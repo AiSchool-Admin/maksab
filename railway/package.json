@@ -1,0 +1,14 @@
+{
+  "name": "maksab-workers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Background workers for مكسب (Maksab) — auction processing, notifications, ad expiry",
+  "scripts": {
+    "start": "npx tsx workers/auction-cron.ts",
+    "dev": "npx tsx --watch workers/auction-cron.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
+    "tsx": "^4.7.0"
+  }
+}

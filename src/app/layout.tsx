@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import AuthProvider from "@/components/auth/AuthProvider";
+import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration";
 import "./globals.css";
 
 const cairo = localFont({
@@ -20,6 +21,10 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "مكسب",
+  },
+  icons: {
+    icon: "/icons/icon.svg",
+    apple: "/icons/icon.svg",
   },
   openGraph: {
     title: "مكسب — كل صفقة مكسب",
@@ -43,9 +48,17 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+
   return (
     <html lang="ar" dir="rtl" className={cairo.variable}>
+      <head>
+        {/* Preconnect to Supabase for faster API calls */}
+        {supabaseUrl && <link rel="preconnect" href={supabaseUrl} />}
+        {supabaseUrl && <link rel="dns-prefetch" href={supabaseUrl} />}
+      </head>
       <body className="font-cairo antialiased bg-white">
+        <ServiceWorkerRegistration />
         <AuthProvider>
           {/* Main content with bottom padding to avoid BottomNav overlap */}
           <div className="min-h-screen pb-20">{children}</div>

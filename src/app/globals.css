@@ -104,6 +104,41 @@ a,
   scrollbar-width: none;
 }
 
+/* Reduce CLS — reserve space for images */
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* GPU-accelerated animations for smoother UX */
+.skeleton,
+.animate-pulse {
+  will-change: background-position;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* Focus visible for keyboard accessibility */
+:focus-visible {
+  outline: 2px solid var(--color-brand-green);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* PWA standalone mode adjustments */
 @media (display-mode: standalone) {
   body {
