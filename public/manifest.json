@@ -1,0 +1,27 @@
+{
+  "name": "مكسب — كل صفقة مكسب",
+  "short_name": "مكسب",
+  "description": "سوق إلكتروني مصري لبيع وشراء وتبديل السلع الجديدة والمستعملة",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#FFFFFF",
+  "theme_color": "#1B7A3D",
+  "categories": ["shopping", "marketplace"],
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
