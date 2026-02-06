@@ -8,15 +8,7 @@ import Select from "@/components/ui/Select";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { updateUserProfile } from "@/lib/supabase/auth";
-
-const governorates = [
-  "القاهرة", "الجيزة", "الإسكندرية", "الدقهلية", "الشرقية",
-  "المنوفية", "القليوبية", "البحيرة", "الغربية", "كفر الشيخ",
-  "دمياط", "بورسعيد", "الإسماعيلية", "السويس", "الفيوم",
-  "بني سويف", "المنيا", "أسيوط", "سوهاج", "قنا",
-  "الأقصر", "أسوان", "البحر الأحمر", "الوادي الجديد", "مطروح",
-  "شمال سيناء", "جنوب سيناء",
-];
+import { governorates } from "@/lib/data/governorates";
 
 export default function EditProfilePage() {
   const router = useRouter();
