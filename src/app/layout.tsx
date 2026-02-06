@@ -44,7 +44,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ar" dir="rtl" className={cairo.variable}>
-      <body className="font-cairo antialiased">{children}</body>
+      <body className="font-cairo antialiased bg-white">
+        {/* Main content with bottom padding to avoid BottomNav overlap */}
+        <div className="min-h-screen pb-20">{children}</div>
+      </body>
     </html>
   );
 }

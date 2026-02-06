@@ -28,12 +28,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Tap target minimum size for mobile */
+/* Tap target minimum size for mobile — exclude small inline elements */
 button,
 a,
 [role="button"] {
   min-height: 44px;
-  min-width: 44px;
+}
+
+/* Small icon buttons override */
+.btn-icon-sm {
+  min-height: 32px;
+  min-width: 32px;
 }
 
 /* Scrollbar styling */
@@ -54,6 +59,40 @@ a,
 ::selection {
   background-color: var(--color-brand-green-light);
   color: var(--color-brand-green-dark);
+}
+
+/* Skeleton loader animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-gray-light) 25%,
+    #e5e7eb 50%,
+    var(--color-gray-light) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Modal backdrop */
+.backdrop-blur-overlay {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Safe area padding for PWA */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 /* PWA standalone mode adjustments */
