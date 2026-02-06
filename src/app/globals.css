@@ -95,6 +95,15 @@ a,
   }
 }
 
+/* Hide scrollbar for horizontal scroll sections */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* PWA standalone mode adjustments */
 @media (display-mode: standalone) {
   body {
