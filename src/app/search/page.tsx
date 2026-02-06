@@ -11,7 +11,7 @@ import CategoryFilters from "@/components/search/CategoryFilters";
 import SortOptions from "@/components/search/SortOptions";
 import AdCard from "@/components/ad/AdCard";
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
-import BottomNav from "@/components/layout/BottomNav";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { saveRecentSearch } from "@/lib/search/recent-searches";
 import { parseSearchQuery } from "@/lib/search/smart-parser";
@@ -344,7 +344,7 @@ function SearchPageInner() {
         )}
       </div>
 
-      <BottomNav />
+      <BottomNavWithBadge />
     </main>
   );
 }

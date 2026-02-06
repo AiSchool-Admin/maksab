@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import Link from "next/link";
 import { Search, Plus, Loader2 } from "lucide-react";
 import Header from "@/components/layout/Header";
-import BottomNav from "@/components/layout/BottomNav";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
 import HorizontalSection from "@/components/home/HorizontalSection";
 import Button from "@/components/ui/Button";
@@ -165,7 +165,7 @@ export default function HomePage() {
         )}
       </section>
 
-      <BottomNav />
+      <BottomNavWithBadge />
     </main>
   );
 }

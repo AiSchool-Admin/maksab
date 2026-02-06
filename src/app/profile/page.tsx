@@ -14,7 +14,7 @@ import {
   Edit3,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
-import BottomNav from "@/components/layout/BottomNav";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { calcProfileCompletion } from "@/lib/supabase/auth";
@@ -51,7 +51,7 @@ export default function ProfilePage() {
           </Button>
         </div>
 
-        <BottomNav />
+        <BottomNavWithBadge />
       </main>
     );
   }
@@ -66,7 +66,7 @@ export default function ProfilePage() {
           <div className="h-5 w-32 skeleton rounded-lg mx-auto mb-2" />
           <div className="h-4 w-48 skeleton rounded-lg mx-auto" />
         </div>
-        <BottomNav />
+        <BottomNavWithBadge />
       </main>
     );
   }
@@ -207,7 +207,7 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      <BottomNav />
+      <BottomNavWithBadge />
     </main>
   );
 }

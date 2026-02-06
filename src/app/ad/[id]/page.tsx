@@ -76,7 +76,17 @@ export default function AdDetailPage({
   const handleChat = async () => {
     const user = await requireAuth();
     if (!user || !ad) return;
-    router.push(`/chat/${ad.id}`);
+    // In production: find or create conversation via Supabase
+    // For now, navigate to the chat list (mock data uses conversation IDs)
+    const { findOrCreateConversation } = await import(
+      "@/lib/chat/mock-chat"
+    );
+    const conv = await findOrCreateConversation(ad.id);
+    if (conv) {
+      router.push(`/chat/${conv.id}`);
+    } else {
+      router.push("/chat");
+    }
   };
 
   const handlePlaceBid = async (amount: number) => {
