@@ -1,14 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Search, Plus, Loader2 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
-import HorizontalSection from "@/components/home/HorizontalSection";
 import Button from "@/components/ui/Button";
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
+
+const HorizontalSection = dynamic(
+  () => import("@/components/home/HorizontalSection"),
+  { ssr: false },
+);
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";

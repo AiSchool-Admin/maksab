@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   User,
@@ -19,6 +20,7 @@ import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { calcProfileCompletion } from "@/lib/supabase/auth";
 import { formatPhone } from "@/lib/utils/format";
+import { isCommissionSupporter } from "@/lib/commission/commission-service";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -72,6 +74,14 @@ export default function ProfilePage() {
   }
 
   // ── Logged in ─────────────────────────────────────────────────────
+  const [isSupporter, setIsSupporter] = useState(false);
+
+  useEffect(() => {
+    if (user?.id) {
+      isCommissionSupporter(user.id).then(setIsSupporter);
+    }
+  }, [user?.id]);
+
   const { percentage, missing } = calcProfileCompletion(user!);
 
   return (
@@ -116,6 +126,11 @@ export default function ProfilePage() {
                 {user!.governorate}
                 {user!.city ? ` — ${user!.city}` : ""}
               </p>
+            )}
+            {isSupporter && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-green bg-brand-green-light px-2 py-0.5 rounded-full mt-1">
+                داعم مكسب 💚
+              </span>
             )}
           </div>
 

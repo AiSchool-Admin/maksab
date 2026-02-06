@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Heart, MapPin, Clock } from "lucide-react";
 import { formatPrice, formatTimeAgo, formatCountdown } from "@/lib/utils/format";
 
@@ -63,7 +64,7 @@ function AuctionTimer({ endsAt }: { endsAt: string }) {
   );
 }
 
-export default function AdCard({
+function AdCard({
   id,
   title,
   price,
@@ -88,11 +89,14 @@ export default function AdCard({
         {/* Image */}
         <div className="relative aspect-[4/3] bg-gray-light">
           {image ? (
-            <img
+            <Image
               src={image}
               alt={title}
-              className="w-full h-full object-cover"
+              fill
+              sizes="(max-width: 640px) 50vw, 200px"
+              className="object-cover"
               loading="lazy"
+              placeholder="empty"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-4xl text-gray-text">
@@ -194,3 +198,5 @@ export default function AdCard({
     </Link>
   );
 }
+
+export default memo(AdCard);

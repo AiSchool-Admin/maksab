@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 interface ImageGalleryProps {
   images: string[];
@@ -42,10 +43,13 @@ export default function ImageGallery({ images, title }: ImageGalleryProps) {
         onTouchEnd={handleTouchEnd}
       >
         {hasImages ? (
-          <img
+          <Image
             src={images[current]}
             alt={`${title} — صورة ${current + 1}`}
-            className="w-full h-full object-cover"
+            fill
+            sizes="100vw"
+            className="object-cover"
+            priority={current === 0}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-6xl text-gray-300">
