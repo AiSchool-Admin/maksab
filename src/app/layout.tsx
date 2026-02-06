@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import AuthProvider from "@/components/auth/AuthProvider";
 import "./globals.css";
 
 const cairo = localFont({
@@ -45,8 +46,10 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={cairo.variable}>
       <body className="font-cairo antialiased bg-white">
-        {/* Main content with bottom padding to avoid BottomNav overlap */}
-        <div className="min-h-screen pb-20">{children}</div>
+        <AuthProvider>
+          {/* Main content with bottom padding to avoid BottomNav overlap */}
+          <div className="min-h-screen pb-20">{children}</div>
+        </AuthProvider>
       </body>
     </html>
   );

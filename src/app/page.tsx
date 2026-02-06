@@ -8,8 +8,9 @@ import BottomNav from "@/components/layout/BottomNav";
 import AdCard from "@/components/ad/AdCard";
 import HorizontalSection from "@/components/home/HorizontalSection";
 import Button from "@/components/ui/Button";
-import { AdGridSkeleton, AdCardSkeleton } from "@/components/ui/SkeletonLoader";
+import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { recommendedAds, auctionAds, fetchFeedAds } from "@/lib/mock-data";
 import type { MockAd } from "@/lib/mock-data";
 
@@ -37,10 +38,17 @@ export default function HomePage() {
     sentinelRef,
   } = useInfiniteScroll<MockAd>({ fetchFn: fetchFeedAds });
 
-  const handleToggleFavorite = useCallback((id: string) => {
-    // Will integrate with Supabase favorites later
-    console.log("toggle favorite", id);
-  }, []);
+  const { requireAuth } = useAuth();
+
+  const handleToggleFavorite = useCallback(
+    async (id: string) => {
+      const user = await requireAuth();
+      if (!user) return;
+      // Will integrate with Supabase favorites later
+      console.log("toggle favorite", id, "by", user.id);
+    },
+    [requireAuth],
+  );
 
   return (
     <main className="bg-white">
