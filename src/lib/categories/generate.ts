@@ -4,7 +4,7 @@ import type { CategoryConfig, CategoryField } from "@/types";
  * Resolve a field value to its display label.
  * For select fields, maps value → label. For others, returns the raw value.
  */
-function resolveFieldLabel(
+export function resolveFieldLabel(
   field: CategoryField,
   value: unknown,
 ): string | null {
