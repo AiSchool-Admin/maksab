@@ -102,7 +102,11 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "elevator", label: "أسانسير", type: "toggle", isRequired: false, order: 7 },
       { id: "garage", label: "جراج", type: "toggle", isRequired: false, order: 8 },
       { id: "garden", label: "حديقة", type: "toggle", isRequired: false, order: 9 },
-      { id: "furnished", label: "مفروشة", type: "toggle", isRequired: false, order: 10 },
+      { id: "facing", label: "الواجهة", type: "select", isRequired: false, order: 10, options: [
+        { value: "north", label: "بحري" }, { value: "south", label: "قبلي" },
+        { value: "east", label: "شرقي" }, { value: "west", label: "غربي" },
+      ]},
+      { id: "furnished", label: "مفروشة", type: "toggle", isRequired: false, order: 11 },
     ],
     requiredFields: ["property_type", "area", "rooms", "floor"],
     titleTemplate: "${property_type} ${area}م² — ${rooms} غرف — الطابق ${floor}",
@@ -214,7 +218,12 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "scrap-other", name: "أخرى", slug: "scrap-other" },
     ],
     fields: [
-      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [] },
+      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
+        { value: "iron", label: "حديد" }, { value: "aluminum", label: "ألومنيوم" },
+        { value: "copper", label: "نحاس" }, { value: "plastic", label: "بلاستيك" },
+        { value: "paper", label: "ورق" }, { value: "old_devices", label: "أجهزة قديمة" },
+        { value: "construction", label: "مخلفات بناء" }, { value: "other", label: "أخرى" },
+      ]},
       { id: "weight", label: "الوزن التقريبي", type: "number", unit: "كجم", isRequired: true, order: 2 },
       { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 3, options: [
         { value: "clean", label: "نظيف" }, { value: "mixed", label: "مختلط" },
@@ -254,8 +263,10 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 4, options: [
         { value: "new", label: "جديد" }, { value: "used", label: "مستعمل" },
       ]},
-      { id: "has_gemstone", label: "يوجد فص/حجر", type: "toggle", isRequired: false, order: 5 },
-      { id: "certificate", label: "شهادة", type: "toggle", isRequired: false, order: 6 },
+      { id: "brand", label: "الماركة", type: "text", isRequired: false, order: 5, placeholder: "اسم الماركة" },
+      { id: "ring_size", label: "مقاس الخاتم", type: "number", isRequired: false, order: 6 },
+      { id: "has_gemstone", label: "يوجد فص/حجر", type: "toggle", isRequired: false, order: 7 },
+      { id: "certificate", label: "شهادة", type: "toggle", isRequired: false, order: 8 },
     ],
     requiredFields: ["type", "karat", "weight", "condition"],
     titleTemplate: "${type} ذهب ${karat} — ${weight} جرام — ${condition}",
@@ -274,7 +285,11 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "pens", name: "أقلام", slug: "pens" },
     ],
     fields: [
-      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [] },
+      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
+        { value: "bag", label: "شنطة" }, { value: "sunglasses", label: "نظارة" },
+        { value: "watch", label: "ساعة" }, { value: "perfume", label: "عطر" },
+        { value: "pen", label: "قلم" }, { value: "other", label: "أخرى" },
+      ]},
       { id: "brand", label: "الماركة", type: "select", isRequired: true, order: 2, options: [
         { value: "louis_vuitton", label: "Louis Vuitton" }, { value: "gucci", label: "Gucci" },
         { value: "chanel", label: "Chanel" }, { value: "rolex", label: "Rolex" },
@@ -311,7 +326,12 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "small-appliances", name: "أجهزة صغيرة", slug: "small-appliances" },
     ],
     fields: [
-      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [] },
+      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
+        { value: "washer", label: "غسالة" }, { value: "fridge", label: "ثلاجة" },
+        { value: "cooker", label: "بوتاجاز" }, { value: "ac", label: "مكيف" },
+        { value: "heater", label: "سخان" }, { value: "small", label: "جهاز صغير" },
+        { value: "other", label: "أخرى" },
+      ]},
       { id: "brand", label: "الماركة", type: "select", isRequired: true, order: 2, options: [
         { value: "toshiba", label: "توشيبا" }, { value: "sharp", label: "شارب" },
         { value: "samsung", label: "سامسونج" }, { value: "lg", label: "إل جي" },
@@ -324,8 +344,13 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "good", label: "مستعمل كويس" }, { value: "needs_repair", label: "يحتاج صيانة" },
       ]},
       { id: "purchase_year", label: "سنة الشراء", type: "year-picker", isRequired: true, order: 4 },
-      { id: "capacity", label: "السعة", type: "text", isRequired: false, order: 5 },
+      { id: "capacity", label: "السعة", type: "text", isRequired: false, order: 5, placeholder: "مثلاً: 14 كيلو أو 16 قدم" },
       { id: "warranty", label: "الضمان", type: "toggle", isRequired: false, order: 6 },
+      { id: "color", label: "اللون", type: "select", isRequired: false, order: 7, options: [
+        { value: "white", label: "أبيض" }, { value: "silver", label: "سيلفر" },
+        { value: "black", label: "أسود" }, { value: "other", label: "أخرى" },
+      ]},
+      { id: "model", label: "الموديل", type: "text", isRequired: false, order: 8, placeholder: "رقم الموديل" },
     ],
     requiredFields: ["type", "brand", "condition", "purchase_year"],
     titleTemplate: "${type} ${brand} — ${purchase_year} — ${condition}",
@@ -347,7 +372,12 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "furniture-other", name: "أخرى", slug: "furniture-other" },
     ],
     fields: [
-      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [] },
+      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
+        { value: "bedroom", label: "غرفة نوم" }, { value: "dining", label: "سفرة" },
+        { value: "living", label: "أنتريه" }, { value: "kitchen", label: "مطبخ" },
+        { value: "decor", label: "ديكور" }, { value: "lighting", label: "إضاءة" },
+        { value: "carpet", label: "سجاد" }, { value: "other", label: "أخرى" },
+      ]},
       { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, options: [
         { value: "new", label: "جديد" }, { value: "excellent", label: "مستعمل ممتاز" },
         { value: "good", label: "مستعمل جيد" }, { value: "needs_renewal", label: "يحتاج تجديد" },
@@ -444,7 +474,13 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "services-other", name: "خدمات أخرى", slug: "services-other" },
     ],
     fields: [
-      { id: "service_type", label: "نوع الخدمة", type: "select", isRequired: true, order: 1, options: [] },
+      { id: "service_type", label: "نوع الخدمة", type: "select", isRequired: true, order: 1, options: [
+        { value: "plumbing", label: "سباكة" }, { value: "electrical", label: "كهرباء" },
+        { value: "painting", label: "نقاشة" }, { value: "carpentry", label: "نجارة" },
+        { value: "device_repair", label: "صيانة أجهزة" }, { value: "moving", label: "نقل أثاث" },
+        { value: "cleaning", label: "تنظيف" }, { value: "tech", label: "خدمات تقنية" },
+        { value: "tutoring", label: "دروس خصوصية" }, { value: "other", label: "خدمات أخرى" },
+      ]},
       { id: "pricing", label: "التسعير", type: "select", isRequired: true, order: 2, options: [
         { value: "hourly", label: "بالساعة" }, { value: "project", label: "بالمشروع" },
         { value: "negotiable", label: "بالاتفاق" }, { value: "fixed", label: "سعر ثابت" },
@@ -453,13 +489,20 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "less_1", label: "أقل من سنة" }, { value: "1_3", label: "1-3 سنوات" },
         { value: "3_5", label: "3-5 سنوات" }, { value: "5_plus", label: "أكثر من 5 سنوات" },
       ]},
-      { id: "working_days", label: "أيام العمل", type: "multi-select", isRequired: false, order: 4, options: [
+      { id: "service_area", label: "نطاق الخدمة", type: "multi-select", isRequired: false, order: 4, options: [
+        { value: "cairo", label: "القاهرة" }, { value: "giza", label: "الجيزة" },
+        { value: "alexandria", label: "الإسكندرية" }, { value: "dakahlia", label: "الدقهلية" },
+        { value: "sharqia", label: "الشرقية" }, { value: "monufia", label: "المنوفية" },
+        { value: "qalyubia", label: "القليوبية" }, { value: "beheira", label: "البحيرة" },
+        { value: "gharbia", label: "الغربية" }, { value: "kafr_elsheikh", label: "كفر الشيخ" },
+      ]},
+      { id: "working_days", label: "أيام العمل", type: "multi-select", isRequired: false, order: 5, options: [
         { value: "sat", label: "السبت" }, { value: "sun", label: "الأحد" },
         { value: "mon", label: "الاثنين" }, { value: "tue", label: "الثلاثاء" },
         { value: "wed", label: "الأربعاء" }, { value: "thu", label: "الخميس" },
         { value: "fri", label: "الجمعة" },
       ]},
-      { id: "working_hours", label: "مواعيد العمل", type: "text", isRequired: false, order: 5 },
+      { id: "working_hours", label: "مواعيد العمل", type: "text", isRequired: false, order: 6 },
     ],
     requiredFields: ["service_type", "pricing", "experience"],
     titleTemplate: "${service_type} — خبرة ${experience} — ${pricing}",
