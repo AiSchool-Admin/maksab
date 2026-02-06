@@ -170,6 +170,137 @@ export type Database = {
         };
         Update: never;
       };
+      commissions: {
+        Row: {
+          id: string;
+          ad_id: string | null;
+          payer_id: string;
+          amount: number;
+          payment_method: string | null;
+          status: "pending" | "paid" | "cancelled";
+          created_at: string;
+        };
+        Insert: {
+          ad_id?: string | null;
+          payer_id: string;
+          amount: number;
+          payment_method?: string | null;
+          status?: string;
+        };
+        Update: {
+          status?: string;
+          payment_method?: string;
+        };
+      };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          type: string;
+          title: string;
+          body: string | null;
+          data: Record<string, unknown>;
+          ad_id: string | null;
+          conversation_id: string | null;
+          is_read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          type: string;
+          title: string;
+          body?: string | null;
+          data?: Record<string, unknown>;
+          ad_id?: string | null;
+          conversation_id?: string | null;
+        };
+        Update: {
+          is_read?: boolean;
+        };
+      };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          keys_p256dh: string;
+          keys_auth: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          endpoint: string;
+          keys_p256dh: string;
+          keys_auth: string;
+        };
+        Update: never;
+      };
+      user_signals: {
+        Row: {
+          id: string;
+          user_id: string;
+          signal_type: string;
+          category_id: string | null;
+          subcategory_id: string | null;
+          ad_id: string | null;
+          signal_data: Record<string, unknown>;
+          governorate: string | null;
+          weight: number;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          signal_type: string;
+          category_id?: string | null;
+          subcategory_id?: string | null;
+          ad_id?: string | null;
+          signal_data?: Record<string, unknown>;
+          governorate?: string | null;
+          weight?: number;
+        };
+        Update: never;
+      };
+      user_interest_profiles: {
+        Row: {
+          user_id: string;
+          interests: Record<string, unknown>[];
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          interests: Record<string, unknown>[];
+        };
+        Update: {
+          interests?: Record<string, unknown>[];
+          updated_at?: string;
+        };
+      };
+      governorates: {
+        Row: {
+          id: number;
+          name: string;
+          name_en: string | null;
+        };
+        Insert: {
+          name: string;
+          name_en?: string | null;
+        };
+        Update: never;
+      };
+      cities: {
+        Row: {
+          id: number;
+          governorate_id: number;
+          name: string;
+          name_en: string | null;
+        };
+        Insert: {
+          governorate_id: number;
+          name: string;
+          name_en?: string | null;
+        };
+        Update: never;
+      };
     };
   };
 };

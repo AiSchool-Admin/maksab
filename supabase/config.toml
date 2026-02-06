@@ -1,0 +1,30 @@
+[project]
+id = ""  # Fill with your Supabase project ref (e.g., "abcdefghijklmnop")
+
+[api]
+port = 54321
+schemas = ["public"]
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+
+[auth.sms.twilio]
+enabled = false
+account_sid = ""
+message_service_sid = ""
+auth_token = ""
+
+[storage]
+file_size_limit = "5MB"
+
+[realtime]
+enabled = true

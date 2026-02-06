@@ -1,13 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Heart, X, Clock } from "lucide-react";
+import { Check, Heart, X, Clock, Copy, ExternalLink } from "lucide-react";
 import Button from "@/components/ui/Button";
 import {
   calculateSuggestedCommission,
   submitCommission,
   declineCommission,
 } from "@/lib/commission/commission-service";
+import {
+  getAvailablePaymentMethods,
+  processPayment,
+} from "@/lib/payment/payment-service";
+import type { PaymentMethod } from "@/lib/payment/types";
 
 interface CommissionPromptProps {
   adId: string;
@@ -17,7 +22,7 @@ interface CommissionPromptProps {
   onComplete: () => void;
 }
 
-type PromptStep = "prompt" | "custom" | "payment" | "thanks" | "dismissed";
+type PromptStep = "prompt" | "custom" | "select_method" | "method_details" | "thanks" | "dismissed";
 
 export default function CommissionPrompt({
   adId,
@@ -29,15 +34,56 @@ export default function CommissionPrompt({
   const suggested = calculateSuggestedCommission(transactionAmount);
   const [step, setStep] = useState<PromptStep>("prompt");
   const [customAmount, setCustomAmount] = useState("");
+  const [finalAmount, setFinalAmount] = useState(suggested);
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [fawryRef, setFawryRef] = useState<string | null>(null);
 
-  const handlePay = async (amount: number) => {
+  const paymentMethods = getAvailablePaymentMethods();
+
+  const handleSelectMethod = (method: PaymentMethod) => {
+    setSelectedMethod(method);
+
+    // Fawry and card redirect are processed immediately
+    if (method === "fawry" || method === "paymob_card") {
+      handleOnlinePayment(method);
+    } else {
+      setStep("method_details");
+    }
+  };
+
+  const handleOnlinePayment = async (method: PaymentMethod) => {
+    setIsSubmitting(true);
+    const result = await processPayment({
+      amount: finalAmount,
+      method,
+      adId,
+      payerId: userId,
+      description: `عمولة مكسب — ${adTitle}`,
+    });
+    setIsSubmitting(false);
+
+    if (result.success) {
+      if (result.redirectUrl) {
+        window.open(result.redirectUrl, "_blank");
+        setStep("thanks");
+      } else if (result.referenceNumber) {
+        setFawryRef(result.referenceNumber);
+        setStep("method_details");
+      } else {
+        setStep("thanks");
+      }
+    }
+  };
+
+  const handleConfirmManualPayment = async () => {
     setIsSubmitting(true);
     await submitCommission({
       adId,
       payerId: userId,
-      amount,
-      paymentMethod: "vodafone_cash",
+      amount: finalAmount,
+      paymentMethod: selectedMethod || "vodafone_cash",
     });
     setIsSubmitting(false);
     setStep("thanks");
@@ -51,6 +97,12 @@ export default function CommissionPrompt({
   const handleDecline = async () => {
     await declineCommission({ adId, payerId: userId, status: "declined" });
     setStep("dismissed");
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   // ── Thanks screen ──
@@ -108,11 +160,13 @@ export default function CommissionPrompt({
         <div className="flex gap-2">
           <Button
             fullWidth
-            onClick={() => handlePay(Number(customAmount))}
-            isLoading={isSubmitting}
+            onClick={() => {
+              setFinalAmount(Number(customAmount));
+              setStep("select_method");
+            }}
             disabled={!customAmount || Number(customAmount) <= 0}
           >
-            ادفع
+            التالي
           </Button>
           <Button
             variant="outline"
@@ -126,37 +180,106 @@ export default function CommissionPrompt({
     );
   }
 
-  // ── Payment method screen ──
-  if (step === "payment") {
+  // ── Select payment method ──
+  if (step === "select_method") {
     return (
       <div className="bg-white rounded-2xl p-6 space-y-4 max-w-sm mx-auto">
         <h2 className="text-lg font-bold text-dark text-center">
-          طريقة الدفع
+          اختار طريقة الدفع
         </h2>
         <p className="text-sm text-gray-text text-center">
-          حوّل {suggested} جنيه على أي طريقة من دول:
+          المبلغ: <span className="font-bold text-brand-green">{finalAmount} جنيه</span>
         </p>
 
-        <div className="space-y-3">
-          <div className="bg-gray-light rounded-xl p-4">
-            <p className="text-sm font-bold text-dark mb-1">
-              فودافون كاش
-            </p>
-            <p className="text-sm text-gray-text" dir="ltr">
-              01XX-XXX-XXXX
-            </p>
-          </div>
-          <div className="bg-gray-light rounded-xl p-4">
-            <p className="text-sm font-bold text-dark mb-1">إنستاباي</p>
-            <p className="text-sm text-gray-text">maksab@instapay</p>
-          </div>
+        <div className="space-y-2">
+          {paymentMethods.map((method) => (
+            <button
+              key={method.id}
+              onClick={() => handleSelectMethod(method.id)}
+              disabled={isSubmitting}
+              className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green-light active:scale-[0.98] transition-all text-start"
+            >
+              <span className="text-2xl">{method.icon}</span>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-dark">{method.name}</p>
+                <p className="text-[11px] text-gray-text">{method.description}</p>
+              </div>
+            </button>
+          ))}
         </div>
 
-        <Button fullWidth onClick={() => handlePay(suggested)} isLoading={isSubmitting}>
-          تم التحويل
-        </Button>
         <button
           onClick={() => setStep("prompt")}
+          className="w-full text-sm text-gray-text text-center py-2"
+        >
+          رجوع
+        </button>
+      </div>
+    );
+  }
+
+  // ── Payment method details (manual: Vodafone/InstaPay, or Fawry ref) ──
+  if (step === "method_details") {
+    const methodInfo = paymentMethods.find((m) => m.id === selectedMethod);
+
+    return (
+      <div className="bg-white rounded-2xl p-6 space-y-4 max-w-sm mx-auto">
+        <h2 className="text-lg font-bold text-dark text-center">
+          {methodInfo?.icon} {methodInfo?.name}
+        </h2>
+
+        {fawryRef ? (
+          <div className="bg-brand-gold-light rounded-xl p-4 text-center">
+            <p className="text-sm text-gray-text mb-2">كود الفوري:</p>
+            <p className="text-2xl font-bold text-dark tracking-wider" dir="ltr">
+              {fawryRef}
+            </p>
+            <button
+              onClick={() => copyToClipboard(fawryRef)}
+              className="flex items-center gap-1 mx-auto mt-2 text-xs text-brand-green font-semibold"
+            >
+              <Copy size={12} />
+              {copied ? "تم النسخ!" : "نسخ الكود"}
+            </button>
+            <p className="text-[11px] text-gray-text mt-3">
+              ادفع {finalAmount} جنيه بالكود ده في أي منفذ فوري
+            </p>
+          </div>
+        ) : (
+          <div className="bg-gray-light rounded-xl p-4">
+            <p className="text-sm text-gray-text mb-2 text-center">
+              حوّل <span className="font-bold text-dark">{finalAmount} جنيه</span> على:
+            </p>
+            {methodInfo?.details && (
+              <div className="flex items-center justify-between bg-white rounded-lg p-3 mt-2">
+                <p className="text-base font-bold text-dark" dir="ltr">
+                  {methodInfo.details}
+                </p>
+                <button
+                  onClick={() => copyToClipboard(methodInfo.details!)}
+                  className="flex items-center gap-1 text-xs text-brand-green font-semibold btn-icon-sm"
+                >
+                  <Copy size={12} />
+                  {copied ? "تم!" : "نسخ"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <Button
+          fullWidth
+          onClick={handleConfirmManualPayment}
+          isLoading={isSubmitting}
+          icon={<Check size={18} />}
+        >
+          {fawryRef ? "تم الدفع" : "تم التحويل"}
+        </Button>
+        <button
+          onClick={() => {
+            setFawryRef(null);
+            setStep("select_method");
+          }}
           className="w-full text-sm text-gray-text text-center py-2"
         >
           رجوع
@@ -198,7 +321,10 @@ export default function CommissionPrompt({
           fullWidth
           size="lg"
           icon={<Check size={18} />}
-          onClick={() => setStep("payment")}
+          onClick={() => {
+            setFinalAmount(suggested);
+            setStep("select_method");
+          }}
         >
           ادفع {suggested} جنيه
         </Button>

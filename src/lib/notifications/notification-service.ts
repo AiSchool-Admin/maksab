@@ -196,17 +196,52 @@ export async function markAllAsRead(userId: string): Promise<void> {
 // ── Push notifications (PWA Web Push) ────────────────────────────────
 
 /**
- * Request push notification permission and register with service worker.
+ * Request push notification permission and subscribe to Web Push.
+ * Returns the PushSubscription if successful, null otherwise.
  */
-export async function requestPushPermission(): Promise<boolean> {
-  if (!("Notification" in window)) return false;
+export async function requestPushPermission(): Promise<PushSubscription | null> {
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) return null;
 
-  if (Notification.permission === "granted") return true;
-
-  if (Notification.permission === "denied") return false;
+  if (Notification.permission === "denied") return null;
 
   const permission = await Notification.requestPermission();
-  return permission === "granted";
+  if (permission !== "granted") return null;
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
+    if (!vapidKey) {
+      console.warn("VAPID public key not configured");
+      return null;
+    }
+
+    // Convert VAPID key to Uint8Array
+    const urlBase64ToUint8Array = (base64String: string) => {
+      const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const rawData = atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    };
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    });
+
+    // TODO: Send subscription to server for storing
+    // await saveSubscription(userId, subscription);
+    console.log("Push subscription:", JSON.stringify(subscription));
+
+    return subscription;
+  } catch (err) {
+    console.error("Push subscription failed:", err);
+    return null;
+  }
 }
 
 /**
