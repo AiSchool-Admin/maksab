@@ -13,6 +13,7 @@ import AdCard from "@/components/ad/AdCard";
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import { saveRecentSearch } from "@/lib/search/recent-searches";
 import { parseSearchQuery } from "@/lib/search/smart-parser";
 import {
@@ -20,6 +21,7 @@ import {
   getSimilarSearchAds,
   type SearchFilters,
 } from "@/lib/search/mock-search";
+import { getEnhancedSimilarAds } from "@/lib/recommendations/recommendations-service";
 import {
   getCategoryById,
   getCategoryBySlug,
@@ -39,6 +41,7 @@ function SearchPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { requireAuth } = useAuth();
+  const { track } = useTrackSignal();
 
   /* ── Derive initial state from URL params ──────────────────────────── */
   const initialQuery = searchParams.get("q") || "";
@@ -93,6 +96,20 @@ function SearchPageInner() {
         setSimilarAds([]);
       }
 
+      // Track search signal
+      if (searchFilters.query) {
+        track("search", {
+          categoryId: searchFilters.category ?? null,
+          signalData: {
+            query: searchFilters.query,
+            filters: searchFilters.categoryFilters,
+            priceMin: searchFilters.priceMin,
+            priceMax: searchFilters.priceMax,
+          },
+          governorate: searchFilters.governorate ?? null,
+        });
+      }
+
       const result = await searchAds(searchFilters, 0);
       setResults(result.ads);
       setTotal(result.total);
@@ -100,11 +117,23 @@ function SearchPageInner() {
       setPage(1);
       setIsLoading(false);
 
-      // Fetch similar ads in background
-      const similar = await getSimilarSearchAds(searchFilters);
-      setSimilarAds(similar);
+      // Fetch enhanced similar ads using recommendations engine
+      const mainIds = new Set(result.ads.map((a) => a.id));
+      const enhanced = getEnhancedSimilarAds(
+        searchFilters.query || "",
+        mainIds,
+        searchFilters.category,
+      );
+      // Also get regular similar ads and merge
+      const regular = await getSimilarSearchAds(searchFilters);
+      const seenIds = new Set(enhanced.map((a) => a.id));
+      const merged = [
+        ...enhanced,
+        ...regular.filter((a) => !seenIds.has(a.id)),
+      ].slice(0, 6);
+      setSimilarAds(merged);
     },
-    [buildFilters],
+    [buildFilters, track],
   );
 
   /* ── Load more (infinite scroll) ───────────────────────────────────── */
@@ -206,11 +235,19 @@ function SearchPageInner() {
   /* ── Favorite toggle ───────────────────────────────────────────────── */
   const handleToggleFavorite = useCallback(
     async (id: string) => {
-      const user = await requireAuth();
-      if (!user) return;
+      const authedUser = await requireAuth();
+      if (!authedUser) return;
+      const ad = [...results, ...similarAds].find((a) => a.id === id);
+      if (ad) {
+        track("favorite", {
+          adId: id,
+          signalData: { price: ad.price, title: ad.title },
+          governorate: ad.governorate,
+        });
+      }
       console.log("toggle favorite", id);
     },
-    [requireAuth],
+    [requireAuth, results, similarAds, track],
   );
 
   /* ── Category name for header ──────────────────────────────────────── */

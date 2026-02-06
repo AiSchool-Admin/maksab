@@ -13,9 +13,11 @@ import {
   Calendar,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import ImageGallery from "@/components/ad/ImageGallery";
 import SpecsTable from "@/components/ad/SpecsTable";
 import AuctionSection from "@/components/ad/AuctionSection";
+import ExchangeMatchSection from "@/components/ad/ExchangeMatchSection";
 import ContactBar from "@/components/ad/ContactBar";
 import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -75,6 +77,7 @@ export default function AdDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { requireAuth, user } = useAuth();
+  const { track } = useTrackSignal();
 
   const [ad, setAd] = useState<MockAdDetail | null>(null);
   const [similarAds, setSimilarAds] = useState<MockAd[]>([]);
@@ -106,6 +109,24 @@ export default function AdDetailPage({
     });
   }, [id]);
 
+  /* ── Track view signal after 3 seconds ──────────────────── */
+  useEffect(() => {
+    if (!ad) return;
+    const timer = setTimeout(() => {
+      track("view", {
+        categoryId: ad.categoryId,
+        adId: ad.id,
+        signalData: {
+          brand: (ad.categoryFields as Record<string, unknown>)?.brand,
+          price: ad.price,
+          title: ad.title,
+        },
+        governorate: ad.governorate,
+      });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [ad, track]);
+
   /* ── Subscribe to real-time auction updates ──────────────── */
   useEffect(() => {
     if (!auctionState || auctionState.status !== "active") return;
@@ -132,6 +153,17 @@ export default function AdDetailPage({
   const handleToggleFavorite = async () => {
     const authedUser = await requireAuth();
     if (!authedUser) return;
+    if (ad && !isFavorited) {
+      track("favorite", {
+        categoryId: ad.categoryId,
+        adId: ad.id,
+        signalData: {
+          brand: (ad.categoryFields as Record<string, unknown>)?.brand,
+          price: ad.price,
+        },
+        governorate: ad.governorate,
+      });
+    }
     setIsFavorited((prev) => !prev);
   };
 
@@ -152,6 +184,15 @@ export default function AdDetailPage({
   const handleChat = async () => {
     const authedUser = await requireAuth();
     if (!authedUser || !ad) return;
+    // Track chat_initiated signal
+    track("chat_initiated", {
+      categoryId: ad.categoryId,
+      adId: ad.id,
+      signalData: {
+        brand: (ad.categoryFields as Record<string, unknown>)?.brand,
+      },
+      governorate: ad.governorate,
+    });
     const { findOrCreateConversation } = await import(
       "@/lib/chat/mock-chat"
     );
@@ -167,6 +208,16 @@ export default function AdDetailPage({
     async (amount: number) => {
       const authedUser = await requireAuth();
       if (!authedUser) return;
+
+      // Track bid_placed signal
+      if (ad) {
+        track("bid_placed", {
+          categoryId: ad.categoryId,
+          adId: ad.id,
+          signalData: { bid_amount: amount },
+          governorate: ad.governorate,
+        });
+      }
 
       setIsBidding(true);
       const result = await placeBid(
@@ -326,6 +377,16 @@ export default function AdDetailPage({
               </p>
             )}
           </div>
+        )}
+
+        {/* Exchange matching — "ممكن تبدّل بـ..." */}
+        {ad.saleType === "exchange" && ad.exchangeDescription && (
+          <ExchangeMatchSection
+            adTitle={ad.title}
+            exchangeDescription={ad.exchangeDescription}
+            categoryId={ad.categoryId}
+            currentAdId={ad.id}
+          />
         )}
 
         {/* Specs table */}

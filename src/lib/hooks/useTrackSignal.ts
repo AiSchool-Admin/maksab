@@ -1,34 +1,62 @@
+/**
+ * useTrackSignal — hook for silently collecting user behavior signals.
+ * Used across the app to feed the recommendations engine.
+ *
+ * Usage:
+ *   const { track } = useTrackSignal();
+ *   track("view", { categoryId: "cars", adId: "abc", signalData: { brand: "toyota" } });
+ */
+
 "use client";
 
-import { supabase } from "@/lib/supabase/client";
-import { useAuthStore } from "@/stores/auth-store";
+import { useCallback, useRef } from "react";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { trackSignal } from "@/lib/recommendations/signal-store";
+import type { SignalType } from "@/lib/recommendations/types";
 
-interface SignalData {
-  signal_type: "search" | "view" | "favorite" | "ad_created" | "bid_placed" | "chat_initiated";
-  category_id?: string;
-  subcategory_id?: string;
-  ad_id?: string;
-  signal_data?: Record<string, unknown>;
-  governorate?: string;
-  weight: number;
-}
+const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
+
+/** Minimum interval between identical signal types (in ms) */
+const THROTTLE_MS = 2000;
 
 export function useTrackSignal() {
-  const user = useAuthStore((state) => state.user);
+  const { user } = useAuth();
+  const lastTracked = useRef<Record<string, number>>({});
 
-  const track = async (signal: SignalData) => {
-    if (!user) return;
+  const track = useCallback(
+    (
+      signalType: SignalType,
+      params?: {
+        categoryId?: string | null;
+        subcategoryId?: string | null;
+        adId?: string | null;
+        signalData?: Record<string, unknown>;
+        governorate?: string | null;
+      },
+    ) => {
+      // Throttle: don't fire the same signal type too frequently
+      const key = `${signalType}:${params?.adId || params?.categoryId || ""}`;
+      const now = Date.now();
+      if (lastTracked.current[key] && now - lastTracked.current[key] < THROTTLE_MS) {
+        return;
+      }
+      lastTracked.current[key] = now;
 
-    // Fire and forget — don't block UI
-    // Note: user_signals table will be added to Database types when Supabase schema is set up
-    supabase
-      .from("user_signals" as never)
-      .insert({
-        user_id: user.id,
-        ...signal,
-      } as never)
-      .then();
-  };
+      const userId = user?.id || DEV_USER_ID;
+
+      // Fire and forget — don't await, don't block UI
+      trackSignal({
+        userId,
+        signalType,
+        categoryId: params?.categoryId,
+        subcategoryId: params?.subcategoryId,
+        adId: params?.adId,
+        signalData: params?.signalData,
+        governorate: params?.governorate,
+      });
+    },
+    [user],
+  );
 
   return { track };
 }

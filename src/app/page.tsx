@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Search, Plus, Loader2 } from "lucide-react";
 import Header from "@/components/layout/Header";
@@ -11,6 +11,8 @@ import Button from "@/components/ui/Button";
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
+import { getRecommendations } from "@/lib/recommendations/recommendations-service";
 import { recommendedAds, auctionAds, fetchFeedAds } from "@/lib/mock-data";
 import type { MockAd } from "@/lib/mock-data";
 
@@ -29,6 +31,8 @@ const categories = [
   { icon: "🛠️", name: "خدمات", slug: "services" },
 ];
 
+const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
+
 export default function HomePage() {
   const {
     items: feedAds,
@@ -38,16 +42,45 @@ export default function HomePage() {
     sentinelRef,
   } = useInfiniteScroll<MockAd>({ fetchFn: fetchFeedAds });
 
-  const { requireAuth } = useAuth();
+  const { requireAuth, user } = useAuth();
+  const { track } = useTrackSignal();
+
+  // Personalized recommendation state
+  const [personalizedAds, setPersonalizedAds] = useState<MockAd[]>(recommendedAds);
+  const [matchingAuctions, setMatchingAuctions] = useState<MockAd[]>(auctionAds);
+
+  // Load personalized recommendations
+  useEffect(() => {
+    const userId = user?.id || DEV_USER_ID;
+    getRecommendations(userId, user?.governorate ?? undefined).then((result) => {
+      if (result.personalizedAds.length > 0) {
+        setPersonalizedAds(result.personalizedAds);
+      }
+      if (result.matchingAuctions.length > 0) {
+        setMatchingAuctions(result.matchingAuctions);
+      }
+    });
+  }, [user]);
 
   const handleToggleFavorite = useCallback(
     async (id: string) => {
-      const user = await requireAuth();
-      if (!user) return;
-      // Will integrate with Supabase favorites later
-      console.log("toggle favorite", id, "by", user.id);
+      const authedUser = await requireAuth();
+      if (!authedUser) return;
+      // Track favorite signal
+      const ad = [...personalizedAds, ...matchingAuctions, ...feedAds].find(
+        (a) => a.id === id,
+      );
+      if (ad) {
+        track("favorite", {
+          categoryId: null,
+          adId: id,
+          signalData: { price: ad.price, title: ad.title },
+          governorate: ad.governorate,
+        });
+      }
+      console.log("toggle favorite", id, "by", authedUser.id);
     },
-    [requireAuth],
+    [requireAuth, personalizedAds, matchingAuctions, feedAds, track],
   );
 
   return (
@@ -99,7 +132,7 @@ export default function HomePage() {
         title="عروض مقترحة ليك"
         subtitle="بناءً على اهتماماتك"
         icon="🔥"
-        ads={recommendedAds}
+        ads={personalizedAds}
         onToggleFavorite={handleToggleFavorite}
       />
 
@@ -107,7 +140,7 @@ export default function HomePage() {
       <HorizontalSection
         title="مزادات تناسبك"
         icon="🔨"
-        ads={auctionAds}
+        ads={matchingAuctions}
         onToggleFavorite={handleToggleFavorite}
       />
 

@@ -13,6 +13,8 @@ import {
 import type { SaleType } from "@/types";
 import type { CompressedImage } from "@/lib/utils/image-compress";
 import type { PriceData } from "@/components/ad/steps/Step3PricePhotos";
+import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
+import SellerInsightsCard from "@/components/ad/SellerInsightsCard";
 import Step1CategorySaleType from "@/components/ad/steps/Step1CategorySaleType";
 import Step2CategoryDetails from "@/components/ad/steps/Step2CategoryDetails";
 import Step3PricePhotos from "@/components/ad/steps/Step3PricePhotos";
@@ -103,6 +105,7 @@ function clearDraft() {
 export default function CreateAdPage() {
   const router = useRouter();
   const { user, requireAuth } = useAuth();
+  const { track } = useTrackSignal();
 
   /* ── State ─────────────────────────────────────────── */
   const [draft, setDraft] = useState<DraftData>(getInitialDraft);
@@ -339,6 +342,19 @@ export default function CreateAdPage() {
         }
       }
 
+      // Track ad_created signal
+      track("ad_created", {
+        categoryId: draft.categoryId,
+        subcategoryId: draft.subcategoryId,
+        signalData: {
+          saleType: draft.saleType,
+          title: draft.title,
+          price:
+            draft.saleType === "cash" ? Number(draft.priceData.price) : null,
+        },
+        governorate: draft.governorate,
+      });
+
       // Success
       clearDraft();
       setPublished(true);
@@ -367,13 +383,26 @@ export default function CreateAdPage() {
   /* ── Success screen ────────────────────────────────── */
   if (published) {
     return (
-      <main className="min-h-screen bg-white flex items-center justify-center px-4">
-        <div className="text-center space-y-4">
-          <div className="text-6xl">🎉</div>
-          <h2 className="text-xl font-bold text-dark">تم نشر إعلانك!</h2>
-          <p className="text-sm text-gray-text">
-            إعلانك اتنشر بنجاح ويقدر الناس تشوفه دلوقتي
-          </p>
+      <main className="min-h-screen bg-white px-4 py-8">
+        <div className="max-w-md mx-auto space-y-5">
+          <div className="text-center space-y-3">
+            <div className="text-6xl">🎉</div>
+            <h2 className="text-xl font-bold text-dark">تم نشر إعلانك!</h2>
+            <p className="text-sm text-gray-text">
+              إعلانك اتنشر بنجاح ويقدر الناس تشوفه دلوقتي
+            </p>
+          </div>
+
+          {/* Seller insights */}
+          {draft.categoryId && draft.title && draft.governorate && (
+            <SellerInsightsCard
+              categoryId={draft.categoryId}
+              title={draft.title}
+              governorate={draft.governorate}
+              hasImages={images.length > 0}
+            />
+          )}
+
           <div className="flex flex-col gap-2 pt-2">
             <Button fullWidth onClick={() => router.push("/")}>
               الصفحة الرئيسية
