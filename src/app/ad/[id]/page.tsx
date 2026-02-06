@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight,
@@ -22,12 +22,50 @@ import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { fetchAdDetail, getSimilarAds } from "@/lib/mock-ad-detail";
 import type { MockAdDetail } from "@/lib/mock-ad-detail";
 import type { MockAd } from "@/lib/mock-data";
+import type { AuctionState } from "@/lib/auction/types";
+import {
+  placeBid,
+  buyNow,
+  subscribeToAuction,
+  initDevAuctionState,
+  checkAuctionEnd,
+} from "@/lib/auction/auction-service";
 import {
   formatPrice,
   formatTimeAgo,
   formatPhone,
   formatNumber,
 } from "@/lib/utils/format";
+
+const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
+
+/** Convert MockAdDetail to AuctionState for the auction component */
+function toAuctionState(ad: MockAdDetail): AuctionState {
+  return {
+    adId: ad.id,
+    status: ad.auctionStatus ?? "active",
+    startPrice: ad.auctionStartPrice ?? 0,
+    buyNowPrice: ad.auctionBuyNowPrice,
+    currentHighestBid: ad.auctionHighestBid,
+    highestBidderName: ad.auctionHighestBidderName ?? null,
+    highestBidderId: ad.auctionHighestBidderId ?? null,
+    bidsCount: ad.auctionBidsCount,
+    minIncrement: ad.auctionMinIncrement,
+    endsAt: ad.auctionEndsAt ?? new Date().toISOString(),
+    originalEndsAt: ad.auctionEndsAt ?? new Date().toISOString(),
+    bids: ad.bids.map((b) => ({
+      id: b.id,
+      adId: ad.id,
+      bidderId: "",
+      bidderName: b.bidderName,
+      amount: b.amount,
+      createdAt: b.createdAt,
+    })),
+    winnerId: ad.auctionWinnerId ?? null,
+    winnerName: ad.auctionWinnerName ?? null,
+    wasExtended: false,
+  };
+}
 
 export default function AdDetailPage({
   params,
@@ -36,13 +74,21 @@ export default function AdDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { requireAuth } = useAuth();
+  const { requireAuth, user } = useAuth();
 
   const [ad, setAd] = useState<MockAdDetail | null>(null);
   const [similarAds, setSimilarAds] = useState<MockAd[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorited, setIsFavorited] = useState(false);
 
+  // Auction state (separate from ad to support real-time updates)
+  const [auctionState, setAuctionState] = useState<AuctionState | null>(null);
+  const [isBidding, setIsBidding] = useState(false);
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
+
+  const currentUserId = user?.id || DEV_USER_ID;
+
+  /* ── Load ad detail ──────────────────────────────────────── */
   useEffect(() => {
     setIsLoading(true);
     fetchAdDetail(id).then((data) => {
@@ -50,12 +96,42 @@ export default function AdDetailPage({
       setIsFavorited(data.isFavorited);
       setSimilarAds(getSimilarAds(id));
       setIsLoading(false);
+
+      // Initialize auction state
+      if (data.saleType === "auction" && data.auctionStartPrice) {
+        const state = toAuctionState(data);
+        setAuctionState(state);
+        initDevAuctionState(state);
+      }
     });
   }, [id]);
 
+  /* ── Subscribe to real-time auction updates ──────────────── */
+  useEffect(() => {
+    if (!auctionState || auctionState.status !== "active") return;
+
+    const unsubscribe = subscribeToAuction(id, (updatedState) => {
+      setAuctionState(updatedState);
+    });
+
+    // Also set up a periodic check for auction end (dev mode)
+    const endCheckInterval = setInterval(() => {
+      const ended = checkAuctionEnd(id);
+      if (ended) {
+        setAuctionState(ended);
+      }
+    }, 1000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(endCheckInterval);
+    };
+  }, [id, auctionState?.status]);
+
+  /* ── Handlers ────────────────────────────────────────────── */
   const handleToggleFavorite = async () => {
-    const user = await requireAuth();
-    if (!user) return;
+    const authedUser = await requireAuth();
+    if (!authedUser) return;
     setIsFavorited((prev) => !prev);
   };
 
@@ -74,10 +150,8 @@ export default function AdDetailPage({
   };
 
   const handleChat = async () => {
-    const user = await requireAuth();
-    if (!user || !ad) return;
-    // In production: find or create conversation via Supabase
-    // For now, navigate to the chat list (mock data uses conversation IDs)
+    const authedUser = await requireAuth();
+    if (!authedUser || !ad) return;
     const { findOrCreateConversation } = await import(
       "@/lib/chat/mock-chat"
     );
@@ -89,19 +163,49 @@ export default function AdDetailPage({
     }
   };
 
-  const handlePlaceBid = async (amount: number) => {
-    const user = await requireAuth();
-    if (!user) return;
-    console.log("Bid placed:", amount);
-  };
+  const handlePlaceBid = useCallback(
+    async (amount: number) => {
+      const authedUser = await requireAuth();
+      if (!authedUser) return;
 
-  const handleBuyNow = async () => {
-    const user = await requireAuth();
-    if (!user) return;
-    console.log("Buy now!");
-  };
+      setIsBidding(true);
+      const result = await placeBid(
+        id,
+        authedUser.id || DEV_USER_ID,
+        authedUser.display_name || "مستخدم",
+        amount,
+      );
+      setIsBidding(false);
 
-  /* ── Loading skeleton ──────────────────────────────── */
+      if (result.success && result.updatedState) {
+        setAuctionState(result.updatedState);
+      }
+      if (!result.success && result.error) {
+        // Error is shown via the AuctionSection input hint
+        // Could also use toast here
+      }
+    },
+    [id, requireAuth],
+  );
+
+  const handleBuyNow = useCallback(async () => {
+    const authedUser = await requireAuth();
+    if (!authedUser) return;
+
+    setIsBuyingNow(true);
+    const result = await buyNow(
+      id,
+      authedUser.id || DEV_USER_ID,
+      authedUser.display_name || "مستخدم",
+    );
+    setIsBuyingNow(false);
+
+    if (result.success && result.updatedState) {
+      setAuctionState(result.updatedState);
+    }
+  }, [id, requireAuth]);
+
+  /* ── Loading skeleton ──────────────────────────────────── */
   if (isLoading || !ad) {
     return (
       <main className="min-h-screen bg-white pb-20">
@@ -198,21 +302,16 @@ export default function AdDetailPage({
         </h1>
 
         {/* Auction section */}
-        {ad.saleType === "auction" &&
-          ad.auctionStartPrice &&
-          ad.auctionEndsAt && (
-            <AuctionSection
-              startPrice={ad.auctionStartPrice}
-              buyNowPrice={ad.auctionBuyNowPrice}
-              highestBid={ad.auctionHighestBid}
-              bidsCount={ad.auctionBidsCount}
-              minIncrement={ad.auctionMinIncrement}
-              endsAt={ad.auctionEndsAt}
-              bids={ad.bids}
-              onPlaceBid={handlePlaceBid}
-              onBuyNow={handleBuyNow}
-            />
-          )}
+        {ad.saleType === "auction" && auctionState && (
+          <AuctionSection
+            auctionState={auctionState}
+            currentUserId={currentUserId}
+            onPlaceBid={handlePlaceBid}
+            onBuyNow={handleBuyNow}
+            isBidding={isBidding}
+            isBuyingNow={isBuyingNow}
+          />
+        )}
 
         {/* Exchange details */}
         {ad.saleType === "exchange" && ad.exchangeDescription && (
