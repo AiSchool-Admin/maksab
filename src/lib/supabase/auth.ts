@@ -182,10 +182,14 @@ export async function adminLogin(
   });
 
   if (error) {
+    console.error("[adminLogin] Supabase error:", error.message, error.status);
     if (error.message.includes("Invalid login")) {
       return { user: null, error: "الإيميل أو كلمة السر غلط" };
     }
-    return { user: null, error: "حصلت مشكلة في تسجيل الدخول. جرب تاني" };
+    if (error.message.includes("Email not confirmed")) {
+      return { user: null, error: "الإيميل لسه مش متأكد. جرب تأكيده الأول" };
+    }
+    return { user: null, error: `حصلت مشكلة في تسجيل الدخول: ${error.message}` };
   }
 
   if (!data.user) {
@@ -204,17 +208,27 @@ export async function adminSignup(
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      // Auto-confirm email in development
+      data: { email_confirmed: true },
+    },
   });
 
   if (error) {
+    console.error("[adminSignup] Supabase error:", error.message, error.status);
     if (error.message.includes("already registered")) {
       return { user: null, error: "الإيميل ده مسجّل قبل كده. جرب تسجيل الدخول" };
     }
-    return { user: null, error: "حصلت مشكلة في إنشاء الحساب. جرب تاني" };
+    return { user: null, error: `حصلت مشكلة في إنشاء الحساب: ${error.message}` };
   }
 
   if (!data.user) {
     return { user: null, error: "حصلت مشكلة. جرب تاني" };
+  }
+
+  // If email confirmation is required, user won't have a session yet
+  if (!data.session) {
+    return { user: null, error: "تم إنشاء الحساب! محتاج تأكد إيميلك الأول. شيك على الـ inbox" };
   }
 
   const profile = await upsertUserProfile(data.user.id, email);

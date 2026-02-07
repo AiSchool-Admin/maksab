@@ -22,6 +22,7 @@ import {
   verifyOTP,
   verifyEmailOTP,
   adminLogin,
+  adminSignup,
   devLogin,
   type UserProfile,
 } from "@/lib/supabase/auth";
@@ -55,6 +56,7 @@ function LoginPageContent() {
 
   const [authMethod, setAuthMethod] = useState<AuthMethod>("password");
   const [step, setStep] = useState<Step>("choose");
+  const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -108,7 +110,7 @@ function LoginPageContent() {
     router.replace(redirectTo);
   };
 
-  // ── Email + Password login ──────────────────────────────────────────
+  // ── Email + Password login/signup ───────────────────────────────────
   const handlePasswordSubmit = async () => {
     setError(null);
     const emailResult = emailSchema.safeParse(email);
@@ -122,15 +124,24 @@ function LoginPageContent() {
     }
 
     setIsSubmitting(true);
-    const { user: loggedInUser, error: loginError } = await adminLogin(email, password);
-    setIsSubmitting(false);
 
-    if (loginError || !loggedInUser) {
-      setError(loginError || "حصلت مشكلة. جرب تاني");
-      return;
+    if (isSignup) {
+      const { user: newUser, error: signupError } = await adminSignup(email, password);
+      setIsSubmitting(false);
+      if (signupError || !newUser) {
+        setError(signupError || "حصلت مشكلة. جرب تاني");
+        return;
+      }
+      handleSuccess(newUser);
+    } else {
+      const { user: loggedInUser, error: loginError } = await adminLogin(email, password);
+      setIsSubmitting(false);
+      if (loginError || !loggedInUser) {
+        setError(loginError || "حصلت مشكلة. جرب تاني");
+        return;
+      }
+      handleSuccess(loggedInUser);
     }
-
-    handleSuccess(loggedInUser);
   };
 
   // ── Email OTP send ──────────────────────────────────────────────────
@@ -399,6 +410,7 @@ function LoginPageContent() {
               onClick={() => {
                 setStep("choose");
                 setError(null);
+                setIsSignup(false);
               }}
               className="flex items-center gap-1.5 text-sm text-gray-text hover:text-dark transition-colors"
             >
@@ -407,8 +419,12 @@ function LoginPageContent() {
             </button>
 
             <div className="text-center pb-2">
-              <h2 className="text-lg font-bold text-dark mb-1">تسجيل الدخول</h2>
-              <p className="text-sm text-gray-text">أدخل إيميلك وكلمة السر</p>
+              <h2 className="text-lg font-bold text-dark mb-1">
+                {isSignup ? "إنشاء حساب جديد" : "تسجيل الدخول"}
+              </h2>
+              <p className="text-sm text-gray-text">
+                {isSignup ? "أدخل إيميلك واختار كلمة سر" : "أدخل إيميلك وكلمة السر"}
+              </p>
             </div>
 
             {/* Email input */}
@@ -460,9 +476,9 @@ function LoginPageContent() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handlePasswordSubmit();
                   }}
-                  placeholder="كلمة السر"
+                  placeholder={isSignup ? "اختار كلمة سر (6 حروف على الأقل)" : "كلمة السر"}
                   className={`w-full px-10 py-3.5 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark placeholder:text-gray-text ${error ? "border-error bg-error/5" : ""}`}
-                  autoComplete="current-password"
+                  autoComplete={isSignup ? "new-password" : "current-password"}
                 />
                 <button
                   type="button"
@@ -484,8 +500,25 @@ function LoginPageContent() {
               onClick={handlePasswordSubmit}
               disabled={!email.includes("@") || password.length < 6}
             >
-              تسجيل الدخول
+              {isSignup ? "إنشاء حساب" : "تسجيل الدخول"}
             </Button>
+
+            {/* Toggle login/signup */}
+            <div className="text-center pt-2">
+              <p className="text-sm text-gray-text">
+                {isSignup ? "عندك حساب؟" : "مش عندك حساب؟"}{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignup(!isSignup);
+                    setError(null);
+                  }}
+                  className="text-brand-green font-semibold hover:text-brand-green-dark transition-colors"
+                >
+                  {isSignup ? "سجّل دخول" : "أنشئ حساب جديد"}
+                </button>
+              </p>
+            </div>
           </div>
         )}
 
