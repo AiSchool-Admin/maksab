@@ -35,7 +35,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           <select
             ref={ref}
             id={selectId}
-            className={`w-full appearance-none px-4 py-3 pe-10 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark cursor-pointer ${
+            className={`w-full appearance-none px-4 py-3 pe-10 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               error ? "border-error bg-error/5" : ""
             } ${!props.value ? "text-gray-text" : ""} ${className}`}
             {...props}

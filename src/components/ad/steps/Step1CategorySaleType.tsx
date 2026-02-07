@@ -1,6 +1,7 @@
 "use client";
 
 import { categoriesConfig } from "@/lib/categories/categories-config";
+import CategoryIcon from "@/components/ui/CategoryIcon";
 import type { SaleType } from "@/types";
 
 interface Step1Props {
@@ -45,7 +46,7 @@ export default function Step1CategorySaleType({
                   : "border-transparent bg-gray-light hover:bg-gray-200"
               }`}
             >
-              <span className="text-2xl">{cat.icon}</span>
+              <CategoryIcon slug={cat.slug} size="sm" />
               <span className="text-xs font-semibold text-dark leading-tight text-center">
                 {cat.name}
               </span>

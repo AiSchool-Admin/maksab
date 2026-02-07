@@ -8,6 +8,7 @@ import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
 import Button from "@/components/ui/Button";
+import CategoryIcon from "@/components/ui/CategoryIcon";
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
 
 const HorizontalSection = dynamic(
@@ -22,18 +23,18 @@ import { recommendedAds, auctionAds, fetchFeedAds } from "@/lib/mock-data";
 import type { MockAd } from "@/lib/mock-data";
 
 const categories = [
-  { icon: "🚗", name: "سيارات", slug: "cars" },
-  { icon: "🏠", name: "عقارات", slug: "real-estate" },
-  { icon: "📱", name: "موبايلات", slug: "phones" },
-  { icon: "👗", name: "موضة", slug: "fashion" },
-  { icon: "♻️", name: "خردة", slug: "scrap" },
-  { icon: "💰", name: "ذهب", slug: "gold" },
-  { icon: "💎", name: "فاخرة", slug: "luxury" },
-  { icon: "🏠", name: "أجهزة", slug: "appliances" },
-  { icon: "🪑", name: "أثاث", slug: "furniture" },
-  { icon: "🎮", name: "هوايات", slug: "hobbies" },
-  { icon: "🔧", name: "عدد", slug: "tools" },
-  { icon: "🛠️", name: "خدمات", slug: "services" },
+  { name: "سيارات", slug: "cars" },
+  { name: "عقارات", slug: "real-estate" },
+  { name: "موبايلات", slug: "phones" },
+  { name: "موضة", slug: "fashion" },
+  { name: "خردة", slug: "scrap" },
+  { name: "ذهب", slug: "gold" },
+  { name: "فاخرة", slug: "luxury" },
+  { name: "أجهزة", slug: "appliances" },
+  { name: "أثاث", slug: "furniture" },
+  { name: "هوايات", slug: "hobbies" },
+  { name: "عدد", slug: "tools" },
+  { name: "خدمات", slug: "services" },
 ];
 
 const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
@@ -123,7 +124,7 @@ export default function HomePage() {
               href={`/search?category=${cat.slug}`}
               className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-gray-light hover:bg-brand-green-light active:scale-95 transition-all"
             >
-              <span className="text-2xl">{cat.icon}</span>
+              <CategoryIcon slug={cat.slug} size="sm" />
               <span className="text-[11px] font-medium text-dark leading-tight text-center">
                 {cat.name}
               </span>

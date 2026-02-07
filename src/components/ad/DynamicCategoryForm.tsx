@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
+import { getModelOptions } from "@/lib/categories/brand-models";
 import type { CategoryConfig, CategoryField } from "@/types";
 
 interface DynamicCategoryFormProps {
@@ -30,6 +31,16 @@ export default function DynamicCategoryForm({
     };
   }, [config]);
 
+  // Handle brand change — reset model when brand changes
+  const handleFieldChange = (fieldId: string, value: unknown) => {
+    onChange(fieldId, value);
+
+    // If brand changed, reset model
+    if (fieldId === "brand") {
+      onChange("model", "");
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Required fields */}
@@ -40,9 +51,11 @@ export default function DynamicCategoryForm({
             key={field.id}
             field={field}
             value={values[field.id]}
-            onChange={(val) => onChange(field.id, val)}
+            onChange={(val) => handleFieldChange(field.id, val)}
             error={errors[field.id]}
             required
+            categoryId={config.id}
+            brandValue={String(values.brand ?? "")}
           />
         ))}
       </div>
@@ -71,8 +84,10 @@ export default function DynamicCategoryForm({
                   key={field.id}
                   field={field}
                   value={values[field.id]}
-                  onChange={(val) => onChange(field.id, val)}
+                  onChange={(val) => handleFieldChange(field.id, val)}
                   error={errors[field.id]}
+                  categoryId={config.id}
+                  brandValue={String(values.brand ?? "")}
                 />
               ))}
             </div>
@@ -91,6 +106,8 @@ interface FieldRendererProps {
   onChange: (value: unknown) => void;
   error?: string;
   required?: boolean;
+  categoryId: string;
+  brandValue: string;
 }
 
 function FieldRenderer({
@@ -99,7 +116,24 @@ function FieldRenderer({
   onChange,
   error,
   required,
+  categoryId,
+  brandValue,
 }: FieldRendererProps) {
+  // Get dynamic options for model fields based on brand
+  const dynamicOptions = useMemo(() => {
+    if (field.id === "model" && brandValue) {
+      const models = getModelOptions(categoryId, brandValue);
+      if (models.length > 0) return models;
+    }
+    return field.options ?? [];
+  }, [field.id, field.options, categoryId, brandValue]);
+
+  // Disable model field if brand not selected (for categories with brand→model dependency)
+  const isModelWithoutBrand =
+    field.id === "model" &&
+    (categoryId === "cars" || categoryId === "phones") &&
+    !brandValue;
+
   switch (field.type) {
     case "select":
       return (
@@ -108,10 +142,15 @@ function FieldRenderer({
           name={field.id}
           value={String(value ?? "")}
           onChange={(e) => onChange(e.target.value)}
-          options={field.options ?? []}
-          placeholder={field.placeholder ?? "اختار..."}
+          options={dynamicOptions}
+          placeholder={
+            isModelWithoutBrand
+              ? "اختار الماركة الأول"
+              : field.placeholder ?? "اختار..."
+          }
           error={error}
           required={required}
+          disabled={isModelWithoutBrand}
         />
       );
 
