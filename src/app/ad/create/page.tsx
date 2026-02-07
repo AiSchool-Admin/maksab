@@ -162,7 +162,6 @@ export default function CreateAdPage() {
 
       if (step === 1) {
         if (!draft.categoryId) errs.category = "اختار القسم";
-        if (!draft.subcategoryId) errs.subcategory = "اختار القسم الفرعي";
         if (!draft.saleType) errs.saleType = "اختار نوع البيع";
       }
 
@@ -537,9 +536,9 @@ export default function CreateAdPage() {
 
         {/* Validation error for step 1 */}
         {draft.currentStep === 1 &&
-          (errors.category || errors.subcategory || errors.saleType) && (
+          (errors.category || errors.saleType) && (
             <p className="mt-4 text-sm text-error text-center bg-error/5 rounded-xl p-3">
-              {errors.category || errors.subcategory || errors.saleType}
+              {errors.category || errors.saleType}
             </p>
           )}
 

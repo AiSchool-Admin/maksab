@@ -13,6 +13,7 @@ import {
   logout as logoutService,
   type UserProfile,
 } from "@/lib/supabase/auth";
+import { supabase } from "@/lib/supabase/client";
 import AuthBottomSheet from "./AuthBottomSheet";
 
 interface AuthContextValue {
@@ -46,11 +47,27 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     ((user: UserProfile | null) => void) | null
   >(null);
 
-  // Load current user on mount
+  // Load current user on mount + listen for auth state changes
   useEffect(() => {
     getCurrentUser()
       .then((u) => setUser(u))
       .finally(() => setIsLoading(false));
+
+    // Listen for auth state changes (session restore, token refresh, sign out)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+        } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          // Refresh user profile when session is restored or token refreshed
+          getCurrentUser().then((u) => {
+            if (u) setUser(u);
+          });
+        }
+      },
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const requireAuth = useCallback((): Promise<UserProfile | null> => {
