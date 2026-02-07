@@ -2,6 +2,7 @@
 -- مكسب (Maksab) — Complete Database Setup
 -- Paste this entire script into Supabase SQL Editor and click "Run"
 -- This creates all tables, indexes, security policies, and seed data
+-- ✅ FULLY IDEMPOTENT — safe to run multiple times
 -- ============================================
 
 
@@ -21,7 +22,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;      -- Accent-insensitive search
 -- ============================================
 -- Users table (extends Supabase auth.users)
 -- ============================================
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   phone VARCHAR(11) UNIQUE NOT NULL,
   display_name VARCHAR(100),
@@ -37,9 +38,9 @@ CREATE TABLE public.users (
 );
 
 -- Index for phone lookups
-CREATE INDEX idx_users_phone ON public.users(phone);
+CREATE INDEX IF NOT EXISTS idx_users_phone ON public.users(phone);
 -- Index for location-based queries
-CREATE INDEX idx_users_location ON public.users(governorate, city);
+CREATE INDEX IF NOT EXISTS idx_users_location ON public.users(governorate, city);
 
 -- Auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -50,6 +51,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_users_updated_at ON public.users;
 CREATE TRIGGER trigger_users_updated_at
   BEFORE UPDATE ON public.users
   FOR EACH ROW
@@ -58,7 +60,7 @@ CREATE TRIGGER trigger_users_updated_at
 -- ============================================
 -- Categories
 -- ============================================
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
   id VARCHAR(50) PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   icon VARCHAR(10),
@@ -67,13 +69,13 @@ CREATE TABLE categories (
   is_active BOOLEAN DEFAULT TRUE
 );
 
-CREATE INDEX idx_categories_slug ON categories(slug);
-CREATE INDEX idx_categories_sort ON categories(sort_order);
+CREATE INDEX IF NOT EXISTS idx_categories_slug ON categories(slug);
+CREATE INDEX IF NOT EXISTS idx_categories_sort ON categories(sort_order);
 
 -- ============================================
 -- Subcategories
 -- ============================================
-CREATE TABLE subcategories (
+CREATE TABLE IF NOT EXISTS subcategories (
   id VARCHAR(50) PRIMARY KEY,
   category_id VARCHAR(50) NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
@@ -83,38 +85,38 @@ CREATE TABLE subcategories (
   UNIQUE(category_id, slug)
 );
 
-CREATE INDEX idx_subcategories_category ON subcategories(category_id);
+CREATE INDEX IF NOT EXISTS idx_subcategories_category ON subcategories(category_id);
 
 -- ============================================
 -- Governorates (المحافظات)
 -- ============================================
-CREATE TABLE governorates (
+CREATE TABLE IF NOT EXISTS governorates (
   id SERIAL PRIMARY KEY,
   name VARCHAR(50) NOT NULL,
   name_en VARCHAR(50)
 );
 
-CREATE INDEX idx_governorates_name ON governorates(name);
+CREATE INDEX IF NOT EXISTS idx_governorates_name ON governorates(name);
 
 -- ============================================
 -- Cities (المدن)
 -- ============================================
-CREATE TABLE cities (
+CREATE TABLE IF NOT EXISTS cities (
   id SERIAL PRIMARY KEY,
   governorate_id INTEGER NOT NULL REFERENCES governorates(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
   name_en VARCHAR(100)
 );
 
-CREATE INDEX idx_cities_governorate ON cities(governorate_id);
-CREATE INDEX idx_cities_name ON cities(name);
+CREATE INDEX IF NOT EXISTS idx_cities_governorate ON cities(governorate_id);
+CREATE INDEX IF NOT EXISTS idx_cities_name ON cities(name);
 
 
 -- ============================================
 -- PART 3: Ads Table + Indexes
 -- ============================================
 
-CREATE TABLE ads (
+CREATE TABLE IF NOT EXISTS ads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
 
@@ -171,46 +173,47 @@ CREATE TABLE ads (
 );
 
 -- Auto-update updated_at
+DROP TRIGGER IF EXISTS trigger_ads_updated_at ON ads;
 CREATE TRIGGER trigger_ads_updated_at
   BEFORE UPDATE ON ads
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
 -- Full-text search index (Arabic)
-CREATE INDEX idx_ads_search ON ads USING GIN (
+CREATE INDEX IF NOT EXISTS idx_ads_search ON ads USING GIN (
   to_tsvector('arabic', coalesce(title, '') || ' ' || coalesce(description, ''))
 );
 
 -- Trigram index for fuzzy matching (handles typos like "تويتا" → "تويوتا")
-CREATE INDEX idx_ads_title_trgm ON ads USING GIN (title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_ads_title_trgm ON ads USING GIN (title gin_trgm_ops);
 
 -- Category + status + date (main feed queries)
-CREATE INDEX idx_ads_category ON ads(category_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ads_category ON ads(category_id, status, created_at DESC);
 
 -- User's own ads
-CREATE INDEX idx_ads_user ON ads(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_ads_user ON ads(user_id, status);
 
 -- Location-based queries
-CREATE INDEX idx_ads_location ON ads(governorate, city);
+CREATE INDEX IF NOT EXISTS idx_ads_location ON ads(governorate, city);
 
 -- Price filtering
-CREATE INDEX idx_ads_price ON ads(price) WHERE price IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_ads_price ON ads(price) WHERE price IS NOT NULL;
 
 -- Sale type filtering
-CREATE INDEX idx_ads_sale_type ON ads(sale_type, status);
+CREATE INDEX IF NOT EXISTS idx_ads_sale_type ON ads(sale_type, status);
 
 -- Active auctions ending soon
-CREATE INDEX idx_ads_auction_ends ON ads(auction_ends_at)
+CREATE INDEX IF NOT EXISTS idx_ads_auction_ends ON ads(auction_ends_at)
   WHERE sale_type = 'auction' AND auction_status = 'active';
 
 -- Status + created_at (general feed)
-CREATE INDEX idx_ads_status_date ON ads(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ads_status_date ON ads(status, created_at DESC);
 
 -- Category fields JSONB (for category-specific filtering)
-CREATE INDEX idx_ads_category_fields ON ads USING GIN (category_fields);
+CREATE INDEX IF NOT EXISTS idx_ads_category_fields ON ads USING GIN (category_fields);
 
 -- Exchange description search
-CREATE INDEX idx_ads_exchange_search ON ads
+CREATE INDEX IF NOT EXISTS idx_ads_exchange_search ON ads
   USING GIN (to_tsvector('arabic', coalesce(exchange_description, '')))
   WHERE sale_type = 'exchange' AND status = 'active';
 
@@ -224,20 +227,20 @@ CREATE INDEX idx_ads_exchange_search ON ads
 -- ============================================
 -- Favorites (المفضلة)
 -- ============================================
-CREATE TABLE favorites (
+CREATE TABLE IF NOT EXISTS favorites (
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, ad_id)
 );
 
-CREATE INDEX idx_favorites_user ON favorites(user_id, created_at DESC);
-CREATE INDEX idx_favorites_ad ON favorites(ad_id);
+CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_favorites_ad ON favorites(ad_id);
 
 -- ============================================
 -- Auction Bids (المزايدات)
 -- ============================================
-CREATE TABLE auction_bids (
+CREATE TABLE IF NOT EXISTS auction_bids (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
   bidder_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -246,14 +249,14 @@ CREATE TABLE auction_bids (
 );
 
 -- Quick lookup of highest bid per ad
-CREATE INDEX idx_bids_ad ON auction_bids(ad_id, amount DESC);
+CREATE INDEX IF NOT EXISTS idx_bids_ad ON auction_bids(ad_id, amount DESC);
 -- User's bidding history
-CREATE INDEX idx_bids_bidder ON auction_bids(bidder_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bids_bidder ON auction_bids(bidder_id, created_at DESC);
 
 -- ============================================
 -- Conversations (المحادثات)
 -- ============================================
-CREATE TABLE conversations (
+CREATE TABLE IF NOT EXISTS conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
   buyer_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -265,14 +268,14 @@ CREATE TABLE conversations (
 );
 
 -- User's conversations (as buyer or seller)
-CREATE INDEX idx_conversations_buyer ON conversations(buyer_id, last_message_at DESC);
-CREATE INDEX idx_conversations_seller ON conversations(seller_id, last_message_at DESC);
-CREATE INDEX idx_conversations_ad ON conversations(ad_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_buyer ON conversations(buyer_id, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_seller ON conversations(seller_id, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_ad ON conversations(ad_id);
 
 -- ============================================
 -- Messages (الرسائل)
 -- ============================================
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   sender_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -283,15 +286,15 @@ CREATE TABLE messages (
 );
 
 -- Messages in a conversation (ordered by time)
-CREATE INDEX idx_messages_conv ON messages(conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at DESC);
 -- Unread messages for a user
-CREATE INDEX idx_messages_unread ON messages(conversation_id, is_read)
+CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(conversation_id, is_read)
   WHERE is_read = FALSE;
 
 -- ============================================
 -- Commissions (العمولات التطوعية)
 -- ============================================
-CREATE TABLE commissions (
+CREATE TABLE IF NOT EXISTS commissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ad_id UUID REFERENCES ads(id) ON DELETE SET NULL,
   payer_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -302,9 +305,9 @@ CREATE TABLE commissions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_commissions_payer ON commissions(payer_id);
-CREATE INDEX idx_commissions_ad ON commissions(ad_id);
-CREATE INDEX idx_commissions_status ON commissions(status);
+CREATE INDEX IF NOT EXISTS idx_commissions_payer ON commissions(payer_id);
+CREATE INDEX IF NOT EXISTS idx_commissions_ad ON commissions(ad_id);
+CREATE INDEX IF NOT EXISTS idx_commissions_status ON commissions(status);
 
 
 -- ============================================
@@ -316,7 +319,7 @@ CREATE INDEX idx_commissions_status ON commissions(status);
 -- User Signals (إشارات سلوك المستخدم)
 -- Collects user behavior for recommendation engine
 -- ============================================
-CREATE TABLE user_signals (
+CREATE TABLE IF NOT EXISTS user_signals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   signal_type VARCHAR(20) NOT NULL CHECK (
@@ -333,19 +336,19 @@ CREATE TABLE user_signals (
 );
 
 -- Recent signals per user (for real-time recommendations)
-CREATE INDEX idx_signals_user_recent ON user_signals(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_signals_user_recent ON user_signals(user_id, created_at DESC);
 -- User + category weighted signals (for category-level recommendations)
-CREATE INDEX idx_signals_user_category ON user_signals(user_id, category_id, weight DESC);
+CREATE INDEX IF NOT EXISTS idx_signals_user_category ON user_signals(user_id, category_id, weight DESC);
 -- JSONB signal data (for filtering by brand, price, etc.)
-CREATE INDEX idx_signals_data ON user_signals USING GIN (signal_data);
+CREATE INDEX IF NOT EXISTS idx_signals_data ON user_signals USING GIN (signal_data);
 -- Signal type (for analytics)
-CREATE INDEX idx_signals_type ON user_signals(signal_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_signals_type ON user_signals(signal_type, created_at DESC);
 
 -- ============================================
 -- User Interest Profiles (ملفات اهتمامات المستخدمين)
 -- Precomputed by background worker, used for fast recommendations
 -- ============================================
-CREATE TABLE user_interest_profiles (
+CREATE TABLE IF NOT EXISTS user_interest_profiles (
   user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
   interests JSONB NOT NULL DEFAULT '[]',
   -- Example structure:
@@ -371,6 +374,7 @@ $$ LANGUAGE plpgsql;
 
 -- ============================================
 -- PART 6: Row Level Security Policies
+-- Using DROP IF EXISTS before CREATE to be idempotent
 -- ============================================
 
 -- ============================================
@@ -378,17 +382,17 @@ $$ LANGUAGE plpgsql;
 -- ============================================
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
--- Anyone can view user profiles
+DROP POLICY IF EXISTS "Users are viewable by everyone" ON public.users;
 CREATE POLICY "Users are viewable by everyone"
   ON public.users FOR SELECT
   USING (true);
 
--- Users can only insert their own profile
+DROP POLICY IF EXISTS "Users can create their own profile" ON public.users;
 CREATE POLICY "Users can create their own profile"
   ON public.users FOR INSERT
   WITH CHECK (auth.uid() = id);
 
--- Users can only update their own profile
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
 CREATE POLICY "Users can update their own profile"
   ON public.users FOR UPDATE
   USING (auth.uid() = id);
@@ -398,6 +402,7 @@ CREATE POLICY "Users can update their own profile"
 -- ============================================
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Categories are viewable by everyone" ON categories;
 CREATE POLICY "Categories are viewable by everyone"
   ON categories FOR SELECT
   USING (true);
@@ -407,6 +412,7 @@ CREATE POLICY "Categories are viewable by everyone"
 -- ============================================
 ALTER TABLE subcategories ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Subcategories are viewable by everyone" ON subcategories;
 CREATE POLICY "Subcategories are viewable by everyone"
   ON subcategories FOR SELECT
   USING (true);
@@ -416,6 +422,7 @@ CREATE POLICY "Subcategories are viewable by everyone"
 -- ============================================
 ALTER TABLE governorates ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Governorates are viewable by everyone" ON governorates;
 CREATE POLICY "Governorates are viewable by everyone"
   ON governorates FOR SELECT
   USING (true);
@@ -425,6 +432,7 @@ CREATE POLICY "Governorates are viewable by everyone"
 -- ============================================
 ALTER TABLE cities ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Cities are viewable by everyone" ON cities;
 CREATE POLICY "Cities are viewable by everyone"
   ON cities FOR SELECT
   USING (true);
@@ -434,23 +442,22 @@ CREATE POLICY "Cities are viewable by everyone"
 -- ============================================
 ALTER TABLE ads ENABLE ROW LEVEL SECURITY;
 
--- Everyone can see non-deleted ads
+DROP POLICY IF EXISTS "Ads are viewable by everyone" ON ads;
 CREATE POLICY "Ads are viewable by everyone"
   ON ads FOR SELECT
   USING (status != 'deleted');
 
--- Authenticated users can create ads (owner only)
+DROP POLICY IF EXISTS "Users can create their own ads" ON ads;
 CREATE POLICY "Users can create their own ads"
   ON ads FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
--- Users can update their own ads
+DROP POLICY IF EXISTS "Users can update their own ads" ON ads;
 CREATE POLICY "Users can update their own ads"
   ON ads FOR UPDATE
   USING (auth.uid() = user_id);
 
--- Users can soft-delete their own ads (update status to 'deleted')
--- Hard delete is not allowed from client
+DROP POLICY IF EXISTS "Users can delete their own ads" ON ads;
 CREATE POLICY "Users can delete their own ads"
   ON ads FOR DELETE
   USING (auth.uid() = user_id);
@@ -460,17 +467,17 @@ CREATE POLICY "Users can delete their own ads"
 -- ============================================
 ALTER TABLE favorites ENABLE ROW LEVEL SECURITY;
 
--- Users can see their own favorites
+DROP POLICY IF EXISTS "Users can view their own favorites" ON favorites;
 CREATE POLICY "Users can view their own favorites"
   ON favorites FOR SELECT
   USING (auth.uid() = user_id);
 
--- Users can add to their own favorites
+DROP POLICY IF EXISTS "Users can add favorites" ON favorites;
 CREATE POLICY "Users can add favorites"
   ON favorites FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
--- Users can remove their own favorites
+DROP POLICY IF EXISTS "Users can remove favorites" ON favorites;
 CREATE POLICY "Users can remove favorites"
   ON favorites FOR DELETE
   USING (auth.uid() = user_id);
@@ -480,12 +487,12 @@ CREATE POLICY "Users can remove favorites"
 -- ============================================
 ALTER TABLE auction_bids ENABLE ROW LEVEL SECURITY;
 
--- Everyone can see bids on active ads (for transparency)
+DROP POLICY IF EXISTS "Bids are viewable by everyone" ON auction_bids;
 CREATE POLICY "Bids are viewable by everyone"
   ON auction_bids FOR SELECT
   USING (true);
 
--- Authenticated users can place bids
+DROP POLICY IF EXISTS "Users can place bids" ON auction_bids;
 CREATE POLICY "Users can place bids"
   ON auction_bids FOR INSERT
   WITH CHECK (auth.uid() = bidder_id);
@@ -495,17 +502,17 @@ CREATE POLICY "Users can place bids"
 -- ============================================
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 
--- Only participants can see their conversations
+DROP POLICY IF EXISTS "Conversation participants can view" ON conversations;
 CREATE POLICY "Conversation participants can view"
   ON conversations FOR SELECT
   USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
 
--- Authenticated users can start conversations (as buyer)
+DROP POLICY IF EXISTS "Users can start conversations" ON conversations;
 CREATE POLICY "Users can start conversations"
   ON conversations FOR INSERT
   WITH CHECK (auth.uid() = buyer_id);
 
--- Participants can update conversation (e.g., last_message_at)
+DROP POLICY IF EXISTS "Participants can update conversations" ON conversations;
 CREATE POLICY "Participants can update conversations"
   ON conversations FOR UPDATE
   USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
@@ -515,7 +522,7 @@ CREATE POLICY "Participants can update conversations"
 -- ============================================
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
--- Only conversation participants can view messages
+DROP POLICY IF EXISTS "Chat participants can view messages" ON messages;
 CREATE POLICY "Chat participants can view messages"
   ON messages FOR SELECT
   USING (
@@ -525,7 +532,7 @@ CREATE POLICY "Chat participants can view messages"
     )
   );
 
--- Only conversation participants can send messages
+DROP POLICY IF EXISTS "Chat participants can send messages" ON messages;
 CREATE POLICY "Chat participants can send messages"
   ON messages FOR INSERT
   WITH CHECK (
@@ -536,7 +543,7 @@ CREATE POLICY "Chat participants can send messages"
     )
   );
 
--- Recipient can mark messages as read
+DROP POLICY IF EXISTS "Recipients can mark messages as read" ON messages;
 CREATE POLICY "Recipients can mark messages as read"
   ON messages FOR UPDATE
   USING (
@@ -551,12 +558,12 @@ CREATE POLICY "Recipients can mark messages as read"
 -- ============================================
 ALTER TABLE commissions ENABLE ROW LEVEL SECURITY;
 
--- Users can view their own commission history
+DROP POLICY IF EXISTS "Users can view their own commissions" ON commissions;
 CREATE POLICY "Users can view their own commissions"
   ON commissions FOR SELECT
   USING (auth.uid() = payer_id);
 
--- Users can create commission payments
+DROP POLICY IF EXISTS "Users can create commissions" ON commissions;
 CREATE POLICY "Users can create commissions"
   ON commissions FOR INSERT
   WITH CHECK (auth.uid() = payer_id);
@@ -566,12 +573,12 @@ CREATE POLICY "Users can create commissions"
 -- ============================================
 ALTER TABLE user_signals ENABLE ROW LEVEL SECURITY;
 
--- Users can only see their own signals
+DROP POLICY IF EXISTS "Users can view their own signals" ON user_signals;
 CREATE POLICY "Users can view their own signals"
   ON user_signals FOR SELECT
   USING (auth.uid() = user_id);
 
--- Users can create their own signals
+DROP POLICY IF EXISTS "Users can create signals" ON user_signals;
 CREATE POLICY "Users can create signals"
   ON user_signals FOR INSERT
   WITH CHECK (auth.uid() = user_id);
@@ -581,7 +588,7 @@ CREATE POLICY "Users can create signals"
 -- ============================================
 ALTER TABLE user_interest_profiles ENABLE ROW LEVEL SECURITY;
 
--- Users can view their own interest profile
+DROP POLICY IF EXISTS "Users can view their own interest profile" ON user_interest_profiles;
 CREATE POLICY "Users can view their own interest profile"
   ON user_interest_profiles FOR SELECT
   USING (auth.uid() = user_id);
@@ -594,7 +601,7 @@ CREATE POLICY "Users can view their own interest profile"
 -- ============================================
 -- Notifications (الإشعارات)
 -- ============================================
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   type VARCHAR(30) NOT NULL CHECK (type IN (
@@ -612,15 +619,15 @@ CREATE TABLE notifications (
 );
 
 -- User's notifications ordered by time
-CREATE INDEX idx_notifications_user ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
 -- Unread count query
-CREATE INDEX idx_notifications_unread ON notifications(user_id, is_read)
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read)
   WHERE is_read = FALSE;
 
 -- ============================================
 -- Push Subscriptions (اشتراكات الإشعارات)
 -- ============================================
-CREATE TABLE push_subscriptions (
+CREATE TABLE IF NOT EXISTS push_subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   endpoint TEXT NOT NULL,
@@ -630,17 +637,19 @@ CREATE TABLE push_subscriptions (
   UNIQUE(user_id, endpoint)
 );
 
-CREATE INDEX idx_push_sub_user ON push_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_push_sub_user ON push_subscriptions(user_id);
 
 -- ============================================
 -- RLS for Notifications
 -- ============================================
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own notifications" ON notifications;
 CREATE POLICY "Users can view their own notifications"
   ON notifications FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own notifications" ON notifications;
 CREATE POLICY "Users can update their own notifications"
   ON notifications FOR UPDATE
   USING (auth.uid() = user_id);
@@ -650,19 +659,28 @@ CREATE POLICY "Users can update their own notifications"
 -- ============================================
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage their own push subscriptions" ON push_subscriptions;
 CREATE POLICY "Users can manage their own push subscriptions"
   ON push_subscriptions FOR ALL
   USING (auth.uid() = user_id);
 
 -- ============================================
 -- Enable Realtime for notifications
+-- (wrapped in DO block for idempotency)
 -- ============================================
-ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;  -- already added
+END;
+$$;
 
 
 -- ============================================
 -- PART 8: Seed Data — Categories & Subcategories
 -- 12 قسم رئيسي مع الأقسام الفرعية
+-- All inserts use ON CONFLICT DO NOTHING for idempotency
 -- ============================================
 
 -- ============================================
@@ -691,7 +709,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('cars_microbus',    'cars', 'ميكروباص',      'microbus',    2),
   ('cars_trucks',      'cars', 'نقل',           'trucks',      3),
   ('cars_motorcycles', 'cars', 'موتوسيكلات',    'motorcycles', 4),
-  ('cars_parts',       'cars', 'قطع غيار',      'car-parts',   5);
+  ('cars_parts',       'cars', 'قطع غيار',      'car-parts',   5)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 2. العقارات — Subcategories
@@ -702,7 +721,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('re_villas',          'real_estate', 'فيلات',          'villas',          3),
   ('re_land',            'real_estate', 'أراضي',          'land',            4),
   ('re_commercial',      'real_estate', 'محلات تجارية',   'commercial',      5),
-  ('re_offices',         'real_estate', 'مكاتب',          'offices',         6);
+  ('re_offices',         'real_estate', 'مكاتب',          'offices',         6)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 3. الموبايلات والتابلت — Subcategories
@@ -711,7 +731,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('phones_mobile',      'phones', 'موبايلات',    'mobile',           1),
   ('phones_tablet',      'phones', 'تابلت',       'tablet',           2),
   ('phones_accessories', 'phones', 'إكسسوارات',   'phone-accessories', 3),
-  ('phones_parts',       'phones', 'قطع غيار',    'phone-parts',      4);
+  ('phones_parts',       'phones', 'قطع غيار',    'phone-parts',      4)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 4. الموضة — Subcategories
@@ -722,7 +743,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('fashion_kids',        'fashion', 'ملابس أطفال',  'kids',               3),
   ('fashion_shoes',       'fashion', 'أحذية',        'shoes',              4),
   ('fashion_bags',        'fashion', 'شنط',          'bags',               5),
-  ('fashion_accessories', 'fashion', 'إكسسوارات',    'fashion-accessories', 6);
+  ('fashion_accessories', 'fashion', 'إكسسوارات',    'fashion-accessories', 6)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 5. الخردة — Subcategories
@@ -735,7 +757,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('scrap_paper',        'scrap', 'ورق',           'paper',        5),
   ('scrap_old_devices',  'scrap', 'أجهزة قديمة',   'old-devices',  6),
   ('scrap_construction', 'scrap', 'مخلفات بناء',   'construction', 7),
-  ('scrap_other',        'scrap', 'أخرى',          'scrap-other',  8);
+  ('scrap_other',        'scrap', 'أخرى',          'scrap-other',  8)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 6. الذهب والفضة — Subcategories
@@ -744,7 +767,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('gold_items',          'gold', 'ذهب',           'gold-items',      1),
   ('gold_silver',         'gold', 'فضة',           'silver',          2),
   ('gold_diamond',        'gold', 'ألماس',         'diamond',         3),
-  ('gold_precious_watch', 'gold', 'ساعات ثمينة',   'precious-watches', 4);
+  ('gold_precious_watch', 'gold', 'ساعات ثمينة',   'precious-watches', 4)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 7. السلع الفاخرة — Subcategories
@@ -754,7 +778,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('luxury_sunglasses', 'luxury', 'نظارات',    'sunglasses',   2),
   ('luxury_watches',    'luxury', 'ساعات',     'watches',      3),
   ('luxury_perfumes',   'luxury', 'عطور',      'perfumes',     4),
-  ('luxury_pens',       'luxury', 'أقلام',     'pens',         5);
+  ('luxury_pens',       'luxury', 'أقلام',     'pens',         5)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 8. الأجهزة المنزلية — Subcategories
@@ -765,7 +790,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('app_cookers',     'appliances', 'بوتاجازات',    'cookers',          3),
   ('app_ac',          'appliances', 'مكيفات',       'ac',               4),
   ('app_heaters',     'appliances', 'سخانات',       'heaters',          5),
-  ('app_small',       'appliances', 'أجهزة صغيرة',  'small-appliances', 6);
+  ('app_small',       'appliances', 'أجهزة صغيرة',  'small-appliances', 6)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 9. الأثاث والديكور — Subcategories
@@ -778,7 +804,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('furn_decor',    'furniture', 'ديكورات',   'decor',           5),
   ('furn_lighting', 'furniture', 'إضاءة',     'lighting',        6),
   ('furn_carpets',  'furniture', 'سجاد',      'carpets',         7),
-  ('furn_other',    'furniture', 'أخرى',      'furniture-other', 8);
+  ('furn_other',    'furniture', 'أخرى',      'furniture-other', 8)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 10. الهوايات — Subcategories
@@ -791,7 +818,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('hobby_cameras',   'hobbies', 'كاميرات',          'cameras',   5),
   ('hobby_bikes',     'hobbies', 'دراجات',           'bikes',     6),
   ('hobby_antiques',  'hobbies', 'تحف وأنتيكات',     'antiques',  7),
-  ('hobby_pets',      'hobbies', 'حيوانات أليفة',    'pets',      8);
+  ('hobby_pets',      'hobbies', 'حيوانات أليفة',    'pets',      8)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 11. العدد والأدوات — Subcategories
@@ -801,7 +829,8 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('tools_power',       'tools', 'عدد كهربائية',    'power-tools',          2),
   ('tools_workshop',    'tools', 'معدات ورش',       'workshop',             3),
   ('tools_agricultural','tools', 'معدات زراعية',    'agricultural',         4),
-  ('tools_restaurant',  'tools', 'معدات مطاعم',     'restaurant-equipment', 5);
+  ('tools_restaurant',  'tools', 'معدات مطاعم',     'restaurant-equipment', 5)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 12. الخدمات — Subcategories
@@ -816,18 +845,21 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('svc_cleaning',       'services', 'تنظيف',          'cleaning',       7),
   ('svc_tech',           'services', 'خدمات تقنية',    'tech',           8),
   ('svc_tutoring',       'services', 'دروس خصوصية',    'tutoring',       9),
-  ('svc_other',          'services', 'خدمات أخرى',     'services-other', 10);
+  ('svc_other',          'services', 'خدمات أخرى',     'services-other', 10)
+ON CONFLICT (id) DO NOTHING;
 
 
 -- ============================================
 -- PART 9: Seed Data — Egyptian Governorates & Main Cities
 -- 27 محافظة مصرية مع المدن الرئيسية
+-- All inserts use ON CONFLICT for idempotency
 -- ============================================
 
 -- ============================================
 -- 1. القاهرة
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (1, 'القاهرة', 'Cairo');
+INSERT INTO governorates (id, name, name_en) VALUES (1, 'القاهرة', 'Cairo')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (1, 'مدينة نصر', 'Nasr City'),
   (1, 'مصر الجديدة', 'Heliopolis'),
@@ -847,12 +879,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (1, 'السيدة زينب', 'Sayeda Zeinab'),
   (1, 'الدرب الأحمر', 'El Darb El Ahmar'),
   (1, 'العاشر من رمضان', '10th of Ramadan'),
-  (1, 'القاهرة الجديدة', 'New Cairo');
+  (1, 'القاهرة الجديدة', 'New Cairo')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 2. الجيزة
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (2, 'الجيزة', 'Giza');
+INSERT INTO governorates (id, name, name_en) VALUES (2, 'الجيزة', 'Giza')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (2, 'الدقي', 'Dokki'),
   (2, 'المهندسين', 'Mohandessin'),
@@ -867,12 +901,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (2, 'أبو النمرس', 'Abu El Nomros'),
   (2, 'الحوامدية', 'El Hawamdiya'),
   (2, 'أوسيم', 'Ausim'),
-  (2, 'كرداسة', 'Kerdasa');
+  (2, 'كرداسة', 'Kerdasa')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 3. الإسكندرية
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (3, 'الإسكندرية', 'Alexandria');
+INSERT INTO governorates (id, name, name_en) VALUES (3, 'الإسكندرية', 'Alexandria')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (3, 'سموحة', 'Smouha'),
   (3, 'سيدي جابر', 'Sidi Gaber'),
@@ -887,12 +923,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (3, 'كفر عبده', 'Kafr Abdo'),
   (3, 'بحري', 'Bahary'),
   (3, 'العامرية', 'El Ameriya'),
-  (3, 'برج العرب', 'Borg El Arab');
+  (3, 'برج العرب', 'Borg El Arab')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 4. القليوبية
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (4, 'القليوبية', 'Qalyubia');
+INSERT INTO governorates (id, name, name_en) VALUES (4, 'القليوبية', 'Qalyubia')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (4, 'بنها', 'Banha'),
   (4, 'شبرا الخيمة', 'Shubra El Kheima'),
@@ -901,12 +939,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (4, 'الخانكة', 'El Khanka'),
   (4, 'كفر شكر', 'Kafr Shokr'),
   (4, 'طوخ', 'Tukh'),
-  (4, 'قها', 'Qaha');
+  (4, 'قها', 'Qaha')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 5. الشرقية
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (5, 'الشرقية', 'Sharqia');
+INSERT INTO governorates (id, name, name_en) VALUES (5, 'الشرقية', 'Sharqia')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (5, 'الزقازيق', 'Zagazig'),
   (5, 'العاشر من رمضان', '10th of Ramadan'),
@@ -917,12 +957,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (5, 'ههيا', 'Hihya'),
   (5, 'ديرب نجم', 'Diarb Negm'),
   (5, 'أبو كبير', 'Abu Kebir'),
-  (5, 'كفر صقر', 'Kafr Saqr');
+  (5, 'كفر صقر', 'Kafr Saqr')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 6. الدقهلية
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (6, 'الدقهلية', 'Dakahlia');
+INSERT INTO governorates (id, name, name_en) VALUES (6, 'الدقهلية', 'Dakahlia')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (6, 'المنصورة', 'Mansoura'),
   (6, 'طلخا', 'Talkha'),
@@ -933,12 +975,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (6, 'شربين', 'Sherbin'),
   (6, 'المنزلة', 'El Manzala'),
   (6, 'بلقاس', 'Belqas'),
-  (6, 'نبروه', 'Nabaroh');
+  (6, 'نبروه', 'Nabaroh')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 7. البحيرة
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (7, 'البحيرة', 'Beheira');
+INSERT INTO governorates (id, name, name_en) VALUES (7, 'البحيرة', 'Beheira')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (7, 'دمنهور', 'Damanhour'),
   (7, 'كفر الدوار', 'Kafr El Dawar'),
@@ -947,12 +991,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (7, 'أبو المطامير', 'Abu El Matamir'),
   (7, 'حوش عيسى', 'Hosh Eisa'),
   (7, 'إيتاي البارود', 'Itay El Barud'),
-  (7, 'شبراخيت', 'Shubrakheit');
+  (7, 'شبراخيت', 'Shubrakheit')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 8. الغربية
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (8, 'الغربية', 'Gharbia');
+INSERT INTO governorates (id, name, name_en) VALUES (8, 'الغربية', 'Gharbia')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (8, 'طنطا', 'Tanta'),
   (8, 'المحلة الكبرى', 'El Mahalla El Kubra'),
@@ -961,12 +1007,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (8, 'السنطة', 'El Santa'),
   (8, 'سمنود', 'Samannoud'),
   (8, 'بسيون', 'Basyoun'),
-  (8, 'قطور', 'Qutur');
+  (8, 'قطور', 'Qutur')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 9. المنوفية
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (9, 'المنوفية', 'Monufia');
+INSERT INTO governorates (id, name, name_en) VALUES (9, 'المنوفية', 'Monufia')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (9, 'شبين الكوم', 'Shibin El Kom'),
   (9, 'منوف', 'Menouf'),
@@ -975,12 +1023,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (9, 'الباجور', 'El Bagour'),
   (9, 'قويسنا', 'Quesna'),
   (9, 'بركة السبع', 'Berket El Sabaa'),
-  (9, 'تلا', 'Tala');
+  (9, 'تلا', 'Tala')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 10. كفر الشيخ
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (10, 'كفر الشيخ', 'Kafr El Sheikh');
+INSERT INTO governorates (id, name, name_en) VALUES (10, 'كفر الشيخ', 'Kafr El Sheikh')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (10, 'كفر الشيخ', 'Kafr El Sheikh'),
   (10, 'دسوق', 'Desouk'),
@@ -989,82 +1039,96 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (10, 'الحامول', 'El Hamoul'),
   (10, 'سيدي سالم', 'Sidi Salem'),
   (10, 'البرلس', 'El Burullus'),
-  (10, 'مطوبس', 'Mutubas');
+  (10, 'مطوبس', 'Mutubas')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
--- 11. الدمياط
+-- 11. دمياط
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (11, 'دمياط', 'Damietta');
+INSERT INTO governorates (id, name, name_en) VALUES (11, 'دمياط', 'Damietta')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (11, 'دمياط', 'Damietta'),
   (11, 'دمياط الجديدة', 'New Damietta'),
   (11, 'رأس البر', 'Ras El Bar'),
   (11, 'فارسكور', 'Faraskour'),
   (11, 'كفر سعد', 'Kafr Saad'),
-  (11, 'الزرقا', 'El Zarqa');
+  (11, 'الزرقا', 'El Zarqa')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 12. بورسعيد
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (12, 'بورسعيد', 'Port Said');
+INSERT INTO governorates (id, name, name_en) VALUES (12, 'بورسعيد', 'Port Said')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (12, 'بورسعيد', 'Port Said'),
   (12, 'بورفؤاد', 'Port Fouad'),
   (12, 'العرب', 'El Arab'),
   (12, 'الزهور', 'El Zohour'),
-  (12, 'الضواحي', 'El Dawahy');
+  (12, 'الضواحي', 'El Dawahy')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 13. الإسماعيلية
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (13, 'الإسماعيلية', 'Ismailia');
+INSERT INTO governorates (id, name, name_en) VALUES (13, 'الإسماعيلية', 'Ismailia')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (13, 'الإسماعيلية', 'Ismailia'),
   (13, 'فايد', 'Fayed'),
   (13, 'القنطرة شرق', 'El Qantara Sharq'),
   (13, 'القنطرة غرب', 'El Qantara Gharb'),
   (13, 'التل الكبير', 'El Tal El Kebir'),
-  (13, 'أبو صوير', 'Abu Suweir');
+  (13, 'أبو صوير', 'Abu Suweir')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 14. السويس
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (14, 'السويس', 'Suez');
+INSERT INTO governorates (id, name, name_en) VALUES (14, 'السويس', 'Suez')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (14, 'السويس', 'Suez'),
   (14, 'الأربعين', 'El Arbaeen'),
   (14, 'عتاقة', 'Ataka'),
   (14, 'فيصل', 'Faisal'),
-  (14, 'الجناين', 'El Ganayen');
+  (14, 'الجناين', 'El Ganayen')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 15. شمال سيناء
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (15, 'شمال سيناء', 'North Sinai');
+INSERT INTO governorates (id, name, name_en) VALUES (15, 'شمال سيناء', 'North Sinai')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (15, 'العريش', 'El Arish'),
   (15, 'الشيخ زويد', 'Sheikh Zuweid'),
   (15, 'رفح', 'Rafah'),
   (15, 'بئر العبد', 'Bir El Abd'),
   (15, 'الحسنة', 'El Hasana'),
-  (15, 'نخل', 'Nakhl');
+  (15, 'نخل', 'Nakhl')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 16. جنوب سيناء
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (16, 'جنوب سيناء', 'South Sinai');
+INSERT INTO governorates (id, name, name_en) VALUES (16, 'جنوب سيناء', 'South Sinai')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (16, 'الطور', 'El Tur'),
   (16, 'شرم الشيخ', 'Sharm El Sheikh'),
   (16, 'دهب', 'Dahab'),
   (16, 'نويبع', 'Nuweiba'),
   (16, 'طابا', 'Taba'),
-  (16, 'سانت كاترين', 'Saint Catherine');
+  (16, 'سانت كاترين', 'Saint Catherine')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 17. الفيوم
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (17, 'الفيوم', 'Fayoum');
+INSERT INTO governorates (id, name, name_en) VALUES (17, 'الفيوم', 'Fayoum')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (17, 'الفيوم', 'Fayoum'),
   (17, 'الفيوم الجديدة', 'New Fayoum'),
@@ -1072,12 +1136,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (17, 'طامية', 'Tamiya'),
   (17, 'سنورس', 'Sennoures'),
   (17, 'إطسا', 'Itsa'),
-  (17, 'يوسف الصديق', 'Yusuf El Siddiq');
+  (17, 'يوسف الصديق', 'Yusuf El Siddiq')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 18. بني سويف
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (18, 'بني سويف', 'Beni Suef');
+INSERT INTO governorates (id, name, name_en) VALUES (18, 'بني سويف', 'Beni Suef')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (18, 'بني سويف', 'Beni Suef'),
   (18, 'بني سويف الجديدة', 'New Beni Suef'),
@@ -1085,12 +1151,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (18, 'ناصر', 'Nasser'),
   (18, 'إهناسيا', 'Ihnasya'),
   (18, 'ببا', 'Beba'),
-  (18, 'الفشن', 'El Fashn');
+  (18, 'الفشن', 'El Fashn')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 19. المنيا
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (19, 'المنيا', 'Minya');
+INSERT INTO governorates (id, name, name_en) VALUES (19, 'المنيا', 'Minya')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (19, 'المنيا', 'Minya'),
   (19, 'المنيا الجديدة', 'New Minya'),
@@ -1100,12 +1168,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (19, 'مغاغة', 'Maghagha'),
   (19, 'بني مزار', 'Beni Mazar'),
   (19, 'ديرمواس', 'Deir Mawas'),
-  (19, 'العدوة', 'El Edwa');
+  (19, 'العدوة', 'El Edwa')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 20. أسيوط
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (20, 'أسيوط', 'Asyut');
+INSERT INTO governorates (id, name, name_en) VALUES (20, 'أسيوط', 'Asyut')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (20, 'أسيوط', 'Asyut'),
   (20, 'أسيوط الجديدة', 'New Asyut'),
@@ -1117,12 +1187,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (20, 'ساحل سليم', 'Sahel Selim'),
   (20, 'أبو تيج', 'Abu Tig'),
   (20, 'الغنايم', 'El Ghanayem'),
-  (20, 'البداري', 'El Badari');
+  (20, 'البداري', 'El Badari')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 21. سوهاج
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (21, 'سوهاج', 'Sohag');
+INSERT INTO governorates (id, name, name_en) VALUES (21, 'سوهاج', 'Sohag')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (21, 'سوهاج', 'Sohag'),
   (21, 'سوهاج الجديدة', 'New Sohag'),
@@ -1133,12 +1205,14 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (21, 'البلينا', 'El Balyana'),
   (21, 'المنشأة', 'El Monshaa'),
   (21, 'ساقلتة', 'Saqulta'),
-  (21, 'دار السلام', 'Dar El Salam');
+  (21, 'دار السلام', 'Dar El Salam')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 22. قنا
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (22, 'قنا', 'Qena');
+INSERT INTO governorates (id, name, name_en) VALUES (22, 'قنا', 'Qena')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (22, 'قنا', 'Qena'),
   (22, 'قنا الجديدة', 'New Qena'),
@@ -1148,24 +1222,28 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (22, 'قوص', 'Qus'),
   (22, 'نقادة', 'Naqada'),
   (22, 'فرشوط', 'Farshut'),
-  (22, 'أبو تشت', 'Abu Tesht');
+  (22, 'أبو تشت', 'Abu Tesht')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 23. الأقصر
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (23, 'الأقصر', 'Luxor');
+INSERT INTO governorates (id, name, name_en) VALUES (23, 'الأقصر', 'Luxor')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (23, 'الأقصر', 'Luxor'),
   (23, 'الأقصر الجديدة', 'New Luxor'),
   (23, 'الطود', 'El Tod'),
   (23, 'إسنا', 'Esna'),
   (23, 'أرمنت', 'Armant'),
-  (23, 'البياضية', 'El Bayadiya');
+  (23, 'البياضية', 'El Bayadiya')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 24. أسوان
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (24, 'أسوان', 'Aswan');
+INSERT INTO governorates (id, name, name_en) VALUES (24, 'أسوان', 'Aswan')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (24, 'أسوان', 'Aswan'),
   (24, 'أسوان الجديدة', 'New Aswan'),
@@ -1173,35 +1251,41 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (24, 'إدفو', 'Edfu'),
   (24, 'دراو', 'Daraw'),
   (24, 'نصر النوبة', 'Nasr El Nuba'),
-  (24, 'أبو سمبل', 'Abu Simbel');
+  (24, 'أبو سمبل', 'Abu Simbel')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 25. البحر الأحمر
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (25, 'البحر الأحمر', 'Red Sea');
+INSERT INTO governorates (id, name, name_en) VALUES (25, 'البحر الأحمر', 'Red Sea')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (25, 'الغردقة', 'Hurghada'),
   (25, 'سفاجا', 'Safaga'),
   (25, 'القصير', 'El Quseir'),
   (25, 'مرسى علم', 'Marsa Alam'),
   (25, 'رأس غارب', 'Ras Gharib'),
-  (25, 'الجونة', 'El Gouna');
+  (25, 'الجونة', 'El Gouna')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 26. الوادي الجديد
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (26, 'الوادي الجديد', 'New Valley');
+INSERT INTO governorates (id, name, name_en) VALUES (26, 'الوادي الجديد', 'New Valley')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (26, 'الخارجة', 'El Kharga'),
   (26, 'الداخلة', 'El Dakhla'),
   (26, 'الفرافرة', 'El Farafra'),
   (26, 'باريس', 'Paris'),
-  (26, 'بلاط', 'Balat');
+  (26, 'بلاط', 'Balat')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 27. مطروح
 -- ============================================
-INSERT INTO governorates (id, name, name_en) VALUES (27, 'مطروح', 'Matrouh');
+INSERT INTO governorates (id, name, name_en) VALUES (27, 'مطروح', 'Matrouh')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO cities (governorate_id, name, name_en) VALUES
   (27, 'مرسى مطروح', 'Marsa Matrouh'),
   (27, 'العلمين', 'El Alamein'),
@@ -1210,4 +1294,84 @@ INSERT INTO cities (governorate_id, name, name_en) VALUES
   (27, 'الضبعة', 'El Dabaa'),
   (27, 'سيدي براني', 'Sidi Barani'),
   (27, 'سيوة', 'Siwa'),
-  (27, 'الساحل الشمالي', 'North Coast');
+  (27, 'الساحل الشمالي', 'North Coast')
+ON CONFLICT DO NOTHING;
+
+
+-- ============================================
+-- PART 10: Storage Bucket for Ad Images
+-- (wrapped in DO block — only works if executed
+--  with service_role privileges)
+-- ============================================
+DO $$
+BEGIN
+  INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  VALUES (
+    'ad-images',
+    'ad-images',
+    true,
+    5242880,  -- 5MB
+    ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  )
+  ON CONFLICT (id) DO NOTHING;
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping storage bucket creation — requires service_role privileges. Create "ad-images" bucket manually in Supabase Dashboard → Storage.';
+  WHEN undefined_table THEN
+    RAISE NOTICE 'storage.buckets table not found — create "ad-images" bucket manually in Supabase Dashboard → Storage.';
+END;
+$$;
+
+-- Storage RLS: anyone can read, authenticated users can upload
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Public read access for ad images" ON storage.objects;
+  CREATE POLICY "Public read access for ad images"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'ad-images');
+
+  DROP POLICY IF EXISTS "Authenticated users can upload ad images" ON storage.objects;
+  CREATE POLICY "Authenticated users can upload ad images"
+    ON storage.objects FOR INSERT
+    WITH CHECK (bucket_id = 'ad-images' AND auth.role() = 'authenticated');
+
+  DROP POLICY IF EXISTS "Users can update their own ad images" ON storage.objects;
+  CREATE POLICY "Users can update their own ad images"
+    ON storage.objects FOR UPDATE
+    USING (bucket_id = 'ad-images' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+  DROP POLICY IF EXISTS "Users can delete their own ad images" ON storage.objects;
+  CREATE POLICY "Users can delete their own ad images"
+    ON storage.objects FOR DELETE
+    USING (bucket_id = 'ad-images' AND auth.uid()::text = (storage.foldername(name))[1]);
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping storage policies — requires service_role privileges.';
+  WHEN undefined_table THEN
+    RAISE NOTICE 'storage.objects table not found — configure storage policies in Supabase Dashboard.';
+END;
+$$;
+
+
+-- ============================================
+-- VERIFICATION: Check that seed data was inserted
+-- ============================================
+DO $$
+DECLARE
+  cat_count INTEGER;
+  sub_count INTEGER;
+  gov_count INTEGER;
+  city_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO cat_count FROM categories;
+  SELECT COUNT(*) INTO sub_count FROM subcategories;
+  SELECT COUNT(*) INTO gov_count FROM governorates;
+  SELECT COUNT(*) INTO city_count FROM cities;
+
+  RAISE NOTICE '✅ Setup complete!';
+  RAISE NOTICE '   Categories: % (expected 12)', cat_count;
+  RAISE NOTICE '   Subcategories: % (expected 72)', sub_count;
+  RAISE NOTICE '   Governorates: % (expected 27)', gov_count;
+  RAISE NOTICE '   Cities: % (expected 200+)', city_count;
+END;
+$$;
