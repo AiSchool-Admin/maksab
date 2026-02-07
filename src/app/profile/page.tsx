@@ -48,11 +48,11 @@ export default function ProfilePage() {
           <Button
             size="lg"
             fullWidth
-            onClick={async () => {
-              await requireAuth();
+            onClick={() => {
+              router.push("/login?redirect=/profile");
             }}
           >
-            سجّل برقم موبايلك
+            سجّل دخولك
           </Button>
         </div>
 
