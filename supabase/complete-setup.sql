@@ -24,7 +24,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;      -- Accent-insensitive search
 -- ============================================
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  phone VARCHAR(11) UNIQUE NOT NULL,
+  phone VARCHAR(20) DEFAULT '',
   display_name VARCHAR(100),
   avatar_url TEXT,
   governorate VARCHAR(50),
@@ -36,6 +36,27 @@ CREATE TABLE IF NOT EXISTS public.users (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration: if table existed with old phone column (VARCHAR(11) UNIQUE NOT NULL)
+-- safely widen it to VARCHAR(20), drop UNIQUE and NOT NULL constraints
+DO $$
+BEGIN
+  -- Remove UNIQUE constraint on phone if exists
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'users_phone_key' AND conrelid = 'public.users'::regclass
+  ) THEN
+    ALTER TABLE public.users DROP CONSTRAINT users_phone_key;
+  END IF;
+
+  -- Allow NULL and widen phone column
+  ALTER TABLE public.users ALTER COLUMN phone DROP NOT NULL;
+  ALTER TABLE public.users ALTER COLUMN phone SET DEFAULT '';
+  ALTER TABLE public.users ALTER COLUMN phone TYPE VARCHAR(20);
+EXCEPTION WHEN OTHERS THEN
+  -- Ignore if column doesn't exist or already modified
+  NULL;
+END $$;
 
 -- Index for phone lookups
 CREATE INDEX IF NOT EXISTS idx_users_phone ON public.users(phone);

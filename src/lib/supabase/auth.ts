@@ -236,7 +236,11 @@ export async function adminSignup(
 }
 
 // ── Upsert user profile ───────────────────────────────────────────────
-async function upsertUserProfile(userId: string, phone: string): Promise<UserProfile> {
+async function upsertUserProfile(userId: string, contactInfo: string): Promise<UserProfile> {
+  // Determine if contactInfo is an email or phone
+  const isEmail = contactInfo.includes("@");
+  const phone = isEmail ? "" : contactInfo;
+
   // Try to fetch existing profile first
   const { data: existing } = await supabase
     .from("users" as never)
@@ -249,11 +253,15 @@ async function upsertUserProfile(userId: string, phone: string): Promise<UserPro
   }
 
   // Create new profile
-  const { data: created } = await supabase
+  const { data: created, error: insertError } = await supabase
     .from("users" as never)
     .insert({ id: userId, phone } as never)
     .select()
     .single();
+
+  if (insertError) {
+    console.error("[upsertUserProfile] Insert error:", insertError.message, insertError.code);
+  }
 
   if (created) {
     return created as unknown as UserProfile;
