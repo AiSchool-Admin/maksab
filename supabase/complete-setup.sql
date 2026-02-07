@@ -680,7 +680,8 @@ INSERT INTO categories (id, name, icon, slug, sort_order) VALUES
   ('furniture',  'الأثاث والديكور',   '🪑', 'furniture',    9),
   ('hobbies',    'الهوايات',          '🎮', 'hobbies',     10),
   ('tools',      'العدد والأدوات',    '🔧', 'tools',       11),
-  ('services',   'الخدمات',           '🛠️', 'services',    12);
+  ('services',   'الخدمات',           '🛠️', 'services',    12)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 1. السيارات — Subcategories

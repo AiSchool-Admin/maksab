@@ -354,7 +354,7 @@ export default function CreateAdPage() {
         console.error("Ad insert error:", insertError);
         const msg =
           insertError.code === "23503"
-            ? "الأقسام مش موجودة في قاعدة البيانات. تواصل مع الدعم"
+            ? "قاعدة البيانات محتاجة تهيئة. شغّل الـ setup من: /api/admin/setup-db?secret=SERVICE_ROLE_KEY أو انسخ ملف supabase/seed-only.sql في SQL Editor"
             : insertError.code === "23505"
               ? "الإعلان ده موجود قبل كده"
               : `حصل مشكلة في نشر الإعلان (${insertError.code || "unknown"}). جرب تاني`;
