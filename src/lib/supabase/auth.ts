@@ -36,10 +36,9 @@ export type UserProfile = {
   updated_at: string;
 };
 
-// ── Send OTP ──────────────────────────────────────────────────────────
+// ── Send OTP (Phone SMS) ──────────────────────────────────────────────
 export async function sendOTP(phone: string): Promise<{ error: string | null }> {
   if (IS_DEV_MODE) {
-    // Simulate delay
     await new Promise((r) => setTimeout(r, 500));
     return { error: null };
   }
@@ -58,14 +57,37 @@ export async function sendOTP(phone: string): Promise<{ error: string | null }> 
   return { error: null };
 }
 
-// ── Verify OTP ────────────────────────────────────────────────────────
+// ── Send OTP (Email — free) ──────────────────────────────────────────
+export async function sendEmailOTP(email: string): Promise<{ error: string | null }> {
+  if (IS_DEV_MODE) {
+    await new Promise((r) => setTimeout(r, 500));
+    return { error: null };
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: true,
+    },
+  });
+
+  if (error) {
+    if (error.message.includes("rate")) {
+      return { error: "استنى شوية قبل ما تبعت كود تاني" };
+    }
+    return { error: "حصلت مشكلة في إرسال الكود. جرب تاني" };
+  }
+
+  return { error: null };
+}
+
+// ── Verify OTP (Phone SMS) ──────────────────────────────────────────
 export async function verifyOTP(
   phone: string,
   otp: string,
 ): Promise<{ user: UserProfile | null; error: string | null }> {
   if (IS_DEV_MODE) {
     await new Promise((r) => setTimeout(r, 500));
-    // Any OTP works in dev mode
     return { user: DEV_USER, error: null };
   }
 
@@ -86,8 +108,89 @@ export async function verifyOTP(
     return { user: null, error: "حصلت مشكلة. جرب تاني" };
   }
 
-  // Upsert user profile in public.users table
   const profile = await upsertUserProfile(data.user.id, phone);
+  return { user: profile, error: null };
+}
+
+// ── Verify OTP (Email) ──────────────────────────────────────────────
+export async function verifyEmailOTP(
+  email: string,
+  otp: string,
+): Promise<{ user: UserProfile | null; error: string | null }> {
+  if (IS_DEV_MODE) {
+    await new Promise((r) => setTimeout(r, 500));
+    return { user: DEV_USER, error: null };
+  }
+
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: otp,
+    type: "email",
+  });
+
+  if (error) {
+    if (error.message.includes("invalid") || error.message.includes("expired")) {
+      return { user: null, error: "الكود غلط أو انتهت صلاحيته. جرب تاني" };
+    }
+    return { user: null, error: "حصلت مشكلة في التحقق. جرب تاني" };
+  }
+
+  if (!data.user) {
+    return { user: null, error: "حصلت مشكلة. جرب تاني" };
+  }
+
+  // Use email as phone placeholder for profile
+  const profile = await upsertUserProfile(data.user.id, email);
+  return { user: profile, error: null };
+}
+
+// ── Admin Login (Email + Password) ──────────────────────────────────
+export async function adminLogin(
+  email: string,
+  password: string,
+): Promise<{ user: UserProfile | null; error: string | null }> {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    if (error.message.includes("Invalid login")) {
+      return { user: null, error: "الإيميل أو كلمة السر غلط" };
+    }
+    return { user: null, error: "حصلت مشكلة في تسجيل الدخول. جرب تاني" };
+  }
+
+  if (!data.user) {
+    return { user: null, error: "حصلت مشكلة. جرب تاني" };
+  }
+
+  const profile = await upsertUserProfile(data.user.id, data.user.email || email);
+  return { user: profile, error: null };
+}
+
+// ── Admin Signup (one-time setup) ───────────────────────────────────
+export async function adminSignup(
+  email: string,
+  password: string,
+): Promise<{ user: UserProfile | null; error: string | null }> {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+  });
+
+  if (error) {
+    if (error.message.includes("already registered")) {
+      return { user: null, error: "الإيميل ده مسجّل قبل كده. جرب تسجيل الدخول" };
+    }
+    return { user: null, error: "حصلت مشكلة في إنشاء الحساب. جرب تاني" };
+  }
+
+  if (!data.user) {
+    return { user: null, error: "حصلت مشكلة. جرب تاني" };
+  }
+
+  const profile = await upsertUserProfile(data.user.id, email);
   return { user: profile, error: null };
 }
 
@@ -162,7 +265,6 @@ export async function updateUserProfile(
 // ── Get current session ───────────────────────────────────────────────
 export async function getCurrentUser(): Promise<UserProfile | null> {
   if (IS_DEV_MODE) {
-    // In dev mode, check localStorage for dev session
     if (typeof window !== "undefined") {
       const devSession = localStorage.getItem("maksab_dev_session");
       if (devSession) return DEV_USER;
@@ -214,9 +316,8 @@ export function calcProfileCompletion(user: UserProfile): {
     { key: "bio", label: "نبذة مختصرة" },
   ];
 
-  // Phone is always present (registered) — counts as 1 filled field
   const total = fields.length + 1;
-  let filled = 1; // phone
+  let filled = 1; // phone/email is always present
   const missing: string[] = [];
 
   for (const f of fields) {

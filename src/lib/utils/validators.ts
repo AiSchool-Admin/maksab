@@ -9,6 +9,20 @@ export const egyptianPhoneSchema = z
   .regex(/^01[0125]\d{8}$/, "رقم الموبايل لازم يبدأ بـ 010 أو 011 أو 012 أو 015 ويكون 11 رقم");
 
 /**
+ * Email validation
+ */
+export const emailSchema = z
+  .string()
+  .email("الإيميل مش صحيح");
+
+/**
+ * Password validation (for admin)
+ */
+export const passwordSchema = z
+  .string()
+  .min(6, "كلمة السر لازم تكون 6 حروف على الأقل");
+
+/**
  * OTP validation - 6 digits
  */
 export const otpSchema = z
