@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="washerBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FAFAFA"/>
+      <stop offset="30%" stop-color="#F5F5F5"/>
+      <stop offset="70%" stop-color="#EEEEEE"/>
+      <stop offset="100%" stop-color="#E0E0E0"/>
+    </linearGradient>
+    <linearGradient id="washerSide" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E0E0E0"/>
+      <stop offset="100%" stop-color="#BDBDBD"/>
+    </linearGradient>
+    <linearGradient id="washerTop" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#EEEEEE"/>
+      <stop offset="100%" stop-color="#FAFAFA"/>
+    </linearGradient>
+    <radialGradient id="drumOuter" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#90A4AE"/>
+      <stop offset="70%" stop-color="#607D8B"/>
+      <stop offset="100%" stop-color="#455A64"/>
+    </radialGradient>
+    <radialGradient id="drumGlass" cx="40%" cy="35%" r="50%">
+      <stop offset="0%" stop-color="#E3F2FD"/>
+      <stop offset="30%" stop-color="#BBDEFB"/>
+      <stop offset="60%" stop-color="#64B5F6"/>
+      <stop offset="100%" stop-color="#1976D2"/>
+    </radialGradient>
+    <radialGradient id="drumInner" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#B0BEC5"/>
+      <stop offset="60%" stop-color="#78909C"/>
+      <stop offset="100%" stop-color="#546E7A"/>
+    </radialGradient>
+    <linearGradient id="controlPanel" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#E0E0E0"/>
+      <stop offset="100%" stop-color="#F5F5F5"/>
+    </linearGradient>
+    <radialGradient id="knob" cx="40%" cy="35%" r="50%">
+      <stop offset="0%" stop-color="#F5F5F5"/>
+      <stop offset="50%" stop-color="#BDBDBD"/>
+      <stop offset="100%" stop-color="#9E9E9E"/>
+    </radialGradient>
+    <linearGradient id="displayScreen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1B5E20"/>
+      <stop offset="100%" stop-color="#2E7D32"/>
+    </linearGradient>
+    <filter id="appShadow" x="-10%" y="-5%" width="125%" height="120%">
+      <feDropShadow dx="3" dy="4" stdDeviation="3" flood-color="#000" flood-opacity="0.2"/>
+    </filter>
+    <filter id="innerShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+      <feOffset dx="1" dy="1"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feComposite in2="SourceGraphic" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/>
+    </filter>
+  </defs>
+
+  <!-- Ground shadow -->
+  <ellipse cx="58" cy="108" rx="40" ry="6" fill="#000" opacity="0.12"/>
+
+  <g filter="url(#appShadow)">
+    <!-- Main body front -->
+    <rect x="18" y="18" width="68" height="88" rx="4" fill="url(#washerBody)"/>
+
+    <!-- Right side (perspective) -->
+    <path d="M86,18 L100,24 L100,100 L86,106Z" fill="url(#washerSide)"/>
+
+    <!-- Top face -->
+    <path d="M18,18 L32,12 L100,12 L86,18Z" fill="url(#washerTop)"/>
+    <path d="M100,12 L100,24 L86,18Z" fill="#BDBDBD"/>
+
+    <!-- Top edge highlight -->
+    <line x1="18" y1="18" x2="86" y2="18" stroke="#FFF" stroke-width="0.5" opacity="0.6"/>
+
+    <!-- Control panel area -->
+    <rect x="22" y="22" width="60" height="20" rx="2" fill="url(#controlPanel)"/>
+
+    <!-- Display screen -->
+    <rect x="28" y="26" width="22" height="12" rx="2" fill="url(#displayScreen)"/>
+    <!-- Display text (temp/time) -->
+    <rect x="31" y="29" width="5" height="6" rx="0.5" fill="#4CAF50" opacity="0.8"/>
+    <rect x="38" y="29" width="5" height="6" rx="0.5" fill="#4CAF50" opacity="0.8"/>
+    <circle cx="36.5" cy="30.5" r="0.5" fill="#4CAF50" opacity="0.8"/>
+    <circle cx="36.5" cy="33.5" r="0.5" fill="#4CAF50" opacity="0.8"/>
+
+    <!-- Knob (large dial) -->
+    <circle cx="62" cy="32" r="8" fill="url(#knob)" stroke="#BDBDBD" stroke-width="0.5"/>
+    <circle cx="62" cy="32" r="6" fill="none" stroke="#E0E0E0" stroke-width="0.3"/>
+    <!-- Knob indicator -->
+    <line x1="62" y1="26" x2="62" y2="28" stroke="#424242" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Knob marks -->
+    <circle cx="56" cy="30" r="0.5" fill="#9E9E9E"/>
+    <circle cx="58" cy="27" r="0.5" fill="#9E9E9E"/>
+    <circle cx="66" cy="27" r="0.5" fill="#9E9E9E"/>
+    <circle cx="68" cy="30" r="0.5" fill="#9E9E9E"/>
+
+    <!-- Small buttons -->
+    <circle cx="74" cy="28" r="2" fill="#E0E0E0" stroke="#BDBDBD" stroke-width="0.3"/>
+    <circle cx="74" cy="36" r="2" fill="#E0E0E0" stroke="#BDBDBD" stroke-width="0.3"/>
+    <!-- Power button indicator -->
+    <circle cx="74" cy="28" r="0.8" fill="#4CAF50"/>
+
+    <!-- Divider line -->
+    <line x1="22" y1="44" x2="82" y2="44" stroke="#BDBDBD" stroke-width="0.5"/>
+
+    <!-- Door frame (circular) -->
+    <circle cx="52" cy="72" r="26" fill="url(#drumOuter)" stroke="#90A4AE" stroke-width="1"/>
+
+    <!-- Glass door -->
+    <circle cx="52" cy="72" r="22" fill="url(#drumGlass)"/>
+
+    <!-- Drum visible through glass -->
+    <circle cx="52" cy="72" r="18" fill="url(#drumInner)" opacity="0.4"/>
+
+    <!-- Water reflection on glass -->
+    <path d="M38,60 Q45,65 40,75 Q35,85 45,82" fill="none" stroke="#E3F2FD" stroke-width="1" opacity="0.5"/>
+
+    <!-- Glass highlight (reflection arc) -->
+    <path d="M38,58 Q42,52 50,52" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+    <path d="M36,62 Q38,58 42,56" fill="none" stroke="#FFF" stroke-width="1" stroke-linecap="round" opacity="0.3"/>
+
+    <!-- Drum holes pattern -->
+    <circle cx="45" cy="65" r="1" fill="#546E7A" opacity="0.4"/>
+    <circle cx="52" cy="62" r="1" fill="#546E7A" opacity="0.4"/>
+    <circle cx="59" cy="65" r="1" fill="#546E7A" opacity="0.4"/>
+    <circle cx="45" cy="72" r="1" fill="#546E7A" opacity="0.4"/>
+    <circle cx="59" cy="72" r="1" fill="#546E7A" opacity="0.4"/>
+    <circle cx="45" cy="79" r="1" fill="#546E7A" opacity="0.4"/>
+    <circle cx="52" cy="82" r="1" fill="#546E7A" opacity="0.4"/>
+    <circle cx="59" cy="79" r="1" fill="#546E7A" opacity="0.4"/>
+    <circle cx="52" cy="72" r="1" fill="#546E7A" opacity="0.4"/>
+
+    <!-- Door handle -->
+    <rect x="72" y="68" width="8" height="3" rx="1.5" fill="#BDBDBD"/>
+    <rect x="72" y="68" width="8" height="1.5" rx="1" fill="#E0E0E0"/>
+
+    <!-- Door rim ring -->
+    <circle cx="52" cy="72" r="23" fill="none" stroke="#BDBDBD" stroke-width="1.5"/>
+    <circle cx="52" cy="72" r="24" fill="none" stroke="#E0E0E0" stroke-width="0.5"/>
+
+    <!-- Bottom panel -->
+    <rect x="18" y="100" width="68" height="6" rx="2" fill="#E0E0E0"/>
+    <!-- Feet -->
+    <rect x="24" y="104" width="6" height="3" rx="1" fill="#9E9E9E"/>
+    <rect x="74" y="104" width="6" height="3" rx="1" fill="#9E9E9E"/>
+  </g>
+</svg>

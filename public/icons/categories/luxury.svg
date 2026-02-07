@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="leatherBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6D4C41"/>
+      <stop offset="30%" stop-color="#5D4037"/>
+      <stop offset="60%" stop-color="#4E342E"/>
+      <stop offset="100%" stop-color="#3E2723"/>
+    </linearGradient>
+    <linearGradient id="leatherFront" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8D6E63"/>
+      <stop offset="40%" stop-color="#6D4C41"/>
+      <stop offset="100%" stop-color="#4E342E"/>
+    </linearGradient>
+    <linearGradient id="leatherFlap" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#5D4037"/>
+      <stop offset="50%" stop-color="#795548"/>
+      <stop offset="100%" stop-color="#8D6E63"/>
+    </linearGradient>
+    <linearGradient id="leatherSide" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4E342E"/>
+      <stop offset="100%" stop-color="#3E2723"/>
+    </linearGradient>
+    <linearGradient id="goldHardware" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF8E1"/>
+      <stop offset="25%" stop-color="#FFD54F"/>
+      <stop offset="50%" stop-color="#FFC107"/>
+      <stop offset="75%" stop-color="#FFB300"/>
+      <stop offset="100%" stop-color="#FF8F00"/>
+    </linearGradient>
+    <linearGradient id="chainGold" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFB300"/>
+      <stop offset="25%" stop-color="#FFD54F"/>
+      <stop offset="50%" stop-color="#FFF8E1"/>
+      <stop offset="75%" stop-color="#FFD54F"/>
+      <stop offset="100%" stop-color="#FFB300"/>
+    </linearGradient>
+    <linearGradient id="leatherShine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="luxShadow" x="-10%" y="-5%" width="130%" height="125%">
+      <feDropShadow dx="3" dy="5" stdDeviation="4" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+    <pattern id="leatherTexture" patternUnits="userSpaceOnUse" width="4" height="4">
+      <rect width="4" height="4" fill="none"/>
+      <circle cx="1" cy="1" r="0.3" fill="#3E2723" opacity="0.15"/>
+      <circle cx="3" cy="3" r="0.3" fill="#3E2723" opacity="0.15"/>
+    </pattern>
+  </defs>
+
+  <!-- Ground shadow -->
+  <ellipse cx="60" cy="108" rx="42" ry="7" fill="#000" opacity="0.15"/>
+
+  <g filter="url(#luxShadow)">
+    <!-- Bag body (main shape) -->
+    <path d="M22,42 L22,90 Q22,96 28,96 L92,96 Q98,96 98,90 L98,42 Q98,36 92,36 L28,36 Q22,36 22,42Z" fill="url(#leatherBody)"/>
+
+    <!-- Leather texture overlay -->
+    <path d="M22,42 L22,90 Q22,96 28,96 L92,96 Q98,96 98,90 L98,42 Q98,36 92,36 L28,36 Q22,36 22,42Z" fill="url(#leatherTexture)"/>
+
+    <!-- Front panel -->
+    <path d="M26,44 L26,88 Q26,92 30,92 L90,92 Q94,92 94,88 L94,44 Q94,40 90,40 L30,40 Q26,40 26,44Z" fill="url(#leatherFront)"/>
+    <path d="M26,44 L26,88 Q26,92 30,92 L90,92 Q94,92 94,88 L94,44 Q94,40 90,40 L30,40 Q26,40 26,44Z" fill="url(#leatherTexture)"/>
+
+    <!-- Front panel shine -->
+    <path d="M30,42 L50,42 L35,70Z" fill="url(#leatherShine)"/>
+
+    <!-- Flap -->
+    <path d="M24,36 L24,60 Q24,62 26,64 L56,78 Q60,80 64,78 L94,64 Q96,62 96,60 L96,36 Q96,34 92,34 L28,34 Q24,34 24,36Z" fill="url(#leatherFlap)"/>
+    <path d="M24,36 L24,60 Q24,62 26,64 L56,78 Q60,80 64,78 L94,64 Q96,62 96,60 L96,36 Q96,34 92,34 L28,34 Q24,34 24,36Z" fill="url(#leatherTexture)"/>
+
+    <!-- Flap edge stitching -->
+    <path d="M28,38 L92,38" stroke="#8D6E63" stroke-width="0.5" stroke-dasharray="2,2" opacity="0.5"/>
+    <path d="M27,60 L57,74 Q60,76 63,74 L93,60" fill="none" stroke="#8D6E63" stroke-width="0.5" stroke-dasharray="2,2" opacity="0.5"/>
+
+    <!-- Flap highlight -->
+    <path d="M28,36 L60,36 L40,55Z" fill="url(#leatherShine)"/>
+
+    <!-- Gold clasp/lock (center of flap bottom) -->
+    <g transform="translate(60, 72)">
+      <rect x="-8" y="-6" width="16" height="12" rx="2" fill="url(#goldHardware)"/>
+      <rect x="-6" y="-4" width="12" height="8" rx="1" fill="none" stroke="#FF8F00" stroke-width="0.5"/>
+      <circle cx="0" cy="0" r="2.5" fill="#FFD54F" stroke="#FF8F00" stroke-width="0.5"/>
+      <circle cx="0" cy="0" r="1" fill="#FFF8E1"/>
+      <!-- Keyhole shape -->
+      <rect x="-0.5" y="0" width="1" height="2" fill="#FF8F00"/>
+    </g>
+
+    <!-- Stitching line on body -->
+    <path d="M26,88 L94,88" stroke="#795548" stroke-width="0.5" stroke-dasharray="2,2" opacity="0.6"/>
+    <path d="M26,44 L94,44" stroke="#795548" stroke-width="0.5" stroke-dasharray="2,2" opacity="0.4"/>
+
+    <!-- Bottom gusset line -->
+    <path d="M22,92 L98,92" stroke="#3E2723" stroke-width="0.5" opacity="0.5"/>
+
+    <!-- Gold bottom studs -->
+    <circle cx="30" cy="96" r="2" fill="url(#goldHardware)"/>
+    <circle cx="30" cy="96" r="1" fill="#FFF8E1" opacity="0.5"/>
+    <circle cx="90" cy="96" r="2" fill="url(#goldHardware)"/>
+    <circle cx="90" cy="96" r="1" fill="#FFF8E1" opacity="0.5"/>
+  </g>
+
+  <!-- Chain strap -->
+  <g>
+    <!-- Left chain -->
+    <path d="M26,38 C22,32 20,22 28,16 C36,10 50,12 58,15"
+          fill="none" stroke="url(#chainGold)" stroke-width="3" stroke-linecap="round"/>
+    <!-- Chain link texture -->
+    <path d="M26,38 C22,32 20,22 28,16 C36,10 50,12 58,15"
+          fill="none" stroke="#FFB300" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+
+    <!-- Right chain -->
+    <path d="M94,38 C98,32 100,22 92,16 C84,10 70,12 62,15"
+          fill="none" stroke="url(#chainGold)" stroke-width="3" stroke-linecap="round"/>
+    <path d="M94,38 C98,32 100,22 92,16 C84,10 70,12 62,15"
+          fill="none" stroke="#FFB300" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+
+    <!-- Chain connection rings -->
+    <circle cx="26" cy="38" r="2.5" fill="none" stroke="url(#goldHardware)" stroke-width="1.5"/>
+    <circle cx="94" cy="38" r="2.5" fill="none" stroke="url(#goldHardware)" stroke-width="1.5"/>
+
+    <!-- Chain highlight at top -->
+    <path d="M38,13 C45,11 55,11 62,13" fill="none" stroke="#FFF8E1" stroke-width="1" opacity="0.6"/>
+  </g>
+</svg>

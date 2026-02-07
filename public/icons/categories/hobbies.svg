@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="controllerBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#424242"/>
+      <stop offset="30%" stop-color="#303030"/>
+      <stop offset="70%" stop-color="#212121"/>
+      <stop offset="100%" stop-color="#1A1A1A"/>
+    </linearGradient>
+    <linearGradient id="controllerTop" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#333333"/>
+      <stop offset="100%" stop-color="#555555"/>
+    </linearGradient>
+    <linearGradient id="controllerShine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.12"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="dpadBase" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4A4A4A"/>
+      <stop offset="80%" stop-color="#333333"/>
+      <stop offset="100%" stop-color="#2A2A2A"/>
+    </radialGradient>
+    <linearGradient id="triggerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#555555"/>
+      <stop offset="100%" stop-color="#2A2A2A"/>
+    </linearGradient>
+    <radialGradient id="btnTriangle" cx="40%" cy="35%" r="50%">
+      <stop offset="0%" stop-color="#81C784"/>
+      <stop offset="100%" stop-color="#2E7D32"/>
+    </radialGradient>
+    <radialGradient id="btnCircle" cx="40%" cy="35%" r="50%">
+      <stop offset="0%" stop-color="#EF9A9A"/>
+      <stop offset="100%" stop-color="#C62828"/>
+    </radialGradient>
+    <radialGradient id="btnCross" cx="40%" cy="35%" r="50%">
+      <stop offset="0%" stop-color="#90CAF9"/>
+      <stop offset="100%" stop-color="#1565C0"/>
+    </radialGradient>
+    <radialGradient id="btnSquare" cx="40%" cy="35%" r="50%">
+      <stop offset="0%" stop-color="#CE93D8"/>
+      <stop offset="100%" stop-color="#7B1FA2"/>
+    </radialGradient>
+    <radialGradient id="joystickBase" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#555555"/>
+      <stop offset="70%" stop-color="#3A3A3A"/>
+      <stop offset="100%" stop-color="#2A2A2A"/>
+    </radialGradient>
+    <radialGradient id="joystickTop" cx="40%" cy="35%" r="50%">
+      <stop offset="0%" stop-color="#666"/>
+      <stop offset="100%" stop-color="#333"/>
+    </radialGradient>
+    <linearGradient id="touchpad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4A4A4A"/>
+      <stop offset="100%" stop-color="#333333"/>
+    </linearGradient>
+    <linearGradient id="ledLight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2196F3"/>
+      <stop offset="50%" stop-color="#42A5F5"/>
+      <stop offset="100%" stop-color="#2196F3"/>
+    </linearGradient>
+    <filter id="ctrlShadow" x="-10%" y="-10%" width="125%" height="135%">
+      <feDropShadow dx="2" dy="5" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+    <filter id="ledGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2"/>
+    </filter>
+    <filter id="btnShadow">
+      <feDropShadow dx="0" dy="1" stdDeviation="0.5" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Ground shadow -->
+  <ellipse cx="60" cy="108" rx="48" ry="6" fill="#000" opacity="0.15"/>
+
+  <g filter="url(#ctrlShadow)">
+    <!-- Controller main body -->
+    <path d="M28,42 Q28,35 35,32 L85,32 Q92,35 92,42 L92,58
+             Q92,65 98,72 L104,82 Q108,90 102,96 L96,100
+             Q90,104 84,98 L78,88 Q74,82 68,80 L52,80
+             Q46,82 42,88 L36,98 Q30,104 24,100 L18,96
+             Q12,90 16,82 L22,72 Q28,65 28,58Z"
+          fill="url(#controllerBody)"/>
+
+    <!-- Top surface highlight -->
+    <path d="M30,42 Q30,36 36,34 L84,34 Q90,36 90,42 L90,55 L30,55Z"
+          fill="url(#controllerTop)"/>
+
+    <!-- Shine overlay -->
+    <path d="M32,38 Q32,36 38,34 L82,34 Q88,36 88,38 L88,45 L32,45Z"
+          fill="url(#controllerShine)"/>
+
+    <!-- Left grip texture lines -->
+    <path d="M18,85 Q14,80 17,75" fill="none" stroke="#383838" stroke-width="0.5" opacity="0.6"/>
+    <path d="M20,87 Q16,82 19,77" fill="none" stroke="#383838" stroke-width="0.5" opacity="0.6"/>
+    <path d="M22,89 Q18,84 21,79" fill="none" stroke="#383838" stroke-width="0.5" opacity="0.6"/>
+
+    <!-- Right grip texture -->
+    <path d="M102,85 Q106,80 103,75" fill="none" stroke="#383838" stroke-width="0.5" opacity="0.6"/>
+    <path d="M100,87 Q104,82 101,77" fill="none" stroke="#383838" stroke-width="0.5" opacity="0.6"/>
+    <path d="M98,89 Q102,84 99,79" fill="none" stroke="#383838" stroke-width="0.5" opacity="0.6"/>
+
+    <!-- D-Pad (left side) -->
+    <g transform="translate(42, 55)">
+      <circle cx="0" cy="0" r="10" fill="url(#dpadBase)"/>
+      <!-- Horizontal bar -->
+      <rect x="-8" y="-3" width="16" height="6" rx="1" fill="#3A3A3A" filter="url(#btnShadow)"/>
+      <!-- Vertical bar -->
+      <rect x="-3" y="-8" width="6" height="16" rx="1" fill="#3A3A3A" filter="url(#btnShadow)"/>
+      <!-- Center -->
+      <rect x="-2" y="-2" width="4" height="4" rx="0.5" fill="#444"/>
+      <!-- Arrow indicators -->
+      <polygon points="0,-6 -1.5,-4 1.5,-4" fill="#555"/>
+      <polygon points="0,6 -1.5,4 1.5,4" fill="#555"/>
+      <polygon points="-6,0 -4,-1.5 -4,1.5" fill="#555"/>
+      <polygon points="6,0 4,-1.5 4,1.5" fill="#555"/>
+    </g>
+
+    <!-- Action buttons (right side) -->
+    <g transform="translate(78, 50)">
+      <!-- Triangle (top) - green -->
+      <circle cx="0" cy="-10" r="4.5" fill="url(#btnTriangle)" filter="url(#btnShadow)"/>
+      <polygon points="0,-13 -2,-8.5 2,-8.5" fill="none" stroke="#FFF" stroke-width="0.8" opacity="0.7"/>
+
+      <!-- Circle (right) - red -->
+      <circle cx="10" cy="0" r="4.5" fill="url(#btnCircle)" filter="url(#btnShadow)"/>
+      <circle cx="10" cy="0" r="2" fill="none" stroke="#FFF" stroke-width="0.8" opacity="0.7"/>
+
+      <!-- Cross (bottom) - blue -->
+      <circle cx="0" cy="10" r="4.5" fill="url(#btnCross)" filter="url(#btnShadow)"/>
+      <line x1="-2" y1="8" x2="2" y2="12" stroke="#FFF" stroke-width="0.8" opacity="0.7"/>
+      <line x1="2" y1="8" x2="-2" y2="12" stroke="#FFF" stroke-width="0.8" opacity="0.7"/>
+
+      <!-- Square (left) - purple -->
+      <circle cx="-10" cy="0" r="4.5" fill="url(#btnSquare)" filter="url(#btnShadow)"/>
+      <rect x="-12" y="-2" width="4" height="4" fill="none" stroke="#FFF" stroke-width="0.8" opacity="0.7"/>
+    </g>
+
+    <!-- Left joystick -->
+    <g transform="translate(42, 42)">
+      <circle cx="0" cy="0" r="6" fill="url(#joystickBase)"/>
+      <circle cx="0" cy="-0.5" r="4.5" fill="url(#joystickTop)"/>
+      <!-- Grip texture -->
+      <circle cx="0" cy="-0.5" r="3" fill="none" stroke="#555" stroke-width="0.3"/>
+      <circle cx="0" cy="-0.5" r="2" fill="none" stroke="#555" stroke-width="0.3"/>
+    </g>
+
+    <!-- Right joystick -->
+    <g transform="translate(68, 62)">
+      <circle cx="0" cy="0" r="6" fill="url(#joystickBase)"/>
+      <circle cx="0" cy="-0.5" r="4.5" fill="url(#joystickTop)"/>
+      <circle cx="0" cy="-0.5" r="3" fill="none" stroke="#555" stroke-width="0.3"/>
+      <circle cx="0" cy="-0.5" r="2" fill="none" stroke="#555" stroke-width="0.3"/>
+    </g>
+
+    <!-- Touchpad (center) -->
+    <rect x="50" y="38" width="20" height="12" rx="2" fill="url(#touchpad)" stroke="#4A4A4A" stroke-width="0.5"/>
+    <!-- Touchpad divider -->
+    <line x1="60" y1="39" x2="60" y2="49" stroke="#3A3A3A" stroke-width="0.3"/>
+
+    <!-- Options button (right of touchpad) -->
+    <circle cx="73" cy="40" r="2" fill="#3A3A3A" stroke="#4A4A4A" stroke-width="0.3"/>
+    <!-- Share button (left of touchpad) -->
+    <circle cx="47" cy="40" r="2" fill="#3A3A3A" stroke="#4A4A4A" stroke-width="0.3"/>
+
+    <!-- LED light bar -->
+    <path d="M50,34 L70,34" stroke="url(#ledLight)" stroke-width="2" stroke-linecap="round"/>
+    <!-- LED glow -->
+    <path d="M50,34 L70,34" stroke="#42A5F5" stroke-width="4" stroke-linecap="round" opacity="0.3" filter="url(#ledGlow)"/>
+
+    <!-- Triggers (top) -->
+    <path d="M30,32 L28,28 Q30,25 35,25 L42,25 Q44,25 44,28 L44,32" fill="url(#triggerGrad)"/>
+    <path d="M76,32 L76,28 Q76,25 78,25 L85,25 Q90,25 92,28 L90,32" fill="url(#triggerGrad)"/>
+
+    <!-- PS button -->
+    <circle cx="60" cy="72" r="3.5" fill="#3A3A3A" stroke="#4A4A4A" stroke-width="0.3"/>
+    <circle cx="60" cy="72" r="2" fill="#444"/>
+  </g>
+</svg>

@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="steelPipe" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E0E0E0"/>
+      <stop offset="25%" stop-color="#BDBDBD"/>
+      <stop offset="50%" stop-color="#9E9E9E"/>
+      <stop offset="75%" stop-color="#757575"/>
+      <stop offset="100%" stop-color="#616161"/>
+    </linearGradient>
+    <linearGradient id="copperMetal" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFAB91"/>
+      <stop offset="30%" stop-color="#E64A19"/>
+      <stop offset="70%" stop-color="#BF360C"/>
+      <stop offset="100%" stop-color="#8D2508"/>
+    </linearGradient>
+    <linearGradient id="copperShine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF8A65" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#FFCCBC" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#FF8A65" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="ironPlate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#90A4AE"/>
+      <stop offset="50%" stop-color="#607D8B"/>
+      <stop offset="100%" stop-color="#455A64"/>
+    </linearGradient>
+    <linearGradient id="rustMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A1887F"/>
+      <stop offset="40%" stop-color="#8D6E63"/>
+      <stop offset="100%" stop-color="#5D4037"/>
+    </linearGradient>
+    <linearGradient id="aluminumSheet" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#CFD8DC"/>
+      <stop offset="30%" stop-color="#ECEFF1"/>
+      <stop offset="50%" stop-color="#FFFFFF"/>
+      <stop offset="70%" stop-color="#ECEFF1"/>
+      <stop offset="100%" stop-color="#B0BEC5"/>
+    </linearGradient>
+    <linearGradient id="greenWire" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#66BB6A"/>
+      <stop offset="100%" stop-color="#2E7D32"/>
+    </linearGradient>
+    <filter id="scrapShadow" x="-10%" y="-5%" width="130%" height="125%">
+      <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+    <filter id="metalTexture">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noise"/>
+      <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
+      <feBlend in="SourceGraphic" in2="grayNoise" mode="overlay" result="textured"/>
+      <feComponentTransfer in="textured">
+        <feFuncA type="linear" slope="1"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+
+  <!-- Ground shadow -->
+  <ellipse cx="60" cy="105" rx="48" ry="8" fill="#000" opacity="0.12"/>
+
+  <g filter="url(#scrapShadow)">
+    <!-- Large iron plate (bottom, angled) -->
+    <path d="M15,85 L50,75 L95,82 L105,100 L60,102 L10,98Z" fill="url(#ironPlate)"/>
+    <path d="M15,85 L50,75 L95,82 L105,100 L60,102 L10,98Z" fill="none" stroke="#455A64" stroke-width="0.5"/>
+    <!-- Plate highlight -->
+    <path d="M20,87 L48,78 L90,84" fill="none" stroke="#B0BEC5" stroke-width="0.5" opacity="0.6"/>
+
+    <!-- Rusty bent plate -->
+    <path d="M25,68 L70,62 L75,72 L65,90 L35,92 L20,80Z" fill="url(#rustMetal)"/>
+    <path d="M25,68 L70,62 L75,72" fill="none" stroke="#795548" stroke-width="0.5"/>
+    <!-- Rust spots -->
+    <circle cx="45" cy="75" r="3" fill="#6D4C41" opacity="0.4"/>
+    <circle cx="55" cy="80" r="2" fill="#5D4037" opacity="0.3"/>
+
+    <!-- Copper pipe (diagonal) -->
+    <g>
+      <path d="M18,50 L75,38" stroke="url(#copperMetal)" stroke-width="8" stroke-linecap="round"/>
+      <path d="M18,50 L75,38" stroke="url(#copperShine)" stroke-width="3" stroke-linecap="round"/>
+      <!-- Pipe end -->
+      <ellipse cx="18" cy="50" rx="4" ry="4.5" fill="#BF360C"/>
+      <ellipse cx="18" cy="50" rx="2.5" ry="3" fill="#4E342E"/>
+    </g>
+
+    <!-- Aluminum crumpled sheet -->
+    <path d="M55,45 L85,40 L95,55 L90,68 L65,70 L50,60Z" fill="url(#aluminumSheet)"/>
+    <path d="M60,48 L80,44 L88,52" fill="none" stroke="#CFD8DC" stroke-width="0.5"/>
+    <path d="M55,55 L70,58 L85,54" fill="none" stroke="#B0BEC5" stroke-width="0.5"/>
+    <!-- Crinkle lines -->
+    <path d="M62,50 L72,55 L78,48" fill="none" stroke="#90A4AE" stroke-width="0.3"/>
+    <path d="M58,58 L68,62 L82,56" fill="none" stroke="#90A4AE" stroke-width="0.3"/>
+
+    <!-- Steel pipe (horizontal) -->
+    <g>
+      <path d="M10,70 L55,62" stroke="url(#steelPipe)" stroke-width="7" stroke-linecap="round"/>
+      <path d="M10,70 L55,62" stroke="#E0E0E0" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+      <!-- Pipe end -->
+      <ellipse cx="55" cy="62" rx="3.5" ry="4" fill="#757575"/>
+      <ellipse cx="55" cy="62" rx="2" ry="2.5" fill="#424242"/>
+    </g>
+
+    <!-- Green coiled wire -->
+    <path d="M30,42 C35,35 40,45 45,38 C50,31 55,41 60,34 C65,27 68,37 70,32"
+          fill="none" stroke="url(#greenWire)" stroke-width="3" stroke-linecap="round"/>
+    <path d="M30,42 C35,35 40,45 45,38 C50,31 55,41 60,34"
+          fill="none" stroke="#81C784" stroke-width="1" opacity="0.5"/>
+
+    <!-- Small copper pieces scattered -->
+    <rect x="80" y="72" width="12" height="5" rx="1" fill="url(#copperMetal)" transform="rotate(-15 86 74)"/>
+    <rect x="22" y="78" width="8" height="4" rx="1" fill="url(#copperMetal)" transform="rotate(10 26 80)"/>
+
+    <!-- Small screws/bolts -->
+    <circle cx="42" cy="88" r="2.5" fill="#78909C"/>
+    <circle cx="42" cy="88" r="1.5" fill="#90A4AE"/>
+    <line x1="40" y1="88" x2="44" y2="88" stroke="#607D8B" stroke-width="0.5"/>
+    <line x1="42" y1="86" x2="42" y2="90" stroke="#607D8B" stroke-width="0.5"/>
+
+    <circle cx="78" cy="92" r="2" fill="#78909C"/>
+    <circle cx="78" cy="92" r="1.2" fill="#90A4AE"/>
+
+    <!-- Recycling symbol suggestion (small green arrows) -->
+    <g transform="translate(85,22) scale(0.5)" opacity="0.6">
+      <path d="M15,5 L25,20 L20,18 L15,25 L10,18 L5,20Z" fill="#4CAF50"/>
+      <path d="M30,25 L15,30 L18,25 L12,20 L18,17 L15,22Z" fill="#4CAF50" transform="rotate(120 20 20)"/>
+      <path d="M30,25 L15,30 L18,25 L12,20 L18,17 L15,22Z" fill="#4CAF50" transform="rotate(240 20 20)"/>
+    </g>
+  </g>
+</svg>

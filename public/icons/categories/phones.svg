@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="phoneBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#37474F"/>
+      <stop offset="30%" stop-color="#263238"/>
+      <stop offset="100%" stop-color="#1A1A2E"/>
+    </linearGradient>
+    <linearGradient id="phoneSide" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#546E7A"/>
+      <stop offset="50%" stop-color="#78909C"/>
+      <stop offset="100%" stop-color="#546E7A"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C4DFF"/>
+      <stop offset="25%" stop-color="#448AFF"/>
+      <stop offset="50%" stop-color="#18FFFF"/>
+      <stop offset="75%" stop-color="#69F0AE"/>
+      <stop offset="100%" stop-color="#EEFF41"/>
+    </linearGradient>
+    <linearGradient id="screenShine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.3"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bezel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#455A64"/>
+      <stop offset="50%" stop-color="#263238"/>
+      <stop offset="100%" stop-color="#1A1A2E"/>
+    </linearGradient>
+    <radialGradient id="camera" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#90A4AE"/>
+      <stop offset="40%" stop-color="#546E7A"/>
+      <stop offset="70%" stop-color="#37474F"/>
+      <stop offset="100%" stop-color="#263238"/>
+    </radialGradient>
+    <radialGradient id="cameraLens" cx="40%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#4DD0E1"/>
+      <stop offset="100%" stop-color="#00838F"/>
+    </radialGradient>
+    <filter id="phoneShadow" x="-15%" y="-5%" width="140%" height="120%">
+      <feDropShadow dx="4" dy="5" stdDeviation="4" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+    <clipPath id="screenClip">
+      <rect x="35" y="18" width="50" height="88" rx="3"/>
+    </clipPath>
+  </defs>
+
+  <!-- Phone shadow on ground -->
+  <ellipse cx="62" cy="112" rx="30" ry="5" fill="#000" opacity="0.15"/>
+
+  <!-- Phone body -->
+  <g filter="url(#phoneShadow)">
+    <!-- Main phone body -->
+    <rect x="30" y="10" width="60" height="100" rx="8" fill="url(#phoneBody)"/>
+
+    <!-- Side highlights -->
+    <rect x="30" y="10" width="2" height="100" rx="1" fill="url(#phoneSide)" opacity="0.5"/>
+    <rect x="88" y="10" width="2" height="100" rx="1" fill="url(#phoneSide)" opacity="0.3"/>
+
+    <!-- Volume buttons (left side) -->
+    <rect x="28" y="35" width="2" height="10" rx="1" fill="#546E7A"/>
+    <rect x="28" y="50" width="2" height="10" rx="1" fill="#546E7A"/>
+
+    <!-- Power button (right side) -->
+    <rect x="90" y="42" width="2" height="14" rx="1" fill="#546E7A"/>
+
+    <!-- Screen bezel -->
+    <rect x="33" y="14" width="54" height="92" rx="5" fill="url(#bezel)"/>
+
+    <!-- Screen -->
+    <rect x="35" y="18" width="50" height="88" rx="3" fill="url(#screen)"/>
+
+    <!-- Screen content (app-like shapes) -->
+    <g clip-path="url(#screenClip)">
+      <!-- Status bar -->
+      <rect x="35" y="18" width="50" height="6" fill="#000" opacity="0.3"/>
+      <circle cx="60" cy="21" r="1" fill="#FFF" opacity="0.8"/>
+
+      <!-- App icon grid -->
+      <rect x="40" y="30" width="10" height="10" rx="3" fill="#F44336" opacity="0.8"/>
+      <rect x="55" y="30" width="10" height="10" rx="3" fill="#4CAF50" opacity="0.8"/>
+      <rect x="70" y="30" width="10" height="10" rx="3" fill="#2196F3" opacity="0.8"/>
+      <rect x="40" y="46" width="10" height="10" rx="3" fill="#FF9800" opacity="0.8"/>
+      <rect x="55" y="46" width="10" height="10" rx="3" fill="#9C27B0" opacity="0.8"/>
+      <rect x="70" y="46" width="10" height="10" rx="3" fill="#00BCD4" opacity="0.8"/>
+      <rect x="40" y="62" width="10" height="10" rx="3" fill="#FFEB3B" opacity="0.8"/>
+      <rect x="55" y="62" width="10" height="10" rx="3" fill="#E91E63" opacity="0.8"/>
+      <rect x="70" y="62" width="10" height="10" rx="3" fill="#8BC34A" opacity="0.8"/>
+
+      <!-- Bottom nav -->
+      <rect x="35" y="94" width="50" height="12" fill="#000" opacity="0.3"/>
+      <circle cx="45" cy="100" r="3" fill="#FFF" opacity="0.4"/>
+      <circle cx="60" cy="100" r="3" fill="#FFF" opacity="0.4"/>
+      <circle cx="75" cy="100" r="3" fill="#FFF" opacity="0.4"/>
+    </g>
+
+    <!-- Screen reflection/shine -->
+    <rect x="35" y="18" width="50" height="88" rx="3" fill="url(#screenShine)"/>
+
+    <!-- Notch / Camera punch hole -->
+    <circle cx="60" cy="16" r="3" fill="#1A1A2E"/>
+    <circle cx="60" cy="16" r="1.5" fill="url(#cameraLens)"/>
+
+    <!-- Camera module (back visible at slight angle) -->
+    <g transform="translate(68, 14)">
+      <rect x="0" y="0" width="16" height="20" rx="4" fill="#37474F" stroke="#455A64" stroke-width="0.5"/>
+      <circle cx="5" cy="6" r="3.5" fill="url(#camera)"/>
+      <circle cx="5" cy="6" r="2" fill="url(#cameraLens)"/>
+      <circle cx="5" cy="6" r="0.8" fill="#263238"/>
+      <circle cx="11" cy="6" r="3" fill="url(#camera)"/>
+      <circle cx="11" cy="6" r="1.5" fill="url(#cameraLens)"/>
+      <circle cx="5" cy="14" r="2.5" fill="url(#camera)"/>
+      <circle cx="5" cy="14" r="1.2" fill="url(#cameraLens)"/>
+      <circle cx="11" cy="14" r="1" fill="#FFF" opacity="0.3"/>
+    </g>
+  </g>
+</svg>

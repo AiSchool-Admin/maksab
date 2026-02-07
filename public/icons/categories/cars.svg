@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="carBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4FC3F7"/>
+      <stop offset="40%" stop-color="#0288D1"/>
+      <stop offset="100%" stop-color="#01579B"/>
+    </linearGradient>
+    <linearGradient id="carBodyTop" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#81D4FA"/>
+      <stop offset="100%" stop-color="#0277BD"/>
+    </linearGradient>
+    <linearGradient id="windowGlass" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B3E5FC"/>
+      <stop offset="50%" stop-color="#4FC3F7"/>
+      <stop offset="100%" stop-color="#0288D1"/>
+    </linearGradient>
+    <linearGradient id="wheelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#424242"/>
+      <stop offset="50%" stop-color="#212121"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </linearGradient>
+    <radialGradient id="hubcap" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E0E0E0"/>
+      <stop offset="60%" stop-color="#9E9E9E"/>
+      <stop offset="100%" stop-color="#616161"/>
+    </radialGradient>
+    <linearGradient id="headlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FFF9C4"/>
+    </linearGradient>
+    <linearGradient id="groundShadow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="carShine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="carShadow" x="-10%" y="-10%" width="120%" height="140%">
+      <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Ground shadow ellipse -->
+  <ellipse cx="60" cy="98" rx="45" ry="6" fill="url(#groundShadow)"/>
+
+  <!-- Car group with shadow filter -->
+  <g filter="url(#carShadow)">
+    <!-- Lower body -->
+    <path d="M15,72 L15,82 Q15,88 21,88 L99,88 Q105,88 105,82 L105,72 Q105,65 95,65 L25,65 Q15,65 15,72Z" fill="url(#carBody)"/>
+
+    <!-- Upper body / roof -->
+    <path d="M32,65 L42,42 Q44,38 50,38 L78,38 Q84,38 86,42 L96,65Z" fill="url(#carBodyTop)"/>
+
+    <!-- Roof shine highlight -->
+    <path d="M42,42 Q44,38 50,38 L78,38 Q84,38 86,42 L82,48 L46,48Z" fill="url(#carShine)"/>
+
+    <!-- Front windshield -->
+    <path d="M35,65 L44,45 Q45,43 48,43 L58,43 L58,65Z" fill="url(#windowGlass)" opacity="0.85"/>
+
+    <!-- Rear windshield -->
+    <path d="M62,43 L76,43 Q79,43 80,45 L90,65 L62,65Z" fill="url(#windowGlass)" opacity="0.85"/>
+
+    <!-- Window pillar -->
+    <rect x="58" y="43" width="4" height="22" fill="#0277BD"/>
+
+    <!-- Body side line -->
+    <path d="M18,75 L102,75" stroke="#01579B" stroke-width="0.5" opacity="0.5"/>
+
+    <!-- Front bumper area -->
+    <path d="M15,82 L15,88 Q15,92 21,92 L30,92 L30,82Z" fill="#0277BD"/>
+
+    <!-- Rear bumper area -->
+    <path d="M90,82 L90,92 L99,92 Q105,92 105,88 L105,82Z" fill="#0277BD"/>
+
+    <!-- Headlight front -->
+    <ellipse cx="18" cy="75" rx="4" ry="3" fill="url(#headlight)" opacity="0.9"/>
+
+    <!-- Taillight -->
+    <rect x="101" y="72" width="4" height="6" rx="1" fill="#F44336" opacity="0.9"/>
+    <rect x="101" y="72" width="4" height="3" rx="1" fill="#FF8A80" opacity="0.5"/>
+
+    <!-- Door handle -->
+    <rect x="55" y="72" width="8" height="2" rx="1" fill="#4FC3F7"/>
+
+    <!-- Side mirror -->
+    <ellipse cx="34" cy="62" rx="3" ry="2" fill="#0288D1"/>
+    <ellipse cx="34" cy="62" rx="2" ry="1.5" fill="#B3E5FC" opacity="0.5"/>
+  </g>
+
+  <!-- Front wheel -->
+  <g>
+    <circle cx="35" cy="90" r="10" fill="url(#wheelGrad)"/>
+    <circle cx="35" cy="90" r="6" fill="url(#hubcap)"/>
+    <circle cx="35" cy="90" r="2" fill="#424242"/>
+    <!-- Spokes -->
+    <line x1="35" y1="84" x2="35" y2="96" stroke="#757575" stroke-width="0.8"/>
+    <line x1="29" y1="90" x2="41" y2="90" stroke="#757575" stroke-width="0.8"/>
+    <line x1="31" y1="86" x2="39" y2="94" stroke="#757575" stroke-width="0.8"/>
+    <line x1="39" y1="86" x2="31" y2="94" stroke="#757575" stroke-width="0.8"/>
+  </g>
+
+  <!-- Rear wheel -->
+  <g>
+    <circle cx="85" cy="90" r="10" fill="url(#wheelGrad)"/>
+    <circle cx="85" cy="90" r="6" fill="url(#hubcap)"/>
+    <circle cx="85" cy="90" r="2" fill="#424242"/>
+    <!-- Spokes -->
+    <line x1="85" y1="84" x2="85" y2="96" stroke="#757575" stroke-width="0.8"/>
+    <line x1="79" y1="90" x2="91" y2="90" stroke="#757575" stroke-width="0.8"/>
+    <line x1="81" y1="86" x2="89" y2="94" stroke="#757575" stroke-width="0.8"/>
+    <line x1="89" y1="86" x2="81" y2="94" stroke="#757575" stroke-width="0.8"/>
+  </g>
+</svg>
