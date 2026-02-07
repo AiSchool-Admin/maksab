@@ -13,6 +13,9 @@ import {
   HelpCircle,
   Camera,
   Edit3,
+  Banknote,
+  Copy,
+  Check,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -186,6 +189,9 @@ export default function ProfilePage() {
         </section>
       )}
 
+      {/* InstaPay commission support banner */}
+      <InstaPayBanner />
+
       {/* Menu sections */}
       <section className="px-4 pb-6 space-y-2">
         <ProfileMenuItem
@@ -224,6 +230,59 @@ export default function ProfilePage() {
 
       <BottomNavWithBadge />
     </main>
+  );
+}
+
+const INSTAPAY_ACCOUNT = "maksab@instapay";
+
+function InstaPayBanner() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(INSTAPAY_ACCOUNT);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  };
+
+  return (
+    <section className="px-4 pb-5">
+      <div className="bg-gradient-to-l from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+            <Banknote size={20} className="text-green-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-dark mb-1">ادعم مكسب 💚</p>
+            <p className="text-xs text-gray-text mb-2">
+              مكسب تطبيق مجاني. لو عجبك، ساهم بعمولة بسيطة عن طريق إنستاباي
+            </p>
+            <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2">
+              <span className="text-sm font-bold text-dark flex-1" dir="ltr">
+                {INSTAPAY_ACCOUNT}
+              </span>
+              <button
+                onClick={handleCopy}
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                aria-label="نسخ"
+              >
+                {copied ? (
+                  <Check size={16} className="text-green-600" />
+                ) : (
+                  <Copy size={16} className="text-gray-text" />
+                )}
+              </button>
+            </div>
+            {copied && (
+              <p className="text-[11px] text-green-600 mt-1">تم النسخ!</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

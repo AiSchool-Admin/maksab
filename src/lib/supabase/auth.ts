@@ -57,6 +57,33 @@ export async function sendOTP(phone: string): Promise<{ error: string | null }> 
   return { error: null };
 }
 
+// ── Send OTP via WhatsApp ─────────────────────────────────────────────
+// Uses Supabase phone OTP but opens WhatsApp for delivery (free alternative)
+export async function sendWhatsAppOTP(phone: string): Promise<{ error: string | null }> {
+  if (IS_DEV_MODE) {
+    await new Promise((r) => setTimeout(r, 500));
+    return { error: null };
+  }
+
+  // Use Supabase phone OTP — the OTP is sent via Supabase's configured provider
+  // For WhatsApp delivery, configure Twilio WhatsApp in Supabase dashboard
+  const { error } = await supabase.auth.signInWithOtp({
+    phone: `+2${phone}`,
+    options: {
+      channel: "whatsapp",
+    },
+  });
+
+  if (error) {
+    if (error.message.includes("rate")) {
+      return { error: "استنى شوية قبل ما تبعت كود تاني" };
+    }
+    return { error: "حصلت مشكلة في إرسال الكود على واتساب. جرب تاني" };
+  }
+
+  return { error: null };
+}
+
 // ── Send OTP (Email — free) ──────────────────────────────────────────
 export async function sendEmailOTP(email: string): Promise<{ error: string | null }> {
   if (IS_DEV_MODE) {

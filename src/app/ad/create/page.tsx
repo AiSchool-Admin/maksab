@@ -301,21 +301,29 @@ export default function CreateAdPage() {
         images: [] as string[],
       };
 
-      // In dev mode, log the data and show success
-      const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
-      if (IS_DEV) {
-        console.log("📝 Ad data (dev mode):", adData);
-        console.log("📷 Images:", images.length, "files");
-      } else {
-        // Real Supabase upload would go here:
-        // 1. Upload images to Supabase Storage
-        // 2. Get image URLs
-        // 3. Insert ad record with image URLs
-        const { supabase } = await import("@/lib/supabase/client");
+      const { supabase } = await import("@/lib/supabase/client");
 
-        // Upload images
-        const uploadedUrls: string[] = [];
-        for (let i = 0; i < images.length; i++) {
+      // Ensure user profile exists in DB (needed for foreign key)
+      const { data: existingProfile } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", authedUser.id)
+        .single();
+
+      if (!existingProfile) {
+        // Create user profile if it doesn't exist
+        await supabase
+          .from("users")
+          .insert({
+            id: authedUser.id,
+            phone: authedUser.phone || authedUser.id.slice(0, 11),
+          } as never);
+      }
+
+      // Upload images (skip silently if bucket doesn't exist)
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < images.length; i++) {
+        try {
           const img = images[i];
           const path = `ads/${authedUser.id}/${Date.now()}_${i}.jpg`;
           const { error: uploadError } = await supabase.storage
@@ -327,18 +335,32 @@ export default function CreateAdPage() {
             } = supabase.storage.from("ad-images").getPublicUrl(path);
             uploadedUrls.push(publicUrl);
           }
+        } catch {
+          // Skip failed image uploads
         }
-        adData.images = uploadedUrls;
+      }
+      adData.images = uploadedUrls;
 
-        // Insert ad
-        const { error: insertError } = await supabase
-          .from("ads")
-          .insert(adData as never);
-        if (insertError) {
-          setErrors({ publish: "حصل مشكلة في نشر الإعلان، جرب تاني" });
-          setIsPublishing(false);
-          return;
-        }
+      // Ensure subcategory_id is null if empty (avoid FK violation)
+      if (!adData.subcategory_id) {
+        adData.subcategory_id = null as unknown as string;
+      }
+
+      // Insert ad
+      const { error: insertError } = await supabase
+        .from("ads")
+        .insert(adData as never);
+      if (insertError) {
+        console.error("Ad insert error:", insertError);
+        const msg =
+          insertError.code === "23503"
+            ? "الأقسام مش موجودة في قاعدة البيانات. تواصل مع الدعم"
+            : insertError.code === "23505"
+              ? "الإعلان ده موجود قبل كده"
+              : `حصل مشكلة في نشر الإعلان (${insertError.code || "unknown"}). جرب تاني`;
+        setErrors({ publish: msg });
+        setIsPublishing(false);
+        return;
       }
 
       // Track ad_created signal

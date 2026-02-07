@@ -117,15 +117,15 @@ export default function HomePage() {
       {/* ─── 2. Categories Grid ────────────────────────────────── */}
       <section className="px-4 pb-5">
         <h2 className="text-sm font-bold text-dark mb-3">الأقسام</h2>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-4">
           {categories.map((cat) => (
             <Link
               key={cat.slug}
               href={`/search?category=${cat.slug}`}
-              className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-gray-light hover:bg-brand-green-light active:scale-95 transition-all"
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-gray-light hover:bg-brand-green-light active:scale-95 transition-all"
             >
               <CategoryIcon slug={cat.slug} size="sm" />
-              <span className="text-[11px] font-medium text-dark leading-tight text-center">
+              <span className="text-xs font-semibold text-dark leading-tight text-center">
                 {cat.name}
               </span>
             </Link>
@@ -202,6 +202,25 @@ export default function HomePage() {
             </Link>
           </div>
         )}
+      </section>
+
+      {/* InstaPay support banner */}
+      <section className="px-4 pb-6">
+        <div className="bg-gradient-to-l from-green-50 to-emerald-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
+          <span className="text-xl">💚</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-dark">ادعم مكسب عبر إنستاباي</p>
+            <p className="text-[11px] text-gray-text" dir="ltr">maksab@instapay</p>
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText("maksab@instapay").catch(() => {});
+            }}
+            className="text-[11px] font-bold text-green-600 bg-white px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors flex-shrink-0"
+          >
+            نسخ
+          </button>
+        </div>
       </section>
 
       <BottomNavWithBadge />

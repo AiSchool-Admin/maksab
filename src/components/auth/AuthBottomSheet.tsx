@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Phone, Mail, ArrowLeft, RefreshCw, Shield, Lock, Eye, EyeOff } from "lucide-react";
+import { Phone, Mail, ArrowLeft, RefreshCw, Shield, Lock, Eye, EyeOff, MessageCircle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import {
   sendOTP,
+  sendWhatsAppOTP,
   sendEmailOTP,
   verifyOTP,
   verifyEmailOTP,
@@ -23,7 +24,7 @@ interface AuthBottomSheetProps {
   onSuccess: (user: UserProfile) => void;
 }
 
-type AuthMethod = "email" | "phone" | "admin";
+type AuthMethod = "whatsapp" | "email" | "phone" | "admin";
 type Step = "choose" | "input" | "otp";
 
 export default function AuthBottomSheet({
@@ -75,7 +76,7 @@ export default function AuthBottomSheet({
   useEffect(() => {
     if (step === "input") {
       setTimeout(() => {
-        if (authMethod === "phone") phoneInputRef.current?.focus();
+        if (authMethod === "phone" || authMethod === "whatsapp") phoneInputRef.current?.focus();
         else emailInputRef.current?.focus();
       }, 400);
     }
@@ -88,7 +89,7 @@ export default function AuthBottomSheet({
     setError(null);
   };
 
-  // ── Phone submit ──────────────────────────────────────────────────
+  // ── Phone submit (SMS or WhatsApp) ───────────────────────────────
   const handlePhoneSubmit = async () => {
     setError(null);
     const result = egyptianPhoneSchema.safeParse(phone);
@@ -98,7 +99,8 @@ export default function AuthBottomSheet({
     }
 
     setIsSubmitting(true);
-    const { error: sendError } = await sendOTP(phone);
+    const sendFn = authMethod === "whatsapp" ? sendWhatsAppOTP : sendOTP;
+    const { error: sendError } = await sendFn(phone);
     setIsSubmitting(false);
 
     if (sendError) {
@@ -210,7 +212,7 @@ export default function AuthBottomSheet({
       setIsSubmitting(true);
 
       let response;
-      if (authMethod === "phone") {
+      if (authMethod === "phone" || authMethod === "whatsapp") {
         response = await verifyOTP(phone, code);
       } else {
         response = await verifyEmailOTP(email, code);
@@ -241,6 +243,7 @@ export default function AuthBottomSheet({
     setIsSubmitting(true);
 
     const { error: sendError } =
+      authMethod === "whatsapp" ? await sendWhatsAppOTP(phone) :
       authMethod === "phone" ? await sendOTP(phone) : await sendEmailOTP(email);
 
     setIsSubmitting(false);
@@ -267,6 +270,7 @@ export default function AuthBottomSheet({
   const getTitle = () => {
     if (step === "otp") return "كود التأكيد";
     if (step === "input" && authMethod === "admin") return "دخول الأدمن";
+    if (step === "input" && authMethod === "whatsapp") return "سجّل عبر واتساب";
     if (step === "input" && authMethod === "phone") return "سجّل برقم موبايلك";
     if (step === "input" && authMethod === "email") return "سجّل بالإيميل";
     return "سجّل دخولك";
@@ -281,7 +285,22 @@ export default function AuthBottomSheet({
             اختار طريقة تسجيل الدخول
           </p>
 
-          {/* Email option (recommended - free) */}
+          {/* WhatsApp option (recommended - free) */}
+          <button
+            onClick={() => selectMethod("whatsapp")}
+            className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-green-50 hover:border-green-500 border-2 border-transparent transition-all"
+          >
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+              <MessageCircle size={20} className="text-green-600" />
+            </div>
+            <div className="text-start">
+              <p className="font-semibold text-dark">واتساب</p>
+              <p className="text-xs text-gray-text">هيوصلك كود تأكيد على واتساب</p>
+            </div>
+            <span className="ms-auto text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold">مُوصى به</span>
+          </button>
+
+          {/* Email option */}
           <button
             onClick={() => selectMethod("email")}
             className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green/10 hover:border-brand-green border-2 border-transparent transition-all"
@@ -296,7 +315,7 @@ export default function AuthBottomSheet({
             <span className="ms-auto text-[10px] bg-brand-green text-white px-2 py-0.5 rounded-full">مجاني</span>
           </button>
 
-          {/* Phone option */}
+          {/* Phone SMS option */}
           <button
             onClick={() => selectMethod("phone")}
             className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green/10 hover:border-brand-green border-2 border-transparent transition-all"
@@ -305,7 +324,7 @@ export default function AuthBottomSheet({
               <Phone size={20} className="text-brand-gold" />
             </div>
             <div className="text-start">
-              <p className="font-semibold text-dark">رقم الموبايل</p>
+              <p className="font-semibold text-dark">رسالة SMS</p>
               <p className="text-xs text-gray-text">هيوصلك كود SMS على رقمك</p>
             </div>
           </button>
@@ -336,8 +355,8 @@ export default function AuthBottomSheet({
         </div>
       )}
 
-      {/* ── Step 2: Input (Phone) ─────────────────────────────────── */}
-      {step === "input" && authMethod === "phone" && (
+      {/* ── Step 2: Input (WhatsApp / Phone) ─────────────────────── */}
+      {step === "input" && (authMethod === "phone" || authMethod === "whatsapp") && (
         <div className="space-y-5">
           {/* Back button */}
           <button
@@ -349,7 +368,9 @@ export default function AuthBottomSheet({
           </button>
 
           <p className="text-sm text-gray-text">
-            أدخل رقم موبايلك المصري وهنبعتلك كود تأكيد SMS
+            {authMethod === "whatsapp"
+              ? "أدخل رقم موبايلك المصري وهنبعتلك كود تأكيد على واتساب"
+              : "أدخل رقم موبايلك المصري وهنبعتلك كود تأكيد SMS"}
           </p>
 
           <div className="w-full">
@@ -524,7 +545,12 @@ export default function AuthBottomSheet({
               <ArrowLeft size={18} />
             </button>
             <p className="text-sm text-gray-text">
-              {authMethod === "phone" ? (
+              {authMethod === "whatsapp" ? (
+                <>
+                  أدخل الكود اللي وصلك على واتساب{" "}
+                  <span className="font-semibold text-dark" dir="ltr">{phone}</span>
+                </>
+              ) : authMethod === "phone" ? (
                 <>
                   أدخل الكود اللي وصلك على{" "}
                   <span className="font-semibold text-dark" dir="ltr">{phone}</span>
