@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlusCircle } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getCategoryById } from "@/lib/categories/categories-config";
@@ -439,6 +439,9 @@ export default function CreateAdPage() {
             >
               <ChevronRight size={24} />
             </button>
+            <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center shadow-sm">
+              <PlusCircle size={22} className="text-white" />
+            </div>
             <h1 className="text-lg font-bold text-dark">
               {stepTitles[draft.currentStep - 1]}
             </h1>
@@ -485,14 +488,16 @@ export default function CreateAdPage() {
             categoryId={draft.categoryId}
             values={draft.categoryFields}
             errors={errors}
-            onChange={(fieldId, value) =>
-              updateDraft({
+            onChange={(fieldId, value) => {
+              setDraft((prev) => ({
+                ...prev,
                 categoryFields: {
-                  ...draft.categoryFields,
+                  ...prev.categoryFields,
                   [fieldId]: value,
                 },
-              })
-            }
+              }));
+              setErrors({});
+            }}
           />
         )}
 
