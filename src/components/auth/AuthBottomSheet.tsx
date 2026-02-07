@@ -17,6 +17,7 @@ import {
 import { egyptianPhoneSchema, emailSchema, otpSchema } from "@/lib/utils/validators";
 
 const IS_DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
+const PHONE_AUTH_ENABLED = process.env.NEXT_PUBLIC_PHONE_AUTH_ENABLED === "true";
 
 interface AuthBottomSheetProps {
   isOpen: boolean;
@@ -285,22 +286,7 @@ export default function AuthBottomSheet({
             اختار طريقة تسجيل الدخول
           </p>
 
-          {/* WhatsApp option (recommended - free) */}
-          <button
-            onClick={() => selectMethod("whatsapp")}
-            className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-green-50 hover:border-green-500 border-2 border-transparent transition-all"
-          >
-            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-              <MessageCircle size={20} className="text-green-600" />
-            </div>
-            <div className="text-start">
-              <p className="font-semibold text-dark">واتساب</p>
-              <p className="text-xs text-gray-text">هيوصلك كود تأكيد على واتساب</p>
-            </div>
-            <span className="ms-auto text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold">مُوصى به</span>
-          </button>
-
-          {/* Email option */}
+          {/* Email option (primary - free) */}
           <button
             onClick={() => selectMethod("email")}
             className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green/10 hover:border-brand-green border-2 border-transparent transition-all"
@@ -312,22 +298,40 @@ export default function AuthBottomSheet({
               <p className="font-semibold text-dark">الإيميل</p>
               <p className="text-xs text-gray-text">هيوصلك كود تأكيد على إيميلك</p>
             </div>
-            <span className="ms-auto text-[10px] bg-brand-green text-white px-2 py-0.5 rounded-full">مجاني</span>
+            <span className="ms-auto text-[10px] bg-brand-green text-white px-2 py-0.5 rounded-full font-bold">مُوصى به</span>
           </button>
 
-          {/* Phone SMS option */}
-          <button
-            onClick={() => selectMethod("phone")}
-            className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green/10 hover:border-brand-green border-2 border-transparent transition-all"
-          >
-            <div className="w-10 h-10 rounded-full bg-brand-gold/15 flex items-center justify-center flex-shrink-0">
-              <Phone size={20} className="text-brand-gold" />
-            </div>
-            <div className="text-start">
-              <p className="font-semibold text-dark">رسالة SMS</p>
-              <p className="text-xs text-gray-text">هيوصلك كود SMS على رقمك</p>
-            </div>
-          </button>
+          {/* WhatsApp option (only when Twilio is configured) */}
+          {PHONE_AUTH_ENABLED && (
+            <button
+              onClick={() => selectMethod("whatsapp")}
+              className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-green-50 hover:border-green-500 border-2 border-transparent transition-all"
+            >
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                <MessageCircle size={20} className="text-green-600" />
+              </div>
+              <div className="text-start">
+                <p className="font-semibold text-dark">واتساب</p>
+                <p className="text-xs text-gray-text">هيوصلك كود تأكيد على واتساب</p>
+              </div>
+            </button>
+          )}
+
+          {/* Phone SMS option (only when Twilio is configured) */}
+          {PHONE_AUTH_ENABLED && (
+            <button
+              onClick={() => selectMethod("phone")}
+              className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green/10 hover:border-brand-green border-2 border-transparent transition-all"
+            >
+              <div className="w-10 h-10 rounded-full bg-brand-gold/15 flex items-center justify-center flex-shrink-0">
+                <Phone size={20} className="text-brand-gold" />
+              </div>
+              <div className="text-start">
+                <p className="font-semibold text-dark">رسالة SMS</p>
+                <p className="text-xs text-gray-text">هيوصلك كود SMS على رقمك</p>
+              </div>
+            </button>
+          )}
 
           {/* Admin option */}
           <button
