@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronRight } from "lucide-react";
+import { Bell, ChevronRight, Plus } from "lucide-react";
 import { useNotificationStore } from "@/stores/notification-store";
 import { useAuth } from "@/components/auth/AuthProvider";
 import NotificationDropdown from "@/components/notifications/NotificationDropdown";
@@ -56,7 +56,16 @@ export default function Header({
         </div>
 
         {/* Left side: Actions */}
-        <div className="flex items-center gap-1 relative">
+        <div className="flex items-center gap-2 relative">
+          {!showBack && (
+            <Link
+              href="/ad/create"
+              className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white px-3 py-1.5 rounded-full transition-all shadow-sm"
+            >
+              <Plus size={18} strokeWidth={2.5} />
+              <span className="text-sm font-bold">أضف إعلان</span>
+            </Link>
+          )}
           {actions}
           {showNotifications && (
             <>
