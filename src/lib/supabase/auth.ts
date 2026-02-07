@@ -241,26 +241,30 @@ async function upsertUserProfile(userId: string, contactInfo: string): Promise<U
   const isEmail = contactInfo.includes("@");
   const phone = isEmail ? "" : contactInfo;
 
-  // Try to fetch existing profile first
-  const { data: existing } = await supabase
+  // Try to fetch existing profile first (maybeSingle avoids 406 on 0 rows)
+  const { data: existing, error: selectError } = await supabase
     .from("users" as never)
     .select("*")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
+
+  if (selectError) {
+    console.error("[upsertUserProfile] Select error:", selectError.message, selectError.code);
+  }
 
   if (existing) {
     return existing as unknown as UserProfile;
   }
 
-  // Create new profile
+  // Create new profile using upsert (handles both insert and conflict)
   const { data: created, error: insertError } = await supabase
     .from("users" as never)
-    .insert({ id: userId, phone } as never)
+    .upsert({ id: userId, phone } as never, { onConflict: "id" } as never)
     .select()
-    .single();
+    .maybeSingle();
 
   if (insertError) {
-    console.error("[upsertUserProfile] Insert error:", insertError.message, insertError.code);
+    console.error("[upsertUserProfile] Upsert error:", insertError.message, insertError.code, insertError.details);
   }
 
   if (created) {

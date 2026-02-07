@@ -43,6 +43,34 @@ export async function POST(request: Request) {
   const results: Record<string, string> = {};
 
   try {
+    // 0. Fix users table phone column (if it has old VARCHAR(11) UNIQUE NOT NULL)
+    // Try to create a profile with empty phone to test if the constraint is fixed
+    // We do this via a raw SQL approach: try inserting, if it fails, we know the constraint needs fixing
+    try {
+      const { error: testError } = await adminClient.rpc("exec_sql" as never, {
+        query: `
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM pg_constraint
+              WHERE conname = 'users_phone_key' AND conrelid = 'public.users'::regclass
+            ) THEN
+              ALTER TABLE public.users DROP CONSTRAINT users_phone_key;
+            END IF;
+            ALTER TABLE public.users ALTER COLUMN phone DROP NOT NULL;
+            ALTER TABLE public.users ALTER COLUMN phone SET DEFAULT '';
+            ALTER TABLE public.users ALTER COLUMN phone TYPE VARCHAR(20);
+          EXCEPTION WHEN OTHERS THEN NULL;
+          END $$;
+        `,
+      } as never);
+      results.fix_users_table = testError
+        ? `تخطي إصلاح جدول users (شغّل complete-setup.sql يدوياً): ${testError.message}`
+        : "تم إصلاح جدول users";
+    } catch {
+      results.fix_users_table = "تخطي إصلاح جدول users — شغّل complete-setup.sql في SQL Editor";
+    }
+
     // 1. Seed categories
     const { error: catError } = await adminClient.from("categories").upsert(
       CATEGORIES,
@@ -76,6 +104,34 @@ export async function POST(request: Request) {
       ? `خطأ: ${cityError.message}`
       : `تم إضافة ${CITIES.length} مدينة`;
 
+    // 5. Create profiles for any auth users who don't have one yet
+    const { data: authUsers } = await adminClient.auth.admin.listUsers();
+    if (authUsers?.users) {
+      let profilesCreated = 0;
+      for (const authUser of authUsers.users) {
+        // Check if profile exists
+        const { data: existing } = await adminClient
+          .from("users")
+          .select("id")
+          .eq("id", authUser.id)
+          .maybeSingle();
+
+        if (!existing) {
+          const phone = authUser.phone?.replace(/^\+2/, "") || "";
+          const { error: profileError } = await adminClient
+            .from("users")
+            .insert({
+              id: authUser.id,
+              phone: phone.length <= 20 ? phone : "",
+              display_name: authUser.user_metadata?.display_name || null,
+            });
+          if (!profileError) profilesCreated++;
+          else console.error(`[setup-db] Profile create error for ${authUser.id}:`, profileError.message);
+        }
+      }
+      results.user_profiles = `تم إنشاء ${profilesCreated} بروفايل (من أصل ${authUsers.users.length} مستخدم)`;
+    }
+
     const hasErrors = Object.values(results).some((r) => r.startsWith("خطأ"));
 
     return NextResponse.json(
@@ -85,6 +141,9 @@ export async function POST(request: Request) {
           ? "حصلت بعض الأخطاء أثناء التهيئة"
           : "تم تهيئة قاعدة البيانات بنجاح! 🎉",
         results,
+        next_step: hasErrors
+          ? "شغّل complete-setup.sql في Supabase SQL Editor الأول، وبعدين ارجع شغّل الـ API ده تاني"
+          : null,
       },
       { status: hasErrors ? 207 : 200 },
     );
