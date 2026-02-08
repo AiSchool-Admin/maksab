@@ -377,6 +377,7 @@ export default function AdDetailPage({
             onBuyNow={handleBuyNow}
             isBidding={isBidding}
             isBuyingNow={isBuyingNow}
+            isLiveAuction={Boolean((ad.categoryFields as Record<string, unknown>)?.is_live_auction)}
           />
         )}
 

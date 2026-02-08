@@ -1,6 +1,6 @@
 export type { Database } from "./database";
 
-export type SaleType = "cash" | "auction" | "exchange";
+export type SaleType = "cash" | "auction" | "live_auction" | "exchange";
 
 export type AdStatus = "active" | "sold" | "exchanged" | "expired" | "deleted";
 

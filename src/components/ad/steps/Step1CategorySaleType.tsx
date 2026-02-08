@@ -13,9 +13,10 @@ interface Step1Props {
   onSaleTypeChange: (type: SaleType) => void;
 }
 
-const saleTypes: { value: SaleType; label: string; icon: string }[] = [
+const saleTypes: { value: SaleType; label: string; icon: string; badge?: string }[] = [
   { value: "cash", label: "بيع نقدي", icon: "💵" },
   { value: "auction", label: "مزاد", icon: "🔨" },
+  { value: "live_auction", label: "مزاد مباشر (بث حي)", icon: "📡", badge: "رسوم إضافية" },
   { value: "exchange", label: "تبديل", icon: "🔄" },
 ];
 
@@ -109,6 +110,11 @@ export default function Step1CategorySaleType({
                 </span>
                 <span className="text-lg">{st.icon}</span>
                 <span className="font-semibold text-dark">{st.label}</span>
+                {st.badge && (
+                  <span className="ms-auto text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+                    {st.badge}
+                  </span>
+                )}
               </button>
             ))}
           </div>

@@ -17,6 +17,8 @@ export interface PriceData {
   auctionBuyNowPrice: string;
   auctionDuration: number;
   auctionMinIncrement: string;
+  // Live Auction
+  liveAuctionScheduledAt: string;
   // Exchange
   exchangeDescription: string;
   exchangeAcceptsPriceDiff: boolean;
@@ -197,6 +199,138 @@ export default function Step3PricePhotos({
               placeholder="50"
               hint="أقل مبلغ يزود بيه المزايد"
             />
+          </div>
+        )}
+
+        {saleType === "live_auction" && (
+          <div className="space-y-4">
+            {/* Live auction fee notice */}
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📡</span>
+                <span className="text-sm font-bold text-orange-700">
+                  مزاد مباشر على الهواء
+                </span>
+              </div>
+              <p className="text-xs text-orange-600 leading-relaxed">
+                المزاد المباشر يتم بثه على الهواء للمشاهدين. يتم تطبيق رسوم إضافية على هذه الخدمة:
+              </p>
+              <div className="bg-white rounded-lg p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-text">رسوم البث المباشر</span>
+                  <span className="font-bold text-dark">50 جنيه</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-text">عمولة على البيع (2%)</span>
+                  <span className="font-bold text-dark">بعد إتمام البيع</span>
+                </div>
+                <div className="border-t border-gray-100 pt-1.5 mt-1.5">
+                  <p className="text-[10px] text-gray-text">
+                    * رسوم البث غير قابلة للاسترداد. العمولة تُخصم من سعر البيع النهائي.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <Input
+              label="سعر الافتتاح"
+              name="auctionStartPrice"
+              type="number"
+              inputMode="numeric"
+              value={priceData.auctionStartPrice}
+              onChange={(e) =>
+                onPriceChange("auctionStartPrice", e.target.value)
+              }
+              unit="جنيه"
+              placeholder="0"
+              error={errors.auctionStartPrice}
+              required
+            />
+            <Input
+              label={'سعر "اشتري الآن" (اختياري)'}
+              name="auctionBuyNowPrice"
+              type="number"
+              inputMode="numeric"
+              value={priceData.auctionBuyNowPrice}
+              onChange={(e) =>
+                onPriceChange("auctionBuyNowPrice", e.target.value)
+              }
+              unit="جنيه"
+              placeholder="0"
+              hint="لو حد دفع المبلغ ده المزاد بينتهي فوراً"
+            />
+
+            {/* Schedule live auction */}
+            <div>
+              <label className="block text-sm font-medium text-dark mb-1.5">
+                موعد البث المباشر <span className="text-error">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={priceData.liveAuctionScheduledAt}
+                onChange={(e) =>
+                  onPriceChange("liveAuctionScheduledAt", e.target.value)
+                }
+                min={new Date(Date.now() + 3600000).toISOString().slice(0, 16)}
+                className={`w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark ${
+                  errors.liveAuctionScheduledAt ? "border-error bg-error/5" : ""
+                }`}
+                dir="ltr"
+              />
+              {errors.liveAuctionScheduledAt && (
+                <p className="mt-1 text-xs text-error">
+                  {errors.liveAuctionScheduledAt}
+                </p>
+              )}
+              <p className="mt-1 text-[11px] text-gray-text">
+                حدد موعد البث بعد ساعة على الأقل من الآن
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark mb-2">
+                مدة المزاد <span className="text-error">*</span>
+              </label>
+              <div className="flex gap-2">
+                {[24, 48, 72].map((hours) => (
+                  <button
+                    key={hours}
+                    type="button"
+                    onClick={() => onPriceChange("auctionDuration", hours)}
+                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${
+                      priceData.auctionDuration === hours
+                        ? "bg-brand-green text-white"
+                        : "bg-gray-light text-dark hover:bg-gray-200"
+                    }`}
+                  >
+                    {hours} ساعة
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Input
+              label="الحد الأدنى للمزايدة"
+              name="auctionMinIncrement"
+              type="number"
+              inputMode="numeric"
+              value={priceData.auctionMinIncrement}
+              onChange={(e) =>
+                onPriceChange("auctionMinIncrement", e.target.value)
+              }
+              unit="جنيه"
+              placeholder="50"
+              hint="أقل مبلغ يزود بيه المزايد"
+            />
+
+            {/* Agreement */}
+            <div className="bg-gray-light rounded-xl p-3 flex items-start gap-2">
+              <span className="text-sm mt-0.5">💡</span>
+              <p className="text-[11px] text-gray-text leading-relaxed">
+                بنشر المزاد المباشر أنت موافق على دفع رسوم البث (50 جنيه) وعمولة 2% على سعر البيع النهائي.
+                سيتم إرسال رابط البث قبل الموعد بـ 15 دقيقة.
+              </p>
+            </div>
           </div>
         )}
 

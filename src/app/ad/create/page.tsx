@@ -53,6 +53,7 @@ function getInitialPriceData(): PriceData {
     auctionBuyNowPrice: "",
     auctionDuration: 24,
     auctionMinIncrement: "",
+    liveAuctionScheduledAt: "",
     exchangeDescription: "",
     exchangeAcceptsPriceDiff: false,
     exchangePriceDiff: "",
@@ -189,6 +190,11 @@ export default function CreateAdPage() {
         } else if (draft.saleType === "auction") {
           if (!draft.priceData.auctionStartPrice)
             errs.auctionStartPrice = "سعر الافتتاح مطلوب";
+        } else if (draft.saleType === "live_auction") {
+          if (!draft.priceData.auctionStartPrice)
+            errs.auctionStartPrice = "سعر الافتتاح مطلوب";
+          if (!draft.priceData.liveAuctionScheduledAt)
+            errs.liveAuctionScheduledAt = "حدد موعد البث المباشر";
         } else if (draft.saleType === "exchange") {
           if (!draft.priceData.exchangeDescription.trim())
             errs.exchangeDescription = "اوصف اللي عايز تبدل بيه";
@@ -272,10 +278,19 @@ export default function CreateAdPage() {
         user_id: authedUser.id,
         category_id: draft.categoryId,
         subcategory_id: draft.subcategoryId,
-        sale_type: draft.saleType as SaleType,
+        // Store live_auction as "auction" in DB with is_live flag in category_fields
+        sale_type: (draft.saleType === "live_auction" ? "auction" : draft.saleType) as SaleType,
         title: draft.title,
         description: draft.description,
-        category_fields: draft.categoryFields,
+        category_fields: {
+          ...draft.categoryFields,
+          ...(draft.saleType === "live_auction"
+            ? {
+                is_live_auction: true,
+                live_scheduled_at: draft.priceData.liveAuctionScheduledAt,
+              }
+            : {}),
+        },
         governorate: draft.governorate,
         city: draft.city || null,
         // Cash
@@ -283,31 +298,31 @@ export default function CreateAdPage() {
           draft.saleType === "cash" ? Number(draft.priceData.price) : null,
         is_negotiable:
           draft.saleType === "cash" ? draft.priceData.isNegotiable : false,
-        // Auction
+        // Auction & Live Auction
         auction_start_price:
-          draft.saleType === "auction"
+          draft.saleType === "auction" || draft.saleType === "live_auction"
             ? Number(draft.priceData.auctionStartPrice)
             : null,
         auction_buy_now_price:
-          draft.saleType === "auction" && draft.priceData.auctionBuyNowPrice
+          (draft.saleType === "auction" || draft.saleType === "live_auction") && draft.priceData.auctionBuyNowPrice
             ? Number(draft.priceData.auctionBuyNowPrice)
             : null,
         auction_duration_hours:
-          draft.saleType === "auction"
+          draft.saleType === "auction" || draft.saleType === "live_auction"
             ? draft.priceData.auctionDuration
             : null,
         auction_min_increment:
-          draft.saleType === "auction" && draft.priceData.auctionMinIncrement
+          (draft.saleType === "auction" || draft.saleType === "live_auction") && draft.priceData.auctionMinIncrement
             ? Number(draft.priceData.auctionMinIncrement)
             : null,
         auction_ends_at:
-          draft.saleType === "auction"
+          draft.saleType === "auction" || draft.saleType === "live_auction"
             ? new Date(
                 Date.now() + (draft.priceData.auctionDuration || 24) * 3600000,
               ).toISOString()
             : null,
         auction_status:
-          draft.saleType === "auction" ? "active" : null,
+          draft.saleType === "auction" || draft.saleType === "live_auction" ? "active" : null,
         // Exchange
         exchange_description:
           draft.saleType === "exchange"
@@ -435,6 +450,9 @@ export default function CreateAdPage() {
     }
     if (draft.saleType === "auction" && draft.priceData.auctionStartPrice) {
       return `يبدأ من ${Number(draft.priceData.auctionStartPrice).toLocaleString("en-US")} جنيه`;
+    }
+    if (draft.saleType === "live_auction" && draft.priceData.auctionStartPrice) {
+      return `📡 مزاد مباشر — يبدأ من ${Number(draft.priceData.auctionStartPrice).toLocaleString("en-US")} جنيه`;
     }
     if (draft.saleType === "exchange") {
       return "للتبديل";

@@ -9,9 +9,11 @@ import {
   ShoppingCart,
   Gavel,
   Timer,
+  Plus,
+  Minus,
+  Radio,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
 import type { AuctionState, AuctionBid } from "@/lib/auction/types";
 import { calcMinNextBid, getAuctionStatusLabel } from "@/lib/auction/types";
 import { formatPrice, formatCountdown, formatTimeAgo } from "@/lib/utils/format";
@@ -23,6 +25,7 @@ interface AuctionSectionProps {
   onBuyNow: () => void;
   isBidding?: boolean;
   isBuyingNow?: boolean;
+  isLiveAuction?: boolean;
 }
 
 export default function AuctionSection({
@@ -32,6 +35,7 @@ export default function AuctionSection({
   onBuyNow,
   isBidding = false,
   isBuyingNow = false,
+  isLiveAuction = false,
 }: AuctionSectionProps) {
   const {
     status,
@@ -52,8 +56,23 @@ export default function AuctionSection({
   const [remaining, setRemaining] = useState(
     () => new Date(endsAt).getTime() - Date.now(),
   );
-  const [bidAmount, setBidAmount] = useState("");
   const [bidError, setBidError] = useState<string | null>(null);
+
+  const isActive = status === "active";
+  const currentPrice = currentHighestBid ?? startPrice;
+  const minNextBid = calcMinNextBid(currentPrice);
+  const minIncrement = Math.max(
+    Math.ceil(currentPrice * 0.02),
+    auctionState.minIncrement || 50,
+  );
+
+  // Quick-bid stepper state: starts at minimum next bid
+  const [bidAmount, setBidAmount] = useState(minNextBid);
+
+  // Update bidAmount when minNextBid changes (new bid comes in)
+  useEffect(() => {
+    setBidAmount(minNextBid);
+  }, [minNextBid]);
 
   /* ── Countdown timer — updates every second ─────────────────── */
   useEffect(() => {
@@ -69,12 +88,8 @@ export default function AuctionSection({
     return () => clearInterval(interval);
   }, [endsAt, status]);
 
-  const isEnded = status !== "active";
-  const isActive = status === "active";
   const isUrgent = isActive && remaining > 0 && remaining < 6 * 3600000;
   const isLastMinutes = isActive && remaining > 0 && remaining < 5 * 60 * 1000;
-  const currentPrice = currentHighestBid ?? startPrice;
-  const minNextBid = calcMinNextBid(currentPrice);
   const isCurrentUserHighest =
     !!currentUserId && highestBidderId === currentUserId;
   const isCurrentUserWinner = !!currentUserId && winnerId === currentUserId;
@@ -88,16 +103,25 @@ export default function AuctionSection({
   const elapsed = totalDuration - remaining;
   const progress = Math.min(Math.max(elapsed / totalDuration, 0), 1);
 
+  /* ── Quick bid stepper handlers ─────────────────────────────── */
+  const handleIncrement = useCallback(() => {
+    setBidAmount((prev) => prev + minIncrement);
+    setBidError(null);
+  }, [minIncrement]);
+
+  const handleDecrement = useCallback(() => {
+    setBidAmount((prev) => {
+      const next = prev - minIncrement;
+      return next >= minNextBid ? next : minNextBid;
+    });
+    setBidError(null);
+  }, [minIncrement, minNextBid]);
+
   /* ── Handle bid submission ──────────────────────────────────── */
   const handleBid = useCallback(() => {
     setBidError(null);
-    const amount = Number(bidAmount);
 
-    if (!amount || isNaN(amount)) {
-      setBidError("ادخل مبلغ المزايدة");
-      return;
-    }
-    if (amount < minNextBid) {
+    if (bidAmount < minNextBid) {
       setBidError(`الحد الأدنى للمزايدة ${formatPrice(minNextBid)}`);
       return;
     }
@@ -106,8 +130,7 @@ export default function AuctionSection({
       return;
     }
 
-    onPlaceBid(amount);
-    setBidAmount("");
+    onPlaceBid(bidAmount);
   }, [bidAmount, minNextBid, isCurrentUserHighest, onPlaceBid]);
 
   /* ── ENDED STATES ───────────────────────────────────────────── */
@@ -115,7 +138,6 @@ export default function AuctionSection({
   if (status === "ended_winner") {
     return (
       <div className="space-y-4">
-        {/* Status banner */}
         <div className="bg-brand-green-light rounded-xl p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Trophy size={20} className="text-brand-green" />
@@ -139,8 +161,6 @@ export default function AuctionSection({
             عدد المزايدات: {bidsCount}
           </div>
         </div>
-
-        {/* Bid history */}
         <BidHistory bids={bids} />
       </div>
     );
@@ -188,8 +208,6 @@ export default function AuctionSection({
             </span>
           </div>
         </div>
-
-        {/* Bid history (if there were bids before buy now) */}
         {bids.length > 0 && <BidHistory bids={bids} />}
       </div>
     );
@@ -217,6 +235,18 @@ export default function AuctionSection({
 
   return (
     <div className="space-y-4">
+      {/* Live auction badge */}
+      {isLiveAuction && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
+          <span className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+          </span>
+          <Radio size={16} className="text-red-500" />
+          <span className="text-sm font-bold text-red-600">مزاد مباشر على الهواء</span>
+        </div>
+      )}
+
       {/* Timer */}
       <div className="bg-brand-gold-light rounded-xl p-4 space-y-2">
         <div className="flex items-center justify-between">
@@ -286,26 +316,83 @@ export default function AuctionSection({
       {/* Bid history */}
       <BidHistory bids={bids} />
 
-      {/* Place bid */}
+      {/* ── Quick Bid Stepper ─────────────────────────────── */}
       {remaining > 0 && (
         <div className="space-y-3">
-          <Input
-            label="مزايدتك"
-            name="bid"
-            type="number"
-            inputMode="numeric"
-            value={bidAmount}
-            onChange={(e) => {
-              setBidAmount(e.target.value);
-              setBidError(null);
-            }}
-            unit="جنيه"
-            placeholder={String(minNextBid)}
-            hint={
-              bidError ?? `الحد الأدنى: ${formatPrice(minNextBid)}`
-            }
-            error={bidError ?? undefined}
-          />
+          {/* Next bid label */}
+          <div className="text-center">
+            <span className="text-xs text-gray-text">المزايدة القادمة</span>
+          </div>
+
+          {/* Stepper control */}
+          <div className="flex items-center justify-center gap-3">
+            {/* Decrement button */}
+            <button
+              type="button"
+              onClick={handleDecrement}
+              disabled={bidAmount <= minNextBid || isBidding}
+              className="w-12 h-12 rounded-full bg-gray-light hover:bg-gray-200 active:scale-95 flex items-center justify-center transition-all disabled:opacity-40 disabled:active:scale-100"
+              aria-label="تقليل المبلغ"
+            >
+              <Minus size={20} className="text-dark" />
+            </button>
+
+            {/* Amount display */}
+            <div className="flex-1 max-w-[200px] text-center">
+              <div className="bg-brand-green-light border-2 border-brand-green rounded-2xl px-4 py-3">
+                <span className="text-2xl font-bold text-brand-green" dir="ltr">
+                  {bidAmount.toLocaleString("en-US")}
+                </span>
+                <span className="text-sm font-medium text-brand-green me-1">
+                  {" "}جنيه
+                </span>
+              </div>
+              <div className="mt-1.5 text-[11px] text-gray-text">
+                الحد الأدنى: {formatPrice(minNextBid)} — الزيادة: {formatPrice(minIncrement)}
+              </div>
+            </div>
+
+            {/* Increment button */}
+            <button
+              type="button"
+              onClick={handleIncrement}
+              disabled={isBidding}
+              className="w-12 h-12 rounded-full bg-brand-green-light hover:bg-brand-green/20 active:scale-95 flex items-center justify-center transition-all disabled:opacity-40 disabled:active:scale-100"
+              aria-label="زيادة المبلغ"
+            >
+              <Plus size={20} className="text-brand-green" />
+            </button>
+          </div>
+
+          {/* Quick increment chips */}
+          <div className="flex justify-center gap-2">
+            {[1, 2, 5, 10].map((multiplier) => {
+              const chipAmount = minIncrement * multiplier;
+              return (
+                <button
+                  key={multiplier}
+                  type="button"
+                  onClick={() => {
+                    setBidAmount(minNextBid + chipAmount - minIncrement);
+                    setBidError(null);
+                  }}
+                  disabled={isBidding}
+                  className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-gray-light text-gray-text hover:bg-brand-gold-light hover:text-brand-gold active:scale-95 transition-all disabled:opacity-40"
+                >
+                  +{formatPrice(chipAmount)}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Error message */}
+          {bidError && (
+            <p className="text-xs text-error text-center font-medium">
+              {bidError}
+            </p>
+          )}
+
+          {/* Bid button */}
           <Button
             fullWidth
             size="lg"
@@ -315,7 +402,7 @@ export default function AuctionSection({
             variant="secondary"
           >
             <Gavel size={18} />
-            زايد الآن
+            زايد بـ {formatPrice(bidAmount)}
           </Button>
 
           {isLastMinutes && (
