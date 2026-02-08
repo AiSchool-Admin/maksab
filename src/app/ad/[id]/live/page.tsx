@@ -25,6 +25,7 @@ import {
 import Button from "@/components/ui/Button";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useWebRTC } from "@/lib/hooks/useWebRTC";
 import { formatPrice, formatCountdown } from "@/lib/utils/format";
 import { calcMinNextBid } from "@/lib/auction/types";
 import toast from "react-hot-toast";
@@ -80,10 +81,32 @@ export default function LiveBroadcastPage() {
   const [bidAmount, setBidAmount] = useState(0);
   const [isBidding, setIsBidding] = useState(false);
 
-  // Media refs (seller only)
-  const videoRef = useRef<HTMLVideoElement>(null);
+  // Media refs
+  const videoRef = useRef<HTMLVideoElement>(null);        // seller local camera
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);  // viewer receives seller stream
   const streamRef = useRef<MediaStream | null>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  // ── WebRTC for real video streaming ────────────────────
+  const {
+    remoteStream,
+    connectionState,
+    broadcasterOnline,
+    startBroadcast,
+    stopBroadcast: stopWebRTC,
+  } = useWebRTC({
+    roomId: adId,
+    userId: user?.id || "anon-" + Math.random().toString(36).slice(2),
+    isBroadcaster: isOwner === true,
+    onViewerCountChange: (count) => setViewerCount(count),
+  });
+
+  // Attach remote stream to viewer video element
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
 
   // ── Fetch ad data ───────────────────────────────────
   useEffect(() => {
@@ -228,12 +251,17 @@ export default function LiveBroadcastPage() {
     const authed = await requireAuth();
     if (!authed) return;
     setBroadcastState("live");
-  }, [requireAuth]);
+    // Start WebRTC broadcast with the current camera stream
+    if (streamRef.current) {
+      startBroadcast(streamRef.current);
+    }
+  }, [requireAuth, startBroadcast]);
 
   const endBroadcast = useCallback(() => {
+    stopWebRTC();
     stopCamera();
     setBroadcastState("ended");
-  }, [stopCamera]);
+  }, [stopWebRTC, stopCamera]);
 
   // ── Comments ─────────────────────────────────────────
   const sendComment = useCallback(() => {
@@ -539,45 +567,84 @@ export default function LiveBroadcastPage() {
     <main className="min-h-screen bg-gray-950 flex flex-col">
       {/* ── Top: Stream area ─────────────────────────── */}
       <div className="relative w-full aspect-[9/16] max-h-[55vh] bg-black flex-shrink-0">
-        {/* Product image as background */}
-        {adImage ? (
-          <Image
-            src={adImage}
-            alt={adTitle}
-            fill
-            className="object-cover opacity-30 blur-sm"
+        {/* ── LIVE VIDEO from seller (WebRTC remote stream) ── */}
+        {remoteStream ? (
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover z-0"
           />
         ) : (
-          <div className="absolute inset-0 bg-gray-900" />
+          <>
+            {/* Blurred product image as background while waiting */}
+            {adImage ? (
+              <Image
+                src={adImage}
+                alt={adTitle}
+                fill
+                className="object-cover opacity-30 blur-sm"
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gray-900" />
+            )}
+          </>
         )}
 
         {/* Stream overlay content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
           {/* Live badge */}
-          <div className="flex items-center gap-1.5 bg-red-600 px-4 py-1.5 rounded-full mb-4">
+          <div className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full mb-4 ${
+            remoteStream ? "bg-red-600" : "bg-gray-700"
+          }`}>
             <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                remoteStream ? "bg-white" : "bg-gray-400"
+              }`} />
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                remoteStream ? "bg-white" : "bg-gray-400"
+              }`} />
             </span>
             <Radio size={14} className="text-white" />
-            <span className="text-white text-sm font-bold">مزاد مباشر</span>
+            <span className="text-white text-sm font-bold">
+              {remoteStream ? "مباشر الآن" : broadcasterOnline ? "جاري الاتصال..." : "في انتظار البائع"}
+            </span>
           </div>
 
-          {/* Product image (centered, clear) */}
-          {adImage && (
-            <div className="w-40 h-40 rounded-2xl overflow-hidden border-2 border-white/20 mb-4 shadow-2xl">
-              <Image
-                src={adImage}
-                alt={adTitle}
-                width={160}
-                height={160}
-                className="object-cover w-full h-full"
-              />
-            </div>
-          )}
+          {/* Show product image + info ONLY when not streaming */}
+          {!remoteStream && (
+            <>
+              {adImage && (
+                <div className="w-40 h-40 rounded-2xl overflow-hidden border-2 border-white/20 mb-4 shadow-2xl">
+                  <Image
+                    src={adImage}
+                    alt={adTitle}
+                    width={160}
+                    height={160}
+                    className="object-cover w-full h-full"
+                  />
+                </div>
+              )}
 
-          <p className="text-white font-bold text-base text-center px-4 mb-1">{adTitle}</p>
-          <p className="text-gray-400 text-xs">البائع: {sellerName || "—"}</p>
+              <p className="text-white font-bold text-base text-center px-4 mb-1">{adTitle}</p>
+              <p className="text-gray-400 text-xs">البائع: {sellerName || "—"}</p>
+
+              {!broadcasterOnline && (
+                <div className="mt-4 bg-white/10 rounded-xl px-4 py-3 text-center max-w-[80%]">
+                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-gray-300 text-xs">البائع لسه ما بدأش البث</p>
+                  <p className="text-gray-500 text-[10px] mt-1">هيظهرلك الفيديو تلقائي لما يبدأ</p>
+                </div>
+              )}
+
+              {broadcasterOnline && !remoteStream && (
+                <div className="mt-4 bg-white/10 rounded-xl px-4 py-3 text-center max-w-[80%]">
+                  <div className="w-6 h-6 border-2 border-brand-green border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-gray-300 text-xs">البائع بيبث — جاري الاتصال...</p>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Top bar: close + timer + viewers */}
