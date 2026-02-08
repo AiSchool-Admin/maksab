@@ -1,114 +1,82 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
   <defs>
-    <linearGradient id="carBody" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4FC3F7"/>
-      <stop offset="40%" stop-color="#0288D1"/>
-      <stop offset="100%" stop-color="#01579B"/>
+    <linearGradient id="carBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#42A5F5"/>
+      <stop offset="50%" stop-color="#2196F3"/>
+      <stop offset="100%" stop-color="#0D47A1"/>
     </linearGradient>
-    <linearGradient id="carBodyTop" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#81D4FA"/>
-      <stop offset="100%" stop-color="#0277BD"/>
+    <linearGradient id="carWindowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E3F2FD"/>
+      <stop offset="50%" stop-color="#90CAF9"/>
+      <stop offset="100%" stop-color="#42A5F5"/>
     </linearGradient>
-    <linearGradient id="windowGlass" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#B3E5FC"/>
-      <stop offset="50%" stop-color="#4FC3F7"/>
-      <stop offset="100%" stop-color="#0288D1"/>
-    </linearGradient>
-    <linearGradient id="wheelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#424242"/>
-      <stop offset="50%" stop-color="#212121"/>
-      <stop offset="100%" stop-color="#000000"/>
-    </linearGradient>
-    <radialGradient id="hubcap" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#E0E0E0"/>
-      <stop offset="60%" stop-color="#9E9E9E"/>
-      <stop offset="100%" stop-color="#616161"/>
+    <radialGradient id="wheelGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#616161"/>
+      <stop offset="50%" stop-color="#424242"/>
+      <stop offset="100%" stop-color="#212121"/>
     </radialGradient>
-    <linearGradient id="headlight" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#FFF9C4"/>
-    </linearGradient>
-    <linearGradient id="groundShadow" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0.2"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="carShine" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.5"/>
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
-    </linearGradient>
-    <filter id="carShadow" x="-10%" y="-10%" width="120%" height="140%">
-      <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="#000" flood-opacity="0.25"/>
+    <radialGradient id="hubcapGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E0E0E0"/>
+      <stop offset="100%" stop-color="#757575"/>
+    </radialGradient>
+    <filter id="carShadow">
+      <feDropShadow dx="4" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.3"/>
     </filter>
   </defs>
 
-  <!-- Ground shadow ellipse -->
-  <ellipse cx="60" cy="98" rx="45" ry="6" fill="url(#groundShadow)"/>
+  <!-- Background -->
+  <rect width="200" height="200" rx="40" fill="#E3F2FD"/>
 
-  <!-- Car group with shadow filter -->
+  <!-- Car with animation and shadow -->
   <g filter="url(#carShadow)">
-    <!-- Lower body -->
-    <path d="M15,72 L15,82 Q15,88 21,88 L99,88 Q105,88 105,82 L105,72 Q105,65 95,65 L25,65 Q15,65 15,72Z" fill="url(#carBody)"/>
+    <!-- Car body bouncing animation -->
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0,0; 0,-3; 0,0" dur="2s" repeatCount="indefinite"/>
 
-    <!-- Upper body / roof -->
-    <path d="M32,65 L42,42 Q44,38 50,38 L78,38 Q84,38 86,42 L96,65Z" fill="url(#carBodyTop)"/>
+      <!-- Main body -->
+      <path d="M40,120 L40,140 Q40,145 45,145 L155,145 Q160,145 160,140 L160,120 Q160,110 150,110 L50,110 Q40,110 40,120Z" fill="url(#carBodyGrad)"/>
 
-    <!-- Roof shine highlight -->
-    <path d="M42,42 Q44,38 50,38 L78,38 Q84,38 86,42 L82,48 L46,48Z" fill="url(#carShine)"/>
+      <!-- Roof/cabin -->
+      <path d="M60,110 L75,70 Q78,65 85,65 L115,65 Q122,65 125,70 L140,110Z" fill="url(#carBodyGrad)"/>
 
-    <!-- Front windshield -->
-    <path d="M35,65 L44,45 Q45,43 48,43 L58,43 L58,65Z" fill="url(#windowGlass)" opacity="0.85"/>
+      <!-- Windows -->
+      <path d="M65,110 L77,75 Q79,72 83,72 L95,72 L95,110Z" fill="url(#carWindowGrad)" opacity="0.8"/>
+      <path d="M105,72 L117,72 Q121,72 123,75 L135,110 L105,110Z" fill="url(#carWindowGrad)" opacity="0.8"/>
 
-    <!-- Rear windshield -->
-    <path d="M62,43 L76,43 Q79,43 80,45 L90,65 L62,65Z" fill="url(#windowGlass)" opacity="0.85"/>
+      <!-- Headlight pulsing -->
+      <ellipse cx="45" cy="125" rx="6" ry="5" fill="#FFF59D">
+        <animate attributeName="opacity" values="0.8;1;0.8" dur="1.5s" repeatCount="indefinite"/>
+      </ellipse>
 
-    <!-- Window pillar -->
-    <rect x="58" y="43" width="4" height="22" fill="#0277BD"/>
+      <!-- Taillight -->
+      <rect x="152" y="120" width="6" height="10" rx="2" fill="#F44336"/>
+    </g>
 
-    <!-- Body side line -->
-    <path d="M18,75 L102,75" stroke="#01579B" stroke-width="0.5" opacity="0.5"/>
+    <!-- Wheels with rotation animation -->
+    <g>
+      <!-- Front wheel -->
+      <circle cx="70" cy="145" r="18" fill="url(#wheelGrad)"/>
+      <circle cx="70" cy="145" r="12" fill="url(#hubcapGrad)">
+        <animateTransform attributeName="transform" type="rotate" from="0 70 145" to="360 70 145" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      <line x1="70" y1="133" x2="70" y2="157" stroke="#424242" stroke-width="2">
+        <animateTransform attributeName="transform" type="rotate" from="0 70 145" to="360 70 145" dur="3s" repeatCount="indefinite"/>
+      </line>
+      <line x1="58" y1="145" x2="82" y2="145" stroke="#424242" stroke-width="2">
+        <animateTransform attributeName="transform" type="rotate" from="0 70 145" to="360 70 145" dur="3s" repeatCount="indefinite"/>
+      </line>
 
-    <!-- Front bumper area -->
-    <path d="M15,82 L15,88 Q15,92 21,92 L30,92 L30,82Z" fill="#0277BD"/>
-
-    <!-- Rear bumper area -->
-    <path d="M90,82 L90,92 L99,92 Q105,92 105,88 L105,82Z" fill="#0277BD"/>
-
-    <!-- Headlight front -->
-    <ellipse cx="18" cy="75" rx="4" ry="3" fill="url(#headlight)" opacity="0.9"/>
-
-    <!-- Taillight -->
-    <rect x="101" y="72" width="4" height="6" rx="1" fill="#F44336" opacity="0.9"/>
-    <rect x="101" y="72" width="4" height="3" rx="1" fill="#FF8A80" opacity="0.5"/>
-
-    <!-- Door handle -->
-    <rect x="55" y="72" width="8" height="2" rx="1" fill="#4FC3F7"/>
-
-    <!-- Side mirror -->
-    <ellipse cx="34" cy="62" rx="3" ry="2" fill="#0288D1"/>
-    <ellipse cx="34" cy="62" rx="2" ry="1.5" fill="#B3E5FC" opacity="0.5"/>
-  </g>
-
-  <!-- Front wheel -->
-  <g>
-    <circle cx="35" cy="90" r="10" fill="url(#wheelGrad)"/>
-    <circle cx="35" cy="90" r="6" fill="url(#hubcap)"/>
-    <circle cx="35" cy="90" r="2" fill="#424242"/>
-    <!-- Spokes -->
-    <line x1="35" y1="84" x2="35" y2="96" stroke="#757575" stroke-width="0.8"/>
-    <line x1="29" y1="90" x2="41" y2="90" stroke="#757575" stroke-width="0.8"/>
-    <line x1="31" y1="86" x2="39" y2="94" stroke="#757575" stroke-width="0.8"/>
-    <line x1="39" y1="86" x2="31" y2="94" stroke="#757575" stroke-width="0.8"/>
-  </g>
-
-  <!-- Rear wheel -->
-  <g>
-    <circle cx="85" cy="90" r="10" fill="url(#wheelGrad)"/>
-    <circle cx="85" cy="90" r="6" fill="url(#hubcap)"/>
-    <circle cx="85" cy="90" r="2" fill="#424242"/>
-    <!-- Spokes -->
-    <line x1="85" y1="84" x2="85" y2="96" stroke="#757575" stroke-width="0.8"/>
-    <line x1="79" y1="90" x2="91" y2="90" stroke="#757575" stroke-width="0.8"/>
-    <line x1="81" y1="86" x2="89" y2="94" stroke="#757575" stroke-width="0.8"/>
-    <line x1="89" y1="86" x2="81" y2="94" stroke="#757575" stroke-width="0.8"/>
+      <!-- Rear wheel -->
+      <circle cx="130" cy="145" r="18" fill="url(#wheelGrad)"/>
+      <circle cx="130" cy="145" r="12" fill="url(#hubcapGrad)">
+        <animateTransform attributeName="transform" type="rotate" from="0 130 145" to="360 130 145" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      <line x1="130" y1="133" x2="130" y2="157" stroke="#424242" stroke-width="2">
+        <animateTransform attributeName="transform" type="rotate" from="0 130 145" to="360 130 145" dur="3s" repeatCount="indefinite"/>
+      </line>
+      <line x1="118" y1="145" x2="142" y2="145" stroke="#424242" stroke-width="2">
+        <animateTransform attributeName="transform" type="rotate" from="0 130 145" to="360 130 145" dur="3s" repeatCount="indefinite"/>
+      </line>
+    </g>
   </g>
 </svg>
