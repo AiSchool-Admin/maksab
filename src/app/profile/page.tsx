@@ -218,12 +218,23 @@ export default function ProfilePage() {
         <div className="pt-3">
           <button
             onClick={async () => {
+              // Clear all sessions including dev
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("maksab_dev_session");
+                const keys = Object.keys(localStorage);
+                for (const key of keys) {
+                  if (key.startsWith("sb-") || key.includes("supabase")) {
+                    localStorage.removeItem(key);
+                  }
+                }
+              }
               await logout();
+              router.push("/login");
             }}
-            className="flex items-center gap-3 w-full p-3 rounded-xl text-error hover:bg-error/5 transition-colors"
+            className="flex items-center gap-3 w-full p-4 rounded-xl bg-red-50 text-error hover:bg-red-100 transition-colors"
           >
             <LogOut size={20} />
-            <span className="text-sm font-semibold">تسجيل الخروج</span>
+            <span className="text-sm font-bold">تسجيل الخروج</span>
           </button>
         </div>
       </section>
