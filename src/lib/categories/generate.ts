@@ -72,27 +72,37 @@ function resolveTemplate(
 
 /**
  * Generate auto-title from category template and field values.
+ * Uses subcategory override template if available.
  */
 export function generateAutoTitle(
   config: CategoryConfig,
   values: Record<string, unknown>,
+  subcategoryId?: string,
 ): string {
-  return resolveTemplate(config.titleTemplate, config, values);
+  const template =
+    (subcategoryId && config.subcategoryOverrides?.[subcategoryId]?.titleTemplate) ||
+    config.titleTemplate;
+  return resolveTemplate(template, config, values);
 }
 
 /**
  * Generate auto-description from category template and field values,
  * then append any filled optional fields.
+ * Uses subcategory override template if available.
  */
 export function generateAutoDescription(
   config: CategoryConfig,
   values: Record<string, unknown>,
+  subcategoryId?: string,
 ): string {
-  const base = resolveTemplate(config.descriptionTemplate, config, values);
+  const descTemplate =
+    (subcategoryId && config.subcategoryOverrides?.[subcategoryId]?.descriptionTemplate) ||
+    config.descriptionTemplate;
+  const base = resolveTemplate(descTemplate, config, values);
 
   // Append optional filled fields not already in the template
   const templateFieldIds = new Set<string>();
-  config.descriptionTemplate.replace(/\$\{(\w+)\}/g, (_, id) => {
+  descTemplate.replace(/\$\{(\w+)\}/g, (_, id) => {
     templateFieldIds.add(id);
     return "";
   });
@@ -100,6 +110,8 @@ export function generateAutoDescription(
   const extras: string[] = [];
   for (const field of config.fields) {
     if (templateFieldIds.has(field.id)) continue;
+    // Skip fields hidden for the current subcategory
+    if (subcategoryId && field.hiddenForSubcategories?.includes(subcategoryId)) continue;
     const label = resolveFieldLabel(field, values[field.id]);
     if (label) {
       extras.push(label);

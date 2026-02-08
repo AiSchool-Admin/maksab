@@ -63,11 +63,11 @@ function getInitialDraft(): DraftData {
   return {
     categoryId: "",
     subcategoryId: "",
-    saleType: "",
+    saleType: "cash",
     categoryFields: {},
     priceData: getInitialPriceData(),
-    governorate: "",
-    city: "",
+    governorate: "القاهرة",
+    city: "مدينة نصر",
     title: "",
     description: "",
     isTitleDescEdited: false,
@@ -148,8 +148,8 @@ export default function CreateAdPage() {
       if (!config) return d;
       return {
         ...d,
-        title: generateAutoTitle(config, d.categoryFields),
-        description: generateAutoDescription(config, d.categoryFields),
+        title: generateAutoTitle(config, d.categoryFields, d.subcategoryId || undefined),
+        description: generateAutoDescription(config, d.categoryFields, d.subcategoryId || undefined),
       };
     },
     [],
@@ -168,10 +168,15 @@ export default function CreateAdPage() {
       if (step === 2) {
         const config = getCategoryById(draft.categoryId);
         if (config) {
-          for (const reqId of config.requiredFields) {
+          // Use subcategory override for required fields if available
+          const override = draft.subcategoryId ? config.subcategoryOverrides?.[draft.subcategoryId] : undefined;
+          const reqFields = override?.requiredFields ?? config.requiredFields;
+          for (const reqId of reqFields) {
+            // Skip fields hidden for current subcategory
+            const field = config.fields.find((f) => f.id === reqId);
+            if (draft.subcategoryId && field?.hiddenForSubcategories?.includes(draft.subcategoryId)) continue;
             const val = draft.categoryFields[reqId];
             if (val === undefined || val === null || val === "") {
-              const field = config.fields.find((f) => f.id === reqId);
               errs[reqId] = `${field?.label || reqId} مطلوب`;
             }
           }
@@ -508,13 +513,22 @@ export default function CreateAdPage() {
             categoryId={draft.categoryId}
             subcategoryId={draft.subcategoryId}
             saleType={draft.saleType}
-            onCategoryChange={(id) =>
+            onCategoryChange={(id) => {
+              const config = getCategoryById(id);
+              const defaults: Record<string, unknown> = {};
+              if (config) {
+                for (const field of config.fields) {
+                  if (field.defaultValue !== undefined) {
+                    defaults[field.id] = field.defaultValue;
+                  }
+                }
+              }
               updateDraft({
                 categoryId: id,
                 subcategoryId: "",
-                categoryFields: {},
-              })
-            }
+                categoryFields: defaults,
+              });
+            }}
             onSubcategoryChange={(id) =>
               updateDraft({ subcategoryId: id })
             }
@@ -525,6 +539,7 @@ export default function CreateAdPage() {
         {draft.currentStep === 2 && (
           <Step2CategoryDetails
             categoryId={draft.categoryId}
+            subcategoryId={draft.subcategoryId || undefined}
             values={draft.categoryFields}
             errors={errors}
             onChange={(fieldId, value) => {

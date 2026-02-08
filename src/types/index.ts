@@ -16,6 +16,8 @@ export interface CategoryConfig {
   requiredFields: string[];
   titleTemplate: string;
   descriptionTemplate: string;
+  /** Override required fields and templates per subcategory */
+  subcategoryOverrides?: Record<string, SubcategoryOverride>;
 }
 
 export interface Subcategory {
@@ -33,6 +35,15 @@ export interface CategoryField {
   unit?: string;
   isRequired: boolean;
   order: number;
+  defaultValue?: unknown;
+  /** Hide this field when one of these subcategories is selected */
+  hiddenForSubcategories?: string[];
+}
+
+export interface SubcategoryOverride {
+  requiredFields: string[];
+  titleTemplate?: string;
+  descriptionTemplate?: string;
 }
 
 export interface SearchRequest {

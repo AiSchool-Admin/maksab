@@ -5,6 +5,7 @@ import { getCategoryById } from "@/lib/categories/categories-config";
 
 interface Step2Props {
   categoryId: string;
+  subcategoryId?: string;
   values: Record<string, unknown>;
   errors: Record<string, string>;
   onChange: (fieldId: string, value: unknown) => void;
@@ -12,6 +13,7 @@ interface Step2Props {
 
 export default function Step2CategoryDetails({
   categoryId,
+  subcategoryId,
   values,
   errors,
   onChange,
@@ -33,6 +35,7 @@ export default function Step2CategoryDetails({
       </h3>
       <DynamicCategoryForm
         config={config}
+        subcategoryId={subcategoryId}
         values={values}
         onChange={onChange}
         errors={errors}

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { ChevronDown } from "lucide-react";
+import { useMemo } from "react";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import { getModelOptions } from "@/lib/categories/brand-models";
@@ -9,6 +8,7 @@ import type { CategoryConfig, CategoryField } from "@/types";
 
 interface DynamicCategoryFormProps {
   config: CategoryConfig;
+  subcategoryId?: string;
   values: Record<string, unknown>;
   onChange: (fieldId: string, value: unknown) => void;
   errors?: Record<string, string>;
@@ -16,20 +16,22 @@ interface DynamicCategoryFormProps {
 
 export default function DynamicCategoryForm({
   config,
+  subcategoryId,
   values,
   onChange,
   errors = {},
 }: DynamicCategoryFormProps) {
-  const [showOptional, setShowOptional] = useState(false);
+  // Use subcategory override for requiredFields if available
+  const override = subcategoryId ? config.subcategoryOverrides?.[subcategoryId] : undefined;
+  const reqFieldIds = new Set(override?.requiredFields ?? config.requiredFields);
 
-  const { requiredFields, optionalFields } = useMemo(() => {
+  const visibleFields = useMemo(() => {
     const sorted = [...config.fields].sort((a, b) => a.order - b.order);
-    const reqSet = new Set(config.requiredFields);
-    return {
-      requiredFields: sorted.filter((f) => reqSet.has(f.id)),
-      optionalFields: sorted.filter((f) => !reqSet.has(f.id)),
-    };
-  }, [config]);
+    // Filter out fields hidden for this subcategory
+    return sorted.filter(
+      (f) => !subcategoryId || !f.hiddenForSubcategories?.includes(subcategoryId),
+    );
+  }, [config, subcategoryId]);
 
   // Handle brand change — reset model when brand changes
   const handleFieldChange = (fieldId: string, value: unknown) => {
@@ -42,58 +44,23 @@ export default function DynamicCategoryForm({
   };
 
   return (
-    <div className="space-y-5">
-      {/* Required fields */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-bold text-dark">الحقول الأساسية</h3>
-        {requiredFields.map((field) => (
+    <div className="space-y-4">
+      {visibleFields.map((field) => {
+        const isRequired = reqFieldIds.has(field.id);
+        return (
           <FieldRenderer
             key={field.id}
             field={field}
             value={values[field.id]}
             onChange={(val) => handleFieldChange(field.id, val)}
             error={errors[field.id]}
-            required
+            required={isRequired}
+            showOptionalLabel={!isRequired}
             categoryId={config.id}
             brandValue={String(values.brand ?? "")}
           />
-        ))}
-      </div>
-
-      {/* Optional fields */}
-      {optionalFields.length > 0 && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setShowOptional(!showOptional)}
-            className="flex items-center gap-2 w-full py-3 text-sm font-semibold text-brand-green hover:text-brand-green-dark transition-colors"
-          >
-            <ChevronDown
-              size={18}
-              className={`transition-transform ${showOptional ? "rotate-180" : ""}`}
-            />
-            {showOptional
-              ? "إخفاء الحقول الإضافية"
-              : `إضافة تفاصيل أكتر (${optionalFields.length})`}
-          </button>
-
-          {showOptional && (
-            <div className="space-y-4 pt-2">
-              {optionalFields.map((field) => (
-                <FieldRenderer
-                  key={field.id}
-                  field={field}
-                  value={values[field.id]}
-                  onChange={(val) => handleFieldChange(field.id, val)}
-                  error={errors[field.id]}
-                  categoryId={config.id}
-                  brandValue={String(values.brand ?? "")}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -106,6 +73,7 @@ interface FieldRendererProps {
   onChange: (value: unknown) => void;
   error?: string;
   required?: boolean;
+  showOptionalLabel?: boolean;
   categoryId: string;
   brandValue: string;
 }
@@ -116,6 +84,7 @@ function FieldRenderer({
   onChange,
   error,
   required,
+  showOptionalLabel,
   categoryId,
   brandValue,
 }: FieldRendererProps) {
@@ -134,11 +103,15 @@ function FieldRenderer({
     (categoryId === "cars" || categoryId === "phones") &&
     !brandValue;
 
+  const label = showOptionalLabel
+    ? `${field.label} (اختياري)`
+    : field.label;
+
   switch (field.type) {
     case "select":
       return (
         <Select
-          label={field.label}
+          label={label}
           name={field.id}
           value={String(value ?? "")}
           onChange={(e) => onChange(e.target.value)}
@@ -157,7 +130,7 @@ function FieldRenderer({
     case "number":
       return (
         <Input
-          label={field.label}
+          label={label}
           name={field.id}
           type="number"
           inputMode="numeric"
@@ -176,7 +149,7 @@ function FieldRenderer({
     case "text":
       return (
         <Input
-          label={field.label}
+          label={label}
           name={field.id}
           type="text"
           value={String(value ?? "")}
@@ -190,7 +163,7 @@ function FieldRenderer({
     case "toggle":
       return (
         <ToggleField
-          label={field.label}
+          label={label}
           checked={Boolean(value)}
           onChange={(checked) => onChange(checked)}
         />
@@ -200,6 +173,7 @@ function FieldRenderer({
       return (
         <MultiSelectField
           field={field}
+          label={label}
           value={Array.isArray(value) ? value : []}
           onChange={onChange}
           error={error}
@@ -211,6 +185,7 @@ function FieldRenderer({
       return (
         <YearPickerField
           field={field}
+          label={label}
           value={value !== undefined && value !== null ? String(value) : ""}
           onChange={onChange}
           error={error}
@@ -260,12 +235,14 @@ function ToggleField({
 
 function MultiSelectField({
   field,
+  label,
   value,
   onChange,
   error,
   required,
 }: {
   field: CategoryField;
+  label: string;
   value: string[];
   onChange: (value: unknown) => void;
   error?: string;
@@ -281,7 +258,7 @@ function MultiSelectField({
   return (
     <div className="w-full">
       <label className="block text-sm font-medium text-dark mb-1.5">
-        {field.label}
+        {label}
         {required && <span className="text-error me-0.5">*</span>}
       </label>
       <div className="flex flex-wrap gap-2">
@@ -312,12 +289,14 @@ function MultiSelectField({
 
 function YearPickerField({
   field,
+  label,
   value,
   onChange,
   error,
   required,
 }: {
   field: CategoryField;
+  label: string;
   value: string;
   onChange: (value: unknown) => void;
   error?: string;
@@ -331,7 +310,7 @@ function YearPickerField({
 
   return (
     <Select
-      label={field.label}
+      label={label}
       name={field.id}
       value={value}
       onChange={(e) => onChange(e.target.value)}

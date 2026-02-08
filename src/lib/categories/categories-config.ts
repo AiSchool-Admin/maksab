@@ -26,39 +26,46 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "chery", label: "شيري" }, { value: "byd", label: "بي واي دي" },
         { value: "geely", label: "جيلي" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "model", label: "الموديل", type: "select", isRequired: true, order: 2, options: [] },
-      { id: "year", label: "السنة", type: "year-picker", isRequired: true, order: 3 },
-      { id: "mileage", label: "الكيلومتراج", type: "number", unit: "كم", isRequired: true, order: 4 },
-      { id: "color", label: "اللون", type: "select", isRequired: false, order: 5, options: [
+      { id: "model", label: "الموديل", type: "select", isRequired: true, order: 2, options: [], hiddenForSubcategories: ["car-parts"] },
+      { id: "year", label: "السنة", type: "year-picker", isRequired: true, order: 3, hiddenForSubcategories: ["car-parts"] },
+      { id: "mileage", label: "الكيلومتراج", type: "number", unit: "كم", isRequired: true, order: 4, hiddenForSubcategories: ["car-parts"] },
+      { id: "color", label: "اللون", type: "select", isRequired: false, order: 5, defaultValue: "white", options: [
         { value: "white", label: "أبيض" }, { value: "black", label: "أسود" },
         { value: "silver", label: "فضي" }, { value: "red", label: "أحمر" },
         { value: "blue", label: "أزرق" }, { value: "gray", label: "رمادي" },
         { value: "gold", label: "ذهبي" }, { value: "other", label: "أخرى" },
-      ]},
-      { id: "fuel", label: "نوع الوقود", type: "select", isRequired: false, order: 6, options: [
+      ], hiddenForSubcategories: ["car-parts"] },
+      { id: "fuel", label: "نوع الوقود", type: "select", isRequired: false, order: 6, defaultValue: "petrol", options: [
         { value: "petrol", label: "بنزين" }, { value: "diesel", label: "سولار" },
         { value: "gas", label: "غاز" }, { value: "electric", label: "كهرباء" },
         { value: "hybrid", label: "هايبرد" },
-      ]},
-      { id: "transmission", label: "ناقل الحركة", type: "select", isRequired: false, order: 7, options: [
+      ], hiddenForSubcategories: ["car-parts"] },
+      { id: "transmission", label: "ناقل الحركة", type: "select", isRequired: false, order: 7, defaultValue: "automatic", options: [
         { value: "automatic", label: "أوتوماتيك" }, { value: "manual", label: "مانيوال" },
-      ]},
-      { id: "engine_cc", label: "سعة المحرك", type: "select", isRequired: false, order: 8, options: [
+      ], hiddenForSubcategories: ["car-parts"] },
+      { id: "engine_cc", label: "سعة المحرك", type: "select", isRequired: false, order: 8, defaultValue: "1600", options: [
         { value: "1000", label: "1000" }, { value: "1200", label: "1200" },
         { value: "1300", label: "1300" }, { value: "1500", label: "1500" },
         { value: "1600", label: "1600" }, { value: "1800", label: "1800" },
         { value: "2000", label: "2000" }, { value: "2500", label: "2500" },
         { value: "3000+", label: "3000+" },
-      ]},
-      { id: "condition", label: "الحالة", type: "select", isRequired: false, order: 9, options: [
+      ], hiddenForSubcategories: ["car-parts"] },
+      { id: "condition", label: "الحالة", type: "select", isRequired: false, order: 9, defaultValue: "used", options: [
         { value: "new", label: "جديدة" }, { value: "used", label: "مستعملة" },
         { value: "accident", label: "حادثة" },
-      ]},
-      { id: "licensed", label: "مُرخصة", type: "toggle", isRequired: false, order: 10 },
+      ], hiddenForSubcategories: ["car-parts"] },
+      { id: "licensed", label: "مُرخصة", type: "toggle", isRequired: false, order: 10, defaultValue: true, hiddenForSubcategories: ["car-parts"] },
     ],
     requiredFields: ["brand", "model", "year", "mileage"],
-    titleTemplate: "${brand} ${model} ${year} — ${mileage} كم",
-    descriptionTemplate: "سيارة ${brand} ${model} موديل ${year}، مسافة ${mileage} كم",
+    titleTemplate: "سيارة ${brand} ${model} موديل ${year} — ${condition} ${mileage}",
+    descriptionTemplate: "سيارة ${brand} ${model} موديل ${year}، ${condition}، مسافة ${mileage}",
+    subcategoryOverrides: {
+      "car-parts": {
+        requiredFields: ["brand"],
+        titleTemplate: "قطع غيار ${brand}",
+        descriptionTemplate: "قطع غيار سيارات ${brand}",
+      },
+    },
   },
   {
     id: "real_estate",
@@ -74,43 +81,50 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "offices", name: "مكاتب", slug: "offices" },
     ],
     fields: [
-      { id: "property_type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
+      { id: "property_type", label: "النوع", type: "select", isRequired: true, order: 1, defaultValue: "apartment", options: [
         { value: "apartment", label: "شقة" }, { value: "villa", label: "فيلا" },
         { value: "land", label: "أرض" }, { value: "shop", label: "محل" },
         { value: "office", label: "مكتب" }, { value: "duplex", label: "دوبلكس" },
         { value: "penthouse", label: "بنتهاوس" }, { value: "studio", label: "استوديو" },
       ]},
       { id: "area", label: "المساحة", type: "number", unit: "م²", isRequired: true, order: 2 },
-      { id: "rooms", label: "عدد الغرف", type: "select", isRequired: true, order: 3, options: [
+      { id: "rooms", label: "عدد الغرف", type: "select", isRequired: true, order: 3, defaultValue: "3", options: [
         { value: "1", label: "1" }, { value: "2", label: "2" }, { value: "3", label: "3" },
         { value: "4", label: "4" }, { value: "5+", label: "5+" },
-      ]},
-      { id: "floor", label: "الطابق", type: "select", isRequired: true, order: 4, options: [
+      ], hiddenForSubcategories: ["land"] },
+      { id: "floor", label: "الطابق", type: "select", isRequired: true, order: 4, defaultValue: "3", options: [
         { value: "basement", label: "بدروم" }, { value: "ground", label: "أرضي" },
         ...Array.from({ length: 20 }, (_, i) => ({ value: `${i + 1}`, label: `${i + 1}` })),
         { value: "last", label: "أخير" },
-      ]},
-      { id: "bathrooms", label: "عدد الحمامات", type: "select", isRequired: false, order: 5, options: [
+      ], hiddenForSubcategories: ["land"] },
+      { id: "bathrooms", label: "عدد الحمامات", type: "select", isRequired: false, order: 5, defaultValue: "1", options: [
         { value: "1", label: "1" }, { value: "2", label: "2" },
         { value: "3", label: "3" }, { value: "4+", label: "4+" },
-      ]},
-      { id: "finishing", label: "التشطيب", type: "select", isRequired: false, order: 6, options: [
+      ], hiddenForSubcategories: ["land"] },
+      { id: "finishing", label: "التشطيب", type: "select", isRequired: false, order: 6, defaultValue: "super_lux", options: [
         { value: "super_lux", label: "سوبر لوكس" }, { value: "lux", label: "لوكس" },
         { value: "semi", label: "نص تشطيب" }, { value: "plastered", label: "على المحارة" },
         { value: "bricks", label: "على الطوب" },
-      ]},
-      { id: "elevator", label: "أسانسير", type: "toggle", isRequired: false, order: 7 },
-      { id: "garage", label: "جراج", type: "toggle", isRequired: false, order: 8 },
-      { id: "garden", label: "حديقة", type: "toggle", isRequired: false, order: 9 },
+      ], hiddenForSubcategories: ["land"] },
+      { id: "elevator", label: "أسانسير", type: "toggle", isRequired: false, order: 7, hiddenForSubcategories: ["land"] },
+      { id: "garage", label: "جراج", type: "toggle", isRequired: false, order: 8, hiddenForSubcategories: ["land"] },
+      { id: "garden", label: "حديقة", type: "toggle", isRequired: false, order: 9, hiddenForSubcategories: ["land"] },
       { id: "facing", label: "الواجهة", type: "select", isRequired: false, order: 10, options: [
         { value: "north", label: "بحري" }, { value: "south", label: "قبلي" },
         { value: "east", label: "شرقي" }, { value: "west", label: "غربي" },
-      ]},
-      { id: "furnished", label: "مفروشة", type: "toggle", isRequired: false, order: 11 },
+      ], hiddenForSubcategories: ["land"] },
+      { id: "furnished", label: "مفروشة", type: "toggle", isRequired: false, order: 11, hiddenForSubcategories: ["land"] },
     ],
     requiredFields: ["property_type", "area", "rooms", "floor"],
-    titleTemplate: "${property_type} ${area}م² — ${rooms} غرف — الطابق ${floor}",
-    descriptionTemplate: "${property_type} مساحة ${area} متر مربع، ${rooms} غرف",
+    titleTemplate: "${property_type} ${area} — ${rooms} غرف — الطابق ${floor}",
+    descriptionTemplate: "${property_type} مساحة ${area}، ${rooms} غرف",
+    subcategoryOverrides: {
+      "land": {
+        requiredFields: ["property_type", "area"],
+        titleTemplate: "أرض ${area}",
+        descriptionTemplate: "أرض مساحة ${area}",
+      },
+    },
   },
   {
     id: "phones",
@@ -131,37 +145,49 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "huawei", label: "هواوي" }, { value: "oneplus", label: "ون بلس" },
         { value: "nokia", label: "نوكيا" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "model", label: "الموديل", type: "select", isRequired: true, order: 2, options: [] },
-      { id: "storage", label: "المساحة", type: "select", isRequired: true, order: 3, options: [
+      { id: "model", label: "الموديل", type: "select", isRequired: true, order: 2, options: [], hiddenForSubcategories: ["phone-accessories", "phone-parts"] },
+      { id: "storage", label: "المساحة", type: "select", isRequired: true, order: 3, defaultValue: "128", options: [
         { value: "32", label: "32GB" }, { value: "64", label: "64GB" },
         { value: "128", label: "128GB" }, { value: "256", label: "256GB" },
         { value: "512", label: "512GB" }, { value: "1024", label: "1TB" },
-      ]},
-      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 4, options: [
+      ], hiddenForSubcategories: ["phone-accessories", "phone-parts"] },
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 4, defaultValue: "good", options: [
         { value: "sealed", label: "جديد متبرشم" }, { value: "like_new", label: "مستعمل زيرو" },
         { value: "good", label: "مستعمل كويس" }, { value: "fair", label: "مستعمل مقبول" },
         { value: "broken", label: "تالف" },
-      ]},
-      { id: "color", label: "اللون", type: "select", isRequired: false, order: 5, options: [
+      ], hiddenForSubcategories: ["phone-accessories", "phone-parts"] },
+      { id: "color", label: "اللون", type: "select", isRequired: false, order: 5, defaultValue: "black", options: [
         { value: "black", label: "أسود" }, { value: "white", label: "أبيض" },
         { value: "blue", label: "أزرق" }, { value: "gold", label: "ذهبي" },
         { value: "other", label: "أخرى" },
-      ]},
+      ], hiddenForSubcategories: ["phone-accessories", "phone-parts"] },
       { id: "ram", label: "الرام", type: "select", isRequired: false, order: 6, options: [
         { value: "3", label: "3GB" }, { value: "4", label: "4GB" },
         { value: "6", label: "6GB" }, { value: "8", label: "8GB" },
         { value: "12", label: "12GB" }, { value: "16", label: "16GB" },
-      ]},
+      ], hiddenForSubcategories: ["phone-accessories", "phone-parts"] },
       { id: "battery", label: "البطارية", type: "select", isRequired: false, order: 7, options: [
         { value: "excellent", label: "ممتازة" }, { value: "good", label: "جيدة" },
         { value: "fair", label: "مقبولة" },
-      ]},
-      { id: "with_box", label: "مع العلبة", type: "toggle", isRequired: false, order: 8 },
-      { id: "with_warranty", label: "مع الضمان", type: "toggle", isRequired: false, order: 9 },
+      ], hiddenForSubcategories: ["phone-accessories", "phone-parts"] },
+      { id: "with_box", label: "مع العلبة", type: "toggle", isRequired: false, order: 8, hiddenForSubcategories: ["phone-accessories", "phone-parts"] },
+      { id: "with_warranty", label: "مع الضمان", type: "toggle", isRequired: false, order: 9, hiddenForSubcategories: ["phone-accessories", "phone-parts"] },
     ],
     requiredFields: ["brand", "model", "storage", "condition"],
     titleTemplate: "${brand} ${model} — ${storage} — ${condition}",
     descriptionTemplate: "${brand} ${model} مساحة ${storage}، حالة: ${condition}",
+    subcategoryOverrides: {
+      "phone-accessories": {
+        requiredFields: ["brand"],
+        titleTemplate: "إكسسوارات ${brand}",
+        descriptionTemplate: "إكسسوارات موبايل ${brand}",
+      },
+      "phone-parts": {
+        requiredFields: ["brand"],
+        titleTemplate: "قطع غيار ${brand}",
+        descriptionTemplate: "قطع غيار موبايل ${brand}",
+      },
+    },
   },
   {
     id: "fashion",
@@ -186,11 +212,11 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "sportswear", label: "ملابس رياضية" }, { value: "underwear", label: "ملابس داخلية" },
         { value: "pajamas", label: "بيجامة" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, options: [
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, defaultValue: "excellent", options: [
         { value: "new_tagged", label: "جديد بالتاج" }, { value: "new_untagged", label: "جديد بدون تاج" },
         { value: "excellent", label: "مستعمل ممتاز" }, { value: "good", label: "مستعمل جيد" },
       ]},
-      { id: "size", label: "المقاس", type: "select", isRequired: true, order: 3, options: [
+      { id: "size", label: "المقاس", type: "select", isRequired: true, order: 3, defaultValue: "l", options: [
         { value: "xs", label: "XS" }, { value: "s", label: "S" }, { value: "m", label: "M" },
         { value: "l", label: "L" }, { value: "xl", label: "XL" }, { value: "xxl", label: "XXL" },
         { value: "36", label: "36" }, { value: "37", label: "37" }, { value: "38", label: "38" },
@@ -206,12 +232,12 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "american_eagle", label: "American Eagle" }, { value: "max", label: "Max" },
         { value: "local", label: "ماركة محلية" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "color", label: "اللون", type: "select", isRequired: false, order: 5, options: [
+      { id: "color", label: "اللون", type: "select", isRequired: false, order: 5, defaultValue: "black", options: [
         { value: "black", label: "أسود" }, { value: "white", label: "أبيض" },
         { value: "blue", label: "أزرق" }, { value: "red", label: "أحمر" },
         { value: "other", label: "أخرى" },
       ]},
-      { id: "material", label: "الخامة", type: "select", isRequired: false, order: 6, options: [
+      { id: "material", label: "الخامة", type: "select", isRequired: false, order: 6, defaultValue: "cotton", options: [
         { value: "cotton", label: "قطن" }, { value: "polyester", label: "بوليستر" },
         { value: "leather", label: "جلد" }, { value: "jeans", label: "جينز" },
         { value: "silk", label: "حرير" }, { value: "linen", label: "كتان" },
@@ -244,18 +270,18 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "construction", label: "مخلفات بناء" }, { value: "other", label: "أخرى" },
       ]},
       { id: "weight", label: "الوزن التقريبي", type: "number", unit: "كجم", isRequired: true, order: 2 },
-      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 3, options: [
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 3, defaultValue: "clean", options: [
         { value: "clean", label: "نظيف" }, { value: "mixed", label: "مختلط" },
         { value: "needs_sorting", label: "يحتاج فرز" },
       ]},
-      { id: "quantity", label: "الكمية", type: "select", isRequired: false, order: 4, options: [
+      { id: "quantity", label: "الكمية", type: "select", isRequired: false, order: 4, defaultValue: "medium", options: [
         { value: "small", label: "كمية صغيرة" }, { value: "medium", label: "كمية متوسطة" },
         { value: "large", label: "كمية كبيرة" }, { value: "wholesale", label: "جملة" },
       ]},
     ],
     requiredFields: ["type", "weight", "condition"],
-    titleTemplate: "${type} خردة — ${weight} كجم — ${condition}",
-    descriptionTemplate: "${type} خردة وزن ${weight} كجم، ${condition}",
+    titleTemplate: "${type} خردة — ${weight} — ${condition}",
+    descriptionTemplate: "${type} خردة وزن ${weight}، ${condition}",
   },
   {
     id: "gold",
@@ -276,13 +302,13 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "engagement_ring", label: "محبس" }, { value: "gold_coin", label: "جنيه ذهب" },
         { value: "bar", label: "سبيكة" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "karat", label: "العيار", type: "select", isRequired: true, order: 2, options: [
+      { id: "karat", label: "العيار", type: "select", isRequired: true, order: 2, defaultValue: "21", options: [
         { value: "24", label: "عيار 24" }, { value: "21", label: "عيار 21" },
         { value: "18", label: "عيار 18" }, { value: "14", label: "عيار 14" },
         { value: "silver_925", label: "فضة 925" }, { value: "silver_900", label: "فضة 900" },
       ]},
       { id: "weight", label: "الوزن", type: "number", unit: "جرام", isRequired: true, order: 3 },
-      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 4, options: [
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 4, defaultValue: "used", options: [
         { value: "new", label: "جديد" }, { value: "used", label: "مستعمل" },
       ]},
       { id: "brand", label: "الماركة", type: "select", isRequired: false, order: 5, options: [
@@ -300,8 +326,8 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "certificate", label: "شهادة", type: "toggle", isRequired: false, order: 8 },
     ],
     requiredFields: ["type", "karat", "weight", "condition"],
-    titleTemplate: "${type} ذهب ${karat} — ${weight} جرام — ${condition}",
-    descriptionTemplate: "${type} ${karat}، وزن ${weight} جرام، ${condition}",
+    titleTemplate: "${type} ذهب ${karat} — ${weight} — ${condition}",
+    descriptionTemplate: "${type} ${karat}، وزن ${weight}، ${condition}",
   },
   {
     id: "luxury",
@@ -327,11 +353,11 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "cartier", label: "Cartier" }, { value: "dior", label: "Dior" },
         { value: "prada", label: "Prada" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 3, options: [
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 3, defaultValue: "excellent", options: [
         { value: "sealed", label: "جديد متبرشم" }, { value: "new_unused", label: "جديد بدون استعمال" },
         { value: "excellent", label: "مستعمل ممتاز" }, { value: "good", label: "مستعمل جيد" },
       ]},
-      { id: "authentic", label: "أصلي/تقليد", type: "select", isRequired: true, order: 4, options: [
+      { id: "authentic", label: "أصلي/تقليد", type: "select", isRequired: true, order: 4, defaultValue: "authentic_warranty", options: [
         { value: "authentic_warranty", label: "أصلي بالضمان" }, { value: "authentic_no_warranty", label: "أصلي بدون ضمان" },
         { value: "high_copy", label: "هاي كوبي" }, { value: "copy", label: "كوبي" },
       ]},
@@ -370,7 +396,7 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "carrier", label: "كاريير" }, { value: "fresh", label: "فريش" },
         { value: "other", label: "أخرى" },
       ]},
-      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 3, options: [
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 3, defaultValue: "good", options: [
         { value: "sealed", label: "جديد متبرشم" }, { value: "excellent", label: "مستعمل ممتاز" },
         { value: "good", label: "مستعمل كويس" }, { value: "needs_repair", label: "يحتاج صيانة" },
       ]},
@@ -387,7 +413,7 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "other", label: "أخرى" },
       ]},
       { id: "warranty", label: "الضمان", type: "toggle", isRequired: false, order: 6 },
-      { id: "color", label: "اللون", type: "select", isRequired: false, order: 7, options: [
+      { id: "color", label: "اللون", type: "select", isRequired: false, order: 7, defaultValue: "white", options: [
         { value: "white", label: "أبيض" }, { value: "silver", label: "سيلفر" },
         { value: "black", label: "أسود" }, { value: "other", label: "أخرى" },
       ]},
@@ -419,16 +445,16 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "decor", label: "ديكور" }, { value: "lighting", label: "إضاءة" },
         { value: "carpet", label: "سجاد" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, options: [
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, defaultValue: "good", options: [
         { value: "new", label: "جديد" }, { value: "excellent", label: "مستعمل ممتاز" },
         { value: "good", label: "مستعمل جيد" }, { value: "needs_renewal", label: "يحتاج تجديد" },
       ]},
-      { id: "material", label: "الخامة", type: "select", isRequired: true, order: 3, options: [
+      { id: "material", label: "الخامة", type: "select", isRequired: true, order: 3, defaultValue: "mdf", options: [
         { value: "beech", label: "خشب زان" }, { value: "oak", label: "خشب أرو" },
         { value: "mdf", label: "MDF" }, { value: "pine", label: "خشب موسكي" },
         { value: "metal", label: "معدن" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "color", label: "اللون", type: "select", isRequired: false, order: 4, options: [
+      { id: "color", label: "اللون", type: "select", isRequired: false, order: 4, defaultValue: "brown", options: [
         { value: "brown", label: "بني" }, { value: "white", label: "أبيض" },
         { value: "black", label: "أسود" }, { value: "other", label: "أخرى" },
       ]},
@@ -466,7 +492,7 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "antique", label: "تحفة/أنتيك" }, { value: "pet", label: "حيوان أليف" },
         { value: "aquarium", label: "حوض سمك" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, options: [
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, defaultValue: "good", options: [
         { value: "new", label: "جديد" }, { value: "excellent", label: "مستعمل ممتاز" },
         { value: "good", label: "مستعمل جيد" }, { value: "fair", label: "مستعمل مقبول" },
       ]},
@@ -506,7 +532,7 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "garden", label: "عدة حدائق" }, { value: "kitchen_equip", label: "معدات مطبخ/مطعم" },
         { value: "other", label: "أخرى" },
       ]},
-      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, options: [
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, defaultValue: "working", options: [
         { value: "new", label: "جديد" }, { value: "working", label: "مستعمل يعمل" },
         { value: "needs_repair", label: "يحتاج صيانة" },
       ]},
@@ -518,7 +544,7 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "local", label: "محلي" }, { value: "other", label: "أخرى" },
       ]},
       { id: "quantity", label: "الكمية", type: "number", isRequired: false, order: 4 },
-      { id: "power", label: "مصدر الطاقة", type: "select", isRequired: false, order: 5, options: [
+      { id: "power", label: "مصدر الطاقة", type: "select", isRequired: false, order: 5, defaultValue: "electric", options: [
         { value: "electric", label: "كهرباء" }, { value: "battery", label: "بطارية" },
         { value: "manual", label: "يدوي" }, { value: "petrol", label: "بنزين" },
       ]},
@@ -552,11 +578,11 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "cleaning", label: "تنظيف" }, { value: "tech", label: "خدمات تقنية" },
         { value: "tutoring", label: "دروس خصوصية" }, { value: "other", label: "خدمات أخرى" },
       ]},
-      { id: "pricing", label: "التسعير", type: "select", isRequired: true, order: 2, options: [
+      { id: "pricing", label: "التسعير", type: "select", isRequired: true, order: 2, defaultValue: "negotiable", options: [
         { value: "hourly", label: "بالساعة" }, { value: "project", label: "بالمشروع" },
         { value: "negotiable", label: "بالاتفاق" }, { value: "fixed", label: "سعر ثابت" },
       ]},
-      { id: "experience", label: "الخبرة", type: "select", isRequired: true, order: 3, options: [
+      { id: "experience", label: "الخبرة", type: "select", isRequired: true, order: 3, defaultValue: "3_5", options: [
         { value: "less_1", label: "أقل من سنة" }, { value: "1_3", label: "1-3 سنوات" },
         { value: "3_5", label: "3-5 سنوات" }, { value: "5_plus", label: "أكثر من 5 سنوات" },
       ]},
