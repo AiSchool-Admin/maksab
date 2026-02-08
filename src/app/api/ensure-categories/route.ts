@@ -8,6 +8,8 @@ import { categoriesConfig } from "@/lib/categories/categories-config";
  * Seeds categories and subcategories from the frontend config.
  * Uses service role key (server-side only) to bypass RLS.
  * IDs match exactly with the frontend config — no mismatch.
+ *
+ * Also cleans up old mismatched subcategory IDs (e.g., cars_passenger → passenger).
  */
 export async function POST() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -56,6 +58,46 @@ export async function POST() {
       })),
     );
 
+    // Collect the correct subcategory IDs from config
+    const correctSubIds = new Set(subcategories.map((s) => s.id));
+
+    // Delete OLD mismatched subcategories that have prefixed IDs
+    // These block new inserts due to UNIQUE(category_id, slug) constraint
+    // Old format: cars_passenger, re_apartments_sale, phones_mobile, etc.
+    const oldPrefixes = [
+      "cars_", "re_", "phones_", "fashion_", "scrap_",
+      "gold_", "luxury_", "app_", "furn_", "hobby_",
+      "tools_", "svc_",
+    ];
+
+    let deletedOld = 0;
+    for (const prefix of oldPrefixes) {
+      const { data: oldRows } = await client
+        .from("subcategories")
+        .select("id")
+        .like("id", `${prefix}%`);
+
+      if (oldRows && oldRows.length > 0) {
+        // Only delete rows whose IDs are NOT in the correct set
+        const toDelete = oldRows
+          .map((r) => r.id)
+          .filter((id: string) => !correctSubIds.has(id));
+
+        if (toDelete.length > 0) {
+          const { error: delErr } = await client
+            .from("subcategories")
+            .delete()
+            .in("id", toDelete);
+
+          if (!delErr) {
+            deletedOld += toDelete.length;
+          } else {
+            console.warn(`[ensure-categories] Failed to delete old ${prefix}* subcategories:`, delErr.message);
+          }
+        }
+      }
+    }
+
     // Seed categories first (subcategories depend on them)
     const { error: catError } = await client
       .from("categories")
@@ -68,7 +110,7 @@ export async function POST() {
           success: false,
           error: catError.message,
           hint: serviceRoleKey
-            ? "Seed failed even with service role key"
+            ? "Seed failed even with service role key — check if categories table exists"
             : "Add SUPABASE_SERVICE_ROLE_KEY to env vars (Supabase Dashboard → Settings → API → service_role key)",
         },
         { status: 500 },
@@ -92,6 +134,8 @@ export async function POST() {
       success: true,
       categories: categories.length,
       subcategories: subcategories.length,
+      deletedOldSubcategories: deletedOld,
+      usedServiceRole: !!serviceRoleKey,
     });
   } catch (err) {
     return NextResponse.json(

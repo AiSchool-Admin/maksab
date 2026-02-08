@@ -387,7 +387,7 @@ export default function CreateAdPage() {
         console.error("Ad insert error:", insertError);
         const msg =
           insertError.code === "23503"
-            ? "خطأ FK: لازم تضيف SUPABASE_SERVICE_ROLE_KEY في Vercel Environment Variables (من Supabase Dashboard → Settings → API → service_role). بعدها افتح /api/ensure-categories في تاب جديد"
+            ? "الفئات مش موجودة في الداتابيز. افتح /api/ensure-categories في تاب جديد أو شغّل complete-setup.sql في Supabase SQL Editor"
             : insertError.code === "23505"
               ? "الإعلان ده موجود قبل كده"
               : `حصل مشكلة في نشر الإعلان (${insertError.code || "unknown"}). جرب تاني`;
