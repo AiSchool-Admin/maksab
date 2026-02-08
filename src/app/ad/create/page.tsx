@@ -342,36 +342,15 @@ export default function CreateAdPage() {
         }
       }
 
-      // Ensure category exists in DB (auto-seed if missing)
-      const catConfig = getCategoryById(draft.categoryId);
-      if (catConfig) {
-        await supabase
-          .from("categories" as never)
-          .upsert({
-            id: catConfig.id,
-            name: catConfig.name,
-            icon: catConfig.icon,
-            slug: catConfig.slug,
-            is_active: true,
-          } as never, { onConflict: "id" } as never);
-
-        // Ensure subcategory exists if selected
-        if (draft.subcategoryId) {
-          const subConfig = catConfig.subcategories.find(
-            (s) => s.id === draft.subcategoryId,
-          );
-          if (subConfig) {
-            await supabase
-              .from("subcategories" as never)
-              .upsert({
-                id: subConfig.id,
-                category_id: catConfig.id,
-                name: subConfig.name,
-                slug: subConfig.slug,
-                is_active: true,
-              } as never, { onConflict: "id" } as never);
-          }
+      // Ensure categories exist in DB via server-side API (bypasses RLS)
+      try {
+        const seedRes = await fetch("/api/ensure-categories", { method: "POST" });
+        if (!seedRes.ok) {
+          const seedData = await seedRes.json().catch(() => ({}));
+          console.warn("Category seed warning:", seedData);
         }
+      } catch {
+        console.warn("Category seed request failed — continuing anyway");
       }
 
       // Upload images (skip silently if bucket doesn't exist)
@@ -406,41 +385,9 @@ export default function CreateAdPage() {
         .insert(adData as never);
       if (insertError) {
         console.error("Ad insert error:", insertError);
-
-        // If FK violation, try full DB seed via API and retry once
-        if (insertError.code === "23503") {
-          console.log("FK violation — attempting full category seed via API...");
-          try {
-            await fetch("/api/admin/setup-db", { method: "POST" });
-          } catch { /* ignore seed failure */ }
-
-          // Retry insert
-          const { error: retryError } = await supabase
-            .from("ads")
-            .insert(adData as never);
-          if (!retryError) {
-            // Success on retry — skip to success flow
-            track("ad_created", {
-              categoryId: draft.categoryId,
-              subcategoryId: draft.subcategoryId,
-              signalData: {
-                saleType: draft.saleType,
-                title: draft.title,
-                price: draft.saleType === "cash" ? Number(draft.priceData.price) : null,
-              },
-              governorate: draft.governorate,
-            });
-            clearDraft();
-            setPublished(true);
-            setIsPublishing(false);
-            return;
-          }
-          console.error("Retry ad insert also failed:", retryError);
-        }
-
         const msg =
           insertError.code === "23503"
-            ? "الفئات مش موجودة في الداتابيز. افتح /api/admin/setup-db في تاب جديد الأول، وبعدين جرب تاني"
+            ? "خطأ FK: لازم تضيف SUPABASE_SERVICE_ROLE_KEY في Vercel Environment Variables (من Supabase Dashboard → Settings → API → service_role). بعدها افتح /api/ensure-categories في تاب جديد"
             : insertError.code === "23505"
               ? "الإعلان ده موجود قبل كده"
               : `حصل مشكلة في نشر الإعلان (${insertError.code || "unknown"}). جرب تاني`;
