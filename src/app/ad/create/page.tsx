@@ -54,9 +54,16 @@ function getInitialPriceData(): PriceData {
     auctionDuration: 24,
     auctionMinIncrement: "",
     liveAuctionScheduledAt: "",
-    exchangeDescription: "",
+    // Exchange — Structured
+    exchangeWantedCategoryId: "",
+    exchangeWantedSubcategoryId: "",
+    exchangeWantedFields: {},
+    exchangeWantedTitle: "",
+    exchangeNotes: "",
     exchangeAcceptsPriceDiff: false,
     exchangePriceDiff: "",
+    // Backward compat
+    exchangeDescription: "",
   };
 }
 
@@ -196,8 +203,8 @@ export default function CreateAdPage() {
           if (!draft.priceData.liveAuctionScheduledAt)
             errs.liveAuctionScheduledAt = "حدد موعد البث المباشر";
         } else if (draft.saleType === "exchange") {
-          if (!draft.priceData.exchangeDescription.trim())
-            errs.exchangeDescription = "اوصف اللي عايز تبدل بيه";
+          if (!draft.priceData.exchangeWantedCategoryId)
+            errs.exchangeWantedCategory = "اختار قسم البديل المطلوب";
         }
         if (images.length === 0) errs.images = "أضف صورة واحدة على الأقل";
       }
@@ -290,6 +297,17 @@ export default function CreateAdPage() {
                 live_scheduled_at: draft.priceData.liveAuctionScheduledAt,
               }
             : {}),
+          // Store structured exchange wanted data in JSONB
+          ...(draft.saleType === "exchange" && draft.priceData.exchangeWantedCategoryId
+            ? {
+                exchange_wanted: {
+                  category_id: draft.priceData.exchangeWantedCategoryId,
+                  subcategory_id: draft.priceData.exchangeWantedSubcategoryId || null,
+                  fields: draft.priceData.exchangeWantedFields,
+                  title: draft.priceData.exchangeWantedTitle,
+                },
+              }
+            : {}),
         },
         governorate: draft.governorate,
         city: draft.city || null,
@@ -323,10 +341,10 @@ export default function CreateAdPage() {
             : null,
         auction_status:
           draft.saleType === "auction" || draft.saleType === "live_auction" ? "active" : null,
-        // Exchange
+        // Exchange — use structured title, fallback to notes
         exchange_description:
           draft.saleType === "exchange"
-            ? draft.priceData.exchangeDescription
+            ? (draft.priceData.exchangeWantedTitle || draft.priceData.exchangeNotes || draft.priceData.exchangeDescription || null)
             : null,
         exchange_accepts_price_diff:
           draft.saleType === "exchange"
@@ -455,7 +473,8 @@ export default function CreateAdPage() {
       return `📡 مزاد مباشر — يبدأ من ${Number(draft.priceData.auctionStartPrice).toLocaleString("en-US")} جنيه`;
     }
     if (draft.saleType === "exchange") {
-      return "للتبديل";
+      const wanted = draft.priceData.exchangeWantedTitle;
+      return wanted ? `🔄 للتبديل بـ ${wanted}` : "للتبديل";
     }
     return "";
   };

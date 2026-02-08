@@ -409,28 +409,34 @@ export default function AdDetailPage({
             </Link>
           )}
 
-        {/* Exchange details */}
-        {ad.saleType === "exchange" && ad.exchangeDescription && (
-          <div className="bg-blue-50 rounded-xl p-4">
-            <h3 className="text-sm font-bold text-dark mb-1">
-              عايز يبدل بـ:
+        {/* Exchange details — structured display */}
+        {ad.saleType === "exchange" && Boolean(ad.exchangeDescription || (ad.categoryFields as Record<string, unknown>)?.exchange_wanted) && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+            <h3 className="text-sm font-bold text-dark flex items-center gap-1.5">
+              🔄 عايز يبدل بـ:
             </h3>
-            <p className="text-sm text-blue-700">{ad.exchangeDescription}</p>
+            <p className="text-base font-bold text-blue-700">
+              {ad.exchangeDescription}
+            </p>
             {ad.exchangeAcceptsPriceDiff && ad.exchangePriceDiff && (
-              <p className="text-xs text-gray-text mt-2">
-                يقبل فرق سعر: {formatPrice(ad.exchangePriceDiff)}
-              </p>
+              <div className="flex items-center gap-1.5 bg-white rounded-lg px-3 py-1.5">
+                <span className="text-xs text-gray-text">يقبل فرق سعر:</span>
+                <span className="text-xs font-bold text-brand-green">
+                  {formatPrice(ad.exchangePriceDiff)}
+                </span>
+              </div>
             )}
           </div>
         )}
 
-        {/* Exchange matching — "ممكن تبدّل بـ..." */}
-        {ad.saleType === "exchange" && ad.exchangeDescription && (
+        {/* Exchange matching — smart matching with scores */}
+        {ad.saleType === "exchange" && Boolean(ad.exchangeDescription || (ad.categoryFields as Record<string, unknown>)?.exchange_wanted) && (
           <ExchangeMatchSection
             adTitle={ad.title}
-            exchangeDescription={ad.exchangeDescription}
+            exchangeDescription={ad.exchangeDescription || ""}
             categoryId={ad.categoryId}
             currentAdId={ad.id}
+            categoryFields={ad.categoryFields as Record<string, unknown>}
           />
         )}
 

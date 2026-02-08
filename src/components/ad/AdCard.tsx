@@ -184,7 +184,7 @@ function AdCard({
           {saleType === "exchange" && (
             <div className="mb-1.5">
               {exchangeDescription && (
-                <p className="text-sm text-gray-text line-clamp-1">
+                <p className="text-sm text-blue-700 font-medium line-clamp-1">
                   🔄 عايز: {exchangeDescription}
                 </p>
               )}

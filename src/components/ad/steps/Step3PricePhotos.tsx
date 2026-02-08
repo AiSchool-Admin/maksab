@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { Camera, X, Star } from "lucide-react";
 import Input from "@/components/ui/Input";
+import ExchangeWantedForm from "./ExchangeWantedForm";
 import type { CompressedImage } from "@/lib/utils/image-compress";
 import { compressImage } from "@/lib/utils/image-compress";
 
@@ -19,10 +20,16 @@ export interface PriceData {
   auctionMinIncrement: string;
   // Live Auction
   liveAuctionScheduledAt: string;
-  // Exchange
-  exchangeDescription: string;
+  // Exchange — Structured
+  exchangeWantedCategoryId: string;
+  exchangeWantedSubcategoryId: string;
+  exchangeWantedFields: Record<string, unknown>;
+  exchangeWantedTitle: string;
+  exchangeNotes: string;
   exchangeAcceptsPriceDiff: boolean;
   exchangePriceDiff: string;
+  // Backward compat: auto-generated from structured data
+  exchangeDescription: string;
 }
 
 interface Step3Props {
@@ -335,81 +342,41 @@ export default function Step3PricePhotos({
         )}
 
         {saleType === "exchange" && (
-          <div className="space-y-4">
-            <div className="w-full">
-              <label className="block text-sm font-medium text-dark mb-1.5">
-                عايز تبدل بإيه؟ <span className="text-error">*</span>
-              </label>
-              <textarea
-                value={priceData.exchangeDescription}
-                onChange={(e) =>
-                  onPriceChange("exchangeDescription", e.target.value)
-                }
-                placeholder="وصف الحاجة اللي عايز تبدل بيها..."
-                rows={3}
-                className={`w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark placeholder:text-gray-text resize-none ${
-                  errors.exchangeDescription ? "border-error bg-error/5" : ""
-                }`}
-              />
-              {errors.exchangeDescription && (
-                <p className="mt-1 text-xs text-error">
-                  {errors.exchangeDescription}
-                </p>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                onPriceChange(
-                  "exchangeAcceptsPriceDiff",
-                  !priceData.exchangeAcceptsPriceDiff,
-                )
-              }
-              className="flex items-center gap-2 text-sm"
-            >
-              <span
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                  priceData.exchangeAcceptsPriceDiff
-                    ? "bg-brand-green border-brand-green"
-                    : "border-gray-300"
-                }`}
-              >
-                {priceData.exchangeAcceptsPriceDiff && (
-                  <svg
-                    width="12"
-                    height="10"
-                    viewBox="0 0 12 10"
-                    fill="none"
-                  >
-                    <path
-                      d="M1 5L4.5 8.5L11 1.5"
-                      stroke="white"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </span>
-              <span className="text-dark font-medium">أقبل فرق سعر</span>
-            </button>
-
-            {priceData.exchangeAcceptsPriceDiff && (
-              <Input
-                label="فرق السعر"
-                name="exchangePriceDiff"
-                type="number"
-                inputMode="numeric"
-                value={priceData.exchangePriceDiff}
-                onChange={(e) =>
-                  onPriceChange("exchangePriceDiff", e.target.value)
-                }
-                unit="جنيه"
-                placeholder="0"
-              />
-            )}
-          </div>
+          <ExchangeWantedForm
+            wantedCategoryId={priceData.exchangeWantedCategoryId}
+            wantedSubcategoryId={priceData.exchangeWantedSubcategoryId}
+            wantedFields={priceData.exchangeWantedFields}
+            wantedTitle={priceData.exchangeWantedTitle}
+            notes={priceData.exchangeNotes}
+            acceptsPriceDiff={priceData.exchangeAcceptsPriceDiff}
+            priceDiff={priceData.exchangePriceDiff}
+            errors={errors}
+            onCategoryChange={(id) => {
+              onPriceChange("exchangeWantedCategoryId", id);
+              onPriceChange("exchangeWantedSubcategoryId", "");
+              onPriceChange("exchangeWantedFields", {});
+              onPriceChange("exchangeWantedTitle", "");
+            }}
+            onSubcategoryChange={(id) =>
+              onPriceChange("exchangeWantedSubcategoryId", id)
+            }
+            onFieldChange={(fieldId, value) =>
+              onPriceChange("exchangeWantedFields", {
+                ...priceData.exchangeWantedFields,
+                [fieldId]: value,
+              })
+            }
+            onTitleChange={(title) => {
+              onPriceChange("exchangeWantedTitle", title);
+              // Auto-sync to exchangeDescription for backward compatibility
+              onPriceChange("exchangeDescription", title);
+            }}
+            onNotesChange={(n) => onPriceChange("exchangeNotes", n)}
+            onAcceptsPriceDiffChange={(v) =>
+              onPriceChange("exchangeAcceptsPriceDiff", v)
+            }
+            onPriceDiffChange={(v) => onPriceChange("exchangePriceDiff", v)}
+          />
         )}
       </div>
 
