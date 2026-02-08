@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { notifyAuctionBid } from "@/lib/notifications/smart-notifications";
 
 const ANTI_SNIPE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 const MIN_INCREMENT_EGP = 50;
@@ -141,6 +142,19 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
+
+    // Notify seller + outbid previous bidder (fire and forget)
+    notifyAuctionBid({
+      adId: ad_id,
+      adTitle: (ad.title as string) || "",
+      sellerId: ad.user_id as string,
+      bidderId: bidder_id,
+      bidderName: bidder_name || "مزايد",
+      bidAmount,
+      previousHighBidderId: topBid
+        ? ((topBid as Record<string, unknown>).bidder_id as string)
+        : null,
+    }).catch(() => {});
 
     // Anti-sniping: extend auction if bid placed in last 5 minutes
     const timeRemaining = endsAt - now;

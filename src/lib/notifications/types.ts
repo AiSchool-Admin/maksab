@@ -4,8 +4,12 @@ export type NotificationType =
   | "auction_outbid"
   | "auction_ending"
   | "auction_ended"
+  | "auction_won"
+  | "auction_ended_no_bids"
   | "favorite_price_drop"
   | "recommendation"
+  | "new_match"
+  | "seller_interest"
   | "system";
 
 export interface AppNotification {
@@ -28,7 +32,11 @@ export const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   auction_outbid: "⚠️",
   auction_ending: "⏰",
   auction_ended: "🏆",
+  auction_won: "🎉",
+  auction_ended_no_bids: "🔨",
   favorite_price_drop: "💰",
   recommendation: "🔥",
+  new_match: "🎯",
+  seller_interest: "👥",
   system: "📢",
 };

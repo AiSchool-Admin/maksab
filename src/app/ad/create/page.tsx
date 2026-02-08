@@ -420,10 +420,12 @@ export default function CreateAdPage() {
         adData.subcategory_id = null as unknown as string;
       }
 
-      // Insert ad
-      const { error: insertError } = await supabase
+      // Insert ad (return the inserted row to get its ID)
+      const { data: insertedAd, error: insertError } = await supabase
         .from("ads")
-        .insert(adData as never);
+        .insert(adData as never)
+        .select("id")
+        .maybeSingle();
       if (insertError) {
         console.error("Ad insert error:", insertError);
         const msg =
@@ -449,6 +451,28 @@ export default function CreateAdPage() {
         },
         governorate: draft.governorate,
       });
+
+      // Notify matching buyers (fire and forget — don't block publish)
+      const adId = (insertedAd as unknown as Record<string, unknown>)?.id;
+      if (adId) {
+        fetch("/api/notifications/on-ad-created", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ad: {
+              id: adId,
+              title: draft.title,
+              category_id: draft.categoryId,
+              subcategory_id: draft.subcategoryId,
+              sale_type: draft.saleType === "live_auction" ? "auction" : draft.saleType,
+              price: draft.saleType === "cash" ? Number(draft.priceData.price) : null,
+              governorate: draft.governorate,
+              user_id: authedUser.id,
+              category_fields: draft.categoryFields,
+            },
+          }),
+        }).catch(() => {});
+      }
 
       // Success
       clearDraft();

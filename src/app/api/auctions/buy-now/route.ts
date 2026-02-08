@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { notifyBuyNow } from "@/lib/notifications/smart-notifications";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -88,6 +89,16 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
+
+    // Notify seller + other bidders (fire and forget)
+    notifyBuyNow({
+      adId: ad_id,
+      adTitle: (ad.title as string) || "",
+      sellerId: ad.user_id as string,
+      buyerId: buyer_id,
+      buyerName: buyer_name || "مشتري",
+      buyNowPrice: Number(ad.auction_buy_now_price),
+    }).catch(() => {});
 
     // Fetch bids for state
     const { data: bidsData } = await client

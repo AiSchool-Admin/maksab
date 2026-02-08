@@ -62,6 +62,30 @@ export default function ChatPage({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  /* ── Notify recipient of new message (fire and forget) ─────────────── */
+  const notifyRecipient = (messageContent: string) => {
+    if (!conversation) return;
+    const recipientId =
+      conversation.otherUser.id ||
+      (currentUserId === conversation.buyerId
+        ? conversation.sellerId
+        : conversation.buyerId);
+    if (!recipientId || recipientId === currentUserId) return;
+
+    fetch("/api/notifications/on-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        sender_id: currentUserId,
+        sender_name: user?.display_name || "مستخدم",
+        recipient_id: recipientId,
+        message_content: messageContent,
+        ad_id: conversation.adId,
+      }),
+    }).catch(() => {});
+  };
+
   /* ── Send text message ─────────────────────────────────────────────── */
   const handleSendText = (text: string) => {
     const newMsg: ChatMessage = {
@@ -74,8 +98,7 @@ export default function ChatPage({
       createdAt: new Date().toISOString(),
     };
     addMessage(newMsg);
-
-    // In production: send via Supabase insert + Realtime subscription
+    notifyRecipient(text);
   };
 
   /* ── Send image message ────────────────────────────────────────────── */
@@ -90,8 +113,7 @@ export default function ChatPage({
       createdAt: new Date().toISOString(),
     };
     addMessage(newMsg);
-
-    // In production: upload to Supabase Storage first, then send message
+    notifyRecipient("📷 صورة");
   };
 
   /* ── Loading state ─────────────────────────────────────────────────── */

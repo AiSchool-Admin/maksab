@@ -133,13 +133,48 @@ export async function requestPushPermission(): Promise<PushSubscription | null> 
       applicationServerKey: urlBase64ToUint8Array(vapidKey),
     });
 
-    console.log("Push subscription:", JSON.stringify(subscription));
-
     return subscription;
   } catch (err) {
     console.error("Push subscription failed:", err);
     return null;
   }
+}
+
+/**
+ * Save push subscription to server so we can send push notifications later.
+ */
+export async function savePushSubscription(
+  userId: string,
+  subscription: PushSubscription,
+): Promise<void> {
+  try {
+    const subJson = subscription.toJSON();
+    await fetch("/api/notifications/push-subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId,
+        subscription: {
+          endpoint: subJson.endpoint,
+          keys: subJson.keys,
+        },
+      }),
+    });
+  } catch {
+    // Silent — push is best-effort
+  }
+}
+
+/**
+ * Request permission and subscribe + save in one call.
+ */
+export async function setupPushNotifications(
+  userId: string,
+): Promise<boolean> {
+  const subscription = await requestPushPermission();
+  if (!subscription) return false;
+  await savePushSubscription(userId, subscription);
+  return true;
 }
 
 /**

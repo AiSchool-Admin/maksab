@@ -103,16 +103,22 @@ self.addEventListener("fetch", (event) => {
 
 // Push notifications
 self.addEventListener("push", (event) => {
-  const data = event.data ? event.data.json() : {};
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
   const title = data.title || "مكسب";
   const options = {
     body: data.body || "عندك إشعار جديد",
-    icon: "/icons/icon-192x192.png",
-    badge: "/icons/icon-192x192.png",
+    icon: data.icon || "/icons/icon-192x192.png",
+    badge: data.badge || "/icons/icon-192x192.png",
     dir: "rtl",
     lang: "ar",
+    vibrate: [100, 50, 100],
     data: {
-      url: data.url || "/",
+      url: (data.data && data.data.url) || data.url || "/",
     },
   };
 
