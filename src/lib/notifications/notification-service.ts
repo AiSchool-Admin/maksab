@@ -1,86 +1,10 @@
 /**
  * Notification service — manages in-app and push notifications.
- * Dev mode uses in-memory storage. Production uses Supabase.
+ * Always queries Supabase — no mock data.
  */
 
 import type { AppNotification, NotificationType } from "./types";
 import { NOTIFICATION_ICONS } from "./types";
-
-const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
-
-const now = Date.now();
-const hour = 3600000;
-const minute = 60000;
-
-// ── Dev mode mock notifications ──────────────────────────────────────
-const devNotifications: AppNotification[] = [
-  {
-    id: "notif-1",
-    userId: "dev-00000000-0000-0000-0000-000000000000",
-    type: "chat",
-    title: "رسالة جديدة من محمد أ.",
-    body: "السيارة لسه متاحة؟",
-    icon: NOTIFICATION_ICONS.chat,
-    adId: "rec-2",
-    conversationId: "conv-1",
-    isRead: false,
-    createdAt: new Date(now - 15 * minute).toISOString(),
-  },
-  {
-    id: "notif-2",
-    userId: "dev-00000000-0000-0000-0000-000000000000",
-    type: "auction_bid",
-    title: "مزايدة جديدة على إعلانك",
-    body: "حد زايد 280,000 جنيه على تويوتا كورولا 2021",
-    icon: NOTIFICATION_ICONS.auction_bid,
-    adId: "auc-1",
-    isRead: false,
-    createdAt: new Date(now - 1 * hour).toISOString(),
-  },
-  {
-    id: "notif-3",
-    userId: "dev-00000000-0000-0000-0000-000000000000",
-    type: "auction_outbid",
-    title: "حد تخطى مزايدتك!",
-    body: "مزايدتك على آيفون 14 برو اتتخطت — زايد تاني عشان تكسب",
-    icon: NOTIFICATION_ICONS.auction_outbid,
-    adId: "auc-2",
-    isRead: false,
-    createdAt: new Date(now - 2 * hour).toISOString(),
-  },
-  {
-    id: "notif-4",
-    userId: "dev-00000000-0000-0000-0000-000000000000",
-    type: "auction_ending",
-    title: "مزاد بينتهي قريب!",
-    body: "المزاد على شنطة Louis Vuitton هينتهي خلال 2 ساعة",
-    icon: NOTIFICATION_ICONS.auction_ending,
-    adId: "auc-3",
-    isRead: true,
-    createdAt: new Date(now - 4 * hour).toISOString(),
-  },
-  {
-    id: "notif-5",
-    userId: "dev-00000000-0000-0000-0000-000000000000",
-    type: "recommendation",
-    title: "إعلان جديد يناسبك",
-    body: "تويوتا كورولا 2022 — يبدأ من 250,000 جنيه",
-    icon: NOTIFICATION_ICONS.recommendation,
-    adId: "rec-2",
-    isRead: true,
-    createdAt: new Date(now - 6 * hour).toISOString(),
-  },
-  {
-    id: "notif-6",
-    userId: "dev-00000000-0000-0000-0000-000000000000",
-    type: "system",
-    title: "أهلاً بيك في مكسب! 💚",
-    body: "اكتشف العروض المميزة وابدأ أول صفقة",
-    icon: NOTIFICATION_ICONS.system,
-    isRead: true,
-    createdAt: new Date(now - 24 * hour).toISOString(),
-  },
-];
 
 // ── Service functions ────────────────────────────────────────────────
 
@@ -90,16 +14,6 @@ const devNotifications: AppNotification[] = [
 export async function fetchNotifications(
   userId: string,
 ): Promise<AppNotification[]> {
-  // Always use mock data for dev user IDs
-  if (IS_DEV || userId.startsWith("dev-")) {
-    return devNotifications
-      .filter((n) => n.userId === userId)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-  }
-
   try {
     const { supabase } = await import("@/lib/supabase/client");
     const { data, error } = await supabase
@@ -135,11 +49,6 @@ export async function fetchNotifications(
  * Get count of unread notifications.
  */
 export async function getUnreadCount(userId: string): Promise<number> {
-  if (IS_DEV || userId.startsWith("dev-")) {
-    return devNotifications.filter((n) => n.userId === userId && !n.isRead)
-      .length;
-  }
-
   try {
     const { supabase } = await import("@/lib/supabase/client");
     const { count } = await supabase
@@ -157,12 +66,6 @@ export async function getUnreadCount(userId: string): Promise<number> {
  * Mark a single notification as read.
  */
 export async function markAsRead(notificationId: string): Promise<void> {
-  if (IS_DEV) {
-    const notif = devNotifications.find((n) => n.id === notificationId);
-    if (notif) notif.isRead = true;
-    return;
-  }
-
   try {
     const { supabase } = await import("@/lib/supabase/client");
     await supabase
@@ -178,13 +81,6 @@ export async function markAsRead(notificationId: string): Promise<void> {
  * Mark all notifications as read for a user.
  */
 export async function markAllAsRead(userId: string): Promise<void> {
-  if (IS_DEV || userId.startsWith("dev-")) {
-    devNotifications.forEach((n) => {
-      if (n.userId === userId) n.isRead = true;
-    });
-    return;
-  }
-
   try {
     const { supabase } = await import("@/lib/supabase/client");
     await supabase
@@ -237,8 +133,6 @@ export async function requestPushPermission(): Promise<PushSubscription | null> 
       applicationServerKey: urlBase64ToUint8Array(vapidKey),
     });
 
-    // TODO: Send subscription to server for storing
-    // await saveSubscription(userId, subscription);
     console.log("Push subscription:", JSON.stringify(subscription));
 
     return subscription;

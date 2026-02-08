@@ -1,7 +1,8 @@
 /**
- * Mock data and service for the "my ads" management page.
+ * My ads service — fetches user's own ads from Supabase.
  */
 
+import { supabase } from "@/lib/supabase/client";
 import type { AdStatus } from "@/types";
 
 export interface MyAd {
@@ -19,89 +20,39 @@ export interface MyAd {
   city: string | null;
 }
 
-const now = Date.now();
-const hour = 3600000;
-const day = 86400000;
-
-const mockAds: MyAd[] = [
-  {
-    id: "my-1",
-    title: "تويوتا كورولا 2020 — 45,000 كم",
-    price: 350000,
-    saleType: "cash",
-    image: null,
-    status: "active",
-    viewsCount: 245,
-    favoritesCount: 12,
-    messagesCount: 8,
-    createdAt: new Date(now - 3 * day).toISOString(),
-    governorate: "القاهرة",
-    city: "مدينة نصر",
-  },
-  {
-    id: "my-2",
-    title: "آيفون 15 برو ماكس — 256GB — مستعمل زيرو",
-    price: 48000,
-    saleType: "auction",
-    image: null,
-    status: "active",
-    viewsCount: 132,
-    favoritesCount: 5,
-    messagesCount: 3,
-    createdAt: new Date(now - 1 * day).toISOString(),
-    governorate: "القاهرة",
-    city: "مدينة نصر",
-  },
-  {
-    id: "my-3",
-    title: "سامسونج S24 Ultra — 512GB — جديد متبرشم",
-    price: null,
-    saleType: "exchange",
-    image: null,
-    status: "active",
-    viewsCount: 89,
-    favoritesCount: 2,
-    messagesCount: 4,
-    createdAt: new Date(now - 5 * day).toISOString(),
-    governorate: "القاهرة",
-    city: "التجمع الخامس",
-  },
-  {
-    id: "my-4",
-    title: "غسالة توشيبا 10 كيلو — 2023 — مستعملة ممتاز",
-    price: 8500,
-    saleType: "cash",
-    image: null,
-    status: "sold",
-    viewsCount: 67,
-    favoritesCount: 1,
-    messagesCount: 2,
-    createdAt: new Date(now - 10 * day).toISOString(),
-    governorate: "الجيزة",
-    city: "فيصل",
-  },
-  {
-    id: "my-5",
-    title: "شقة 150م² — 3 غرف — الطابق الخامس",
-    price: 1500000,
-    saleType: "cash",
-    image: null,
-    status: "expired",
-    viewsCount: 312,
-    favoritesCount: 18,
-    messagesCount: 15,
-    createdAt: new Date(now - 35 * day).toISOString(),
-    governorate: "القاهرة",
-    city: "مصر الجديدة",
-  },
-];
-
 /**
- * Fetch user's own ads.
+ * Fetch user's own ads from Supabase.
  */
 export async function fetchMyAds(): Promise<MyAd[]> {
-  await new Promise((r) => setTimeout(r, 400));
-  return mockAds;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from("ads" as never)
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error || !data) return [];
+
+    return (data as Record<string, unknown>[]).map((row) => ({
+      id: row.id as string,
+      title: row.title as string,
+      price: row.price ? Number(row.price) : null,
+      saleType: row.sale_type as MyAd["saleType"],
+      image: ((row.images as string[]) ?? [])[0] ?? null,
+      status: (row.status as AdStatus) || "active",
+      viewsCount: Number(row.views_count) || 0,
+      favoritesCount: Number(row.favorites_count) || 0,
+      messagesCount: 0,
+      createdAt: row.created_at as string,
+      governorate: (row.governorate as string) ?? null,
+      city: (row.city as string) ?? null,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -111,17 +62,20 @@ export async function updateAdStatus(
   adId: string,
   status: AdStatus,
 ): Promise<{ success: boolean }> {
-  await new Promise((r) => setTimeout(r, 300));
-  const ad = mockAds.find((a) => a.id === adId);
-  if (ad) {
-    ad.status = status;
-    return { success: true };
+  try {
+    const { error } = await supabase
+      .from("ads" as never)
+      .update({ status } as never)
+      .eq("id", adId);
+
+    return { success: !error };
+  } catch {
+    return { success: false };
   }
-  return { success: false };
 }
 
 /**
- * Delete an ad.
+ * Delete an ad (soft-delete by setting status to "deleted").
  */
 export async function deleteAd(
   adId: string,

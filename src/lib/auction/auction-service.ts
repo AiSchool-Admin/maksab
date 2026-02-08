@@ -306,7 +306,7 @@ async function fetchAuctionState(adId: string): Promise<AuctionState | null> {
 
   const { data: bids } = await supabase
     .from("auction_bids" as never)
-    .select("*, bidder:users(display_name)")
+    .select("*, bidder:profiles(display_name)")
     .eq("ad_id", adId)
     .order("amount", { ascending: false })
     .limit(20);

@@ -19,7 +19,7 @@ import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import { getRecommendations } from "@/lib/recommendations/recommendations-service";
-import { recommendedAds, auctionAds, fetchFeedAds } from "@/lib/mock-data";
+import { fetchFeedAds } from "@/lib/mock-data";
 import type { MockAd } from "@/lib/mock-data";
 
 const categories = [
@@ -37,8 +37,6 @@ const categories = [
   { name: "خدمات", slug: "services" },
 ];
 
-const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
-
 export default function HomePage() {
   const {
     items: feedAds,
@@ -52,12 +50,12 @@ export default function HomePage() {
   const { track } = useTrackSignal();
 
   // Personalized recommendation state
-  const [personalizedAds, setPersonalizedAds] = useState<MockAd[]>(recommendedAds);
-  const [matchingAuctions, setMatchingAuctions] = useState<MockAd[]>(auctionAds);
+  const [personalizedAds, setPersonalizedAds] = useState<MockAd[]>([]);
+  const [matchingAuctions, setMatchingAuctions] = useState<MockAd[]>([]);
 
   // Load personalized recommendations
   useEffect(() => {
-    const userId = user?.id || DEV_USER_ID;
+    const userId = user?.id || "";
     getRecommendations(userId, user?.governorate ?? undefined).then((result) => {
       if (result.personalizedAds.length > 0) {
         setPersonalizedAds(result.personalizedAds);

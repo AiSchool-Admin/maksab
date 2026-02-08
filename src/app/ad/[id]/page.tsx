@@ -94,10 +94,15 @@ export default function AdDetailPage({
   /* ── Load ad detail ──────────────────────────────────────── */
   useEffect(() => {
     setIsLoading(true);
-    fetchAdDetail(id).then((data) => {
+    fetchAdDetail(id).then(async (data) => {
+      if (!data) {
+        setIsLoading(false);
+        return;
+      }
       setAd(data);
       setIsFavorited(data.isFavorited);
-      setSimilarAds(getSimilarAds(id));
+      const similar = await getSimilarAds(id, data.categoryId);
+      setSimilarAds(similar);
       setIsLoading(false);
 
       // Initialize auction state
