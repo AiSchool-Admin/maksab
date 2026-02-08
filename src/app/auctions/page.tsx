@@ -30,6 +30,7 @@ interface AuctionAd extends MockAd {
 }
 
 function rowToAuctionAd(row: Record<string, unknown>): AuctionAd {
+  const categoryFields = (row.category_fields as Record<string, unknown>) ?? {};
   return {
     id: row.id as string,
     title: row.title as string,
@@ -47,6 +48,7 @@ function rowToAuctionAd(row: Record<string, unknown>): AuctionAd {
       ? Number(row.auction_start_price)
       : undefined,
     auctionStatus: (row.auction_status as string) ?? undefined,
+    isLiveAuction: Boolean(categoryFields.is_live_auction),
   };
 }
 
@@ -291,6 +293,7 @@ export default function AuctionsPage() {
                 auctionHighestBid={auction.auctionHighestBid}
                 auctionEndsAt={auction.auctionEndsAt}
                 auctionBidsCount={auction.auctionBidsCount}
+                isLiveAuction={auction.isLiveAuction}
               />
             ))}
           </div>

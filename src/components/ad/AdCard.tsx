@@ -20,6 +20,8 @@ interface AdCardProps {
   auctionHighestBid?: number;
   auctionEndsAt?: string;
   auctionBidsCount?: number;
+  // Live auction
+  isLiveAuction?: boolean;
   // Exchange props
   exchangeDescription?: string;
   // Interaction
@@ -30,6 +32,7 @@ interface AdCardProps {
 const saleTypeBadge = {
   cash: { label: "نقدي", icon: "💵", color: "bg-brand-green-light text-brand-green-dark" },
   auction: { label: "مزاد", icon: "🔨", color: "bg-brand-gold-light text-brand-gold" },
+  live_auction: { label: "مباشر", icon: "📡", color: "bg-red-50 text-red-600 border border-red-200" },
   exchange: { label: "تبديل", icon: "🔄", color: "bg-blue-50 text-blue-700" },
 };
 
@@ -77,11 +80,13 @@ function AdCard({
   auctionHighestBid,
   auctionEndsAt,
   auctionBidsCount,
+  isLiveAuction = false,
   exchangeDescription,
   isFavorited = false,
   onToggleFavorite,
 }: AdCardProps) {
-  const badge = saleTypeBadge[saleType];
+  const badgeKey = isLiveAuction && saleType === "auction" ? "live_auction" : saleType;
+  const badge = saleTypeBadge[badgeKey];
 
   return (
     <Link href={`/ad/${id}`} className="block">
@@ -106,8 +111,14 @@ function AdCard({
 
           {/* Sale type badge */}
           <span
-            className={`absolute top-2 start-2 text-[11px] font-semibold px-2 py-1 rounded-lg backdrop-blur-sm ${badge.color}`}
+            className={`absolute top-2 start-2 text-[11px] font-semibold px-2 py-1 rounded-lg backdrop-blur-sm flex items-center gap-1 ${badge.color}`}
           >
+            {isLiveAuction && saleType === "auction" && (
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+              </span>
+            )}
             {badge.icon} {badge.label}
           </span>
 

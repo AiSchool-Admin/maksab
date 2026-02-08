@@ -37,9 +37,14 @@ export interface AuctionState {
   wasExtended: boolean;
 }
 
-/** Calculate the minimum next bid amount */
-export function calcMinNextBid(currentPrice: number): number {
-  return currentPrice + Math.max(Math.ceil(currentPrice * 0.02), 50);
+/** Calculate the minimum next bid amount.
+ *  If seller defined a custom minIncrement, use it.
+ *  Otherwise fall back to 2% of current price (min 50 EGP). */
+export function calcMinNextBid(currentPrice: number, sellerMinIncrement?: number): number {
+  const increment = sellerMinIncrement && sellerMinIncrement > 0
+    ? sellerMinIncrement
+    : Math.max(Math.ceil(currentPrice * 0.02), 50);
+  return currentPrice + increment;
 }
 
 /** Human-readable auction status label */

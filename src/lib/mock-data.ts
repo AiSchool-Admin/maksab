@@ -20,10 +20,12 @@ export interface MockAd {
   auctionBidsCount?: number;
   exchangeDescription?: string;
   isFavorited?: boolean;
+  isLiveAuction?: boolean;
 }
 
 /** Convert a Supabase ad row to MockAd */
 function rowToMockAd(row: Record<string, unknown>): MockAd {
+  const categoryFields = (row.category_fields as Record<string, unknown>) ?? {};
   return {
     id: row.id as string,
     title: row.title as string,
@@ -37,6 +39,7 @@ function rowToMockAd(row: Record<string, unknown>): MockAd {
     auctionHighestBid: row.auction_start_price ? Number(row.auction_start_price) : undefined,
     auctionEndsAt: (row.auction_ends_at as string) ?? undefined,
     exchangeDescription: (row.exchange_description as string) ?? undefined,
+    isLiveAuction: Boolean(categoryFields.is_live_auction),
   };
 }
 

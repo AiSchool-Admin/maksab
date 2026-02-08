@@ -60,11 +60,10 @@ export default function AuctionSection({
 
   const isActive = status === "active";
   const currentPrice = currentHighestBid ?? startPrice;
-  const minNextBid = calcMinNextBid(currentPrice);
-  const minIncrement = Math.max(
-    Math.ceil(currentPrice * 0.02),
-    auctionState.minIncrement || 50,
-  );
+  // Use seller-defined increment when set, otherwise 2% (min 50 EGP)
+  const sellerIncrement = auctionState.minIncrement > 0 ? auctionState.minIncrement : undefined;
+  const minIncrement = sellerIncrement ?? Math.max(Math.ceil(currentPrice * 0.02), 50);
+  const minNextBid = calcMinNextBid(currentPrice, sellerIncrement);
 
   // Quick-bid stepper state: starts at minimum next bid
   const [bidAmount, setBidAmount] = useState(minNextBid);

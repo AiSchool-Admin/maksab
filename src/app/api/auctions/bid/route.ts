@@ -108,11 +108,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate minimum next bid
-    const minIncrement = Math.max(
-      Math.ceil(currentPrice * 0.02),
-      Number(ad.auction_min_increment) || MIN_INCREMENT_EGP,
-    );
+    // Calculate minimum next bid — use seller-defined increment when set
+    const sellerIncrement = Number(ad.auction_min_increment) || 0;
+    const minIncrement = sellerIncrement > 0
+      ? sellerIncrement
+      : Math.max(Math.ceil(currentPrice * 0.02), MIN_INCREMENT_EGP);
     const minNextBid = currentPrice + minIncrement;
 
     if (bidAmount < minNextBid) {

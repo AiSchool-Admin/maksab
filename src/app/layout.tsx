@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import AuthProvider from "@/components/auth/AuthProvider";
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration";
+import ChatbotWidget from "@/components/chatbot/ChatbotWidget";
 import "./globals.css";
 
 const cairo = localFont({
@@ -65,6 +66,7 @@ export default function RootLayout({
         <AuthProvider>
           {/* Main content with bottom padding to avoid BottomNav overlap */}
           <div className="min-h-screen pb-20">{children}</div>
+          <ChatbotWidget />
         </AuthProvider>
       </body>
     </html>

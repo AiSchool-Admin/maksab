@@ -11,7 +11,9 @@ import {
   Clock,
   User,
   Calendar,
+  Radio,
 } from "lucide-react";
+import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import ImageGallery from "@/components/ad/ImageGallery";
@@ -380,6 +382,32 @@ export default function AdDetailPage({
             isLiveAuction={Boolean((ad.categoryFields as Record<string, unknown>)?.is_live_auction)}
           />
         )}
+
+        {/* Live auction broadcast button */}
+        {ad.saleType === "auction" &&
+          Boolean((ad.categoryFields as Record<string, unknown>)?.is_live_auction) && (
+            <Link href={`/ad/${ad.id}/live`}>
+              <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-center gap-3 hover:bg-red-100 transition-colors">
+                <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
+                  <Radio size={20} className="text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-red-600">
+                    {currentUserId === ad.seller?.id ? "ابدأ البث المباشر" : "شاهد البث المباشر"}
+                  </p>
+                  <p className="text-xs text-red-400">
+                    {currentUserId === ad.seller?.id
+                      ? "اعرض المنتج للمشاهدين وتلقى مزايدات حية"
+                      : "شاهد المنتج مباشرة وزايد في الوقت الحقيقي"}
+                  </p>
+                </div>
+                <span className="relative flex h-3 w-3 flex-shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                </span>
+              </div>
+            </Link>
+          )}
 
         {/* Exchange details */}
         {ad.saleType === "exchange" && ad.exchangeDescription && (
