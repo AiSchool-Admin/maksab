@@ -87,16 +87,19 @@ export default function LiveBroadcastPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
+  // Stable anonymous user ID for viewers (persists across re-renders)
+  const anonIdRef = useRef("anon-" + Math.random().toString(36).slice(2, 10));
+  const stableUserId = user?.id || anonIdRef.current;
+
   // ── WebRTC for real video streaming ────────────────────
   const {
     remoteStream,
-    connectionState,
     broadcasterOnline,
     startBroadcast,
     stopBroadcast: stopWebRTC,
   } = useWebRTC({
     roomId: adId,
-    userId: user?.id || "anon-" + Math.random().toString(36).slice(2),
+    userId: stableUserId,
     isBroadcaster: isOwner === true,
     onViewerCountChange: (count) => setViewerCount(count),
   });
@@ -181,15 +184,8 @@ export default function LiveBroadcastPage() {
     return () => clearInterval(interval);
   }, [auctionEndsAt]);
 
-  // ── Simulate viewer count (when live) ────────────────
-  useEffect(() => {
-    if (broadcastState !== "live") return;
-    setViewerCount(1);
-    const interval = setInterval(() => {
-      setViewerCount((p) => Math.max(1, p + (Math.random() > 0.5 ? 1 : -1)));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [broadcastState]);
+  // ── Viewer count from WebRTC (real peer connections) ──
+  // The onViewerCountChange callback in useWebRTC updates viewerCount automatically
 
   // Auto-scroll comments
   useEffect(() => {
@@ -573,6 +569,7 @@ export default function LiveBroadcastPage() {
             ref={remoteVideoRef}
             autoPlay
             playsInline
+            muted={false}
             className="absolute inset-0 w-full h-full object-cover z-0"
           />
         ) : (
