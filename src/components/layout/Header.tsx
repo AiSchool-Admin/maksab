@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronRight, Plus } from "lucide-react";
+import { Bell, ChevronRight, Plus, LogIn, LogOut } from "lucide-react";
 import { useNotificationStore } from "@/stores/notification-store";
 import { useAuth } from "@/components/auth/AuthProvider";
 import NotificationDropdown from "@/components/notifications/NotificationDropdown";
@@ -22,7 +22,7 @@ export default function Header({
   actions,
 }: HeaderProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const { unreadCount, isOpen, setOpen, load } = useNotificationStore();
 
   // Load unread count on mount
@@ -31,6 +31,20 @@ export default function Header({
       load(user?.id);
     }
   }, [showNotifications, load, user?.id]);
+
+  const handleLogout = async () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("maksab_dev_session");
+      const keys = Object.keys(localStorage);
+      for (const key of keys) {
+        if (key.startsWith("sb-") || key.includes("supabase")) {
+          localStorage.removeItem(key);
+        }
+      }
+    }
+    await logout();
+    router.push("/login");
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
@@ -57,6 +71,27 @@ export default function Header({
 
         {/* Left side: Actions */}
         <div className="flex items-center gap-2 relative">
+          {/* Login / Logout button */}
+          {!isLoading && !showBack && (
+            user ? (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-error px-3 py-1.5 rounded-full transition-all text-sm font-bold"
+              >
+                <LogOut size={16} />
+                <span>خروج</span>
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="flex items-center gap-1.5 bg-brand-green hover:bg-brand-green-dark text-white px-3 py-1.5 rounded-full transition-all text-sm font-bold"
+              >
+                <LogIn size={16} />
+                <span>دخول</span>
+              </Link>
+            )
+          )}
+
           {!showBack && (
             <Link
               href="/ad/create"
