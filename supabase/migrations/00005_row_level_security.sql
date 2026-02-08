@@ -5,21 +5,21 @@
 -- ============================================
 -- USERS
 -- ============================================
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- Anyone can view user profiles
 CREATE POLICY "Users are viewable by everyone"
-  ON public.users FOR SELECT
+  ON public.profiles FOR SELECT
   USING (true);
 
 -- Users can only insert their own profile
 CREATE POLICY "Users can create their own profile"
-  ON public.users FOR INSERT
+  ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
 -- Users can only update their own profile
 CREATE POLICY "Users can update their own profile"
-  ON public.users FOR UPDATE
+  ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 
 -- ============================================

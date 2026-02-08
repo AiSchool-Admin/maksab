@@ -8,7 +8,7 @@
 -- Favorites (المفضلة)
 -- ============================================
 CREATE TABLE favorites (
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, ad_id)
@@ -23,7 +23,7 @@ CREATE INDEX idx_favorites_ad ON favorites(ad_id);
 CREATE TABLE auction_bids (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
-  bidder_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  bidder_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   amount DECIMAL(12,2) NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -39,8 +39,8 @@ CREATE INDEX idx_bids_bidder ON auction_bids(bidder_id, created_at DESC);
 CREATE TABLE conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
-  buyer_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  seller_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  buyer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  seller_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   last_message_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   -- One conversation per buyer per ad
@@ -58,7 +58,7 @@ CREATE INDEX idx_conversations_ad ON conversations(ad_id);
 CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-  sender_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   content TEXT,
   image_url TEXT,
   is_read BOOLEAN DEFAULT FALSE,
@@ -77,7 +77,7 @@ CREATE INDEX idx_messages_unread ON messages(conversation_id, is_read)
 CREATE TABLE commissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ad_id UUID REFERENCES ads(id) ON DELETE SET NULL,
-  payer_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  payer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
   payment_method VARCHAR(50),
   status VARCHAR(20) DEFAULT 'pending'

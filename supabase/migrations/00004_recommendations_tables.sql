@@ -9,7 +9,7 @@
 -- ============================================
 CREATE TABLE user_signals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   signal_type VARCHAR(20) NOT NULL CHECK (
     signal_type IN ('search', 'view', 'favorite', 'ad_created', 'bid_placed', 'chat_initiated')
   ),
@@ -37,7 +37,7 @@ CREATE INDEX idx_signals_type ON user_signals(signal_type, created_at DESC);
 -- Precomputed by background worker, used for fast recommendations
 -- ============================================
 CREATE TABLE user_interest_profiles (
-  user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
   interests JSONB NOT NULL DEFAULT '[]',
   -- Example structure:
   -- [

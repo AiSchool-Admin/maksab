@@ -288,7 +288,7 @@ export async function POST(request: Request) {
   }));
 
   const { error: profileError } = await admin
-    .from("users")
+    .from("profiles")
     .upsert(profiles, { onConflict: "id" });
   results.profiles = profileError
     ? `خطأ: ${profileError.message}`

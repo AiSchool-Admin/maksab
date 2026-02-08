@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;      -- Accent-insensitive search
 -- ============================================
 -- Users table (extends Supabase auth.users)
 -- ============================================
-CREATE TABLE public.users (
+CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   phone VARCHAR(11) UNIQUE NOT NULL,
   display_name VARCHAR(100),
@@ -26,9 +26,9 @@ CREATE TABLE public.users (
 );
 
 -- Index for phone lookups
-CREATE INDEX idx_users_phone ON public.users(phone);
+CREATE INDEX idx_users_phone ON public.profiles(phone);
 -- Index for location-based queries
-CREATE INDEX idx_users_location ON public.users(governorate, city);
+CREATE INDEX idx_users_location ON public.profiles(governorate, city);
 
 -- Auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -40,7 +40,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trigger_users_updated_at
-  BEFORE UPDATE ON public.users
+  BEFORE UPDATE ON public.profiles
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 

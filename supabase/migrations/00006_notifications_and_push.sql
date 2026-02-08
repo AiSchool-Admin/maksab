@@ -7,7 +7,7 @@
 -- ============================================
 CREATE TABLE notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   type VARCHAR(30) NOT NULL CHECK (type IN (
     'chat', 'auction_bid', 'auction_outbid', 'auction_ending',
     'auction_ended', 'auction_won', 'auction_ended_no_bids',
@@ -33,7 +33,7 @@ CREATE INDEX idx_notifications_unread ON notifications(user_id, is_read)
 -- ============================================
 CREATE TABLE push_subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   endpoint TEXT NOT NULL,
   keys_p256dh TEXT NOT NULL,
   keys_auth TEXT NOT NULL,

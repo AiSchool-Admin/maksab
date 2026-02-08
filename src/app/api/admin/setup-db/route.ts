@@ -43,32 +43,45 @@ export async function POST(request: Request) {
   const results: Record<string, string> = {};
 
   try {
-    // 0. Fix users table phone column (if it has old VARCHAR(11) UNIQUE NOT NULL)
-    // Try to create a profile with empty phone to test if the constraint is fixed
-    // We do this via a raw SQL approach: try inserting, if it fails, we know the constraint needs fixing
+    // 0. Fix profiles table phone column (if it has old VARCHAR(11) UNIQUE NOT NULL)
     try {
       const { error: testError } = await adminClient.rpc("exec_sql" as never, {
         query: `
           DO $$
           BEGIN
+            -- Rename users to profiles if needed
+            IF EXISTS (
+              SELECT 1 FROM information_schema.tables
+              WHERE table_schema = 'public' AND table_name = 'users'
+            ) AND NOT EXISTS (
+              SELECT 1 FROM information_schema.tables
+              WHERE table_schema = 'public' AND table_name = 'profiles'
+            ) THEN
+              ALTER TABLE public.users RENAME TO profiles;
+            END IF;
+            -- Fix phone constraints on profiles table
             IF EXISTS (
               SELECT 1 FROM pg_constraint
-              WHERE conname = 'users_phone_key' AND conrelid = 'public.users'::regclass
+              WHERE conname IN ('users_phone_key', 'profiles_phone_key')
+                AND conrelid = 'public.profiles'::regclass
             ) THEN
-              ALTER TABLE public.users DROP CONSTRAINT users_phone_key;
+              EXECUTE 'ALTER TABLE public.profiles DROP CONSTRAINT ' ||
+                (SELECT conname FROM pg_constraint
+                 WHERE conname IN ('users_phone_key', 'profiles_phone_key')
+                   AND conrelid = 'public.profiles'::regclass LIMIT 1);
             END IF;
-            ALTER TABLE public.users ALTER COLUMN phone DROP NOT NULL;
-            ALTER TABLE public.users ALTER COLUMN phone SET DEFAULT '';
-            ALTER TABLE public.users ALTER COLUMN phone TYPE VARCHAR(20);
+            ALTER TABLE public.profiles ALTER COLUMN phone DROP NOT NULL;
+            ALTER TABLE public.profiles ALTER COLUMN phone SET DEFAULT '';
+            ALTER TABLE public.profiles ALTER COLUMN phone TYPE VARCHAR(20);
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$;
         `,
       } as never);
-      results.fix_users_table = testError
-        ? `تخطي إصلاح جدول users (شغّل complete-setup.sql يدوياً): ${testError.message}`
-        : "تم إصلاح جدول users";
+      results.fix_profiles_table = testError
+        ? `تخطي إصلاح جدول profiles (شغّل complete-setup.sql يدوياً): ${testError.message}`
+        : "تم إصلاح جدول profiles";
     } catch {
-      results.fix_users_table = "تخطي إصلاح جدول users — شغّل complete-setup.sql في SQL Editor";
+      results.fix_profiles_table = "تخطي إصلاح جدول profiles — شغّل complete-setup.sql في SQL Editor";
     }
 
     // 1. Seed categories
@@ -111,7 +124,7 @@ export async function POST(request: Request) {
       for (const authUser of authUsers.users) {
         // Check if profile exists
         const { data: existing } = await adminClient
-          .from("users")
+          .from("profiles")
           .select("id")
           .eq("id", authUser.id)
           .maybeSingle();
@@ -119,7 +132,7 @@ export async function POST(request: Request) {
         if (!existing) {
           const phone = authUser.phone?.replace(/^\+2/, "") || "";
           const { error: profileError } = await adminClient
-            .from("users")
+            .from("profiles")
             .insert({
               id: authUser.id,
               phone: phone.length <= 20 ? phone : "",

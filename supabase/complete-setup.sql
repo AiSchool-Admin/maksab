@@ -7,6 +7,29 @@
 
 
 -- ============================================
+-- PART 0: CRITICAL FIX — Rename public.users to public.profiles
+-- Having a table named "users" in the public schema conflicts with
+-- Supabase Auth's internal auth.users table, causing "Database error
+-- finding user" during signup/login. Renaming to "profiles" fixes this.
+-- ============================================
+DO $$
+BEGIN
+  -- If public.users exists, rename it to profiles
+  -- This preserves all data, FK constraints, indexes, and policies
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'users'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'profiles'
+  ) THEN
+    ALTER TABLE public.users RENAME TO profiles;
+    RAISE NOTICE '✅ Renamed public.users → public.profiles';
+  END IF;
+END $$;
+
+
+-- ============================================
 -- PART 1: Extensions
 -- ============================================
 
@@ -20,9 +43,10 @@ CREATE EXTENSION IF NOT EXISTS unaccent;      -- Accent-insensitive search
 -- ============================================
 
 -- ============================================
--- Users table (extends Supabase auth.users)
+-- Profiles table (extends Supabase auth.users)
+-- Named "profiles" to avoid conflict with auth.users
 -- ============================================
-CREATE TABLE IF NOT EXISTS public.users (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   phone VARCHAR(20) DEFAULT '',
   display_name VARCHAR(100),
@@ -37,31 +61,38 @@ CREATE TABLE IF NOT EXISTS public.users (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Migration: if table existed with old phone column (VARCHAR(11) UNIQUE NOT NULL)
+-- Migration: if table had old phone column (VARCHAR(11) UNIQUE NOT NULL)
 -- safely widen it to VARCHAR(20), drop UNIQUE and NOT NULL constraints
 DO $$
 BEGIN
-  -- Remove UNIQUE constraint on phone if exists
+  -- Remove UNIQUE constraint on phone if exists (old name)
   IF EXISTS (
     SELECT 1 FROM pg_constraint
-    WHERE conname = 'users_phone_key' AND conrelid = 'public.users'::regclass
+    WHERE conname = 'users_phone_key' AND conrelid = 'public.profiles'::regclass
   ) THEN
-    ALTER TABLE public.users DROP CONSTRAINT users_phone_key;
+    ALTER TABLE public.profiles DROP CONSTRAINT users_phone_key;
+  END IF;
+  -- Also check new name
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'profiles_phone_key' AND conrelid = 'public.profiles'::regclass
+  ) THEN
+    ALTER TABLE public.profiles DROP CONSTRAINT profiles_phone_key;
   END IF;
 
   -- Allow NULL and widen phone column
-  ALTER TABLE public.users ALTER COLUMN phone DROP NOT NULL;
-  ALTER TABLE public.users ALTER COLUMN phone SET DEFAULT '';
-  ALTER TABLE public.users ALTER COLUMN phone TYPE VARCHAR(20);
+  ALTER TABLE public.profiles ALTER COLUMN phone DROP NOT NULL;
+  ALTER TABLE public.profiles ALTER COLUMN phone SET DEFAULT '';
+  ALTER TABLE public.profiles ALTER COLUMN phone TYPE VARCHAR(20);
 EXCEPTION WHEN OTHERS THEN
   -- Ignore if column doesn't exist or already modified
   NULL;
 END $$;
 
 -- Index for phone lookups
-CREATE INDEX IF NOT EXISTS idx_users_phone ON public.users(phone);
+CREATE INDEX IF NOT EXISTS idx_profiles_phone ON public.profiles(phone);
 -- Index for location-based queries
-CREATE INDEX IF NOT EXISTS idx_users_location ON public.users(governorate, city);
+CREATE INDEX IF NOT EXISTS idx_profiles_location ON public.profiles(governorate, city);
 
 -- Auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -72,11 +103,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trigger_users_updated_at ON public.users;
-CREATE TRIGGER trigger_users_updated_at
-  BEFORE UPDATE ON public.users
+DROP TRIGGER IF EXISTS trigger_profiles_updated_at ON public.profiles;
+CREATE TRIGGER trigger_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- Clean up old trigger name if it exists from before rename
+DROP TRIGGER IF EXISTS trigger_users_updated_at ON public.profiles;
 
 -- ============================================
 -- Categories
@@ -139,7 +173,7 @@ CREATE INDEX IF NOT EXISTS idx_cities_name ON cities(name);
 
 CREATE TABLE IF NOT EXISTS ads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   -- Classification
   category_id VARCHAR(50) NOT NULL REFERENCES categories(id),
@@ -162,7 +196,7 @@ CREATE TABLE IF NOT EXISTS ads (
   auction_ends_at TIMESTAMPTZ,
   auction_status VARCHAR(20) DEFAULT 'active'
     CHECK (auction_status IN ('active', 'ended', 'bought_now', 'cancelled')),
-  auction_winner_id UUID REFERENCES public.users(id),
+  auction_winner_id UUID REFERENCES public.profiles(id),
 
   -- Exchange specific
   exchange_description TEXT,
@@ -249,7 +283,7 @@ CREATE INDEX IF NOT EXISTS idx_ads_exchange_search ON ads
 -- Favorites (المفضلة)
 -- ============================================
 CREATE TABLE IF NOT EXISTS favorites (
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, ad_id)
@@ -264,7 +298,7 @@ CREATE INDEX IF NOT EXISTS idx_favorites_ad ON favorites(ad_id);
 CREATE TABLE IF NOT EXISTS auction_bids (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
-  bidder_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  bidder_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   amount DECIMAL(12,2) NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -280,8 +314,8 @@ CREATE INDEX IF NOT EXISTS idx_bids_bidder ON auction_bids(bidder_id, created_at
 CREATE TABLE IF NOT EXISTS conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
-  buyer_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  seller_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  buyer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  seller_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   last_message_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   -- One conversation per buyer per ad
@@ -299,7 +333,7 @@ CREATE INDEX IF NOT EXISTS idx_conversations_ad ON conversations(ad_id);
 CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-  sender_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   content TEXT,
   image_url TEXT,
   is_read BOOLEAN DEFAULT FALSE,
@@ -318,7 +352,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(conversation_id, is_r
 CREATE TABLE IF NOT EXISTS commissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ad_id UUID REFERENCES ads(id) ON DELETE SET NULL,
-  payer_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  payer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
   payment_method VARCHAR(50),
   status VARCHAR(20) DEFAULT 'pending'
@@ -342,7 +376,7 @@ CREATE INDEX IF NOT EXISTS idx_commissions_status ON commissions(status);
 -- ============================================
 CREATE TABLE IF NOT EXISTS user_signals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   signal_type VARCHAR(20) NOT NULL CHECK (
     signal_type IN ('search', 'view', 'favorite', 'ad_created', 'bid_placed', 'chat_initiated')
   ),
@@ -370,7 +404,7 @@ CREATE INDEX IF NOT EXISTS idx_signals_type ON user_signals(signal_type, created
 -- Precomputed by background worker, used for fast recommendations
 -- ============================================
 CREATE TABLE IF NOT EXISTS user_interest_profiles (
-  user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
   interests JSONB NOT NULL DEFAULT '[]',
   -- Example structure:
   -- [
@@ -399,23 +433,29 @@ $$ LANGUAGE plpgsql;
 -- ============================================
 
 -- ============================================
--- USERS
+-- PROFILES
 -- ============================================
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users are viewable by everyone" ON public.users;
-CREATE POLICY "Users are viewable by everyone"
-  ON public.users FOR SELECT
+-- Drop old policy names (from when table was called "users")
+DROP POLICY IF EXISTS "Users are viewable by everyone" ON public.profiles;
+DROP POLICY IF EXISTS "Users can create their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+-- Drop new policy names for idempotency
+DROP POLICY IF EXISTS "Profiles are viewable by everyone" ON public.profiles;
+DROP POLICY IF EXISTS "Users can create their own profile in profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile in profiles" ON public.profiles;
+
+CREATE POLICY "Profiles are viewable by everyone"
+  ON public.profiles FOR SELECT
   USING (true);
 
-DROP POLICY IF EXISTS "Users can create their own profile" ON public.users;
-CREATE POLICY "Users can create their own profile"
-  ON public.users FOR INSERT
+CREATE POLICY "Users can create their own profile in profiles"
+  ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
-CREATE POLICY "Users can update their own profile"
-  ON public.users FOR UPDATE
+CREATE POLICY "Users can update their own profile in profiles"
+  ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 
 -- ============================================
@@ -624,7 +664,7 @@ CREATE POLICY "Users can view their own interest profile"
 -- ============================================
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   type VARCHAR(30) NOT NULL CHECK (type IN (
     'chat', 'auction_bid', 'auction_outbid', 'auction_ending',
     'auction_ended', 'auction_won', 'auction_ended_no_bids',
@@ -650,7 +690,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is
 -- ============================================
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   endpoint TEXT NOT NULL,
   keys_p256dh TEXT NOT NULL,
   keys_auth TEXT NOT NULL,

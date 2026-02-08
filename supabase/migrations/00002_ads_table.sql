@@ -4,7 +4,7 @@
 
 CREATE TABLE ads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   -- Classification
   category_id VARCHAR(50) NOT NULL REFERENCES categories(id),
@@ -27,7 +27,7 @@ CREATE TABLE ads (
   auction_ends_at TIMESTAMPTZ,
   auction_status VARCHAR(20) DEFAULT 'active'
     CHECK (auction_status IN ('active', 'ended', 'bought_now', 'cancelled')),
-  auction_winner_id UUID REFERENCES public.users(id),
+  auction_winner_id UUID REFERENCES public.profiles(id),
 
   -- Exchange specific
   exchange_description TEXT,

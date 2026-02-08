@@ -315,7 +315,7 @@ export default function CreateAdPage() {
 
       // Ensure user profile exists in DB (needed for foreign key)
       const { data: existingProfile } = await supabase
-        .from("users")
+        .from("profiles")
         .select("id")
         .eq("id", authedUser.id)
         .maybeSingle();
@@ -323,7 +323,7 @@ export default function CreateAdPage() {
       if (!existingProfile) {
         // Create user profile if it doesn't exist
         const { error: profileError } = await supabase
-          .from("users")
+          .from("profiles")
           .upsert({
             id: authedUser.id,
             phone: authedUser.phone || "",

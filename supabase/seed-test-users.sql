@@ -170,10 +170,10 @@ $$;
 
 
 -- ============================================
--- PART 2: User Profiles in public.users
+-- PART 2: User Profiles in public.profiles
 -- ============================================
 
-INSERT INTO public.users (id, phone, display_name, governorate, city, bio, is_commission_supporter, total_ads_count, rating) VALUES
+INSERT INTO public.profiles (id, phone, display_name, governorate, city, bio, is_commission_supporter, total_ads_count, rating) VALUES
   ('a1111111-1111-1111-1111-111111111111', '01012345678', 'محمد أحمد', 'القاهرة', 'مدينة نصر', 'بائع سيارات مستعملة — خبرة 10 سنين في السوق', true, 5, 4.8),
   ('b2222222-2222-2222-2222-222222222222', '01198765432', 'فاطمة علي', 'الجيزة', 'المهندسين', 'بيع وشراء موبايلات وتابلت — أصلي ومضمون', false, 3, 4.5),
   ('c3333333-3333-3333-3333-333333333333', '01234567890', 'أحمد حسن', 'الإسكندرية', 'سموحة', 'مكتب عقارات — شقق وفيلات في إسكندرية', true, 4, 4.9),
@@ -507,7 +507,7 @@ DECLARE
   conv_count INTEGER;
   msg_count INTEGER;
 BEGIN
-  SELECT COUNT(*) INTO user_count FROM public.users;
+  SELECT COUNT(*) INTO user_count FROM public.profiles;
   SELECT COUNT(*) INTO ad_count FROM ads;
   SELECT COUNT(*) INTO bid_count FROM auction_bids;
   SELECT COUNT(*) INTO conv_count FROM conversations;

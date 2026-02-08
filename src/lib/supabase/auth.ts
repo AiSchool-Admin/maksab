@@ -246,7 +246,7 @@ async function upsertUserProfile(userId: string, contactInfo: string): Promise<U
 
   // Try to fetch existing profile first (maybeSingle avoids 406 on 0 rows)
   const { data: existing, error: selectError } = await supabase
-    .from("users" as never)
+    .from("profiles" as never)
     .select("*")
     .eq("id", userId)
     .maybeSingle();
@@ -261,7 +261,7 @@ async function upsertUserProfile(userId: string, contactInfo: string): Promise<U
 
   // Create new profile using upsert (handles both insert and conflict)
   const { data: created, error: insertError } = await supabase
-    .from("users" as never)
+    .from("profiles" as never)
     .upsert({ id: userId, phone } as never, { onConflict: "id" } as never)
     .select()
     .maybeSingle();
@@ -305,7 +305,7 @@ export async function updateUserProfile(
   }
 
   const { data, error } = await supabase
-    .from("users" as never)
+    .from("profiles" as never)
     .update({ ...updates, updated_at: new Date().toISOString() } as never)
     .eq("id", userId)
     .select()
@@ -337,7 +337,7 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
   if (!session?.user) return null;
 
   const { data } = await supabase
-    .from("users" as never)
+    .from("profiles" as never)
     .select("*")
     .eq("id", session.user.id)
     .maybeSingle();
