@@ -106,9 +106,11 @@ export async function getRecommendations(
   userId: string,
   userGovernorate?: string,
 ): Promise<RecommendationResult> {
-  if (!IS_DEV) {
-    return getRecommendationsProduction(userId, userGovernorate);
-  }
+  // Always use mock data for now — the get_recommendations RPC function
+  // is not created in the database yet. When it's ready, uncomment:
+  // if (!IS_DEV && !userId.startsWith("dev-")) {
+  //   return getRecommendationsProduction(userId, userGovernorate);
+  // }
 
   // Dev mode: build from signals + mock data
   const signals = getDevSignals(userId);

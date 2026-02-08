@@ -249,6 +249,16 @@ export default function CreateAdPage() {
     const authedUser = user || (await requireAuth());
     if (!authedUser) return;
 
+    // Reject dev/fake user IDs — must be a real UUID from Supabase Auth
+    if (authedUser.id.startsWith("dev-") || authedUser.id.length < 36) {
+      // Clear stale dev session and force re-login
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("maksab_dev_session");
+      }
+      setErrors({ publish: "لازم تسجل دخول بحساب حقيقي. اعمل logout وسجل دخول تاني من صفحة /login" });
+      return;
+    }
+
     setIsPublishing(true);
 
     try {
@@ -354,7 +364,7 @@ export default function CreateAdPage() {
         console.error("Ad insert error:", insertError);
         const msg =
           insertError.code === "23503"
-            ? "قاعدة البيانات محتاجة تهيئة. شغّل الـ setup من: /api/admin/setup-db?secret=SERVICE_ROLE_KEY أو انسخ ملف supabase/seed-only.sql في SQL Editor"
+            ? "حصلت مشكلة في حسابك. اعمل تسجيل خروج وسجل دخول تاني من /login"
             : insertError.code === "23505"
               ? "الإعلان ده موجود قبل كده"
               : `حصل مشكلة في نشر الإعلان (${insertError.code || "unknown"}). جرب تاني`;

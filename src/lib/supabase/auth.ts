@@ -317,6 +317,11 @@ export async function updateUserProfile(
 
 // ── Get current session ───────────────────────────────────────────────
 export async function getCurrentUser(): Promise<UserProfile | null> {
+  // Always clean up stale dev sessions in production
+  if (!IS_DEV_MODE && typeof window !== "undefined") {
+    localStorage.removeItem("maksab_dev_session");
+  }
+
   if (IS_DEV_MODE) {
     if (typeof window !== "undefined") {
       const devSession = localStorage.getItem("maksab_dev_session");
@@ -332,9 +337,13 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
     .from("users" as never)
     .select("*")
     .eq("id", session.user.id)
-    .single();
+    .maybeSingle();
 
-  return (data as unknown as UserProfile) || null;
+  if (data) return data as unknown as UserProfile;
+
+  // Profile doesn't exist yet — create it
+  const profile = await upsertUserProfile(session.user.id, session.user.email || session.user.phone || "");
+  return profile;
 }
 
 // ── Logout ────────────────────────────────────────────────────────────

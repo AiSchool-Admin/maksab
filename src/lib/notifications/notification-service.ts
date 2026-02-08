@@ -90,7 +90,8 @@ const devNotifications: AppNotification[] = [
 export async function fetchNotifications(
   userId: string,
 ): Promise<AppNotification[]> {
-  if (IS_DEV) {
+  // Always use mock data for dev user IDs
+  if (IS_DEV || userId.startsWith("dev-")) {
     return devNotifications
       .filter((n) => n.userId === userId)
       .sort(
@@ -101,12 +102,15 @@ export async function fetchNotifications(
 
   try {
     const { supabase } = await import("@/lib/supabase/client");
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("notifications" as never)
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(30);
+
+    // Table might not exist yet — fail silently
+    if (error) return [];
 
     if (!data) return [];
 
@@ -131,7 +135,7 @@ export async function fetchNotifications(
  * Get count of unread notifications.
  */
 export async function getUnreadCount(userId: string): Promise<number> {
-  if (IS_DEV) {
+  if (IS_DEV || userId.startsWith("dev-")) {
     return devNotifications.filter((n) => n.userId === userId && !n.isRead)
       .length;
   }
@@ -174,7 +178,7 @@ export async function markAsRead(notificationId: string): Promise<void> {
  * Mark all notifications as read for a user.
  */
 export async function markAllAsRead(userId: string): Promise<void> {
-  if (IS_DEV) {
+  if (IS_DEV || userId.startsWith("dev-")) {
     devNotifications.forEach((n) => {
       if (n.userId === userId) n.isRead = true;
     });
