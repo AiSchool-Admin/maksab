@@ -145,6 +145,7 @@ export default function HomePage() {
         title="مزادات تناسبك"
         icon="🔨"
         ads={matchingAuctions}
+        href="/auctions"
         onToggleFavorite={handleToggleFavorite}
       />
 

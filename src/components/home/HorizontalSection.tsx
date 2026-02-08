@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import AdCard from "@/components/ad/AdCard";
 import type { MockAd } from "@/lib/mock-data";
@@ -10,6 +11,7 @@ interface HorizontalSectionProps {
   subtitle?: string;
   icon?: string;
   ads: MockAd[];
+  href?: string;
   onToggleFavorite?: (id: string) => void;
 }
 
@@ -18,6 +20,7 @@ export default function HorizontalSection({
   subtitle,
   icon,
   ads,
+  href,
   onToggleFavorite,
 }: HorizontalSectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -37,10 +40,17 @@ export default function HorizontalSection({
             <p className="text-[11px] text-gray-text mt-0.5">{subtitle}</p>
           )}
         </div>
-        <button className="flex items-center gap-0.5 text-xs text-brand-green font-semibold btn-icon-sm">
-          عرض الكل
-          <ChevronLeft size={14} />
-        </button>
+        {href ? (
+          <Link href={href} className="flex items-center gap-0.5 text-xs text-brand-green font-semibold btn-icon-sm">
+            عرض الكل
+            <ChevronLeft size={14} />
+          </Link>
+        ) : (
+          <button className="flex items-center gap-0.5 text-xs text-brand-green font-semibold btn-icon-sm">
+            عرض الكل
+            <ChevronLeft size={14} />
+          </button>
+        )}
       </div>
 
       {/* Horizontal scrollable cards */}

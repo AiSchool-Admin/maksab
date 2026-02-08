@@ -300,6 +300,14 @@ export default function CreateAdPage() {
           draft.saleType === "auction" && draft.priceData.auctionMinIncrement
             ? Number(draft.priceData.auctionMinIncrement)
             : null,
+        auction_ends_at:
+          draft.saleType === "auction"
+            ? new Date(
+                Date.now() + (draft.priceData.auctionDuration || 24) * 3600000,
+              ).toISOString()
+            : null,
+        auction_status:
+          draft.saleType === "auction" ? "active" : null,
         // Exchange
         exchange_description:
           draft.saleType === "exchange"

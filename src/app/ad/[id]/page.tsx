@@ -31,6 +31,7 @@ import {
   subscribeToAuction,
   initDevAuctionState,
   checkAuctionEnd,
+  fetchAuctionState,
 } from "@/lib/auction/auction-service";
 import {
   formatPrice,
@@ -140,11 +141,21 @@ export default function AdDetailPage({
       setAuctionState(updatedState);
     });
 
-    // Also set up a periodic check for auction end (dev mode)
-    const endCheckInterval = setInterval(() => {
+    // Periodic check: dev mode uses in-memory, production re-fetches
+    const endCheckInterval = setInterval(async () => {
+      // Dev mode: check in-memory state
       const ended = checkAuctionEnd(id);
       if (ended) {
         setAuctionState(ended);
+        return;
+      }
+      // Production: check if timer expired client-side
+      if (auctionState.endsAt) {
+        const remaining = new Date(auctionState.endsAt).getTime() - Date.now();
+        if (remaining <= 0) {
+          const fresh = await fetchAuctionState(id);
+          if (fresh) setAuctionState(fresh);
+        }
       }
     }, 1000);
 
@@ -152,7 +163,7 @@ export default function AdDetailPage({
       unsubscribe();
       clearInterval(endCheckInterval);
     };
-  }, [id, auctionState?.status]);
+  }, [id, auctionState?.status, auctionState?.endsAt]);
 
   /* ── Handlers ────────────────────────────────────────────── */
   const handleToggleFavorite = async () => {
@@ -237,8 +248,8 @@ export default function AdDetailPage({
         setAuctionState(result.updatedState);
       }
       if (!result.success && result.error) {
-        // Error is shown via the AuctionSection input hint
-        // Could also use toast here
+        const { toast } = await import("react-hot-toast");
+        toast.error(result.error);
       }
     },
     [id, requireAuth],

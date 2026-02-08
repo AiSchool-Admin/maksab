@@ -2,7 +2,7 @@
  * Auction service — handles bidding, anti-sniping, buy now,
  * and Supabase Realtime subscriptions.
  *
- * In dev mode, uses in-memory state. In production, uses Supabase.
+ * In dev mode, uses in-memory state. In production, uses API routes + Supabase Realtime.
  */
 
 import { supabase } from "@/lib/supabase/client";
@@ -119,22 +119,38 @@ function placeBidDev(
 async function placeBidProduction(
   adId: string,
   bidderId: string,
-  _bidderName: string,
+  bidderName: string,
   amount: number,
 ): Promise<PlaceBidResult> {
-  // In production: insert bid via Supabase RPC or direct insert
-  // The edge function / database trigger handles anti-sniping
-  const { error } = await supabase.from("auction_bids" as never).insert({
-    ad_id: adId,
-    bidder_id: bidderId,
-    amount,
-  } as never);
+  try {
+    const res = await fetch("/api/auctions/bid", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ad_id: adId,
+        bidder_id: bidderId,
+        bidder_name: bidderName,
+        amount,
+      }),
+    });
 
-  if (error) {
-    return { success: false, error: "حصل مشكلة في المزايدة. جرب تاني" };
+    const data = await res.json();
+
+    if (!res.ok) {
+      return {
+        success: false,
+        error: data.error || "حصل مشكلة في المزايدة. جرب تاني",
+      };
+    }
+
+    return {
+      success: true,
+      updatedState: data.auctionState as AuctionState,
+      antiSnipeExtended: data.antiSnipeExtended,
+    };
+  } catch {
+    return { success: false, error: "حصل مشكلة في الاتصال. جرب تاني" };
   }
-
-  return { success: true };
 }
 
 /* ── Buy now ────────────────────────────────────────────────────────── */
@@ -153,7 +169,7 @@ export async function buyNow(
   if (IS_DEV_MODE) {
     return buyNowDev(adId, buyerId, buyerName);
   }
-  return buyNowProduction(adId, buyerId);
+  return buyNowProduction(adId, buyerId, buyerName);
 }
 
 function buyNowDev(
@@ -187,17 +203,35 @@ function buyNowDev(
 async function buyNowProduction(
   adId: string,
   buyerId: string,
+  buyerName: string,
 ): Promise<BuyNowResult> {
-  // In production: call Supabase Edge Function to handle buy now
-  const { error } = await supabase.functions.invoke("auction-buy-now", {
-    body: { ad_id: adId, buyer_id: buyerId },
-  });
+  try {
+    const res = await fetch("/api/auctions/buy-now", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ad_id: adId,
+        buyer_id: buyerId,
+        buyer_name: buyerName,
+      }),
+    });
 
-  if (error) {
-    return { success: false, error: "حصل مشكلة. جرب تاني" };
+    const data = await res.json();
+
+    if (!res.ok) {
+      return {
+        success: false,
+        error: data.error || "حصل مشكلة. جرب تاني",
+      };
+    }
+
+    return {
+      success: true,
+      updatedState: data.auctionState as AuctionState,
+    };
+  } catch {
+    return { success: false, error: "حصل مشكلة في الاتصال. جرب تاني" };
   }
-
-  return { success: true };
 }
 
 /* ── Check and finalize ended auctions ──────────────────────────────── */
@@ -263,7 +297,7 @@ export function subscribeToAuction(
         table: "auction_bids",
         filter: `ad_id=eq.${adId}`,
       } as never,
-      (payload: Record<string, unknown>) => {
+      () => {
         // When a new bid arrives, fetch updated auction state
         fetchAuctionState(adId).then((state) => {
           if (state) onUpdate(state);
@@ -278,7 +312,7 @@ export function subscribeToAuction(
         table: "ads",
         filter: `id=eq.${adId}`,
       } as never,
-      (payload: Record<string, unknown>) => {
+      () => {
         // When ad is updated (auction_ends_at, auction_status change)
         fetchAuctionState(adId).then((state) => {
           if (state) onUpdate(state);
@@ -293,7 +327,7 @@ export function subscribeToAuction(
 }
 
 /** Fetch current auction state from Supabase (production only) */
-async function fetchAuctionState(adId: string): Promise<AuctionState | null> {
+export async function fetchAuctionState(adId: string): Promise<AuctionState | null> {
   const { data: ad } = await supabase
     .from("ads" as never)
     .select("*")
@@ -317,15 +351,22 @@ async function fetchAuctionState(adId: string): Promise<AuctionState | null> {
       adId: b.ad_id as string,
       bidderId: b.bidder_id as string,
       bidderName:
-        ((b.bidder as Record<string, unknown>)?.display_name as string) || "مستخدم",
+        ((b.bidder as Record<string, unknown>)?.display_name as string) || "مزايد",
       amount: Number(b.amount),
       createdAt: b.created_at as string,
     }),
   );
 
+  // Determine real-time status: check if auction ended
+  let status = adData.auction_status as AuctionStatus;
+  const endsAt = adData.auction_ends_at as string;
+  if (status === "active" && endsAt && new Date(endsAt).getTime() <= Date.now()) {
+    status = bidsList.length > 0 ? "ended_winner" : "ended_no_bids";
+  }
+
   return {
     adId,
-    status: adData.auction_status as AuctionStatus,
+    status,
     startPrice: Number(adData.auction_start_price),
     buyNowPrice: adData.auction_buy_now_price
       ? Number(adData.auction_buy_now_price)
@@ -335,8 +376,8 @@ async function fetchAuctionState(adId: string): Promise<AuctionState | null> {
     highestBidderId: bidsList.length > 0 ? bidsList[0].bidderId : null,
     bidsCount: bidsList.length,
     minIncrement: Number(adData.auction_min_increment) || 50,
-    endsAt: adData.auction_ends_at as string,
-    originalEndsAt: adData.auction_ends_at as string,
+    endsAt,
+    originalEndsAt: endsAt,
     bids: bidsList,
     winnerId: (adData.auction_winner_id as string) || null,
     winnerName: null,

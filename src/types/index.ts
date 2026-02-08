@@ -4,7 +4,7 @@ export type SaleType = "cash" | "auction" | "exchange";
 
 export type AdStatus = "active" | "sold" | "exchanged" | "expired" | "deleted";
 
-export type AuctionStatus = "active" | "ended" | "bought_now" | "cancelled";
+export type AuctionStatus = "active" | "ended_winner" | "ended_no_bids" | "bought_now" | "cancelled";
 
 export interface CategoryConfig {
   id: string;
