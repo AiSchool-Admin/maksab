@@ -138,6 +138,10 @@ function LoginPageContent() {
       setIsSubmitting(false);
       if (loginError || !loggedInUser) {
         setError(loginError || "حصلت مشكلة. جرب تاني");
+        // Auto-suggest signup if account doesn't exist
+        if (loginError && (loginError.includes("مش موجود") || loginError.includes("أنشئ حساب"))) {
+          setIsSignup(true);
+        }
         return;
       }
       handleSuccess(loggedInUser);

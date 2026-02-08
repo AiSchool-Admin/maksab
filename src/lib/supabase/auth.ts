@@ -184,12 +184,15 @@ export async function adminLogin(
   if (error) {
     console.error("[adminLogin] Supabase error:", error.message, error.status);
     if (error.message.includes("Invalid login")) {
-      return { user: null, error: "الإيميل أو كلمة السر غلط" };
+      return { user: null, error: "الإيميل أو كلمة السر غلط. لو مش عندك حساب، اعمل 'أنشئ حساب جديد'" };
     }
     if (error.message.includes("Email not confirmed")) {
       return { user: null, error: "الإيميل لسه مش متأكد. جرب تأكيده الأول" };
     }
-    return { user: null, error: `حصلت مشكلة في تسجيل الدخول: ${error.message}` };
+    if (error.message.includes("Database error") || error.message.includes("schema")) {
+      return { user: null, error: "الحساب ده مش موجود. اعمل 'أنشئ حساب جديد' الأول" };
+    }
+    return { user: null, error: "حصلت مشكلة في تسجيل الدخول. جرب 'أنشئ حساب جديد' لو مش عندك حساب" };
   }
 
   if (!data.user) {

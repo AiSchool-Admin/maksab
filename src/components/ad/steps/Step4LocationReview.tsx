@@ -4,7 +4,7 @@ import { useState } from "react";
 import { MapPin, Pencil } from "lucide-react";
 import Select from "@/components/ui/Select";
 import Input from "@/components/ui/Input";
-import { governorateOptions } from "@/lib/data/governorates";
+import { governorateOptions, getCityOptions } from "@/lib/data/governorates";
 import type { CompressedImage } from "@/lib/utils/image-compress";
 
 interface Step4Props {
@@ -45,6 +45,7 @@ export default function Step4LocationReview({
   errors,
 }: Step4Props) {
   const [showEdit, setShowEdit] = useState(false);
+  const cityOptions = getCityOptions(governorate);
 
   const saleTypeBadge =
     saleType === "cash"
@@ -86,12 +87,14 @@ export default function Step4LocationReview({
             error={errors.governorate}
             required
           />
-          <Input
+          <Select
             label="المدينة / المنطقة"
             name="city"
             value={city}
             onChange={(e) => onCityChange(e.target.value)}
-            placeholder="مثلاً: مدينة نصر"
+            options={cityOptions}
+            placeholder={governorate ? "اختار المدينة" : "اختار المحافظة الأول"}
+            disabled={!governorate}
           />
         </div>
       </div>

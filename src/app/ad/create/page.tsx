@@ -318,16 +318,23 @@ export default function CreateAdPage() {
         .from("users")
         .select("id")
         .eq("id", authedUser.id)
-        .single();
+        .maybeSingle();
 
       if (!existingProfile) {
         // Create user profile if it doesn't exist
-        await supabase
+        const { error: profileError } = await supabase
           .from("users")
-          .insert({
+          .upsert({
             id: authedUser.id,
-            phone: authedUser.phone || authedUser.id.slice(0, 11),
-          } as never);
+            phone: authedUser.phone || "",
+          } as never, { onConflict: "id" } as never);
+
+        if (profileError) {
+          console.error("Profile creation error:", profileError);
+          setErrors({ publish: "مش قادرين ننشئ بروفايلك. جرب تسجل خروج وتدخل تاني" });
+          setIsPublishing(false);
+          return;
+        }
       }
 
       // Upload images (skip silently if bucket doesn't exist)
