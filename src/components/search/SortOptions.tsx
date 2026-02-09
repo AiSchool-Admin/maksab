@@ -6,6 +6,7 @@ interface SortOptionsProps {
 }
 
 const sortOptions = [
+  { value: "relevance", label: "الأنسب" },
   { value: "newest", label: "الأحدث" },
   { value: "price_asc", label: "الأقل سعراً" },
   { value: "price_desc", label: "الأعلى سعراً" },

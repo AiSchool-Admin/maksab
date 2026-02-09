@@ -23,6 +23,11 @@ import {
   getSimilarSearchAds,
   type SearchFilters,
 } from "@/lib/search/mock-search";
+import {
+  advancedSearch,
+  searchByImage,
+  type ImageSearchResult,
+} from "@/lib/search/search-service";
 import { getEnhancedSimilarAds } from "@/lib/recommendations/recommendations-service";
 import {
   getCategoryById,
@@ -59,7 +64,7 @@ function SearchPageInner() {
   const [categoryFilters, setCategoryFilters] = useState<
     Record<string, string>
   >({});
-  const [sortBy, setSortBy] = useState("newest");
+  const [sortBy, setSortBy] = useState("relevance");
   const [results, setResults] = useState<MockAd[]>([]);
   const [similarAds, setSimilarAds] = useState<MockAd[]>([]);
   const [total, setTotal] = useState(0);
@@ -77,6 +82,9 @@ function SearchPageInner() {
   const [emptySuggestions, setEmptySuggestions] = useState<EmptySuggestion[]>([]);
   const [wishRefreshTrigger, setWishRefreshTrigger] = useState(0);
   const [showInterpretation, setShowInterpretation] = useState(false);
+  const [searchMethod, setSearchMethod] = useState<string>("none");
+  const [imageSearchResults, setImageSearchResults] = useState<MockAd[]>([]);
+  const [isImageSearching, setIsImageSearching] = useState(false);
 
   /* ── Build SearchFilters from state ────────────────────────────────── */
   const buildFilters = useCallback((): SearchFilters => {
@@ -93,12 +101,13 @@ function SearchPageInner() {
     };
   }, [query, filters, sortBy, categoryFilters]);
 
-  /* ── Execute search ────────────────────────────────────────────────── */
+  /* ── Execute search (uses advanced full-text + fuzzy API) ──────────── */
   const executeSearch = useCallback(
     async (resetPage = true) => {
       const searchFilters = buildFilters();
       setIsLoading(true);
       setHasSearched(true);
+      setImageSearchResults([]);
 
       if (resetPage) {
         setPage(0);
@@ -120,10 +129,27 @@ function SearchPageInner() {
         });
       }
 
-      const result = await searchAds(searchFilters, 0);
+      // Use advanced search API (full-text + fuzzy + relevance scoring)
+      const result = await advancedSearch(
+        {
+          query: searchFilters.query,
+          category: searchFilters.category,
+          subcategory: searchFilters.subcategory,
+          saleType: searchFilters.saleType,
+          priceMin: searchFilters.priceMin,
+          priceMax: searchFilters.priceMax,
+          governorate: searchFilters.governorate,
+          condition: searchFilters.condition,
+          sortBy: (searchFilters.sortBy || "relevance") as "relevance" | "newest" | "price_asc" | "price_desc",
+          categoryFilters: searchFilters.categoryFilters,
+        },
+        0,
+      );
+
       setResults(result.ads);
       setTotal(result.total);
       setHasMore(result.hasMore);
+      setSearchMethod(result.searchMethod);
       setPage(1);
       setIsLoading(false);
 
@@ -158,13 +184,63 @@ function SearchPageInner() {
     fetchingRef.current = true;
     setIsLoadingMore(true);
 
-    const result = await searchAds(buildFilters(), page);
+    const result = await advancedSearch(
+      {
+        query: buildFilters().query,
+        category: buildFilters().category,
+        subcategory: buildFilters().subcategory,
+        saleType: buildFilters().saleType,
+        priceMin: buildFilters().priceMin,
+        priceMax: buildFilters().priceMax,
+        governorate: buildFilters().governorate,
+        condition: buildFilters().condition,
+        sortBy: (buildFilters().sortBy || "relevance") as "relevance" | "newest" | "price_asc" | "price_desc",
+        categoryFilters: buildFilters().categoryFilters,
+      },
+      page,
+    );
     setResults((prev) => [...prev, ...result.ads]);
     setHasMore(result.hasMore);
     setPage((p) => p + 1);
     setIsLoadingMore(false);
     fetchingRef.current = false;
   }, [buildFilters, hasMore, page]);
+
+  /* ── Image search handler ────────────────────────────────────────── */
+  const handleImageSearch = useCallback(
+    async (tags: string[], category?: string) => {
+      setIsImageSearching(true);
+      setHasSearched(true);
+      setResults([]);
+      setSimilarAds([]);
+
+      const { results: imgResults, detectedCategory } = await searchByImage(tags, category);
+
+      // Convert to MockAd format
+      const ads: MockAd[] = imgResults.map((r: ImageSearchResult) => ({
+        id: r.id,
+        title: r.title,
+        price: r.price,
+        saleType: r.saleType as MockAd["saleType"],
+        image: r.image,
+        governorate: r.governorate,
+        city: r.city,
+        createdAt: r.createdAt,
+        isNegotiable: false,
+      }));
+
+      setImageSearchResults(ads);
+      setTotal(ads.length);
+      setSearchMethod("image");
+      setIsImageSearching(false);
+
+      // Update category filter if detected
+      if (detectedCategory) {
+        setFilters((prev) => ({ ...prev, category: detectedCategory }));
+      }
+    },
+    [],
+  );
 
   /* ── IntersectionObserver for sentinel ─────────────────────────────── */
   useEffect(() => {
@@ -365,6 +441,7 @@ function SearchPageInner() {
               initialQuery={query}
               onSearch={handleAISearch}
               onSaveWish={handleSaveWish}
+              onImageSearch={handleImageSearch}
               autoFocus={!initialQuery && !initialCategory}
             />
           </div>
@@ -433,32 +510,71 @@ function SearchPageInner() {
           </div>
         )}
 
-        {/* Results header: count + sort */}
-        {hasSearched && !isLoading && (
+        {/* Results header: count + sort + search method */}
+        {hasSearched && !isLoading && !isImageSearching && (
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-text">
-              {total > 0 ? (
-                <>
-                  {query && (
-                    <span className="font-bold text-dark">
-                      &quot;{query}&quot;{" "}
-                    </span>
-                  )}
-                  {categoryConfig && !query && (
-                    <span className="font-bold text-dark">
-                      {categoryConfig.icon} {categoryConfig.name}{" "}
-                    </span>
-                  )}
-                  — {total} نتيجة
-                </>
-              ) : null}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-text">
+                {total > 0 ? (
+                  <>
+                    {query && (
+                      <span className="font-bold text-dark">
+                        &quot;{query}&quot;{" "}
+                      </span>
+                    )}
+                    {categoryConfig && !query && (
+                      <span className="font-bold text-dark">
+                        {categoryConfig.icon} {categoryConfig.name}{" "}
+                      </span>
+                    )}
+                    — {total} نتيجة
+                  </>
+                ) : null}
+              </p>
+              {searchMethod && searchMethod !== "none" && searchMethod !== "fallback" && total > 0 && (
+                <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-medium ${
+                  searchMethod === "fulltext"
+                    ? "bg-green-100 text-green-700"
+                    : searchMethod === "fuzzy"
+                    ? "bg-blue-100 text-blue-700"
+                    : searchMethod === "image"
+                    ? "bg-purple-100 text-purple-700"
+                    : "bg-gray-100 text-gray-500"
+                }`}>
+                  {searchMethod === "fulltext" ? "بحث نصي كامل" :
+                   searchMethod === "fuzzy" ? "بحث ذكي (تشابه)" :
+                   searchMethod === "image" ? "بحث بصري" :
+                   searchMethod === "partial" ? "تطابق جزئي" : ""}
+                </span>
+              )}
+            </div>
             {total > 1 && <SortOptions value={sortBy} onChange={setSortBy} />}
           </div>
         )}
 
-        {/* Loading state */}
-        {isLoading && <AdGridSkeleton count={6} />}
+        {/* Loading states */}
+        {(isLoading || isImageSearching) && <AdGridSkeleton count={6} />}
+
+        {/* Image search results */}
+        {!isImageSearching && imageSearchResults.length > 0 && (
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-bold text-dark">نتائج البحث البصري</span>
+              <span className="text-[8px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">
+                {imageSearchResults.length} نتيجة
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {imageSearchResults.map((ad) => (
+                <AdCard
+                  key={ad.id}
+                  {...ad}
+                  onToggleFavorite={handleToggleFavorite}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Results grid */}
         {!isLoading && results.length > 0 && (

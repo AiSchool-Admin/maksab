@@ -1,11 +1,19 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, X, Clock, TrendingUp, Sparkles, Brain, ArrowLeft, Bell } from "lucide-react";
+import {
+  Search, X, Clock, TrendingUp, Sparkles, Brain,
+  ArrowLeft, Bell, Camera, ImagePlus, Tag, Loader2,
+} from "lucide-react";
 import { getRecentSearches, removeRecentSearch, clearRecentSearches } from "@/lib/search/recent-searches";
-import { getAutoSuggestions } from "@/lib/search/smart-parser";
 import { aiParseQuery } from "@/lib/search/ai-query-engine";
-import { popularSearches } from "@/lib/search/mock-search";
+import {
+  getAutocomplete,
+  getTrendingSearches,
+  type AutocompleteSuggestion,
+  type TrendingSearch,
+  IMAGE_TAG_CATEGORIES,
+} from "@/lib/search/search-service";
 import { getWishes } from "@/lib/search/wish-store";
 import type { AIParsedQuery } from "@/lib/search/ai-search-types";
 
@@ -13,6 +21,7 @@ interface AISearchBarProps {
   initialQuery?: string;
   onSearch: (query: string, parsed: AIParsedQuery) => void;
   onSaveWish?: (query: string, parsed: AIParsedQuery) => void;
+  onImageSearch?: (tags: string[], category?: string) => void;
   autoFocus?: boolean;
 }
 
@@ -20,45 +29,55 @@ export default function AISearchBar({
   initialQuery = "",
   onSearch,
   onSaveWish,
+  onImageSearch,
   autoFocus = false,
 }: AISearchBarProps) {
   const [query, setQuery] = useState(initialQuery);
   const [isFocused, setIsFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [serverSuggestions, setServerSuggestions] = useState<AutocompleteSuggestion[]>([]);
   const [aiPreview, setAiPreview] = useState<AIParsedQuery | null>(null);
   const [showAiPreview, setShowAiPreview] = useState(false);
-  const [wishCount, setWishCount] = useState(0);
+  const [trendingSearches, setTrendingSearches] = useState<TrendingSearch[]>([]);
+  const [trendingLoaded, setTrendingLoaded] = useState(false);
+  const [showImageSearch, setShowImageSearch] = useState(false);
+  const [selectedImageTags, setSelectedImageTags] = useState<string[]>([]);
+  const [selectedImageCategory, setSelectedImageCategory] = useState<string | null>(null);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Load wishes count
   useEffect(() => {
-    const wishes = getWishes();
-    setWishCount(wishes.filter((w) => w.isActive).length);
+    getWishes();
   }, []);
 
-  // Load recent searches on focus
+  // Load recent searches + trending on focus
   useEffect(() => {
     if (isFocused) {
       setRecentSearches(getRecentSearches());
+      if (!trendingLoaded) {
+        getTrendingSearches(10).then((trending) => {
+          setTrendingSearches(trending);
+          setTrendingLoaded(true);
+        });
+      }
     }
-  }, [isFocused]);
+  }, [isFocused, trendingLoaded]);
 
-  // AI parsing preview (debounced 300ms)
+  // Server-side autocomplete + AI parsing (debounced 250ms)
   useEffect(() => {
-    if (!query.trim() || query.trim().length < 3) {
+    if (!query.trim() || query.trim().length < 2) {
       setAiPreview(null);
       setShowAiPreview(false);
-      setSuggestions([]);
+      setServerSuggestions([]);
       return;
     }
 
-    const timer = setTimeout(() => {
-      // Auto-suggestions
-      setSuggestions(getAutoSuggestions(query));
+    setIsLoadingSuggestions(true);
 
-      // AI parse preview
+    const timer = setTimeout(async () => {
+      // AI parse preview (client-side, instant)
       const parsed = aiParseQuery(query);
       if (parsed.confidence > 0.4) {
         setAiPreview(parsed);
@@ -66,9 +85,17 @@ export default function AISearchBar({
       } else {
         setShowAiPreview(false);
       }
-    }, 300);
 
-    return () => clearTimeout(timer);
+      // Server-side autocomplete (async)
+      const suggestions = await getAutocomplete(query.trim());
+      setServerSuggestions(suggestions);
+      setIsLoadingSuggestions(false);
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      setIsLoadingSuggestions(false);
+    };
   }, [query]);
 
   // Close on outside click
@@ -76,6 +103,7 @@ export default function AISearchBar({
     function handleClick(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsFocused(false);
+        setShowImageSearch(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -87,6 +115,7 @@ export default function AISearchBar({
       e.preventDefault();
       if (query.trim()) {
         setIsFocused(false);
+        setShowImageSearch(false);
         inputRef.current?.blur();
         const parsed = aiParseQuery(query.trim());
         onSearch(query.trim(), parsed);
@@ -99,6 +128,7 @@ export default function AISearchBar({
     (text: string) => {
       setQuery(text);
       setIsFocused(false);
+      setShowImageSearch(false);
       const parsed = aiParseQuery(text);
       onSearch(text, parsed);
     },
@@ -109,6 +139,7 @@ export default function AISearchBar({
     setQuery("");
     setAiPreview(null);
     setShowAiPreview(false);
+    setServerSuggestions([]);
     inputRef.current?.focus();
   };
 
@@ -122,10 +153,24 @@ export default function AISearchBar({
     setRecentSearches([]);
   };
 
-  const showDropdown =
-    isFocused && (suggestions.length > 0 || recentSearches.length > 0 || showAiPreview || !query);
+  const handleImageTagToggle = (tag: string) => {
+    setSelectedImageTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
 
-  // Example queries for inspiration
+  const handleImageSearchSubmit = () => {
+    if (selectedImageTags.length > 0 && onImageSearch) {
+      onImageSearch(selectedImageTags, selectedImageCategory || undefined);
+      setShowImageSearch(false);
+      setIsFocused(false);
+    }
+  };
+
+  const showDropdown =
+    isFocused && !showImageSearch &&
+    (serverSuggestions.length > 0 || recentSearches.length > 0 || showAiPreview || !query);
+
   const exampleQueries = [
     "هدية لمراتي تحت 5000",
     "عربية هيونداي تحت 300 ألف",
@@ -156,6 +201,9 @@ export default function AISearchBar({
             autoFocus={autoFocus}
             autoComplete="off"
           />
+          {isLoadingSuggestions && query.length >= 2 && (
+            <Loader2 size={14} className="animate-spin text-brand-green flex-shrink-0" />
+          )}
           {query && (
             <button
               type="button"
@@ -166,10 +214,119 @@ export default function AISearchBar({
               <X size={16} />
             </button>
           )}
+          {/* Image search button */}
+          <button
+            type="button"
+            onClick={() => {
+              setShowImageSearch(!showImageSearch);
+              setIsFocused(false);
+            }}
+            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+              showImageSearch
+                ? "bg-brand-green text-white"
+                : "text-gray-text hover:text-brand-green hover:bg-brand-green-light"
+            }`}
+            aria-label="بحث بالصورة"
+          >
+            <Camera size={16} />
+          </button>
         </div>
       </form>
 
-      {/* Dropdown */}
+      {/* ── Image Search Panel ── */}
+      {showImageSearch && (
+        <div className="absolute top-full inset-x-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-[500px] overflow-y-auto">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-full bg-brand-green flex items-center justify-center">
+                <ImagePlus size={16} className="text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-dark">بحث بالوصف البصري</h3>
+                <p className="text-[10px] text-gray-text">اختار القسم وكلمات الوصف</p>
+              </div>
+            </div>
+
+            {/* Category selector */}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {Object.entries(IMAGE_TAG_CATEGORIES).map(([catId, cat]) => (
+                <button
+                  key={catId}
+                  type="button"
+                  onClick={() => {
+                    setSelectedImageCategory(
+                      selectedImageCategory === catId ? null : catId
+                    );
+                    setSelectedImageTags([]);
+                  }}
+                  className={`text-[10px] px-2.5 py-1.5 rounded-full border transition-colors ${
+                    selectedImageCategory === catId
+                      ? "bg-brand-green text-white border-brand-green"
+                      : "bg-white text-gray-text border-gray-200 hover:border-brand-green"
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tags for selected category */}
+            {selectedImageCategory && IMAGE_TAG_CATEGORIES[selectedImageCategory] && (
+              <div className="mb-3">
+                <div className="flex items-center gap-1 mb-2">
+                  <Tag size={12} className="text-brand-green" />
+                  <span className="text-[10px] font-bold text-gray-text">
+                    اختار كلمات الوصف (اختار كل المناسب)
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {IMAGE_TAG_CATEGORIES[selectedImageCategory].tags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => handleImageTagToggle(tag)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                        selectedImageTags.includes(tag)
+                          ? "bg-brand-green text-white border-brand-green scale-105"
+                          : "bg-white text-dark border-gray-200 hover:border-brand-green"
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Selected tags summary */}
+            {selectedImageTags.length > 0 && (
+              <div className="flex items-center gap-2 mb-3 p-2 bg-brand-green-light rounded-lg">
+                <span className="text-[10px] text-brand-green-dark font-medium">
+                  بتدور على: {selectedImageTags.join(" + ")}
+                </span>
+              </div>
+            )}
+
+            {/* Search button */}
+            <button
+              type="button"
+              onClick={handleImageSearchSubmit}
+              disabled={selectedImageTags.length === 0}
+              className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${
+                selectedImageTags.length > 0
+                  ? "bg-brand-green text-white shadow-md hover:bg-brand-green-dark"
+                  : "bg-gray-200 text-gray-text cursor-not-allowed"
+              }`}
+            >
+              {selectedImageTags.length > 0
+                ? `🔍 دوّر (${selectedImageTags.length} وصف)`
+                : "اختار كلمات وصف الأول"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Autocomplete Dropdown ── */}
       {showDropdown && (
         <div className="absolute top-full inset-x-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-[420px] overflow-y-auto">
 
@@ -215,27 +372,32 @@ export default function AISearchBar({
             </div>
           )}
 
-          {/* ── Auto-suggestions ── */}
-          {suggestions.length > 0 && (
-            <div className="py-1">
-              {suggestions.map((s) => (
+          {/* ── Server Autocomplete Suggestions ── */}
+          {serverSuggestions.length > 0 && (
+            <div className="py-1 border-b border-gray-100">
+              {serverSuggestions.map((s, i) => (
                 <button
-                  key={s}
+                  key={`sug-${i}`}
                   type="button"
-                  onClick={() => handleSuggestionClick(s)}
+                  onClick={() => handleSuggestionClick(s.text)}
                   className="w-full flex items-center gap-3 px-4 py-2 text-sm text-dark hover:bg-gray-light transition-colors text-start"
                 >
-                  <Search size={14} className="text-gray-text flex-shrink-0" />
-                  <span>{s}</span>
-                  <ArrowLeft size={14} className="text-gray-text me-auto rotate-180" />
+                  <Search size={14} className="text-brand-green flex-shrink-0" />
+                  <span className="flex-1 line-clamp-1">{s.text}</span>
+                  {s.category && (
+                    <span className="text-[9px] text-gray-text bg-gray-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                      {getCategoryName(s.category)}
+                    </span>
+                  )}
+                  <ArrowLeft size={14} className="text-gray-text rotate-180 flex-shrink-0" />
                 </button>
               ))}
             </div>
           )}
 
-          {/* ── "دوّر لي" Save Wish CTA (when query has content) ── */}
+          {/* ── "دوّر لي" Save Wish CTA ── */}
           {query.trim().length > 2 && onSaveWish && (
-            <div className="border-t border-gray-100 p-2">
+            <div className="border-b border-gray-100 p-2">
               <button
                 type="button"
                 onClick={() => {
@@ -260,7 +422,7 @@ export default function AISearchBar({
 
           {/* ── Recent searches ── */}
           {!query && recentSearches.length > 0 && (
-            <div className="py-2 border-t border-gray-100">
+            <div className="py-2 border-b border-gray-100">
               <div className="flex items-center justify-between px-4 pb-1">
                 <span className="text-xs font-bold text-gray-text">بحث سابق</span>
                 <button
@@ -271,7 +433,7 @@ export default function AISearchBar({
                   مسح الكل
                 </button>
               </div>
-              {recentSearches.map((term) => (
+              {recentSearches.slice(0, 5).map((term) => (
                 <div
                   key={term}
                   className="flex items-center gap-3 px-4 py-2 hover:bg-gray-light transition-colors"
@@ -297,49 +459,61 @@ export default function AISearchBar({
             </div>
           )}
 
-          {/* ── Popular + Example queries ── */}
-          {!query && recentSearches.length === 0 && (
-            <>
-              <div className="py-2">
-                <div className="px-4 pb-1">
-                  <span className="text-xs font-bold text-gray-text">بحث رائج</span>
-                </div>
-                {popularSearches.map((term) => (
+          {/* ── Trending Searches (Live from DB) ── */}
+          {!query && trendingSearches.length > 0 && (
+            <div className="py-2 border-b border-gray-100">
+              <div className="px-4 pb-1 flex items-center gap-1">
+                <TrendingUp size={12} className="text-brand-green" />
+                <span className="text-xs font-bold text-gray-text">الأكثر بحثاً</span>
+                <span className="text-[8px] text-gray-text bg-gray-100 px-1.5 py-0.5 rounded-full ms-1">
+                  مباشر
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1 px-3">
+                {trendingSearches.slice(0, 8).map((item, i) => (
                   <button
-                    key={term}
+                    key={item.query}
                     type="button"
-                    onClick={() => handleSuggestionClick(term)}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-dark hover:bg-gray-light transition-colors text-start"
+                    onClick={() => handleSuggestionClick(item.query)}
+                    className="flex items-center gap-2 px-2.5 py-2 text-start rounded-lg hover:bg-gray-light transition-colors"
                   >
-                    <TrendingUp size={14} className="text-brand-green flex-shrink-0" />
-                    <span>{term}</span>
+                    <span className={`text-[10px] font-bold w-4 text-center flex-shrink-0 ${
+                      i < 3 ? "text-brand-green" : "text-gray-text"
+                    }`}>
+                      {i + 1}
+                    </span>
+                    <span className="text-xs text-dark line-clamp-1 flex-1">
+                      {item.query}
+                    </span>
                   </button>
                 ))}
               </div>
+            </div>
+          )}
 
-              {/* AI Example queries */}
-              <div className="py-2 border-t border-gray-100">
-                <div className="px-4 pb-1 flex items-center gap-1">
-                  <Brain size={12} className="text-brand-green" />
-                  <span className="text-xs font-bold text-gray-text">جرّب بحث ذكي</span>
-                </div>
-                <div className="px-4 flex flex-wrap gap-1.5 pb-2">
-                  {exampleQueries.map((eq) => (
-                    <button
-                      key={eq}
-                      type="button"
-                      onClick={() => {
-                        setQuery(eq);
-                        inputRef.current?.focus();
-                      }}
-                      className="text-[10px] bg-brand-green-light text-brand-green-dark px-2.5 py-1.5 rounded-full hover:bg-green-200 transition-colors"
-                    >
-                      {eq}
-                    </button>
-                  ))}
-                </div>
+          {/* ── AI Example queries ── */}
+          {!query && (
+            <div className="py-2">
+              <div className="px-4 pb-1 flex items-center gap-1">
+                <Brain size={12} className="text-brand-green" />
+                <span className="text-xs font-bold text-gray-text">جرّب بحث ذكي</span>
               </div>
-            </>
+              <div className="px-4 flex flex-wrap gap-1.5 pb-2">
+                {exampleQueries.map((eq) => (
+                  <button
+                    key={eq}
+                    type="button"
+                    onClick={() => {
+                      setQuery(eq);
+                      inputRef.current?.focus();
+                    }}
+                    className="text-[10px] bg-brand-green-light text-brand-green-dark px-2.5 py-1.5 rounded-full hover:bg-green-200 transition-colors"
+                  >
+                    {eq}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}
