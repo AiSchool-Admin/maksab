@@ -7,7 +7,7 @@ import { Home, Search, MessageCircle, User, Plus } from "lucide-react";
 const tabs = [
   { href: "/", icon: Home, label: "الرئيسية" },
   { href: "/search", icon: Search, label: "البحث" },
-  { href: "/ad/create", icon: Plus, label: "أضف إعلان", isAdd: true },
+  { href: "/ad/create", icon: Plus, label: "أضف إعلانك", isAdd: true },
   { href: "/chat", icon: MessageCircle, label: "الرسائل", hasBadge: true },
   { href: "/profile", icon: User, label: "حسابي" },
 ];
@@ -29,16 +29,17 @@ export default function BottomNav({ unreadMessages = 0 }: BottomNavProps) {
               : pathname.startsWith(tab.href);
           const Icon = tab.icon;
 
-          // Prominent green "add" button — elevated
+          // Prominent "أضف إعلانك" button — elevated pill
           if (tab.isAdd) {
             return (
               <Link
                 key={tab.href}
                 href={tab.href}
-                className="relative -top-5 flex items-center justify-center w-14 h-14 bg-brand-green text-white rounded-full shadow-lg hover:bg-brand-green-dark active:scale-95 transition-all"
+                className="relative -top-4 flex items-center gap-1.5 bg-brand-green text-white px-5 py-2.5 rounded-full shadow-lg shadow-brand-green/30 hover:bg-brand-green-dark active:scale-95 transition-all"
                 aria-label={tab.label}
               >
-                <Icon size={28} strokeWidth={2.5} />
+                <Icon size={18} strokeWidth={2.5} />
+                <span className="text-sm font-bold whitespace-nowrap">أضف إعلانك</span>
               </Link>
             );
           }

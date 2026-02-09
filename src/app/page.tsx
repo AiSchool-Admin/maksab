@@ -104,24 +104,31 @@ export default function HomePage() {
       <Header title="مكسب" showNotifications />
 
       {/* ─── 1. Search Bar ─────────────────────────────────────── */}
-      <Link href="/search" className="block px-4 pt-3 pb-2">
-        <div className="flex items-center gap-2 bg-gray-light rounded-xl px-4 py-3">
-          <Search size={18} className="text-gray-text flex-shrink-0" />
-          <span className="text-gray-text text-sm">ابحث في مكسب...</span>
-        </div>
-      </Link>
+      <div className="px-4 pt-3 pb-3">
+        <Link href="/search" className="block">
+          <div className="flex items-center gap-3 bg-white border-2 border-brand-green/20 rounded-2xl px-4 py-3.5 shadow-sm shadow-brand-green/5 hover:border-brand-green/40 hover:shadow-md transition-all">
+            <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+              <Search size={18} className="text-brand-green" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm text-gray-text">ابحث عن أي حاجة في مكسب...</span>
+            </div>
+            <span className="text-[10px] text-brand-green font-bold bg-brand-green-light px-2 py-1 rounded-lg flex-shrink-0">بحث</span>
+          </div>
+        </Link>
 
-      {/* Quick search chips */}
-      <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide">
-        {["سيارات", "موبايلات", "عقارات", "ذهب", "أثاث"].map((term) => (
-          <Link
-            key={term}
-            href={`/search?q=${encodeURIComponent(term)}`}
-            className="flex-shrink-0 px-3 py-1.5 bg-brand-green-light text-brand-green-dark text-xs font-semibold rounded-full hover:bg-brand-green/10 transition-colors"
-          >
-            {term}
-          </Link>
-        ))}
+        {/* Quick search chips */}
+        <div className="flex gap-2 overflow-x-auto mt-2.5 scrollbar-hide">
+          {["سيارات", "موبايلات", "عقارات", "ذهب", "أثاث", "خردة"].map((term) => (
+            <Link
+              key={term}
+              href={`/search?q=${encodeURIComponent(term)}`}
+              className="flex-shrink-0 px-3.5 py-1.5 bg-gray-light text-dark text-xs font-semibold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
+            >
+              {term}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* ─── 2. Categories Grid ────────────────────────────────── */}
