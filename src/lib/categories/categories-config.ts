@@ -91,7 +91,7 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "rooms", label: "عدد الغرف", type: "select", isRequired: true, order: 3, defaultValue: "3", options: [
         { value: "1", label: "1" }, { value: "2", label: "2" }, { value: "3", label: "3" },
         { value: "4", label: "4" }, { value: "5+", label: "5+" },
-      ], hiddenForSubcategories: ["land"] },
+      ], hiddenForSubcategories: ["land", "commercial", "offices"] },
       { id: "floor", label: "الطابق", type: "select", isRequired: true, order: 4, defaultValue: "3", options: [
         { value: "basement", label: "بدروم" }, { value: "ground", label: "أرضي" },
         ...Array.from({ length: 20 }, (_, i) => ({ value: `${i + 1}`, label: `${i + 1}` })),
@@ -108,7 +108,7 @@ export const categoriesConfig: CategoryConfig[] = [
       ], hiddenForSubcategories: ["land"] },
       { id: "elevator", label: "أسانسير", type: "toggle", isRequired: false, order: 7, hiddenForSubcategories: ["land"] },
       { id: "garage", label: "جراج", type: "toggle", isRequired: false, order: 8, hiddenForSubcategories: ["land"] },
-      { id: "garden", label: "حديقة", type: "toggle", isRequired: false, order: 9, hiddenForSubcategories: ["land"] },
+      { id: "garden", label: "حديقة", type: "toggle", isRequired: false, order: 9, hiddenForSubcategories: ["land", "commercial", "offices"] },
       { id: "facing", label: "الواجهة", type: "select", isRequired: false, order: 10, options: [
         { value: "north", label: "بحري" }, { value: "south", label: "قبلي" },
         { value: "east", label: "شرقي" }, { value: "west", label: "غربي" },
@@ -123,6 +123,31 @@ export const categoriesConfig: CategoryConfig[] = [
         requiredFields: ["property_type", "area"],
         titleTemplate: "أرض ${area}",
         descriptionTemplate: "أرض مساحة ${area}",
+      },
+      "commercial": {
+        requiredFields: ["property_type", "area", "floor"],
+        extraFields: [
+          { id: "frontage", label: "واجهة المحل", type: "number", unit: "متر", isRequired: false, order: 3.1, placeholder: "عرض الواجهة" },
+          { id: "has_mezzanine", label: "يوجد ميزانين", type: "toggle", isRequired: false, order: 9.1 },
+          { id: "has_bathroom", label: "يوجد حمام", type: "toggle", isRequired: false, order: 9.2 },
+        ],
+        fieldOverrides: {
+          "furnished": { label: "مجهز" },
+          "finishing": {
+            options: [
+              { value: "super_lux", label: "سوبر لوكس" }, { value: "lux", label: "لوكس" },
+              { value: "semi", label: "نص تشطيب" }, { value: "plastered", label: "على المحارة" },
+              { value: "bricks", label: "على الطوب" },
+            ],
+          },
+        },
+        titleTemplate: "محل ${area} — الطابق ${floor}",
+        descriptionTemplate: "محل تجاري مساحة ${area}، الطابق ${floor}",
+      },
+      "offices": {
+        requiredFields: ["property_type", "area", "floor"],
+        titleTemplate: "مكتب ${area} — الطابق ${floor}",
+        descriptionTemplate: "مكتب مساحة ${area}، الطابق ${floor}",
       },
     },
   },
@@ -223,7 +248,7 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "39", label: "39" }, { value: "40", label: "40" }, { value: "41", label: "41" },
         { value: "42", label: "42" }, { value: "43", label: "43" }, { value: "44", label: "44" },
         { value: "45", label: "45" }, { value: "free_size", label: "مقاس حر" },
-      ]},
+      ], hiddenForSubcategories: ["bags"] },
       { id: "brand", label: "الماركة", type: "select", isRequired: true, order: 4, options: [
         { value: "zara", label: "Zara" }, { value: "h_and_m", label: "H&M" },
         { value: "adidas", label: "Adidas" }, { value: "nike", label: "Nike" },
@@ -246,6 +271,33 @@ export const categoriesConfig: CategoryConfig[] = [
     requiredFields: ["type", "condition", "size", "brand"],
     titleTemplate: "${type} ${brand} — مقاس ${size} — ${condition}",
     descriptionTemplate: "${type} ماركة ${brand}، مقاس ${size}، ${condition}",
+    subcategoryOverrides: {
+      "bags": {
+        requiredFields: ["type", "condition", "brand"],
+        extraFields: [
+          { id: "bag_length", label: "الطول", type: "number", unit: "سم", isRequired: false, order: 3.1, placeholder: "مثال: 30" },
+          { id: "bag_width", label: "العرض", type: "number", unit: "سم", isRequired: false, order: 3.2, placeholder: "مثال: 20" },
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "handbag", label: "شنطة يد" },
+              { value: "backpack", label: "شنطة ظهر" },
+              { value: "crossbody", label: "شنطة كروس" },
+              { value: "tote", label: "شنطة توت" },
+              { value: "clutch", label: "كلاتش" },
+              { value: "travel_bag", label: "شنطة سفر" },
+              { value: "laptop_bag", label: "شنطة لابتوب" },
+              { value: "school_bag", label: "حقيبة مدرسة" },
+              { value: "wallet", label: "محفظة" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${condition}",
+        descriptionTemplate: "${type} ماركة ${brand}، ${condition}",
+      },
+    },
   },
   {
     id: "scrap",

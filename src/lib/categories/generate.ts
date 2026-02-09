@@ -51,8 +51,14 @@ function resolveTemplate(
   template: string,
   config: CategoryConfig,
   values: Record<string, unknown>,
+  subcategoryId?: string,
 ): string {
-  const fieldsMap = new Map(config.fields.map((f) => [f.id, f]));
+  const allFields = [...config.fields];
+  if (subcategoryId) {
+    const extra = config.subcategoryOverrides?.[subcategoryId]?.extraFields;
+    if (extra) allFields.push(...extra);
+  }
+  const fieldsMap = new Map(allFields.map((f) => [f.id, f]));
 
   const resolved = template.replace(/\$\{(\w+)\}/g, (_, fieldId) => {
     const field = fieldsMap.get(fieldId);
@@ -82,7 +88,7 @@ export function generateAutoTitle(
   const template =
     (subcategoryId && config.subcategoryOverrides?.[subcategoryId]?.titleTemplate) ||
     config.titleTemplate;
-  return resolveTemplate(template, config, values);
+  return resolveTemplate(template, config, values, subcategoryId);
 }
 
 /**
@@ -98,7 +104,7 @@ export function generateAutoDescription(
   const descTemplate =
     (subcategoryId && config.subcategoryOverrides?.[subcategoryId]?.descriptionTemplate) ||
     config.descriptionTemplate;
-  const base = resolveTemplate(descTemplate, config, values);
+  const base = resolveTemplate(descTemplate, config, values, subcategoryId);
 
   // Append optional filled fields not already in the template
   const templateFieldIds = new Set<string>();
@@ -107,11 +113,18 @@ export function generateAutoDescription(
     return "";
   });
 
+  // Build full list of visible fields including extra fields from subcategory override
+  const allFields = config.fields.filter(
+    (f) => !subcategoryId || !f.hiddenForSubcategories?.includes(subcategoryId),
+  );
+  if (subcategoryId) {
+    const extra = config.subcategoryOverrides?.[subcategoryId]?.extraFields;
+    if (extra) allFields.push(...extra);
+  }
+
   const extras: string[] = [];
-  for (const field of config.fields) {
+  for (const field of allFields) {
     if (templateFieldIds.has(field.id)) continue;
-    // Skip fields hidden for the current subcategory
-    if (subcategoryId && field.hiddenForSubcategories?.includes(subcategoryId)) continue;
     const label = resolveFieldLabel(field, values[field.id]);
     if (label) {
       extras.push(label);
