@@ -26,18 +26,13 @@ import Button from "@/components/ui/Button";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useWebRTC } from "@/lib/hooks/useWebRTC";
+import { useLiveChat } from "@/lib/hooks/useLiveChat";
+import { useConnectionQuality } from "@/lib/hooks/useConnectionQuality";
 import { formatPrice, formatCountdown } from "@/lib/utils/format";
 import { calcMinNextBid } from "@/lib/auction/types";
 import toast from "react-hot-toast";
 
 type BroadcastState = "preview" | "live" | "ended";
-
-interface LiveComment {
-  id: string;
-  userName: string;
-  text: string;
-  timestamp: number;
-}
 
 interface LiveBid {
   bidderName: string;
@@ -72,8 +67,7 @@ export default function LiveBroadcastPage() {
   const [auctionEndsAt, setAuctionEndsAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Comments & bids
-  const [comments, setComments] = useState<LiveComment[]>([]);
+  // Live bids (from realtime DB subscription)
   const [liveBids, setLiveBids] = useState<LiveBid[]>([]);
   const [commentInput, setCommentInput] = useState("");
 
@@ -90,6 +84,21 @@ export default function LiveBroadcastPage() {
   // Stable anonymous user ID for viewers (persists across re-renders)
   const anonIdRef = useRef("anon-" + Math.random().toString(36).slice(2, 10));
   const stableUserId = user?.id || anonIdRef.current;
+
+  // Persistent live chat via Supabase broadcast
+  const {
+    messages: chatMessages,
+    isConnected: isChatConnected,
+    sendMessage: sendChatMessage,
+    sendBidNotification,
+  } = useLiveChat({
+    roomId: adId,
+    userId: stableUserId,
+    userName: user?.display_name || "زائر",
+  });
+
+  // Connection quality monitoring
+  const connectionStats = useConnectionQuality(null, broadcastState === "live");
 
   // ── WebRTC for real video streaming ────────────────────
   const {
@@ -190,7 +199,7 @@ export default function LiveBroadcastPage() {
   // Auto-scroll comments
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [comments, liveBids]);
+  }, [chatMessages, liveBids]);
 
   // ── Camera functions (SELLER ONLY) ───────────────────
   const startCamera = useCallback(async () => {
@@ -259,20 +268,12 @@ export default function LiveBroadcastPage() {
     setBroadcastState("ended");
   }, [stopWebRTC, stopCamera]);
 
-  // ── Comments ─────────────────────────────────────────
+  // ── Comments (via persistent live chat) ──────────────
   const sendComment = useCallback(() => {
     if (!commentInput.trim()) return;
-    setComments((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        userName: user?.display_name || "زائر",
-        text: commentInput.trim(),
-        timestamp: Date.now(),
-      },
-    ]);
-    setCommentInput("");
-  }, [commentInput, user?.display_name]);
+    const sent = sendChatMessage(commentInput.trim());
+    if (sent) setCommentInput("");
+  }, [commentInput, sendChatMessage]);
 
   // ── Viewer: Place bid ────────────────────────────────
   const handlePlaceBid = useCallback(async () => {
@@ -329,12 +330,14 @@ export default function LiveBroadcastPage() {
             { bidderName: "مزايد", amount, timestamp: Date.now() },
             ...prev,
           ]);
+          // Broadcast bid to live chat
+          sendBidNotification("مزايد", amount);
         },
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [adId]);
+  }, [adId, sendBidNotification]);
 
   // ── Error screen ─────────────────────────────────────
   if (error && !adTitle) {
@@ -455,14 +458,22 @@ export default function LiveBroadcastPage() {
             </div>
           )}
 
-          {/* Comments (when live) */}
+          {/* Persistent live chat (when live) */}
           {broadcastState === "live" && (
             <div className="absolute bottom-36 inset-x-0 z-10 px-4">
+              {/* Connection quality indicator */}
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-xs">{connectionStats.emoji}</span>
+                <span className="text-white/70 text-[10px]">{connectionStats.qualityAr}</span>
+                {isChatConnected && <span className="text-green-400 text-[10px]">الشات متصل</span>}
+              </div>
               <div className="max-h-40 overflow-y-auto space-y-1 scrollbar-hide">
-                {comments.map((c) => (
-                  <div key={c.id} className="flex gap-1.5 max-w-[80%]">
-                    <span className="text-brand-green text-xs font-bold flex-shrink-0">{c.userName}:</span>
-                    <span className="text-white text-xs">{c.text}</span>
+                {chatMessages.map((msg) => (
+                  <div key={msg.id} className={`flex gap-1.5 max-w-[80%] ${msg.type === "bid" ? "bg-brand-gold/20 rounded-lg px-2 py-0.5" : ""} ${msg.type === "system" ? "opacity-60" : ""}`}>
+                    <span className={`text-xs font-bold flex-shrink-0 ${msg.type === "bid" ? "text-brand-gold" : msg.type === "system" ? "text-gray-400" : "text-brand-green"}`}>
+                      {msg.userName}:
+                    </span>
+                    <span className="text-white text-xs">{msg.text}</span>
                   </div>
                 ))}
                 <div ref={commentsEndRef} />
@@ -709,16 +720,20 @@ export default function LiveBroadcastPage() {
           </div>
         </div>
 
-        {/* Comments section */}
+        {/* Persistent live chat section */}
         <div className="flex-1 overflow-y-auto px-4 py-2 min-h-0 max-h-32">
-          {comments.length === 0 ? (
-            <p className="text-xs text-gray-text text-center py-2">اكتب تعليق للتفاعل مع البث</p>
+          {chatMessages.length === 0 ? (
+            <p className="text-xs text-gray-text text-center py-2">
+              {isChatConnected ? "اكتب تعليق للتفاعل مع البث" : "جاري الاتصال بالشات..."}
+            </p>
           ) : (
             <div className="space-y-1.5">
-              {comments.map((c) => (
-                <div key={c.id} className="flex gap-1.5">
-                  <span className="text-brand-green text-xs font-bold flex-shrink-0">{c.userName}:</span>
-                  <span className="text-dark text-xs">{c.text}</span>
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className={`flex gap-1.5 ${msg.type === "bid" ? "bg-brand-gold-light rounded-lg px-2 py-0.5" : ""}`}>
+                  <span className={`text-xs font-bold flex-shrink-0 ${msg.type === "bid" ? "text-brand-gold" : msg.type === "system" ? "text-gray-text" : "text-brand-green"}`}>
+                    {msg.userName}:
+                  </span>
+                  <span className="text-dark text-xs">{msg.text}</span>
                 </div>
               ))}
               <div ref={commentsEndRef} />

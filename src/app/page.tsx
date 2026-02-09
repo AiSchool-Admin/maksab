@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus, Loader2 } from "lucide-react";
+import { Search, Plus, Loader2, MapPin } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
@@ -135,6 +135,13 @@ export default function HomePage() {
 
         {/* Quick search chips */}
         <div className="flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide">
+          <Link
+            href="/map"
+            className="flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 bg-brand-green-light text-brand-green text-xs font-semibold rounded-full hover:bg-brand-green hover:text-white transition-colors"
+          >
+            <MapPin size={12} />
+            خريطة
+          </Link>
           {["سيارات", "موبايلات", "عقارات", "ذهب", "أثاث", "خردة"].map((term) => (
             <Link
               key={term}

@@ -50,6 +50,7 @@ import PriceOfferButton from "@/components/offers/PriceOfferButton";
 import OffersListSection from "@/components/offers/OffersListSection";
 import AddToCompareButton from "@/components/comparison/AddToCompareButton";
 import ComparisonFab from "@/components/comparison/ComparisonFab";
+import PriceBadge from "@/components/price/PriceBadge";
 
 const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
 
@@ -396,6 +397,19 @@ export default function AdDetailPage({
           )}
           <span className="text-sm text-gray-text">{saleLabel}</span>
         </div>
+
+        {/* Price Intelligence Badge */}
+        {ad.saleType === "cash" && ad.price != null && ad.price > 0 && (
+          <PriceBadge
+            categoryId={ad.categoryId}
+            subcategoryId={ad.subcategoryId}
+            brand={(ad.categoryFields as Record<string, unknown>)?.brand as string}
+            model={(ad.categoryFields as Record<string, unknown>)?.model as string}
+            price={ad.price}
+            governorate={ad.governorate}
+            variant="card"
+          />
+        )}
 
         {/* Title */}
         <h1 className="text-lg font-bold text-dark leading-relaxed">

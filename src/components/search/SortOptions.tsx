@@ -10,6 +10,7 @@ const sortOptions = [
   { value: "newest", label: "الأحدث" },
   { value: "price_asc", label: "الأقل سعراً" },
   { value: "price_desc", label: "الأعلى سعراً" },
+  { value: "nearest", label: "📍 الأقرب" },
 ];
 
 export default function SortOptions({ value, onChange }: SortOptionsProps) {

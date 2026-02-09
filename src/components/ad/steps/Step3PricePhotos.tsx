@@ -6,6 +6,7 @@ import Input from "@/components/ui/Input";
 import ExchangeWantedForm from "./ExchangeWantedForm";
 import type { CompressedImage } from "@/lib/utils/image-compress";
 import { compressImage } from "@/lib/utils/image-compress";
+import PriceSuggestionCard from "@/components/price/PriceSuggestionCard";
 
 const MAX_IMAGES = 5;
 
@@ -39,6 +40,9 @@ interface Step3Props {
   onPriceChange: <K extends keyof PriceData>(key: K, value: PriceData[K]) => void;
   onImagesChange: (images: CompressedImage[]) => void;
   errors: Record<string, string>;
+  categoryId?: string;
+  subcategoryId?: string;
+  categoryFields?: Record<string, unknown>;
 }
 
 export default function Step3PricePhotos({
@@ -48,6 +52,9 @@ export default function Step3PricePhotos({
   onPriceChange,
   onImagesChange,
   errors,
+  categoryId,
+  subcategoryId,
+  categoryFields,
 }: Step3Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -133,6 +140,18 @@ export default function Step3PricePhotos({
                 السعر قابل للتفاوض
               </span>
             </button>
+
+            {/* Smart Price Suggestion */}
+            {categoryId && (
+              <PriceSuggestionCard
+                categoryId={categoryId}
+                subcategoryId={subcategoryId}
+                brand={(categoryFields?.brand as string) || undefined}
+                model={(categoryFields?.model as string) || undefined}
+                condition={(categoryFields?.condition as string) || undefined}
+                onPriceSelect={(price) => onPriceChange("price", String(price))}
+              />
+            )}
           </div>
         )}
 

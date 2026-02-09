@@ -8,6 +8,10 @@ import {
   Bot,
   Minimize2,
   EyeOff,
+  Search,
+  TrendingUp,
+  MapPin,
+  Sparkles,
 } from "lucide-react";
 
 interface ChatMessage {
@@ -21,7 +25,7 @@ const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
   role: "assistant",
   content:
-    "أهلاً بيك في مكسب! 💚\nأنا المساعد الذكي، ممكن أساعدك في أي استفسار عن التطبيق.\n\nجرب تسألني:\n• إزاي أضيف إعلان؟\n• إيه هو المزاد المباشر؟\n• إيه الأقسام المتاحة؟",
+    "أهلاً بيك في مكسب! 💚\nأنا المساعد الذكي — ممكن أساعدك تلاقي أي حاجة وأحللك الأسعار.\n\nجرب تسألني:\n• \"عايز آيفون 15 بأقل من 20 ألف\"\n• \"سعر تويوتا كورولا كام؟\"\n• \"فيه شقق في مدينة نصر؟\"",
   timestamp: Date.now(),
 };
 
@@ -36,78 +40,59 @@ export default function ChatbotWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Focus input when opened
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 300);
-    }
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
 
-  // Check if hidden preference is stored
   useEffect(() => {
     const hidden = localStorage.getItem("maksab_chatbot_hidden");
-    if (hidden === "true") {
-      setIsHidden(true);
-    }
+    if (hidden === "true") setIsHidden(true);
   }, []);
 
-  const sendMessage = useCallback(async () => {
-    const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
+  const sendMessage = useCallback(
+    async (text?: string) => {
+      const trimmed = (text || input).trim();
+      if (!trimmed || isLoading) return;
 
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: trimmed,
-      timestamp: Date.now(),
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
-    setIsLoading(true);
-
-    try {
-      const res = await fetch("/api/chatbot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: trimmed,
-          history: messages.slice(-10).map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
-
-      const data = await res.json();
-
-      const assistantMsg: ChatMessage = {
+      const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
-        role: "assistant",
-        content: data.response || "عذراً، حصلت مشكلة. جرب تاني.",
+        role: "user",
+        content: trimmed,
         timestamp: Date.now(),
       };
 
-      setMessages((prev) => [...prev, assistantMsg]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: "عذراً، مش قادر أوصل للسيرفر دلوقتي. جرب تاني بعد شوية.",
-          timestamp: Date.now(),
-        },
-      ]);
-    }
+      setMessages((prev) => [...prev, userMsg]);
+      if (!text) setInput("");
+      setIsLoading(true);
 
-    setIsLoading(false);
-  }, [input, isLoading, messages]);
+      try {
+        const res = await fetch("/api/chatbot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: trimmed,
+            history: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
+          }),
+        });
+        const data = await res.json();
+        setMessages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), role: "assistant", content: data.response || "عذراً، جرب تاني.", timestamp: Date.now() },
+        ]);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), role: "assistant", content: "عذراً، مش قادر أوصل للسيرفر. جرب تاني بعد شوية.", timestamp: Date.now() },
+        ]);
+      }
+      setIsLoading(false);
+    },
+    [input, isLoading, messages],
+  );
 
   const hideWidget = useCallback(() => {
     setIsHidden(true);
@@ -121,15 +106,13 @@ export default function ChatbotWidget() {
     localStorage.removeItem("maksab_chatbot_hidden");
   }, []);
 
-  // Quick suggestion chips
   const quickSuggestions = [
-    "إزاي أضيف إعلان؟",
-    "إيه هو المزاد؟",
-    "الأقسام المتاحة",
-    "رسوم مكسب",
+    { text: "عايز آيفون 15", icon: <Search size={10} /> },
+    { text: "سعر تويوتا كورولا كام؟", icon: <TrendingUp size={10} /> },
+    { text: "شقق في مدينة نصر", icon: <MapPin size={10} /> },
+    { text: "إزاي أضيف إعلان؟", icon: <Sparkles size={10} /> },
   ];
 
-  // Hidden — show a tiny restore button
   if (isHidden) {
     return (
       <button
@@ -144,7 +127,6 @@ export default function ChatbotWidget() {
 
   return (
     <>
-      {/* ── Floating action button ────────────────────── */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
@@ -152,14 +134,12 @@ export default function ChatbotWidget() {
           aria-label="المساعد الذكي"
         >
           <Bot size={26} />
-          {/* Notification dot */}
           {messages.length <= 1 && (
             <span className="absolute -top-0.5 -end-0.5 w-3.5 h-3.5 rounded-full bg-red-500 border-2 border-white" />
           )}
         </button>
       )}
 
-      {/* ── Chat panel ────────────────────────────────── */}
       {isOpen && (
         <div className="fixed bottom-16 start-3 end-3 z-50 sm:start-4 sm:end-auto sm:w-[380px] max-h-[75vh] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
           {/* Header */}
@@ -170,53 +150,28 @@ export default function ChatbotWidget() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">المساعد الذكي</h3>
-                <p className="text-[10px] text-white/70">مكسب — كل صفقة مكسب</p>
+                <p className="text-[10px] text-white/70">بحث ذكي · تحليل أسعار · مساعدة</p>
               </div>
             </div>
-
             <div className="flex items-center gap-1">
-              {/* Hide button */}
-              <button
-                onClick={() => setShowHideConfirm(true)}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-                title="إخفاء المساعد"
-              >
+              <button onClick={() => setShowHideConfirm(true)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors" title="إخفاء">
                 <EyeOff size={16} />
               </button>
-              {/* Minimize */}
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-              >
+              <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors">
                 <Minimize2 size={16} />
               </button>
-              {/* Close */}
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-              >
+              <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors">
                 <X size={16} />
               </button>
             </div>
           </div>
 
-          {/* Hide confirmation */}
           {showHideConfirm && (
             <div className="px-4 py-3 bg-yellow-50 border-b border-yellow-200 flex items-center justify-between">
               <p className="text-xs text-yellow-800">إخفاء المساعد؟</p>
               <div className="flex gap-2">
-                <button
-                  onClick={hideWidget}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-yellow-200 text-yellow-800 font-medium"
-                >
-                  إخفاء
-                </button>
-                <button
-                  onClick={() => setShowHideConfirm(false)}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600"
-                >
-                  إلغاء
-                </button>
+                <button onClick={hideWidget} className="text-xs px-2.5 py-1 rounded-lg bg-yellow-200 text-yellow-800 font-medium">إخفاء</button>
+                <button onClick={() => setShowHideConfirm(false)} className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600">إلغاء</button>
               </div>
             </div>
           )}
@@ -224,88 +179,44 @@ export default function ChatbotWidget() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0 max-h-[50vh]">
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === "user" ? "justify-start" : "justify-end"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 ${
-                    msg.role === "user"
-                      ? "bg-brand-green text-white rounded-es-sm"
-                      : "bg-gray-100 text-dark rounded-ee-sm"
-                  }`}
-                >
-                  <p className="text-sm whitespace-pre-line leading-relaxed">
-                    {msg.content}
-                  </p>
+              <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-start" : "justify-end"}`}>
+                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 ${
+                  msg.role === "user" ? "bg-brand-green text-white rounded-es-sm" : "bg-gray-100 text-dark rounded-ee-sm"
+                }`}>
+                  <p className="text-sm whitespace-pre-line leading-relaxed">{msg.content}</p>
                 </div>
               </div>
             ))}
 
-            {/* Loading indicator */}
             {isLoading && (
               <div className="flex justify-end">
                 <div className="bg-gray-100 rounded-2xl rounded-ee-sm px-4 py-3">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={12} className="text-brand-green animate-pulse" />
+                    <span className="text-[10px] text-gray-text">بدور ليك...</span>
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
                   </div>
                 </div>
               </div>
             )}
-
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick suggestions — shown when only welcome message */}
           {messages.length <= 1 && (
             <div className="px-4 pb-2 flex flex-wrap gap-1.5">
-              {quickSuggestions.map((suggestion) => (
+              {quickSuggestions.map((s) => (
                 <button
-                  key={suggestion}
-                  onClick={() => {
-                    const userMsg: ChatMessage = {
-                      id: crypto.randomUUID(),
-                      role: "user",
-                      content: suggestion,
-                      timestamp: Date.now(),
-                    };
-                    setMessages((prev) => [...prev, userMsg]);
-                    setIsLoading(true);
-                    fetch("/api/chatbot", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ message: suggestion }),
-                    })
-                      .then((res) => res.json())
-                      .then((data) => {
-                        setMessages((prev) => [
-                          ...prev,
-                          {
-                            id: crypto.randomUUID(),
-                            role: "assistant" as const,
-                            content: data.response || "عذراً، جرب تاني.",
-                            timestamp: Date.now(),
-                          },
-                        ]);
-                      })
-                      .catch(() => {
-                        setMessages((prev) => [
-                          ...prev,
-                          {
-                            id: crypto.randomUUID(),
-                            role: "assistant" as const,
-                            content: "عذراً، حصلت مشكلة. جرب تاني.",
-                            timestamp: Date.now(),
-                          },
-                        ]);
-                      })
-                      .finally(() => setIsLoading(false));
-                  }}
-                  className="px-3 py-1.5 text-[11px] font-medium rounded-full bg-brand-green-light text-brand-green hover:bg-brand-green/10 transition-colors"
+                  key={s.text}
+                  onClick={() => sendMessage(s.text)}
+                  disabled={isLoading}
+                  className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium rounded-full bg-brand-green-light text-brand-green hover:bg-brand-green/10 transition-colors disabled:opacity-50"
                 >
-                  {suggestion}
+                  {s.icon}
+                  {s.text}
                 </button>
               ))}
             </div>
@@ -319,20 +230,15 @@ export default function ChatbotWidget() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                placeholder="اكتب سؤالك هنا..."
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                placeholder="اسألني عن أي حاجة..."
                 disabled={isLoading}
                 className="flex-1 bg-gray-100 rounded-xl px-3.5 py-2.5 text-sm text-dark placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-brand-green/20 disabled:opacity-60"
               />
               <button
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={!input.trim() || isLoading}
-                className="w-10 h-10 rounded-xl bg-brand-green text-white flex items-center justify-center hover:bg-brand-green-dark active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100 flex-shrink-0"
+                className="w-10 h-10 rounded-xl bg-brand-green text-white flex items-center justify-center hover:bg-brand-green-dark active:scale-95 transition-all disabled:opacity-40 flex-shrink-0"
               >
                 <Send size={16} />
               </button>

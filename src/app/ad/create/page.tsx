@@ -576,6 +576,9 @@ export default function CreateAdPage() {
             }
             onImagesChange={setImages}
             errors={errors}
+            categoryId={draft.categoryId}
+            subcategoryId={draft.subcategoryId}
+            categoryFields={draft.categoryFields}
           />
         )}
 
