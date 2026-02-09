@@ -47,6 +47,7 @@ function LoginPageContent() {
   const [autoDetecting, setAutoDetecting] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [otpChannel, setOtpChannel] = useState<string | null>(null);
+  const [otpToken, setOtpToken] = useState<string>("");
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -137,7 +138,8 @@ function LoginPageContent() {
       return;
     }
 
-    // Store channel info and dev code
+    // Store token, channel info, and dev code
+    setOtpToken(otpResult.token || "");
     setOtpChannel(otpResult.channel || null);
     setDevCode(otpResult.dev_code || null);
 
@@ -222,7 +224,7 @@ function LoginPageContent() {
 
       setIsSubmitting(true);
 
-      const response = await verifyOTP(phone, code, displayName.trim() || undefined);
+      const response = await verifyOTP(phone, code, otpToken, displayName.trim() || undefined);
 
       setIsSubmitting(false);
 
@@ -239,7 +241,7 @@ function LoginPageContent() {
 
       handleSuccess(response.user);
     },
-    [otp, phone, displayName],
+    [otp, phone, displayName, otpToken],
   );
 
   // ── Resend OTP ────────────────────────────────────────────────────
@@ -248,14 +250,16 @@ function LoginPageContent() {
     setError(null);
     setIsSubmitting(true);
 
-    const { error: sendError } = await sendOTP(phone);
+    const resendResult = await sendOTP(phone);
 
     setIsSubmitting(false);
-    if (sendError) {
-      setError(sendError);
+    if (resendResult.error) {
+      setError(resendResult.error);
       return;
     }
 
+    setOtpToken(resendResult.token || "");
+    setDevCode(resendResult.dev_code || null);
     setResendTimer(60);
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
@@ -268,7 +272,7 @@ function LoginPageContent() {
   const handleDevLogin = async () => {
     setIsSubmitting(true);
     devLogin();
-    const { user: devUser } = await verifyOTP("01000000000", "000000");
+    const { user: devUser } = await verifyOTP("01000000000", "000000", "");
     setIsSubmitting(false);
     if (devUser) handleSuccess(devUser);
   };

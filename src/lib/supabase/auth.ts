@@ -48,6 +48,7 @@ export type UserProfile = {
 /** Response from send-otp API */
 export type SendOtpResult = {
   error: string | null;
+  token?: string; // HMAC-signed token to send back with verify
   channel?: "dev" | "whatsapp" | "sms" | "manual";
   dev_code?: string; // Only in dev mode
   whatsapp_link?: string | null;
@@ -70,6 +71,7 @@ export async function sendOTP(phone: string): Promise<SendOtpResult> {
 
     return {
       error: null,
+      token: data.token,
       channel: data.channel,
       dev_code: data.dev_code,
       whatsapp_link: data.whatsapp_link,
@@ -83,22 +85,14 @@ export async function sendOTP(phone: string): Promise<SendOtpResult> {
 export async function verifyOTP(
   phone: string,
   otp: string,
+  token: string,
   displayName?: string,
 ): Promise<{ user: UserProfile | null; error: string | null }> {
-  // Dev mode: accept 123456 without API call
-  if (IS_DEV_MODE && otp === "123456") {
-    await new Promise((r) => setTimeout(r, 300));
-    return {
-      user: displayName ? { ...DEV_USER, display_name: displayName } : DEV_USER,
-      error: null,
-    };
-  }
-
   try {
     const res = await fetch("/api/auth/verify-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, code: otp, display_name: displayName }),
+      body: JSON.stringify({ phone, code: otp, token, display_name: displayName }),
     });
 
     const data = await res.json();

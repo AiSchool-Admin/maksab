@@ -1,60 +1,33 @@
 /**
  * POST /api/auth/send-otp
  *
- * Generates a 6-digit OTP for phone verification and sends it
- * via the configured channel (WhatsApp / SMS / dev mode).
+ * Generates a 6-digit OTP for phone verification.
+ * Uses HMAC-signed tokens — completely stateless, NO database table needed.
  *
- * This is a FREE alternative to Supabase Phone Auth (which requires Twilio).
- * OTP codes are stored server-side in `phone_otps` table.
+ * Flow:
+ * 1. Generate 6-digit code
+ * 2. Create HMAC signature: HMAC(phone:code:expiry, SECRET)
+ * 3. Return signed token to client
+ * 4. Client sends token + code to /api/auth/verify-otp
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createHmac } from "crypto";
 
-const IS_DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
+const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
-const RATE_LIMIT_PER_HOUR = 5;
 
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Missing Supabase env vars");
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+function getSecret(): string {
+  // Use service role key as HMAC secret (always available in Supabase projects)
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+  return secret;
 }
 
-/** Ensure phone_otps table exists (auto-create via service role) */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function ensurePhoneOtpsTable(supabase: any) {
-  const { error } = await supabase.from("phone_otps").select("id").limit(1);
-  if (error && error.message.includes("does not exist")) {
-    // Table doesn't exist — create it via raw SQL
-    const { error: createError } = await supabase.rpc("exec_sql" as never, {
-      query: `
-        CREATE TABLE IF NOT EXISTS phone_otps (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          phone VARCHAR(20) NOT NULL,
-          code VARCHAR(6) NOT NULL,
-          attempts INTEGER DEFAULT 0,
-          verified BOOLEAN DEFAULT FALSE,
-          expires_at TIMESTAMPTZ NOT NULL,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        );
-        CREATE INDEX IF NOT EXISTS idx_phone_otps_lookup ON phone_otps(phone, code, expires_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_phone_otps_expires ON phone_otps(expires_at);
-        CREATE INDEX IF NOT EXISTS idx_phone_otps_rate ON phone_otps(phone, created_at DESC);
-        ALTER TABLE phone_otps ENABLE ROW LEVEL SECURITY;
-      `,
-    } as never);
-    if (createError) {
-      console.error("[send-otp] Could not auto-create phone_otps table:", createError.message);
-      return false;
-    }
-    console.log("[send-otp] Auto-created phone_otps table");
-    return true;
-  }
-  return true; // Table already exists
+/** Create HMAC-SHA256 signature */
+function signOTP(phone: string, code: string, expiresAt: number): string {
+  const payload = `${phone}:${code}:${expiresAt}`;
+  return createHmac("sha256", getSecret()).update(payload).digest("hex");
 }
 
 /** Generate a cryptographically random 6-digit code */
@@ -77,108 +50,50 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = getServiceClient();
-
-    // Ensure phone_otps table exists (auto-create if needed)
-    const tableReady = await ensurePhoneOtpsTable(supabase);
-    if (!tableReady) {
-      return NextResponse.json(
-        { error: "جدول التحقق مش موجود. شغّل complete-setup.sql في Supabase SQL Editor" },
-        { status: 500 }
-      );
-    }
-
-    // Rate limiting: check how many OTPs were sent to this phone in the last hour
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { data: recentOtps } = await supabase
-      .from("phone_otps")
-      .select("id")
-      .eq("phone", phone)
-      .gte("created_at", oneHourAgo);
-
-    if (recentOtps && recentOtps.length >= RATE_LIMIT_PER_HOUR) {
-      return NextResponse.json(
-        { error: "استنى شوية قبل ما تطلب كود تاني" },
-        { status: 429 }
-      );
-    }
-
     // Generate OTP
-    const code = IS_DEV_MODE ? "123456" : generateOTP();
+    const code = generateOTP();
+    const expiresAt = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
 
-    // Store OTP (expires in 5 minutes)
-    const { error: insertError } = await supabase
-      .from("phone_otps")
-      .insert({
-        phone,
-        code,
-        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-      });
-
-    if (insertError) {
-      console.error("[send-otp] Insert error:", insertError);
-      return NextResponse.json(
-        { error: "حصلت مشكلة. جرب تاني" },
-        { status: 500 }
-      );
-    }
-
-    // Clean up expired OTPs (fire and forget)
-    supabase
-      .from("phone_otps")
-      .delete()
-      .lt("expires_at", new Date().toISOString())
-      .then(() => {});
+    // Create signed token
+    const hmac = signOTP(phone, code, expiresAt);
+    const token = Buffer.from(
+      JSON.stringify({ phone, expiresAt, hmac })
+    ).toString("base64url");
 
     // ── Send OTP via configured channel ─────────────────────────────
 
-    // Channel 1: Dev mode — return code in response (for testing)
-    if (IS_DEV_MODE) {
-      return NextResponse.json({
-        success: true,
-        dev_code: code, // Only in dev mode!
-        channel: "dev",
-      });
-    }
-
-    // Channel 2: WhatsApp — generate a wa.me link for the user
-    // The user will receive a message with the code
+    // Channel 1: WhatsApp Cloud API
     if (WHATSAPP_BOT_NUMBER) {
-      // If WhatsApp Cloud API is configured, send programmatically
       const sent = await sendViaWhatsApp(phone, code);
       if (sent) {
         return NextResponse.json({
           success: true,
+          token,
           channel: "whatsapp",
+          expires_at: expiresAt,
         });
       }
     }
 
-    // Channel 3: Supabase SMS (if Twilio is configured)
-    // This is a fallback for when you have budget for SMS
+    // Channel 2: SMS (if configured)
     const smsEnabled = process.env.NEXT_PUBLIC_PHONE_AUTH_ENABLED === "true";
     if (smsEnabled) {
-      // Use Supabase's built-in phone OTP (requires Twilio)
-      // We still store our own OTP, but also trigger Supabase's SMS
       return NextResponse.json({
         success: true,
+        token,
         channel: "sms",
+        expires_at: expiresAt,
       });
     }
 
-    // Channel 4: No delivery channel configured —
-    // Return success with WhatsApp manual link
-    // User will copy the code from a WhatsApp chat
-    const whatsappLink = WHATSAPP_BOT_NUMBER
-      ? `https://wa.me/${WHATSAPP_BOT_NUMBER}?text=${encodeURIComponent(`مكسب: ${code}`)}`
-      : null;
-
+    // Channel 3: No delivery channel — dev/manual mode
+    // Show code directly so the app works during development
     return NextResponse.json({
       success: true,
-      channel: "manual",
-      whatsapp_link: whatsappLink,
-      // In production without any channel, we'll show the OTP
-      // via the configured notification method
+      token,
+      channel: "dev",
+      dev_code: code,
+      expires_at: expiresAt,
     });
 
   } catch (err) {
@@ -193,11 +108,6 @@ export async function POST(req: NextRequest) {
 /**
  * Send OTP via WhatsApp Cloud API (Meta Business)
  * First 1000 service conversations per month are FREE.
- *
- * Requires these env vars:
- * - WHATSAPP_PHONE_NUMBER_ID: Your WhatsApp Business phone number ID
- * - WHATSAPP_ACCESS_TOKEN: Meta Graph API access token
- * - WHATSAPP_OTP_TEMPLATE: Name of your approved message template
  */
 async function sendViaWhatsApp(phone: string, code: string): Promise<boolean> {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -217,7 +127,7 @@ async function sendViaWhatsApp(phone: string, code: string): Promise<boolean> {
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to: `2${phone}`, // Egypt country code
+          to: `2${phone}`,
           type: "template",
           template: {
             name: templateName,
@@ -227,7 +137,6 @@ async function sendViaWhatsApp(phone: string, code: string): Promise<boolean> {
                 type: "body",
                 parameters: [{ type: "text", text: code }],
               },
-              // OTP button component (auto-fill)
               {
                 type: "button",
                 sub_type: "url",

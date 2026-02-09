@@ -36,6 +36,7 @@ export default function AuthBottomSheet({
   const [resendTimer, setResendTimer] = useState(0);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [otpChannel, setOtpChannel] = useState<string | null>(null);
+  const [otpToken, setOtpToken] = useState<string>("");
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
@@ -52,6 +53,7 @@ export default function AuthBottomSheet({
       setResendTimer(0);
       setDevCode(null);
       setOtpChannel(null);
+      setOtpToken("");
       // Focus phone input when sheet opens
       setTimeout(() => phoneInputRef.current?.focus(), 400);
     }
@@ -84,6 +86,7 @@ export default function AuthBottomSheet({
       return;
     }
 
+    setOtpToken(otpResult.token || "");
     setOtpChannel(otpResult.channel || null);
     setDevCode(otpResult.dev_code || null);
 
@@ -166,7 +169,7 @@ export default function AuthBottomSheet({
 
       setIsSubmitting(true);
 
-      const response = await verifyOTP(phone, code, displayName.trim() || undefined);
+      const response = await verifyOTP(phone, code, otpToken, displayName.trim() || undefined);
 
       setIsSubmitting(false);
 
@@ -183,7 +186,7 @@ export default function AuthBottomSheet({
 
       onSuccess(response.user);
     },
-    [otp, phone, displayName, onSuccess],
+    [otp, phone, displayName, otpToken, onSuccess],
   );
 
   // ── Resend OTP ──────────────────────────────────────────────────
@@ -192,14 +195,16 @@ export default function AuthBottomSheet({
     setError(null);
     setIsSubmitting(true);
 
-    const { error: sendError } = await sendOTP(phone);
+    const resendResult = await sendOTP(phone);
 
     setIsSubmitting(false);
-    if (sendError) {
-      setError(sendError);
+    if (resendResult.error) {
+      setError(resendResult.error);
       return;
     }
 
+    setOtpToken(resendResult.token || "");
+    setDevCode(resendResult.dev_code || null);
     setResendTimer(60);
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
@@ -210,7 +215,7 @@ export default function AuthBottomSheet({
   const handleDevLogin = async () => {
     setIsSubmitting(true);
     devLogin();
-    const { user } = await verifyOTP("01000000000", "000000");
+    const { user } = await verifyOTP("01000000000", "000000", "");
     setIsSubmitting(false);
     if (user) onSuccess(user);
   };
