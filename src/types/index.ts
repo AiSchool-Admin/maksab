@@ -41,7 +41,7 @@ export interface CategoryField {
 }
 
 export interface SubcategoryOverride {
-  requiredFields: string[];
+  requiredFields?: string[];
   titleTemplate?: string;
   descriptionTemplate?: string;
   /** Additional fields only shown for this subcategory */

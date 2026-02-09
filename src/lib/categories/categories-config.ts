@@ -334,6 +334,37 @@ export const categoriesConfig: CategoryConfig[] = [
     requiredFields: ["type", "weight", "condition"],
     titleTemplate: "${type} خردة — ${weight} — ${condition}",
     descriptionTemplate: "${type} خردة وزن ${weight}، ${condition}",
+    subcategoryOverrides: {
+      "old-devices": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "tv", label: "تليفزيون" }, { value: "washer", label: "غسالة" },
+              { value: "fridge", label: "ثلاجة" }, { value: "ac", label: "مكيف" },
+              { value: "computer", label: "كمبيوتر" }, { value: "printer", label: "طابعة" },
+              { value: "microwave", label: "ميكروويف" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} قديم — ${weight} — ${condition}",
+        descriptionTemplate: "${type} قديم وزن ${weight}، ${condition}",
+      },
+      "construction": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "bricks", label: "طوب" }, { value: "concrete", label: "خرسانة" },
+              { value: "tiles", label: "بلاط" }, { value: "wood", label: "خشب" },
+              { value: "rubble", label: "ردم/أنقاض" }, { value: "mixed", label: "مخلوط" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+          "weight": { unit: "طن" },
+        },
+        titleTemplate: "مخلفات بناء ${type} — ${weight} — ${condition}",
+        descriptionTemplate: "مخلفات بناء ${type} وزن ${weight}، ${condition}",
+      },
+    },
   },
   {
     id: "gold",
@@ -358,8 +389,8 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "24", label: "عيار 24" }, { value: "21", label: "عيار 21" },
         { value: "18", label: "عيار 18" }, { value: "14", label: "عيار 14" },
         { value: "silver_925", label: "فضة 925" }, { value: "silver_900", label: "فضة 900" },
-      ]},
-      { id: "weight", label: "الوزن", type: "number", unit: "جرام", isRequired: true, order: 3 },
+      ], hiddenForSubcategories: ["precious-watches"] },
+      { id: "weight", label: "الوزن", type: "number", unit: "جرام", isRequired: true, order: 3, hiddenForSubcategories: ["precious-watches"] },
       { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 4, defaultValue: "used", options: [
         { value: "new", label: "جديد" }, { value: "used", label: "مستعمل" },
       ]},
@@ -368,18 +399,76 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "tiffany", label: "Tiffany" }, { value: "cartier", label: "Cartier" },
         { value: "local", label: "صنعة محلية" }, { value: "other", label: "أخرى" },
       ]},
-      { id: "ring_size", label: "مقاس الخاتم", type: "select", isRequired: false, order: 6, options: [
+      { id: "ring_size", label: "مقاس الخاتم", type: "select", isRequired: false, order: 6, hiddenForSubcategories: ["precious-watches"], options: [
         { value: "14", label: "14" }, { value: "15", label: "15" }, { value: "16", label: "16" },
         { value: "17", label: "17" }, { value: "18", label: "18" }, { value: "19", label: "19" },
         { value: "20", label: "20" }, { value: "21", label: "21" }, { value: "22", label: "22" },
         { value: "23", label: "23" }, { value: "24", label: "24" }, { value: "25", label: "25" },
       ]},
-      { id: "has_gemstone", label: "يوجد فص/حجر", type: "toggle", isRequired: false, order: 7 },
+      { id: "has_gemstone", label: "يوجد فص/حجر", type: "toggle", isRequired: false, order: 7, hiddenForSubcategories: ["precious-watches"] },
       { id: "certificate", label: "شهادة", type: "toggle", isRequired: false, order: 8 },
     ],
     requiredFields: ["type", "karat", "weight", "condition"],
     titleTemplate: "${type} ذهب ${karat} — ${weight} — ${condition}",
     descriptionTemplate: "${type} ${karat}، وزن ${weight}، ${condition}",
+    subcategoryOverrides: {
+      "silver": {
+        fieldOverrides: {
+          "karat": {
+            options: [
+              { value: "silver_925", label: "فضة 925" }, { value: "silver_900", label: "فضة 900" },
+              { value: "silver_800", label: "فضة 800" },
+            ],
+          },
+        },
+        titleTemplate: "${type} فضة ${karat} — ${weight} — ${condition}",
+        descriptionTemplate: "${type} فضة ${karat}، وزن ${weight}، ${condition}",
+      },
+      "diamond": {
+        extraFields: [
+          { id: "carat", label: "القيراط", type: "select", isRequired: false, order: 2.1, options: [
+            { value: "0.25", label: "0.25 قيراط" }, { value: "0.5", label: "0.5 قيراط" },
+            { value: "0.75", label: "0.75 قيراط" }, { value: "1", label: "1 قيراط" },
+            { value: "1.5", label: "1.5 قيراط" }, { value: "2", label: "2 قيراط" },
+            { value: "3+", label: "3+ قيراط" },
+          ]},
+        ],
+        titleTemplate: "${type} ألماس — ${weight} — ${condition}",
+        descriptionTemplate: "${type} ألماس، وزن ${weight}، ${condition}",
+      },
+      "precious-watches": {
+        requiredFields: ["type", "condition"],
+        extraFields: [
+          { id: "watch_brand", label: "ماركة الساعة", type: "select", isRequired: true, order: 1.1, options: [
+            { value: "rolex", label: "Rolex" }, { value: "omega", label: "Omega" },
+            { value: "cartier", label: "Cartier" }, { value: "patek", label: "Patek Philippe" },
+            { value: "audemars", label: "Audemars Piguet" }, { value: "breitling", label: "Breitling" },
+            { value: "tag_heuer", label: "TAG Heuer" }, { value: "tissot", label: "Tissot" },
+            { value: "other", label: "أخرى" },
+          ]},
+          { id: "movement", label: "نوع الحركة", type: "select", isRequired: false, order: 2.2, options: [
+            { value: "automatic", label: "أوتوماتيك" }, { value: "quartz", label: "كوارتز" },
+            { value: "manual", label: "يدوي" },
+          ]},
+          { id: "case_material", label: "خامة الكيس", type: "select", isRequired: false, order: 3.1, options: [
+            { value: "steel", label: "ستانلس ستيل" }, { value: "gold", label: "ذهب" },
+            { value: "rose_gold", label: "روز جولد" }, { value: "titanium", label: "تيتانيوم" },
+            { value: "ceramic", label: "سيراميك" }, { value: "other", label: "أخرى" },
+          ]},
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "men_watch", label: "ساعة رجالي" },
+              { value: "women_watch", label: "ساعة حريمي" },
+              { value: "unisex_watch", label: "ساعة يونيسكس" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${watch_brand} — ${condition}",
+        descriptionTemplate: "${type} ${watch_brand}، ${condition}",
+      },
+    },
   },
   {
     id: "luxury",
@@ -420,6 +509,149 @@ export const categoriesConfig: CategoryConfig[] = [
     requiredFields: ["type", "brand", "condition", "authentic"],
     titleTemplate: "${type} ${brand} — ${authentic} — ${condition}",
     descriptionTemplate: "${type} ${brand}، ${condition}، ${authentic}",
+    subcategoryOverrides: {
+      "luxury-bags": {
+        extraFields: [
+          { id: "bag_size", label: "الحجم", type: "select", isRequired: false, order: 4.1, options: [
+            { value: "mini", label: "ميني" }, { value: "small", label: "صغير" },
+            { value: "medium", label: "متوسط" }, { value: "large", label: "كبير" },
+          ]},
+          { id: "bag_material", label: "الخامة", type: "select", isRequired: false, order: 4.2, options: [
+            { value: "leather", label: "جلد طبيعي" }, { value: "canvas", label: "كانفاس" },
+            { value: "fabric", label: "قماش" }, { value: "other", label: "أخرى" },
+          ]},
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "handbag", label: "شنطة يد" }, { value: "crossbody", label: "كروس بادي" },
+              { value: "tote", label: "توت" }, { value: "clutch", label: "كلاتش" },
+              { value: "backpack", label: "باك باك" }, { value: "wallet", label: "محفظة" },
+              { value: "travel_bag", label: "شنطة سفر" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${authentic} — ${condition}",
+        descriptionTemplate: "شنطة ${brand}، ${condition}، ${authentic}",
+      },
+      "watches": {
+        extraFields: [
+          { id: "movement", label: "نوع الحركة", type: "select", isRequired: false, order: 4.1, options: [
+            { value: "automatic", label: "أوتوماتيك" }, { value: "quartz", label: "كوارتز" },
+            { value: "manual", label: "يدوي" },
+          ]},
+          { id: "case_material", label: "خامة الكيس", type: "select", isRequired: false, order: 4.2, options: [
+            { value: "steel", label: "ستانلس ستيل" }, { value: "gold", label: "ذهب" },
+            { value: "rose_gold", label: "روز جولد" }, { value: "titanium", label: "تيتانيوم" },
+            { value: "ceramic", label: "سيراميك" }, { value: "other", label: "أخرى" },
+          ]},
+          { id: "case_size", label: "قطر الكيس", type: "select", isRequired: false, order: 4.3, options: [
+            { value: "36mm", label: "36mm" }, { value: "38mm", label: "38mm" },
+            { value: "40mm", label: "40mm" }, { value: "42mm", label: "42mm" },
+            { value: "44mm", label: "44mm" }, { value: "46mm", label: "46mm" },
+          ]},
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "men_watch", label: "ساعة رجالي" },
+              { value: "women_watch", label: "ساعة حريمي" },
+              { value: "unisex_watch", label: "ساعة يونيسكس" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "rolex", label: "Rolex" }, { value: "omega", label: "Omega" },
+              { value: "cartier", label: "Cartier" }, { value: "patek", label: "Patek Philippe" },
+              { value: "audemars", label: "Audemars Piguet" }, { value: "breitling", label: "Breitling" },
+              { value: "tag_heuer", label: "TAG Heuer" }, { value: "tissot", label: "Tissot" },
+              { value: "casio", label: "Casio" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "ساعة ${brand} — ${authentic} — ${condition}",
+        descriptionTemplate: "ساعة ${brand}، ${condition}، ${authentic}",
+      },
+      "sunglasses": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "men_sunglasses", label: "نظارة رجالي" },
+              { value: "women_sunglasses", label: "نظارة حريمي" },
+              { value: "unisex_sunglasses", label: "نظارة يونيسكس" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "ray_ban", label: "Ray-Ban" }, { value: "gucci", label: "Gucci" },
+              { value: "prada", label: "Prada" }, { value: "dior", label: "Dior" },
+              { value: "versace", label: "Versace" }, { value: "tom_ford", label: "Tom Ford" },
+              { value: "chanel", label: "Chanel" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${authentic} — ${condition}",
+        descriptionTemplate: "نظارة ${brand}، ${condition}، ${authentic}",
+      },
+      "perfumes": {
+        extraFields: [
+          { id: "perfume_size", label: "الحجم", type: "select", isRequired: false, order: 4.1, options: [
+            { value: "30ml", label: "30ml" }, { value: "50ml", label: "50ml" },
+            { value: "75ml", label: "75ml" }, { value: "100ml", label: "100ml" },
+            { value: "125ml", label: "125ml" }, { value: "150ml", label: "150ml" },
+            { value: "200ml", label: "200ml" },
+          ]},
+          { id: "concentration", label: "التركيز", type: "select", isRequired: false, order: 4.2, options: [
+            { value: "parfum", label: "بارفان" }, { value: "edp", label: "أو دي بارفان EDP" },
+            { value: "edt", label: "أو دي تواليت EDT" }, { value: "cologne", label: "كولونيا" },
+          ]},
+          { id: "gender", label: "للجنس", type: "select", isRequired: false, order: 4.3, options: [
+            { value: "men", label: "رجالي" }, { value: "women", label: "حريمي" },
+            { value: "unisex", label: "يونيسكس" },
+          ]},
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "perfume", label: "عطر" }, { value: "deodorant", label: "مزيل عرق" },
+              { value: "body_mist", label: "بودي ميست" }, { value: "set", label: "طقم عطور" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "chanel", label: "Chanel" }, { value: "dior", label: "Dior" },
+              { value: "tom_ford", label: "Tom Ford" }, { value: "creed", label: "Creed" },
+              { value: "ysl", label: "YSL" }, { value: "versace", label: "Versace" },
+              { value: "givenchy", label: "Givenchy" }, { value: "armani", label: "Armani" },
+              { value: "guerlain", label: "Guerlain" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "عطر ${brand} — ${perfume_size} — ${authentic}",
+        descriptionTemplate: "عطر ${brand}، ${condition}، ${authentic}",
+      },
+      "pens": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "fountain", label: "قلم حبر" }, { value: "ballpoint", label: "قلم جاف" },
+              { value: "rollerball", label: "رولربول" }, { value: "set", label: "طقم أقلام" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "montblanc", label: "Montblanc" }, { value: "parker", label: "Parker" },
+              { value: "cross", label: "Cross" }, { value: "waterman", label: "Waterman" },
+              { value: "sheaffer", label: "Sheaffer" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${authentic} — ${condition}",
+        descriptionTemplate: "${type} ${brand}، ${condition}، ${authentic}",
+      },
+    },
   },
   {
     id: "appliances",
@@ -474,6 +706,129 @@ export const categoriesConfig: CategoryConfig[] = [
     requiredFields: ["type", "brand", "condition", "purchase_year"],
     titleTemplate: "${type} ${brand} — ${purchase_year} — ${condition}",
     descriptionTemplate: "${type} ${brand} موديل ${purchase_year}، ${condition}",
+    subcategoryOverrides: {
+      "washers": {
+        fieldOverrides: {
+          "capacity": {
+            options: [
+              { value: "5kg", label: "5 كيلو" }, { value: "7kg", label: "7 كيلو" },
+              { value: "8kg", label: "8 كيلو" }, { value: "10kg", label: "10 كيلو" },
+              { value: "12kg", label: "12 كيلو" }, { value: "14kg", label: "14 كيلو" },
+              { value: "16kg", label: "16 كيلو" },
+            ],
+          },
+        },
+        extraFields: [
+          { id: "load_type", label: "نوع التحميل", type: "select", isRequired: false, order: 5.1, options: [
+            { value: "front", label: "تحميل أمامي" }, { value: "top", label: "تحميل علوي" },
+          ]},
+        ],
+        titleTemplate: "غسالة ${brand} ${capacity} — ${purchase_year} — ${condition}",
+        descriptionTemplate: "غسالة ${brand} سعة ${capacity}، ${purchase_year}، ${condition}",
+      },
+      "fridges": {
+        fieldOverrides: {
+          "capacity": {
+            options: [
+              { value: "8ft", label: "8 قدم" }, { value: "10ft", label: "10 قدم" },
+              { value: "12ft", label: "12 قدم" }, { value: "14ft", label: "14 قدم" },
+              { value: "16ft", label: "16 قدم" }, { value: "18ft", label: "18 قدم" },
+              { value: "20ft", label: "20 قدم" }, { value: "22ft", label: "22 قدم" },
+              { value: "24ft", label: "24 قدم" },
+            ],
+          },
+        },
+        extraFields: [
+          { id: "fridge_type", label: "النظام", type: "select", isRequired: false, order: 5.1, options: [
+            { value: "nofrost", label: "نو فروست" }, { value: "defrost", label: "ديفروست" },
+          ]},
+          { id: "doors", label: "عدد الأبواب", type: "select", isRequired: false, order: 5.2, options: [
+            { value: "1", label: "باب واحد" }, { value: "2", label: "بابين" },
+            { value: "side_by_side", label: "جنب بجنب" }, { value: "french", label: "فرنش دور" },
+          ]},
+        ],
+        titleTemplate: "ثلاجة ${brand} ${capacity} — ${purchase_year} — ${condition}",
+        descriptionTemplate: "ثلاجة ${brand} سعة ${capacity}، ${purchase_year}، ${condition}",
+      },
+      "cookers": {
+        fieldOverrides: {
+          "capacity": {
+            label: "عدد العيون",
+            options: [
+              { value: "4_eyes", label: "4 عيون" }, { value: "5_eyes", label: "5 عيون" },
+              { value: "6_eyes", label: "6 عيون" },
+            ],
+          },
+        },
+        extraFields: [
+          { id: "cooker_size", label: "الحجم", type: "select", isRequired: false, order: 5.1, options: [
+            { value: "50cm", label: "50 سم" }, { value: "55cm", label: "55 سم" },
+            { value: "60cm", label: "60 سم" }, { value: "80cm", label: "80 سم" },
+            { value: "90cm", label: "90 سم" },
+          ]},
+        ],
+        titleTemplate: "بوتاجاز ${brand} — ${purchase_year} — ${condition}",
+        descriptionTemplate: "بوتاجاز ${brand}، ${purchase_year}، ${condition}",
+      },
+      "ac": {
+        fieldOverrides: {
+          "capacity": {
+            label: "القدرة",
+            options: [
+              { value: "1.5hp", label: "1.5 حصان" }, { value: "2.25hp", label: "2.25 حصان" },
+              { value: "3hp", label: "3 حصان" }, { value: "4hp", label: "4 حصان" },
+              { value: "5hp", label: "5 حصان" },
+            ],
+          },
+        },
+        extraFields: [
+          { id: "ac_type", label: "نوع المكيف", type: "select", isRequired: false, order: 5.1, options: [
+            { value: "split", label: "سبليت" }, { value: "window", label: "شباك" },
+            { value: "portable", label: "متنقل" }, { value: "concealed", label: "كونسيلد" },
+          ]},
+          { id: "cooling_heating", label: "تبريد/تدفئة", type: "select", isRequired: false, order: 5.2, options: [
+            { value: "cool_only", label: "تبريد فقط" }, { value: "cool_heat", label: "تبريد وتدفئة" },
+          ]},
+        ],
+        titleTemplate: "مكيف ${brand} ${capacity} — ${purchase_year} — ${condition}",
+        descriptionTemplate: "مكيف ${brand} قدرة ${capacity}، ${purchase_year}، ${condition}",
+      },
+      "heaters": {
+        fieldOverrides: {
+          "capacity": {
+            label: "السعة",
+            options: [
+              { value: "30l", label: "30 لتر" }, { value: "40l", label: "40 لتر" },
+              { value: "50l", label: "50 لتر" }, { value: "60l", label: "60 لتر" },
+              { value: "80l", label: "80 لتر" }, { value: "100l", label: "100 لتر" },
+            ],
+          },
+        },
+        extraFields: [
+          { id: "heater_type", label: "نوع السخان", type: "select", isRequired: false, order: 5.1, options: [
+            { value: "electric", label: "كهرباء" }, { value: "gas", label: "غاز" },
+            { value: "instant", label: "فوري" }, { value: "solar", label: "طاقة شمسية" },
+          ]},
+        ],
+        titleTemplate: "سخان ${brand} ${capacity} — ${purchase_year} — ${condition}",
+        descriptionTemplate: "سخان ${brand} سعة ${capacity}، ${purchase_year}، ${condition}",
+      },
+      "small-appliances": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "blender", label: "خلاط" }, { value: "iron", label: "مكواة" },
+              { value: "microwave", label: "ميكروويف" }, { value: "toaster", label: "توستر" },
+              { value: "mixer", label: "عجان" }, { value: "vacuum", label: "مكنسة" },
+              { value: "fan", label: "مروحة" }, { value: "air_fryer", label: "إير فراير" },
+              { value: "coffee_machine", label: "ماكينة قهوة" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${purchase_year} — ${condition}",
+        descriptionTemplate: "${type} ${brand}، ${purchase_year}، ${condition}",
+      },
+    },
   },
   {
     id: "furniture",
@@ -516,6 +871,83 @@ export const categoriesConfig: CategoryConfig[] = [
     requiredFields: ["type", "condition", "material"],
     titleTemplate: "${type} ${material} — ${condition}",
     descriptionTemplate: "${type} ${material}، ${condition}",
+    subcategoryOverrides: {
+      "kitchen": {
+        fieldOverrides: {
+          "material": {
+            options: [
+              { value: "aluminum", label: "ألوميتال" }, { value: "wood", label: "خشب" },
+              { value: "hpl", label: "HPL" }, { value: "acrylic", label: "أكريليك" },
+              { value: "mdf", label: "MDF" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        extraFields: [
+          { id: "kitchen_length", label: "الطول", type: "number", unit: "متر", isRequired: false, order: 3.1 },
+        ],
+        titleTemplate: "مطبخ ${material} — ${condition}",
+        descriptionTemplate: "مطبخ ${material}، ${condition}",
+      },
+      "lighting": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "chandelier", label: "نجفة" }, { value: "wall_light", label: "أبليك" },
+              { value: "floor_lamp", label: "أباجورة أرضية" }, { value: "table_lamp", label: "أباجورة" },
+              { value: "ceiling", label: "سبوت لايت" }, { value: "led_strip", label: "ليد" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+          "material": {
+            options: [
+              { value: "crystal", label: "كريستال" }, { value: "metal", label: "معدن" },
+              { value: "wood", label: "خشب" }, { value: "fabric", label: "قماش" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} — ${material} — ${condition}",
+        descriptionTemplate: "${type} ${material}، ${condition}",
+      },
+      "carpets": {
+        fieldOverrides: {
+          "material": {
+            options: [
+              { value: "wool", label: "صوف" }, { value: "silk", label: "حرير" },
+              { value: "synthetic", label: "صناعي" }, { value: "cotton", label: "قطن" },
+              { value: "mixed", label: "مخلوط" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        extraFields: [
+          { id: "carpet_size", label: "المقاس", type: "select", isRequired: false, order: 3.1, options: [
+            { value: "1x1.5", label: "1×1.5 متر" }, { value: "1.5x2", label: "1.5×2 متر" },
+            { value: "2x3", label: "2×3 متر" }, { value: "2.5x3.5", label: "2.5×3.5 متر" },
+            { value: "3x4", label: "3×4 متر" }, { value: "custom", label: "مقاس خاص" },
+          ]},
+          { id: "origin", label: "المنشأ", type: "select", isRequired: false, order: 3.2, options: [
+            { value: "handmade", label: "يدوي" }, { value: "machine", label: "ماكينة" },
+            { value: "imported", label: "مستورد" }, { value: "local", label: "محلي" },
+          ]},
+        ],
+        titleTemplate: "سجاد ${material} — ${carpet_size} — ${condition}",
+        descriptionTemplate: "سجاد ${material}، ${condition}",
+      },
+      "decor": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "painting", label: "لوحة" }, { value: "mirror", label: "مرآة" },
+              { value: "vase", label: "فازة" }, { value: "statue", label: "تمثال/مجسم" },
+              { value: "clock", label: "ساعة حائط" }, { value: "frame", label: "برواز" },
+              { value: "artificial_plant", label: "نباتات صناعية" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ديكور — ${condition}",
+        descriptionTemplate: "${type} ديكور، ${condition}",
+      },
+    },
   },
   {
     id: "hobbies",
@@ -548,7 +980,7 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "new", label: "جديد" }, { value: "excellent", label: "مستعمل ممتاز" },
         { value: "good", label: "مستعمل جيد" }, { value: "fair", label: "مستعمل مقبول" },
       ]},
-      { id: "brand", label: "الماركة/الوصف", type: "select", isRequired: true, order: 3, options: [
+      { id: "brand", label: "الماركة/الوصف", type: "select", isRequired: true, order: 3, hiddenForSubcategories: ["pets", "books", "antiques"], options: [
         { value: "sony", label: "Sony" }, { value: "microsoft", label: "Microsoft" },
         { value: "nintendo", label: "Nintendo" }, { value: "canon", label: "Canon" },
         { value: "nikon", label: "Nikon" }, { value: "yamaha", label: "Yamaha" },
@@ -562,6 +994,218 @@ export const categoriesConfig: CategoryConfig[] = [
     requiredFields: ["type", "condition", "brand"],
     titleTemplate: "${brand} ${type} — ${condition}",
     descriptionTemplate: "${type} ${brand}، ${condition}",
+    subcategoryOverrides: {
+      "pets": {
+        requiredFields: ["type", "condition"],
+        extraFields: [
+          { id: "breed", label: "السلالة", type: "text", isRequired: false, order: 3.1, placeholder: "مثال: شيرازي، جولدن ريتريفر" },
+          { id: "age", label: "العمر", type: "select", isRequired: false, order: 3.2, options: [
+            { value: "baby", label: "صغير (أقل من 3 شهور)" }, { value: "young", label: "شاب (3-12 شهر)" },
+            { value: "adult", label: "بالغ (1-5 سنوات)" }, { value: "senior", label: "كبير (5+ سنوات)" },
+          ]},
+          { id: "pet_gender", label: "الجنس", type: "select", isRequired: false, order: 3.3, options: [
+            { value: "male", label: "ذكر" }, { value: "female", label: "أنثى" },
+          ]},
+          { id: "vaccinated", label: "مُطعّم", type: "toggle", isRequired: false, order: 3.4 },
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "cat", label: "قطة" }, { value: "dog", label: "كلب" },
+              { value: "bird", label: "طائر" }, { value: "fish", label: "سمك" },
+              { value: "hamster", label: "هامستر" }, { value: "rabbit", label: "أرنب" },
+              { value: "turtle", label: "سلحفاة" }, { value: "other", label: "أخرى" },
+            ],
+          },
+          "condition": {
+            label: "الصحة",
+            options: [
+              { value: "healthy", label: "بصحة ممتازة" }, { value: "good", label: "بصحة جيدة" },
+              { value: "needs_care", label: "يحتاج رعاية" },
+            ],
+          },
+        },
+        titleTemplate: "${type} — ${breed} — ${age}",
+        descriptionTemplate: "${type}، ${condition}",
+      },
+      "books": {
+        requiredFields: ["type", "condition"],
+        extraFields: [
+          { id: "author", label: "المؤلف", type: "text", isRequired: false, order: 3.1, placeholder: "اسم المؤلف" },
+          { id: "language", label: "اللغة", type: "select", isRequired: false, order: 3.2, options: [
+            { value: "arabic", label: "عربي" }, { value: "english", label: "إنجليزي" },
+            { value: "french", label: "فرنسي" }, { value: "other", label: "أخرى" },
+          ]},
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "novel", label: "رواية" }, { value: "religious", label: "ديني" },
+              { value: "educational", label: "تعليمي" }, { value: "children", label: "أطفال" },
+              { value: "self_help", label: "تنمية بشرية" }, { value: "scientific", label: "علمي" },
+              { value: "history", label: "تاريخ" }, { value: "collection", label: "مجموعة كتب" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} — ${author} — ${condition}",
+        descriptionTemplate: "كتاب ${type}، ${condition}",
+      },
+      "gaming": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "ps5", label: "بلايستيشن 5" }, { value: "ps4", label: "بلايستيشن 4" },
+              { value: "xbox_series", label: "إكسبوكس Series X/S" }, { value: "xbox_one", label: "إكسبوكس One" },
+              { value: "nintendo", label: "نينتيندو سويتش" }, { value: "controller", label: "يد تحكم" },
+              { value: "game_disc", label: "أسطوانة لعبة" }, { value: "vr", label: "VR" },
+              { value: "gaming_chair", label: "كرسي جيمنج" }, { value: "other", label: "أخرى" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "sony", label: "Sony" }, { value: "microsoft", label: "Microsoft" },
+              { value: "nintendo", label: "Nintendo" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} — ${brand} — ${condition}",
+        descriptionTemplate: "${type} ${brand}، ${condition}",
+      },
+      "music": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "guitar", label: "جيتار" }, { value: "piano", label: "بيانو" },
+              { value: "organ", label: "أورج" }, { value: "drums", label: "درامز" },
+              { value: "violin", label: "كمان" }, { value: "oud", label: "عود" },
+              { value: "flute", label: "ناي/فلوت" }, { value: "amplifier", label: "أمبليفاير" },
+              { value: "microphone", label: "ميكروفون" }, { value: "other", label: "أخرى" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "yamaha", label: "Yamaha" }, { value: "fender", label: "Fender" },
+              { value: "gibson", label: "Gibson" }, { value: "roland", label: "Roland" },
+              { value: "korg", label: "Korg" }, { value: "ibanez", label: "Ibanez" },
+              { value: "local", label: "محلي" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${condition}",
+        descriptionTemplate: "${type} ${brand}، ${condition}",
+      },
+      "sports": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "treadmill", label: "تريدميل" }, { value: "bike_machine", label: "عجلة رياضية" },
+              { value: "weights", label: "أوزان/دمبلز" }, { value: "bench", label: "بنش" },
+              { value: "multi_gym", label: "ملتي جيم" }, { value: "yoga_mat", label: "مرتبة يوجا" },
+              { value: "boxing", label: "معدات ملاكمة" }, { value: "football", label: "كرة قدم" },
+              { value: "tennis", label: "مضرب تنس" }, { value: "other", label: "أخرى" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "life_fitness", label: "Life Fitness" }, { value: "technogym", label: "Technogym" },
+              { value: "adidas", label: "Adidas" }, { value: "nike", label: "Nike" },
+              { value: "domyos", label: "Domyos" }, { value: "local", label: "محلي" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${condition}",
+        descriptionTemplate: "${type} ${brand}، ${condition}",
+      },
+      "cameras": {
+        extraFields: [
+          { id: "camera_type", label: "نوع الكاميرا", type: "select", isRequired: false, order: 1.1, options: [
+            { value: "dslr", label: "DSLR" }, { value: "mirrorless", label: "Mirrorless" },
+            { value: "compact", label: "كومباكت" }, { value: "action", label: "أكشن كاميرا" },
+            { value: "film", label: "فيلم" }, { value: "other", label: "أخرى" },
+          ]},
+          { id: "megapixels", label: "الميجابكسل", type: "select", isRequired: false, order: 3.1, options: [
+            { value: "12mp", label: "12 MP" }, { value: "20mp", label: "20 MP" },
+            { value: "24mp", label: "24 MP" }, { value: "30mp", label: "30 MP" },
+            { value: "45mp", label: "45 MP" }, { value: "50mp+", label: "50+ MP" },
+          ]},
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "camera_body", label: "بودي كاميرا" }, { value: "camera_kit", label: "كاميرا + عدسة" },
+              { value: "lens", label: "عدسة" }, { value: "flash", label: "فلاش" },
+              { value: "tripod", label: "ترايبود" }, { value: "gimbal", label: "جيمبال" },
+              { value: "drone", label: "درون" }, { value: "other", label: "أخرى" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "canon", label: "Canon" }, { value: "nikon", label: "Nikon" },
+              { value: "sony", label: "Sony" }, { value: "fujifilm", label: "Fujifilm" },
+              { value: "panasonic", label: "Panasonic" }, { value: "gopro", label: "GoPro" },
+              { value: "dji", label: "DJI" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${condition}",
+        descriptionTemplate: "${type} ${brand}، ${condition}",
+      },
+      "bikes": {
+        extraFields: [
+          { id: "wheel_size", label: "مقاس العجل", type: "select", isRequired: false, order: 3.1, options: [
+            { value: "12", label: "12 بوصة" }, { value: "16", label: "16 بوصة" },
+            { value: "20", label: "20 بوصة" }, { value: "24", label: "24 بوصة" },
+            { value: "26", label: "26 بوصة" }, { value: "27.5", label: "27.5 بوصة" },
+            { value: "29", label: "29 بوصة" },
+          ]},
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "mountain", label: "جبلي" }, { value: "road", label: "طريق/سباق" },
+              { value: "hybrid", label: "هايبرد" }, { value: "bmx", label: "BMX" },
+              { value: "kids", label: "أطفال" }, { value: "electric", label: "كهربائي" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "trinx", label: "ترينكس" }, { value: "giant", label: "Giant" },
+              { value: "trek", label: "Trek" }, { value: "specialized", label: "Specialized" },
+              { value: "local", label: "محلي" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "دراجة ${type} ${brand} — ${condition}",
+        descriptionTemplate: "دراجة ${type} ${brand}، ${condition}",
+      },
+      "antiques": {
+        requiredFields: ["type", "condition"],
+        extraFields: [
+          { id: "era", label: "العصر/الفترة", type: "select", isRequired: false, order: 3.1, options: [
+            { value: "pharaonic", label: "فرعوني" }, { value: "islamic", label: "إسلامي" },
+            { value: "ottoman", label: "عثماني" }, { value: "modern", label: "حديث (50+ سنة)" },
+            { value: "vintage", label: "فينتاج (20+ سنة)" }, { value: "unknown", label: "غير محدد" },
+          ]},
+          { id: "antique_origin", label: "المنشأ", type: "text", isRequired: false, order: 3.2, placeholder: "بلد المنشأ" },
+        ],
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "painting", label: "لوحة" }, { value: "coin", label: "عملة" },
+              { value: "stamp", label: "طابع" }, { value: "statue", label: "تمثال" },
+              { value: "furniture", label: "أثاث أنتيك" }, { value: "pottery", label: "فخار" },
+              { value: "jewelry", label: "مجوهرات أنتيك" }, { value: "clock", label: "ساعة أنتيك" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} أنتيك — ${era} — ${condition}",
+        descriptionTemplate: "${type} أنتيك، ${condition}",
+      },
+    },
   },
   {
     id: "tools",
@@ -596,7 +1240,7 @@ export const categoriesConfig: CategoryConfig[] = [
         { value: "local", label: "محلي" }, { value: "other", label: "أخرى" },
       ]},
       { id: "quantity", label: "الكمية", type: "number", isRequired: false, order: 4 },
-      { id: "power", label: "مصدر الطاقة", type: "select", isRequired: false, order: 5, defaultValue: "electric", options: [
+      { id: "power", label: "مصدر الطاقة", type: "select", isRequired: false, order: 5, defaultValue: "electric", hiddenForSubcategories: ["hand-tools"], options: [
         { value: "electric", label: "كهرباء" }, { value: "battery", label: "بطارية" },
         { value: "manual", label: "يدوي" }, { value: "petrol", label: "بنزين" },
       ]},
@@ -604,6 +1248,86 @@ export const categoriesConfig: CategoryConfig[] = [
     requiredFields: ["type", "condition", "brand"],
     titleTemplate: "${type} ${brand} — ${condition}",
     descriptionTemplate: "${type} ${brand}، ${condition}",
+    subcategoryOverrides: {
+      "hand-tools": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "wrench", label: "مفتاح" }, { value: "screwdriver", label: "مفك" },
+              { value: "pliers", label: "زرادية" }, { value: "hammer", label: "شاكوش" },
+              { value: "saw", label: "منشار يدوي" }, { value: "toolkit", label: "طقم عدة" },
+              { value: "measuring", label: "أدوات قياس" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${condition}",
+        descriptionTemplate: "${type} ${brand}، ${condition}",
+      },
+      "power-tools": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "drill", label: "شنيور/دريل" }, { value: "angle_grinder", label: "صاروخ/جلاخة" },
+              { value: "circular_saw", label: "منشار دائري" }, { value: "jigsaw", label: "منشار أركت" },
+              { value: "sander", label: "صنفرة كهربائية" }, { value: "router", label: "فريزة/راوتر" },
+              { value: "heat_gun", label: "مسدس حراري" }, { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${power} — ${condition}",
+        descriptionTemplate: "${type} ${brand}، ${power}، ${condition}",
+      },
+      "workshop": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "welder", label: "ماكينة لحام" }, { value: "compressor", label: "كمبروسر" },
+              { value: "lathe", label: "مخرطة" }, { value: "press", label: "مكبس" },
+              { value: "generator", label: "مولد كهرباء" }, { value: "cnc", label: "CNC" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} ${brand} — ${condition}",
+        descriptionTemplate: "${type} ${brand}، ${condition}",
+      },
+      "agricultural": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "pump", label: "موتور ري" }, { value: "sprayer", label: "رشاشة" },
+              { value: "mower", label: "ماكينة قص" }, { value: "tractor_parts", label: "قطع جرار" },
+              { value: "irrigation", label: "معدات ري" }, { value: "garden_tools", label: "عدة حدائق" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} زراعي ${brand} — ${condition}",
+        descriptionTemplate: "${type} زراعي ${brand}، ${condition}",
+      },
+      "restaurant-equipment": {
+        fieldOverrides: {
+          "type": {
+            options: [
+              { value: "oven", label: "فرن" }, { value: "deep_fryer", label: "قلاية" },
+              { value: "display_fridge", label: "ثلاجة عرض" }, { value: "mixer", label: "عجان" },
+              { value: "meat_grinder", label: "مفرمة" }, { value: "shawarma", label: "ماكينة شاورما" },
+              { value: "coffee_machine", label: "ماكينة قهوة" }, { value: "pos", label: "كاشير/POS" },
+              { value: "tables_chairs", label: "طاولات وكراسي" }, { value: "other", label: "أخرى" },
+            ],
+          },
+          "brand": {
+            options: [
+              { value: "rational", label: "Rational" }, { value: "hobart", label: "Hobart" },
+              { value: "berto", label: "Berto's" }, { value: "local", label: "تصنيع محلي" },
+              { value: "other", label: "أخرى" },
+            ],
+          },
+        },
+        titleTemplate: "${type} مطاعم ${brand} — ${condition}",
+        descriptionTemplate: "${type} معدات مطاعم ${brand}، ${condition}",
+      },
+    },
   },
   {
     id: "services",
@@ -656,6 +1380,79 @@ export const categoriesConfig: CategoryConfig[] = [
     requiredFields: ["service_type", "pricing", "experience"],
     titleTemplate: "${service_type} — خبرة ${experience} — ${pricing}",
     descriptionTemplate: "${service_type}، خبرة ${experience}، ${pricing}",
+    subcategoryOverrides: {
+      "tutoring": {
+        extraFields: [
+          { id: "subject", label: "المادة", type: "select", isRequired: true, order: 1.1, options: [
+            { value: "arabic", label: "لغة عربية" }, { value: "english", label: "لغة إنجليزية" },
+            { value: "math", label: "رياضيات" }, { value: "science", label: "علوم" },
+            { value: "physics", label: "فيزياء" }, { value: "chemistry", label: "كيمياء" },
+            { value: "french", label: "لغة فرنسية" }, { value: "german", label: "لغة ألمانية" },
+            { value: "computer", label: "حاسب آلي" }, { value: "quran", label: "قرآن كريم" },
+            { value: "other", label: "أخرى" },
+          ]},
+          { id: "education_level", label: "المرحلة", type: "select", isRequired: false, order: 1.2, options: [
+            { value: "primary", label: "ابتدائي" }, { value: "preparatory", label: "إعدادي" },
+            { value: "secondary", label: "ثانوي" }, { value: "university", label: "جامعي" },
+            { value: "all", label: "كل المراحل" },
+          ]},
+          { id: "teaching_method", label: "طريقة التدريس", type: "select", isRequired: false, order: 1.3, options: [
+            { value: "home", label: "في البيت" }, { value: "online", label: "أونلاين" },
+            { value: "center", label: "في سنتر" }, { value: "group", label: "مجموعات" },
+          ]},
+        ],
+        titleTemplate: "مدرس ${subject} — ${education_level} — خبرة ${experience}",
+        descriptionTemplate: "دروس خصوصية ${subject}، ${education_level}، خبرة ${experience}، ${pricing}",
+      },
+      "tech": {
+        extraFields: [
+          { id: "tech_specialty", label: "التخصص", type: "select", isRequired: false, order: 1.1, options: [
+            { value: "web", label: "تصميم مواقع" }, { value: "mobile", label: "تطبيقات موبايل" },
+            { value: "networking", label: "شبكات" }, { value: "cctv", label: "كاميرات مراقبة" },
+            { value: "data_recovery", label: "استعادة بيانات" }, { value: "graphic", label: "جرافيك ديزاين" },
+            { value: "social_media", label: "سوشيال ميديا" }, { value: "other", label: "أخرى" },
+          ]},
+        ],
+        titleTemplate: "خدمات تقنية — ${tech_specialty} — خبرة ${experience}",
+        descriptionTemplate: "خدمات تقنية ${tech_specialty}، خبرة ${experience}، ${pricing}",
+      },
+      "moving": {
+        extraFields: [
+          { id: "vehicle_type", label: "نوع السيارة", type: "select", isRequired: false, order: 1.1, options: [
+            { value: "pickup", label: "نص نقل" }, { value: "truck", label: "سيارة نقل" },
+            { value: "large_truck", label: "سيارة نقل كبيرة" }, { value: "container", label: "كونتينر" },
+          ]},
+          { id: "includes_packing", label: "يشمل تغليف", type: "toggle", isRequired: false, order: 1.2 },
+          { id: "includes_assembly", label: "يشمل فك وتركيب", type: "toggle", isRequired: false, order: 1.3 },
+        ],
+        titleTemplate: "نقل أثاث — ${vehicle_type} — خبرة ${experience}",
+        descriptionTemplate: "خدمة نقل أثاث، خبرة ${experience}، ${pricing}",
+      },
+      "device-repair": {
+        extraFields: [
+          { id: "devices_repaired", label: "الأجهزة", type: "multi-select", isRequired: false, order: 1.1, options: [
+            { value: "mobile", label: "موبايلات" }, { value: "laptop", label: "لابتوب" },
+            { value: "desktop", label: "كمبيوتر" }, { value: "tablet", label: "تابلت" },
+            { value: "tv", label: "تليفزيون" }, { value: "washer", label: "غسالات" },
+            { value: "fridge", label: "ثلاجات" }, { value: "ac", label: "مكيفات" },
+            { value: "other", label: "أخرى" },
+          ]},
+        ],
+        titleTemplate: "صيانة أجهزة — خبرة ${experience} — ${pricing}",
+        descriptionTemplate: "صيانة أجهزة، خبرة ${experience}، ${pricing}",
+      },
+      "cleaning": {
+        extraFields: [
+          { id: "cleaning_type", label: "نوع التنظيف", type: "select", isRequired: false, order: 1.1, options: [
+            { value: "regular", label: "تنظيف دوري" }, { value: "deep", label: "تنظيف عميق" },
+            { value: "post_construction", label: "بعد التشطيب" }, { value: "carpet", label: "تنظيف سجاد" },
+            { value: "facade", label: "تنظيف واجهات" }, { value: "other", label: "أخرى" },
+          ]},
+        ],
+        titleTemplate: "تنظيف — ${cleaning_type} — خبرة ${experience}",
+        descriptionTemplate: "خدمة تنظيف ${cleaning_type}، خبرة ${experience}، ${pricing}",
+      },
+    },
   },
 ];
 
