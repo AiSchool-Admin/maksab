@@ -31,6 +31,18 @@ export default function LoginPage() {
   );
 }
 
+/** Normalize any phone format to 11-digit Egyptian number */
+function normalizePhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  // +20XXXXXXXXXX or 20XXXXXXXXXX
+  if (digits.startsWith("20") && digits.length === 12) return digits.slice(1);
+  // 0020XXXXXXXXXX
+  if (digits.startsWith("0020") && digits.length === 14) return digits.slice(3);
+  // Already 01XXXXXXXXX
+  if (digits.startsWith("01") && digits.length === 11) return digits;
+  return digits;
+}
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -44,13 +56,11 @@ function LoginPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [autoDetecting, setAutoDetecting] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [otpChannel, setOtpChannel] = useState<string | null>(null);
   const [otpToken, setOtpToken] = useState<string>("");
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
-  const nameInputRef = useRef<HTMLInputElement>(null);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   // If already logged in, redirect
@@ -59,11 +69,6 @@ function LoginPageContent() {
       router.replace(redirectTo);
     }
   }, [user, router, redirectTo]);
-
-  // Try to auto-detect phone number from device on mount
-  useEffect(() => {
-    autoDetectCredentials();
-  }, []);
 
   // Resend countdown timer
   useEffect(() => {
@@ -74,50 +79,25 @@ function LoginPageContent() {
     return () => clearInterval(interval);
   }, [resendTimer]);
 
-  // Focus phone input on mount
+  // Focus phone input on mount — triggers browser autofill suggestion
   useEffect(() => {
     if (step === "phone") {
       setTimeout(() => phoneInputRef.current?.focus(), 300);
     }
   }, [step]);
 
-  // ── Auto-detect phone & name from device ──────────────────────────
-  const autoDetectCredentials = async () => {
-    // Try Contact Picker API (Android Chrome) for name
-    try {
-      if ("contacts" in navigator && "ContactsManager" in window) {
-        setAutoDetecting(true);
-        const contacts = await (navigator as unknown as { contacts: { select: (props: string[], opts: { multiple: boolean }) => Promise<Array<{ name?: string[]; tel?: string[] }>> } }).contacts.select(
-          ["name", "tel"],
-          { multiple: false }
-        );
-        if (contacts?.[0]) {
-          if (contacts[0].name?.[0]) {
-            setDisplayName(contacts[0].name[0]);
-          }
-          if (contacts[0].tel?.[0]) {
-            const tel = contacts[0].tel[0].replace(/\D/g, "");
-            // Handle Egyptian numbers with country code
-            if (tel.startsWith("2") && tel.length === 12) {
-              setPhone(tel.slice(1));
-            } else if (tel.startsWith("002") && tel.length === 13) {
-              setPhone(tel.slice(3));
-            } else if (tel.startsWith("01") && tel.length === 11) {
-              setPhone(tel);
-            }
-          }
-        }
-        setAutoDetecting(false);
-      }
-    } catch {
-      // Contact Picker not supported or user cancelled — that's fine
-      setAutoDetecting(false);
-    }
-  };
-
   const handleSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);
     router.replace(redirectTo);
+  };
+
+  // ── Handle phone input changes (normalize autofill values) ─────────
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    // If browser autofill gives us +20xxx or 20xxx, normalize it
+    const normalized = normalizePhone(raw);
+    setPhone(normalized);
+    setError(null);
   };
 
   // ── Send OTP ──────────────────────────────────────────────────────
@@ -153,7 +133,7 @@ function LoginPageContent() {
     setStep("otp");
     setResendTimer(60);
 
-    // If code was auto-filled, focus the confirm button area
+    // If code was auto-filled, user just taps confirm
     // Otherwise focus first OTP input for manual entry
     if (!receivedCode) {
       setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
@@ -182,7 +162,7 @@ function LoginPageContent() {
         }
       }
     } catch {
-      // WebOTP not supported or user didn't grant permission — that's fine
+      // WebOTP not supported or user didn't grant permission
     }
   };
 
@@ -320,7 +300,14 @@ function LoginPageContent() {
       <div className="flex-1 px-5 pb-8">
         {/* ── Step 1: Phone + Name ──────────────────────────────────── */}
         {step === "phone" && (
-          <div className="space-y-5 pt-2">
+          <form
+            className="space-y-5 pt-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (phone.length >= 11) handlePhoneSubmit();
+            }}
+            autoComplete="on"
+          >
             {/* Branding */}
             <div className="text-center pt-4 pb-3">
               <div className="w-20 h-20 bg-brand-green rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
@@ -332,9 +319,9 @@ function LoginPageContent() {
               </p>
             </div>
 
-            {/* Phone number input */}
+            {/* Phone number input — autocomplete triggers browser autofill from SIM/Google account */}
             <div className="w-full">
-              <label className="block text-sm font-semibold text-dark mb-1.5">
+              <label htmlFor="login-phone" className="block text-sm font-semibold text-dark mb-1.5">
                 <Phone size={14} className="inline ml-1 text-brand-green" />
                 رقم الموبايل
               </label>
@@ -344,47 +331,44 @@ function LoginPageContent() {
                 </span>
                 <input
                   ref={phoneInputRef}
+                  id="login-phone"
+                  name="phone"
                   type="tel"
                   dir="ltr"
-                  inputMode="numeric"
-                  maxLength={11}
+                  inputMode="tel"
+                  maxLength={14}
                   value={phone}
-                  onChange={(e) => {
-                    setPhone(e.target.value.replace(/\D/g, ""));
-                    setError(null);
-                  }}
+                  onChange={handlePhoneChange}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && phone.length === 11) handlePhoneSubmit();
                   }}
                   placeholder="01XXXXXXXXX"
                   className={`w-full ps-14 pe-4 py-3.5 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-lg tracking-wider placeholder:text-gray-text placeholder:tracking-normal ${error ? "border-error bg-error/5" : ""}`}
-                  autoComplete="tel"
+                  autoComplete="tel-national"
                 />
               </div>
               {!error && (
                 <p className="mt-1.5 text-[11px] text-gray-text">
-                  هيوصلك كود تأكيد على رقمك
+                  رقمك هيتملى تلقائي من الموبايل
                 </p>
               )}
             </div>
 
             {/* Display name input (optional) */}
             <div className="w-full">
-              <label className="block text-sm font-semibold text-dark mb-1.5">
+              <label htmlFor="login-name" className="block text-sm font-semibold text-dark mb-1.5">
                 <User size={14} className="inline ml-1 text-brand-green" />
                 اسمك
                 <span className="text-xs text-gray-text font-normal mr-1">(اختياري)</span>
               </label>
               <input
-                ref={nameInputRef}
+                id="login-name"
+                name="name"
                 type="text"
                 dir="rtl"
                 maxLength={50}
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && phone.length === 11) handlePhoneSubmit();
-                }}
                 placeholder="اسمك اللي هيظهر للناس"
                 className="w-full px-4 py-3.5 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark placeholder:text-gray-text"
                 autoComplete="name"
@@ -408,26 +392,10 @@ function LoginPageContent() {
               إرسال كود التأكيد
             </Button>
 
-            {/* Auto-detect button for supported devices */}
-            {!autoDetecting && (
-              <button
-                onClick={autoDetectCredentials}
-                className="w-full flex items-center justify-center gap-2 py-2 text-sm text-brand-green hover:text-brand-green-dark transition-colors"
-              >
-                <Phone size={15} />
-                اقرأ بياناتي من الموبايل تلقائياً
-              </button>
-            )}
-            {autoDetecting && (
-              <div className="flex items-center justify-center gap-2 py-2 text-sm text-gray-text">
-                <div className="w-4 h-4 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
-                جاري قراءة البيانات...
-              </div>
-            )}
-
             {/* Dev bypass */}
             {IS_DEV_MODE && (
               <button
+                type="button"
                 onClick={handleDevLogin}
                 className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-text hover:text-brand-green transition-colors"
               >
@@ -443,7 +411,7 @@ function LoginPageContent() {
               {" "}و{" "}
               <span className="text-brand-green font-semibold">سياسة الخصوصية</span>
             </p>
-          </div>
+          </form>
         )}
 
         {/* ── Step 2: OTP Verification ──────────────────────────────── */}
@@ -463,7 +431,7 @@ function LoginPageContent() {
               </p>
               {devCode && (
                 <div className="mt-2 bg-brand-gold/10 border border-brand-gold/30 rounded-lg px-3 py-2">
-                  <p className="text-xs text-gray-text">كود التطوير:</p>
+                  <p className="text-xs text-gray-text">كود التأكيد:</p>
                   <p className="text-2xl font-bold text-brand-gold tracking-widest" dir="ltr">{devCode}</p>
                 </div>
               )}
