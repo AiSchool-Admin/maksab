@@ -47,7 +47,7 @@ export default function Header({
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
+    <header className="bg-white border-b border-gray-light">
       <div className="flex items-center justify-between px-4 h-14">
         {/* Right side: Back or Logo */}
         <div className="flex items-center gap-2">

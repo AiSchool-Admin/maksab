@@ -101,24 +101,38 @@ export default function HomePage() {
 
   return (
     <main className="bg-white">
-      <Header title="مكسب" showNotifications />
+      {/* ═══ Sticky Top Bar: Header + InstaPay + Search ═══════════ */}
+      <div className="sticky top-0 z-50 bg-white shadow-sm">
+        <Header title="مكسب" showNotifications />
 
-      {/* ─── 1. Search Bar ─────────────────────────────────────── */}
-      <div className="px-4 pt-3 pb-3">
-        <Link href="/search" className="block">
-          <div className="flex items-center gap-3 bg-white border-2 border-brand-green/20 rounded-2xl px-4 py-3.5 shadow-sm shadow-brand-green/5 hover:border-brand-green/40 hover:shadow-md transition-all">
-            <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
-              <Search size={18} className="text-brand-green" />
+        {/* InstaPay — always visible at top */}
+        <a
+          href="https://ipn.eg/S/maksab/instapay/QR"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 mx-3 mt-1 px-3 py-1.5 bg-gradient-to-l from-emerald-500 to-green-600 rounded-xl text-white active:scale-[0.98] transition-all"
+        >
+          <span className="text-base leading-none">💳</span>
+          <p className="flex-1 text-[11px] font-bold">ادعم مكسب — حوّل عبر إنستاباي</p>
+          <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-md flex-shrink-0" dir="ltr">
+            maksab@instapay
+          </span>
+        </a>
+
+        {/* Search bar — sticky */}
+        <div className="px-3 pt-2 pb-1.5">
+          <Link href="/search" className="block">
+            <div className="flex items-center gap-3 bg-gray-light rounded-full pe-4 ps-1.5 py-1.5 hover:bg-gray-200/80 transition-colors">
+              <div className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
+                <Search size={20} className="text-white" strokeWidth={2.5} />
+              </div>
+              <span className="flex-1 text-sm text-gray-text">ابحث عن السيارات، الهواتف وأكتر...</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <span className="text-sm text-gray-text">ابحث عن أي حاجة في مكسب...</span>
-            </div>
-            <span className="text-[10px] text-brand-green font-bold bg-brand-green-light px-2 py-1 rounded-lg flex-shrink-0">بحث</span>
-          </div>
-        </Link>
+          </Link>
+        </div>
 
         {/* Quick search chips */}
-        <div className="flex gap-2 overflow-x-auto mt-2.5 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide">
           {["سيارات", "موبايلات", "عقارات", "ذهب", "أثاث", "خردة"].map((term) => (
             <Link
               key={term}
@@ -221,25 +235,6 @@ export default function HomePage() {
             </Link>
           </div>
         )}
-      </section>
-
-      {/* InstaPay support banner */}
-      <section className="px-4 pb-6">
-        <div className="bg-gradient-to-l from-green-50 to-emerald-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
-          <span className="text-xl">💚</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-dark">ادعم مكسب عبر إنستاباي</p>
-            <p className="text-[11px] text-gray-text" dir="ltr">maksab@instapay</p>
-          </div>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText("maksab@instapay").catch(() => {});
-            }}
-            className="text-[11px] font-bold text-green-600 bg-white px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors flex-shrink-0"
-          >
-            نسخ
-          </button>
-        </div>
       </section>
 
       <BottomNavWithBadge />
