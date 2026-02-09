@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { MessageCircle, LogIn } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNav from "@/components/layout/BottomNav";
@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/SkeletonLoader";
 import Button from "@/components/ui/Button";
 import { useChatStore } from "@/stores/chat-store";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { subscribeToConversationList } from "@/lib/chat/realtime";
 
 export default function ChatListPage() {
   const { user, isLoading: isAuthLoading, requireAuth } = useAuth();
@@ -19,10 +20,38 @@ export default function ChatListPage() {
     loadConversations,
   } = useChatStore();
 
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  // Load conversations on mount
   useEffect(() => {
     if (user) {
       loadConversations();
     }
+  }, [user, loadConversations]);
+
+  // Subscribe to real-time conversation list updates
+  useEffect(() => {
+    if (!user) return;
+
+    // Debounce rapid updates
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        loadConversations();
+      }, 1000);
+    };
+
+    unsubscribeRef.current = subscribeToConversationList(
+      user.id,
+      debouncedRefresh,
+    );
+
+    return () => {
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
   }, [user, loadConversations]);
 
   return (

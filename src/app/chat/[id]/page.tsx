@@ -1,17 +1,26 @@
 "use client";
 
-import { useState, useEffect, useRef, use } from "react";
+import { useState, useEffect, useRef, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, User, Phone } from "lucide-react";
 import ChatBubble from "@/components/chat/ChatBubble";
 import ChatInput from "@/components/chat/ChatInput";
 import ChatAdLink from "@/components/chat/ChatAdLink";
 import OnlineIndicator from "@/components/chat/OnlineIndicator";
+import TypingIndicator from "@/components/chat/TypingIndicator";
 import { ChatBubbleSkeleton } from "@/components/ui/SkeletonLoader";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useChatStore } from "@/stores/chat-store";
-import { fetchConversation } from "@/lib/chat/mock-chat";
-import type { ChatConversation, ChatMessage } from "@/lib/chat/mock-chat";
+import {
+  fetchConversation,
+  sendMessage,
+  markMessagesAsRead,
+  uploadChatImage,
+} from "@/lib/chat/chat-service";
+import type { ChatConversation, ChatMessage } from "@/lib/chat/chat-service";
+import { useRealtimeChat } from "@/lib/hooks/useRealtimeChat";
+import { useTyping } from "@/lib/hooks/useTyping";
+import { useIsOnline } from "@/lib/hooks/usePresence";
 
 const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
 
@@ -30,17 +39,22 @@ export default function ChatPage({
     loadMessages,
     addMessage,
     markAsRead,
+    markMessagesRead,
   } = useChatStore();
 
   const [conversation, setConversation] = useState<ChatConversation | null>(
     null,
   );
   const [isLoadingConv, setIsLoadingConv] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const messages = messagesByConversation[conversationId] || [];
   const currentUserId = user?.id || DEV_USER_ID;
+
+  // Check if the other user is online via presence
+  const otherUserOnline = useIsOnline(conversation?.otherUser.id || null);
 
   /* ── Load conversation info ────────────────────────────────────────── */
   useEffect(() => {
@@ -54,13 +68,58 @@ export default function ChatPage({
   /* ── Load messages ─────────────────────────────────────────────────── */
   useEffect(() => {
     loadMessages(conversationId);
+    // Mark messages as read in DB
+    if (currentUserId !== DEV_USER_ID) {
+      markMessagesAsRead(conversationId, currentUserId);
+    }
     markAsRead(conversationId);
-  }, [conversationId, loadMessages, markAsRead]);
+  }, [conversationId, loadMessages, markAsRead, currentUserId]);
+
+  /* ── Real-time subscription ────────────────────────────────────────── */
+  const handleNewMessage = useCallback(
+    (msg: ChatMessage) => {
+      addMessage(msg);
+      // Mark as read immediately since user is viewing this conversation
+      if (currentUserId !== DEV_USER_ID) {
+        markMessagesAsRead(conversationId, currentUserId);
+      }
+    },
+    [addMessage, conversationId, currentUserId],
+  );
+
+  const handleMessageRead = useCallback(
+    (messageIds: string[]) => {
+      markMessagesRead(conversationId, messageIds);
+    },
+    [conversationId, markMessagesRead],
+  );
+
+  const { sendTyping } = useRealtimeChat({
+    conversationId,
+    currentUserId,
+    onNewMessage: handleNewMessage,
+    onMessageRead: handleMessageRead,
+    onTypingChange: (payload) => {
+      handleRemoteTyping(payload.isTyping, payload.displayName);
+    },
+  });
+
+  /* ── Typing indicator ──────────────────────────────────────────────── */
+  const {
+    isOtherTyping,
+    typingUserName,
+    handleLocalTyping,
+    handleRemoteTyping,
+    stopTyping,
+  } = useTyping({
+    sendTyping,
+    displayName: user?.display_name || "مستخدم",
+  });
 
   /* ── Scroll to bottom on new messages ──────────────────────────────── */
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  }, [messages.length, isOtherTyping]);
 
   /* ── Notify recipient of new message (fire and forget) ─────────────── */
   const notifyRecipient = (messageContent: string) => {
@@ -87,9 +146,14 @@ export default function ChatPage({
   };
 
   /* ── Send text message ─────────────────────────────────────────────── */
-  const handleSendText = (text: string) => {
-    const newMsg: ChatMessage = {
-      id: `msg-new-${Date.now()}`,
+  const handleSendText = async (text: string) => {
+    stopTyping();
+    setIsSending(true);
+
+    // Optimistic: add immediately with temp ID
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
       conversationId,
       senderId: currentUserId,
       content: text,
@@ -97,14 +161,43 @@ export default function ChatPage({
       isRead: false,
       createdAt: new Date().toISOString(),
     };
-    addMessage(newMsg);
+    addMessage(optimisticMsg);
+
+    // Persist to DB
+    const savedMsg = await sendMessage({
+      conversationId,
+      senderId: currentUserId,
+      content: text,
+    });
+
+    if (savedMsg) {
+      // Replace temp message with real one
+      useChatStore.setState((state) => {
+        const msgs = state.messagesByConversation[conversationId] || [];
+        return {
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: msgs.map((m) =>
+              m.id === tempId ? savedMsg : m,
+            ),
+          },
+        };
+      });
+    }
+
+    setIsSending(false);
     notifyRecipient(text);
   };
 
   /* ── Send image message ────────────────────────────────────────────── */
-  const handleSendImage = (preview: string) => {
-    const newMsg: ChatMessage = {
-      id: `msg-new-${Date.now()}`,
+  const handleSendImage = async (preview: string, file?: File) => {
+    stopTyping();
+    setIsSending(true);
+
+    // Optimistic: show preview immediately
+    const tempId = `temp-img-${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
       conversationId,
       senderId: currentUserId,
       content: null,
@@ -112,8 +205,45 @@ export default function ChatPage({
       isRead: false,
       createdAt: new Date().toISOString(),
     };
-    addMessage(newMsg);
+    addMessage(optimisticMsg);
+
+    // Upload to Supabase Storage if file provided
+    let imageUrl = preview;
+    if (file) {
+      const uploadedUrl = await uploadChatImage(file, conversationId);
+      if (uploadedUrl) {
+        imageUrl = uploadedUrl;
+      }
+    }
+
+    // Persist to DB
+    const savedMsg = await sendMessage({
+      conversationId,
+      senderId: currentUserId,
+      imageUrl,
+    });
+
+    if (savedMsg) {
+      useChatStore.setState((state) => {
+        const msgs = state.messagesByConversation[conversationId] || [];
+        return {
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: msgs.map((m) =>
+              m.id === tempId ? savedMsg : m,
+            ),
+          },
+        };
+      });
+    }
+
+    setIsSending(false);
     notifyRecipient("📷 صورة");
+  };
+
+  /* ── Handle typing in input ────────────────────────────────────────── */
+  const handleTyping = () => {
+    handleLocalTyping();
   };
 
   /* ── Loading state ─────────────────────────────────────────────────── */
@@ -147,6 +277,7 @@ export default function ChatPage({
   }
 
   const { otherUser } = conversation;
+  const isOnline = otherUserOnline || otherUser.isOnline;
 
   return (
     <main className="flex flex-col h-screen bg-white">
@@ -176,7 +307,7 @@ export default function ChatPage({
                 <User size={20} />
               )}
             </div>
-            {otherUser.isOnline && (
+            {isOnline && (
               <span className="absolute bottom-0 end-0 w-2.5 h-2.5 bg-brand-green border-2 border-white rounded-full" />
             )}
           </div>
@@ -186,10 +317,17 @@ export default function ChatPage({
             <h2 className="text-sm font-bold text-dark truncate">
               {otherUser.displayName}
             </h2>
-            <OnlineIndicator
-              isOnline={otherUser.isOnline}
-              lastSeen={otherUser.lastSeen}
-            />
+            {isOtherTyping ? (
+              <span className="flex items-center gap-1 text-xs text-brand-green">
+                <span className="w-1.5 h-1.5 bg-brand-green rounded-full animate-pulse" />
+                بيكتب...
+              </span>
+            ) : (
+              <OnlineIndicator
+                isOnline={isOnline}
+                lastSeen={otherUser.lastSeen}
+              />
+            )}
           </div>
 
           {/* Call button */}
@@ -254,6 +392,13 @@ export default function ChatPage({
             ))}
           </>
         )}
+
+        {/* Typing indicator */}
+        <TypingIndicator
+          userName={typingUserName || otherUser.displayName}
+          isVisible={isOtherTyping}
+        />
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -262,6 +407,8 @@ export default function ChatPage({
         <ChatInput
           onSendText={handleSendText}
           onSendImage={handleSendImage}
+          onTyping={handleTyping}
+          disabled={isSending}
         />
       </div>
     </main>

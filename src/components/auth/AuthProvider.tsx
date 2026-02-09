@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import {
@@ -14,6 +15,7 @@ import {
   type UserProfile,
 } from "@/lib/supabase/auth";
 import { supabase } from "@/lib/supabase/client";
+import { trackPresence, cleanupAllChannels } from "@/lib/chat/realtime";
 import AuthBottomSheet from "./AuthBottomSheet";
 
 interface AuthContextValue {
@@ -46,6 +48,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [authResolve, setAuthResolve] = useState<
     ((user: UserProfile | null) => void) | null
   >(null);
+  const presenceCleanupRef = useRef<(() => void) | null>(null);
 
   // Load current user on mount + listen for auth state changes
   useEffect(() => {
@@ -69,6 +72,21 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Track online presence when user is logged in
+  useEffect(() => {
+    if (user?.id) {
+      presenceCleanupRef.current = trackPresence(user.id);
+    } else {
+      presenceCleanupRef.current?.();
+      presenceCleanupRef.current = null;
+    }
+
+    return () => {
+      presenceCleanupRef.current?.();
+      presenceCleanupRef.current = null;
+    };
+  }, [user?.id]);
 
   const requireAuth = useCallback((): Promise<UserProfile | null> => {
     // Already logged in → return immediately
@@ -103,6 +121,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleLogout = useCallback(async () => {
+    cleanupAllChannels();
     await logoutService();
     setUser(null);
   }, []);

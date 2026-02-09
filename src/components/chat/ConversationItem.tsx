@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { User } from "lucide-react";
 import { formatTimeAgo } from "@/lib/utils/format";
-import type { ChatConversation } from "@/lib/chat/mock-chat";
+import type { ChatConversation } from "@/lib/chat/chat-service";
 
 interface ConversationItemProps {
   conversation: ChatConversation;

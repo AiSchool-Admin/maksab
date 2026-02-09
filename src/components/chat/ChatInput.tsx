@@ -6,25 +6,29 @@ import { compressImage } from "@/lib/utils/image-compress";
 
 interface ChatInputProps {
   onSendText: (text: string) => void;
-  onSendImage: (preview: string) => void;
+  onSendImage: (preview: string, file?: File) => void;
+  onTyping?: () => void;
   disabled?: boolean;
 }
 
 export default function ChatInput({
   onSendText,
   onSendImage,
+  onTyping,
   disabled = false,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleSend = () => {
     if (imagePreview) {
-      onSendImage(imagePreview);
+      onSendImage(imagePreview, imageFile || undefined);
       setImagePreview(null);
+      setImageFile(null);
       return;
     }
     const trimmed = text.trim();
@@ -41,6 +45,11 @@ export default function ChatInput({
     }
   };
 
+  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setText(e.target.value);
+    onTyping?.();
+  };
+
   const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -48,6 +57,7 @@ export default function ChatInput({
     try {
       const compressed = await compressImage(file);
       setImagePreview(compressed.preview);
+      setImageFile(compressed.file);
     } catch {
       // Failed to compress
     }
@@ -70,7 +80,10 @@ export default function ChatInput({
           />
           <button
             type="button"
-            onClick={() => setImagePreview(null)}
+            onClick={() => {
+              setImagePreview(null);
+              setImageFile(null);
+            }}
             className="absolute top-1 end-1 w-5 h-5 bg-error text-white rounded-full flex items-center justify-center"
             aria-label="إزالة الصورة"
           >
@@ -108,7 +121,7 @@ export default function ChatInput({
           ref={inputRef}
           type="text"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleTextChange}
           onKeyDown={handleKeyDown}
           placeholder="اكتب رسالة..."
           disabled={disabled}

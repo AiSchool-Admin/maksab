@@ -212,7 +212,7 @@ export default function AdDetailPage({
       governorate: ad.governorate,
     });
     const { findOrCreateConversation } = await import(
-      "@/lib/chat/mock-chat"
+      "@/lib/chat/chat-service"
     );
     const conv = await findOrCreateConversation(ad.id);
     if (conv) {
