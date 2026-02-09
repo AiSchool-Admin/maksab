@@ -30,6 +30,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   load: async (userId) => {
     const uid = userId || DEV_USER_ID;
+    // Skip DB queries for dev user — the fake UUID causes 400 errors
+    if (uid === DEV_USER_ID) {
+      set({ notifications: [], unreadCount: 0, isLoading: false });
+      return;
+    }
     set({ isLoading: true });
     const [notifications, unreadCount] = await Promise.all([
       fetchNotifications(uid),
@@ -50,7 +55,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   markAllRead: async (userId) => {
     const uid = userId || DEV_USER_ID;
-    await markAllAsRead(uid);
+    if (uid !== DEV_USER_ID) {
+      await markAllAsRead(uid);
+    }
     set((state) => ({
       notifications: state.notifications.map((n) => ({ ...n, isRead: true })),
       unreadCount: 0,

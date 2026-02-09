@@ -668,7 +668,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   type VARCHAR(30) NOT NULL CHECK (type IN (
     'chat', 'auction_bid', 'auction_outbid', 'auction_ending',
     'auction_ended', 'auction_won', 'auction_ended_no_bids',
-    'favorite_price_drop', 'recommendation', 'system'
+    'favorite_price_drop', 'recommendation', 'system',
+    'new_match', 'seller_interest'
   )),
   title VARCHAR(200) NOT NULL,
   body TEXT,
@@ -1435,6 +1436,28 @@ EXCEPTION
     RAISE NOTICE 'storage.objects table not found — configure storage policies in Supabase Dashboard.';
 END;
 $$;
+
+
+-- ============================================
+-- Custom Phone OTP (for free phone verification)
+-- ============================================
+CREATE TABLE IF NOT EXISTS phone_otps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone VARCHAR(11) NOT NULL,
+  code VARCHAR(6) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '5 minutes'),
+  verified BOOLEAN DEFAULT FALSE,
+  attempts INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_phone_otps_lookup ON phone_otps(phone, code, expires_at DESC);
+CREATE INDEX IF NOT EXISTS idx_phone_otps_expires ON phone_otps(expires_at);
+CREATE INDEX IF NOT EXISTS idx_phone_otps_rate ON phone_otps(phone, created_at DESC);
+
+-- RLS: Only server-side (service role) can access this table
+ALTER TABLE phone_otps ENABLE ROW LEVEL SECURITY;
+-- No public policies = no public access (only service_role key works)
 
 
 -- ============================================

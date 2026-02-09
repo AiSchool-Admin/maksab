@@ -19,7 +19,42 @@ function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Missing Supabase env vars");
-  return createClient(url, key);
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+/** Ensure phone_otps table exists (auto-create via service role) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function ensurePhoneOtpsTable(supabase: any) {
+  const { error } = await supabase.from("phone_otps").select("id").limit(1);
+  if (error && error.message.includes("does not exist")) {
+    // Table doesn't exist — create it via raw SQL
+    const { error: createError } = await supabase.rpc("exec_sql" as never, {
+      query: `
+        CREATE TABLE IF NOT EXISTS phone_otps (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          phone VARCHAR(20) NOT NULL,
+          code VARCHAR(6) NOT NULL,
+          attempts INTEGER DEFAULT 0,
+          verified BOOLEAN DEFAULT FALSE,
+          expires_at TIMESTAMPTZ NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_phone_otps_lookup ON phone_otps(phone, code, expires_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_phone_otps_expires ON phone_otps(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_phone_otps_rate ON phone_otps(phone, created_at DESC);
+        ALTER TABLE phone_otps ENABLE ROW LEVEL SECURITY;
+      `,
+    } as never);
+    if (createError) {
+      console.error("[send-otp] Could not auto-create phone_otps table:", createError.message);
+      return false;
+    }
+    console.log("[send-otp] Auto-created phone_otps table");
+    return true;
+  }
+  return true; // Table already exists
 }
 
 /** Generate a cryptographically random 6-digit code */
@@ -43,6 +78,15 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getServiceClient();
+
+    // Ensure phone_otps table exists (auto-create if needed)
+    const tableReady = await ensurePhoneOtpsTable(supabase);
+    if (!tableReady) {
+      return NextResponse.json(
+        { error: "جدول التحقق مش موجود. شغّل complete-setup.sql في Supabase SQL Editor" },
+        { status: 500 }
+      );
+    }
 
     // Rate limiting: check how many OTPs were sent to this phone in the last hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
