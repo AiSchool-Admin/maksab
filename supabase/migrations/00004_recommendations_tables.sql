@@ -1,13 +1,14 @@
 -- ============================================
 -- Migration 004: Recommendations Engine Tables
 -- user_signals, user_interest_profiles
+-- ✅ IDEMPOTENT — safe to run multiple times
 -- ============================================
 
 -- ============================================
 -- User Signals (إشارات سلوك المستخدم)
 -- Collects user behavior for recommendation engine
 -- ============================================
-CREATE TABLE user_signals (
+CREATE TABLE IF NOT EXISTS user_signals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   signal_type VARCHAR(20) NOT NULL CHECK (
@@ -24,19 +25,19 @@ CREATE TABLE user_signals (
 );
 
 -- Recent signals per user (for real-time recommendations)
-CREATE INDEX idx_signals_user_recent ON user_signals(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_signals_user_recent ON user_signals(user_id, created_at DESC);
 -- User + category weighted signals (for category-level recommendations)
-CREATE INDEX idx_signals_user_category ON user_signals(user_id, category_id, weight DESC);
+CREATE INDEX IF NOT EXISTS idx_signals_user_category ON user_signals(user_id, category_id, weight DESC);
 -- JSONB signal data (for filtering by brand, price, etc.)
-CREATE INDEX idx_signals_data ON user_signals USING GIN (signal_data);
+CREATE INDEX IF NOT EXISTS idx_signals_data ON user_signals USING GIN (signal_data);
 -- Signal type (for analytics)
-CREATE INDEX idx_signals_type ON user_signals(signal_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_signals_type ON user_signals(signal_type, created_at DESC);
 
 -- ============================================
 -- User Interest Profiles (ملفات اهتمامات المستخدمين)
 -- Precomputed by background worker, used for fast recommendations
 -- ============================================
-CREATE TABLE user_interest_profiles (
+CREATE TABLE IF NOT EXISTS user_interest_profiles (
   user_id UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
   interests JSONB NOT NULL DEFAULT '[]',
   -- Example structure:
