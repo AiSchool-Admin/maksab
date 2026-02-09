@@ -53,6 +53,7 @@ export default function HomePage() {
   // Personalized recommendation state
   const [personalizedAds, setPersonalizedAds] = useState<MockAd[]>([]);
   const [matchingAuctions, setMatchingAuctions] = useState<MockAd[]>([]);
+  const [hasSignals, setHasSignals] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
   // Load favorites from localStorage
@@ -70,6 +71,7 @@ export default function HomePage() {
       if (result.matchingAuctions.length > 0) {
         setMatchingAuctions(result.matchingAuctions);
       }
+      setHasSignals(result.hasSignals);
     });
   }, [user]);
 
@@ -167,7 +169,7 @@ export default function HomePage() {
       {/* ─── 3. Recommended Ads (horizontal scroll) ────────────── */}
       <HorizontalSection
         title="عروض مقترحة ليك"
-        subtitle="بناءً على اهتماماتك"
+        subtitle={hasSignals ? "بناءً على بحثاتك ومفضلاتك" : "إعلانات جديدة ممكن تعجبك"}
         icon="🔥"
         ads={personalizedAds}
         onToggleFavorite={handleToggleFavorite}
@@ -176,6 +178,7 @@ export default function HomePage() {
       {/* ─── 4. Matching Auctions (horizontal scroll) ──────────── */}
       <HorizontalSection
         title="مزادات تناسبك"
+        subtitle={hasSignals ? "بناءً على اهتماماتك" : undefined}
         icon="🔨"
         ads={matchingAuctions}
         href="/auctions"

@@ -1,18 +1,154 @@
 /**
- * Recommendations service — fetches from Supabase.
- * No more mock data — returns real data or empty arrays.
+ * Recommendations service — AI-powered personalized recommendations.
+ * Uses server-side API (/api/recommendations) that calls Supabase RPCs
+ * analyzing user_signals for real personalization.
  */
 
-import { supabase } from "@/lib/supabase/client";
 import type { MockAd } from "@/lib/mock-data";
 import type { ExchangeMatch, SellerInsights } from "./types";
 
-/* ── Get personalized recommendations ─────────────────────────────────── */
+/* ── Types ──────────────────────────────────────────────────────────────── */
 
 export interface RecommendationResult {
   personalizedAds: MockAd[];
-  matchingAuctions: MockAd[];
+  matchingAuctions: (MockAd & {
+    matchReason?: string;
+    timeRemainingHours?: number | null;
+  })[];
   hasSignals: boolean;
+}
+
+interface RecommendedAdFromAPI {
+  id: string;
+  title: string;
+  price: number | null;
+  saleType: string;
+  image: string | null;
+  governorate: string | null;
+  city: string | null;
+  categoryId: string;
+  subcategoryId: string;
+  createdAt: string;
+  isNegotiable: boolean;
+  auctionStartPrice?: number;
+  auctionBuyNowPrice?: number;
+  auctionEndsAt?: string;
+  auctionStatus?: string;
+  exchangeDescription?: string;
+  viewsCount: number;
+  favoritesCount: number;
+  relevanceScore: number;
+  matchReason: string;
+  timeRemainingHours?: number | null;
+}
+
+/* ── Convert API response to MockAd format ──────────────────────────────── */
+
+function apiAdToMockAd(ad: RecommendedAdFromAPI): MockAd {
+  return {
+    id: ad.id,
+    title: ad.title,
+    price: ad.price,
+    saleType: ad.saleType as MockAd["saleType"],
+    image: ad.image,
+    governorate: ad.governorate,
+    city: ad.city,
+    createdAt: ad.createdAt,
+    isNegotiable: ad.isNegotiable ?? false,
+    auctionHighestBid: ad.auctionStartPrice,
+    auctionEndsAt: ad.auctionEndsAt,
+    exchangeDescription: ad.exchangeDescription,
+  };
+}
+
+/* ── Get personalized recommendations ─────────────────────────────────── */
+
+/**
+ * Fetch personalized recommendations from server API.
+ * The API analyzes user_signals to return:
+ * 1. Ads matching user's browsing/search/favorite patterns
+ * 2. Auctions matching user's interests (with urgency scoring)
+ */
+export async function getRecommendations(
+  userId: string,
+  userGovernorate?: string,
+): Promise<RecommendationResult> {
+  try {
+    const response = await fetch("/api/recommendations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId,
+        governorate: userGovernorate || null,
+        limit: 20,
+        auctionLimit: 10,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Recommendations API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    const personalizedAds = (data.personalizedAds || []).map(
+      (ad: RecommendedAdFromAPI) => apiAdToMockAd(ad),
+    );
+
+    const matchingAuctions = (data.matchingAuctions || []).map(
+      (ad: RecommendedAdFromAPI) => ({
+        ...apiAdToMockAd(ad),
+        matchReason: ad.matchReason || "",
+        timeRemainingHours: ad.timeRemainingHours ?? null,
+      }),
+    );
+
+    return {
+      personalizedAds,
+      matchingAuctions,
+      hasSignals: data.hasSignals ?? false,
+    };
+  } catch (err) {
+    console.error("Recommendations error:", err);
+    // Fallback: use client-side Supabase directly
+    return fallbackRecommendations(userId);
+  }
+}
+
+/** Client-side fallback when API is down */
+async function fallbackRecommendations(userId: string): Promise<RecommendationResult> {
+  try {
+    const { supabase } = await import("@/lib/supabase/client");
+
+    const { data: adsData } = await supabase
+      .from("ads" as never)
+      .select("*")
+      .eq("status", "active")
+      .neq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    const personalizedAds = adsData
+      ? (adsData as Record<string, unknown>[]).map(rowToMockAd)
+      : [];
+
+    const { data: auctionData } = await supabase
+      .from("ads" as never)
+      .select("*")
+      .eq("status", "active")
+      .eq("sale_type", "auction")
+      .neq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(8);
+
+    const matchingAuctions = auctionData
+      ? (auctionData as Record<string, unknown>[]).map(rowToMockAd)
+      : [];
+
+    return { personalizedAds, matchingAuctions, hasSignals: false };
+  } catch {
+    return { personalizedAds: [], matchingAuctions: [], hasSignals: false };
+  }
 }
 
 /** Convert Supabase row to MockAd */
@@ -33,54 +169,10 @@ function rowToMockAd(row: Record<string, unknown>): MockAd {
   };
 }
 
-/**
- * Fetch personalized recommendations.
- * Returns latest active ads as personalized, and active auctions.
- */
-export async function getRecommendations(
-  userId: string,
-  userGovernorate?: string,
-): Promise<RecommendationResult> {
-  try {
-    // Fetch latest active ads for personalized section
-    const { data: adsData } = await supabase
-      .from("ads" as never)
-      .select("*")
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(10);
-
-    const personalizedAds = adsData
-      ? (adsData as Record<string, unknown>[]).map(rowToMockAd)
-      : [];
-
-    // Fetch active auctions
-    const { data: auctionData } = await supabase
-      .from("ads" as never)
-      .select("*")
-      .eq("status", "active")
-      .eq("sale_type", "auction")
-      .order("created_at", { ascending: false })
-      .limit(8);
-
-    const matchingAuctions = auctionData
-      ? (auctionData as Record<string, unknown>[]).map(rowToMockAd)
-      : [];
-
-    return {
-      personalizedAds,
-      matchingAuctions,
-      hasSignals: false,
-    };
-  } catch {
-    return { personalizedAds: [], matchingAuctions: [], hasSignals: false };
-  }
-}
-
 /* ── Exchange matching ────────────────────────────────────────────────── */
 
 /**
- * Find matching ads for exchange.
+ * Find matching ads for exchange — uses smart exchange engine.
  */
 export async function findExchangeMatches(
   adTitle: string,
@@ -89,7 +181,9 @@ export async function findExchangeMatches(
   currentAdId: string,
 ): Promise<ExchangeMatch[]> {
   try {
-    // Search for ads that might match what the user wants
+    const { supabase } = await import("@/lib/supabase/client");
+
+    // Multi-angle search for exchange matches
     const { data } = await supabase
       .from("ads" as never)
       .select("*")
@@ -121,49 +215,70 @@ export async function findExchangeMatches(
 /* ── Seller insights ──────────────────────────────────────────────────── */
 
 /**
- * Calculate seller insights after publishing an ad.
+ * Fetch real seller insights — how many potential buyers exist.
  */
 export async function getSellerInsights(params: {
   categoryId: string;
+  subcategoryId?: string;
   title: string;
   governorate: string;
+  brand?: string;
   hasImages: boolean;
 }): Promise<SellerInsights> {
-  // Return basic tips without mock numbers
-  const tips: string[] = [];
-  if (!params.hasImages) {
-    tips.push("أضف صور لزيادة المشاهدات بنسبة 3x");
-  }
+  try {
+    const response = await fetch("/api/recommendations/seller-insights", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        categoryId: params.categoryId,
+        subcategoryId: params.subcategoryId,
+        governorate: params.governorate,
+        brand: params.brand,
+      }),
+    });
 
-  const categoryTips: Record<string, string> = {
-    cars: "أضف صورة للعداد والموتور — دي أكتر حاجة الناس بتسأل عنها",
-    phones: "اذكر حالة البطارية — دي بتفرق كتير في السعر",
-    real_estate: "أضف صور للمطبخ والحمام — الناس عايزة تشوف التفاصيل",
-    gold: "صور واضحة للدمغة بتزود الثقة",
-  };
-  if (categoryTips[params.categoryId]) {
-    tips.push(categoryTips[params.categoryId]);
-  }
+    const data = await response.json();
 
-  return {
-    categorySearchers: 0,
-    specificSearchers: 0,
-    locationInterested: 0,
-    tips,
-  };
+    const tips: string[] = [];
+    if (!params.hasImages) {
+      tips.push("أضف صور لزيادة المشاهدات بنسبة 3x");
+    }
+
+    const categoryTips: Record<string, string> = {
+      cars: "أضف صورة للعداد والموتور — دي أكتر حاجة الناس بتسأل عنها",
+      phones: "اذكر حالة البطارية — دي بتفرق كتير في السعر",
+      real_estate: "أضف صور للمطبخ والحمام — الناس عايزة تشوف التفاصيل",
+      gold: "صور واضحة للدمغة بتزود الثقة",
+    };
+    if (categoryTips[params.categoryId]) {
+      tips.push(categoryTips[params.categoryId]);
+    }
+
+    return {
+      categorySearchers: data.categorySearchers || 0,
+      specificSearchers: data.specificSearchers || 0,
+      locationInterested: data.locationInterested || 0,
+      tips,
+    };
+  } catch {
+    return {
+      categorySearchers: 0,
+      specificSearchers: 0,
+      locationInterested: 0,
+      tips: [],
+    };
+  }
 }
 
 /* ── Enhanced similar search ads ──────────────────────────────────────── */
 
 /**
- * Enhanced "شبيه اللي بتدور عليه" — returns related ads from Supabase.
+ * Enhanced "شبيه اللي بتدور عليه" — handled by search service.
  */
 export function getEnhancedSimilarAds(
-  query: string,
-  mainResultIds: Set<string>,
-  category?: string,
+  _query: string,
+  _mainResultIds: Set<string>,
+  _category?: string,
 ): MockAd[] {
-  // This is now handled by getSimilarSearchAds in search service
-  // Return empty to avoid showing mock data
   return [];
 }
