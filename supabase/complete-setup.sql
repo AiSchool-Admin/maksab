@@ -1613,6 +1613,4 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-DO $$ BEGIN
-  RAISE NOTICE '✅ Part 8: Reviews, Verification, Price Offers tables created!';
-END $$;
+-- ✅ Part 8: Reviews, Verification, Price Offers tables created!
