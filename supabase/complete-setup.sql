@@ -749,24 +749,8 @@ $$;
 -- Correct format: short IDs matching the slug (passenger, land, etc.)
 -- ============================================
 
--- ============================================
--- MIGRATION: Delete old-format subcategory IDs
--- Old format: cars_passenger, re_apartments_sale, phones_mobile, etc.
--- New format: passenger, apartments-sale, mobile, etc. (matches frontend config)
--- Safe to delete because no ads reference them (ads fail with FK violation anyway)
--- ============================================
-DELETE FROM subcategories WHERE id LIKE 'cars_%';
-DELETE FROM subcategories WHERE id LIKE 're_%';
-DELETE FROM subcategories WHERE id LIKE 'phones_%';
-DELETE FROM subcategories WHERE id LIKE 'fashion_%';
-DELETE FROM subcategories WHERE id LIKE 'scrap_%';
-DELETE FROM subcategories WHERE id LIKE 'gold_%';
-DELETE FROM subcategories WHERE id LIKE 'luxury_%';
-DELETE FROM subcategories WHERE id LIKE 'app_%';
-DELETE FROM subcategories WHERE id LIKE 'furn_%';
-DELETE FROM subcategories WHERE id LIKE 'hobby_%';
-DELETE FROM subcategories WHERE id LIKE 'tools_%';
-DELETE FROM subcategories WHERE id LIKE 'svc_%';
+-- NOTE: Old DELETE migration removed — not needed since INSERT uses ON CONFLICT DO NOTHING
+-- and existing ads may reference current subcategory IDs.
 
 -- ============================================
 -- Categories (الأقسام الرئيسية)
