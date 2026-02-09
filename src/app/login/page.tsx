@@ -45,6 +45,8 @@ function LoginPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
   const [autoDetecting, setAutoDetecting] = useState(false);
+  const [devCode, setDevCode] = useState<string | null>(null);
+  const [otpChannel, setOtpChannel] = useState<string | null>(null);
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -127,13 +129,17 @@ function LoginPageContent() {
     }
 
     setIsSubmitting(true);
-    const { error: sendError } = await sendOTP(phone);
+    const otpResult = await sendOTP(phone);
     setIsSubmitting(false);
 
-    if (sendError) {
-      setError(sendError);
+    if (otpResult.error) {
+      setError(otpResult.error);
       return;
     }
+
+    // Store channel info and dev code
+    setOtpChannel(otpResult.channel || null);
+    setDevCode(otpResult.dev_code || null);
 
     setStep("otp");
     setResendTimer(60);
@@ -429,11 +435,17 @@ function LoginPageContent() {
               </div>
               <h2 className="text-lg font-bold text-dark mb-2">أدخل كود التأكيد</h2>
               <p className="text-sm text-gray-text">
-                بعتنالك كود على{" "}
+                {otpChannel === "whatsapp" ? "بعتنالك كود على واتساب" : "بعتنالك كود على"}{" "}
                 <span className="font-bold text-dark" dir="ltr">
                   {formatPhone(phone)}
                 </span>
               </p>
+              {devCode && (
+                <div className="mt-2 bg-brand-gold/10 border border-brand-gold/30 rounded-lg px-3 py-2">
+                  <p className="text-xs text-gray-text">كود التطوير:</p>
+                  <p className="text-2xl font-bold text-brand-gold tracking-widest" dir="ltr">{devCode}</p>
+                </div>
+              )}
             </div>
 
             {/* OTP 6-digit inputs */}

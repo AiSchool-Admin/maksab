@@ -1,9 +1,18 @@
 import { supabase } from "./client";
 
 /**
- * Dev mode bypass — when NEXT_PUBLIC_DEV_MODE=true, auth flows
- * skip real Supabase OTP and use a fake dev user instead.
+ * Custom OTP Authentication System
+ *
+ * This system uses our own API routes (/api/auth/send-otp, /api/auth/verify-otp)
+ * instead of Supabase's built-in phone auth (which requires paid Twilio SMS).
+ *
+ * OTP delivery channels (configured via env vars):
+ * - Dev mode: Code shown on screen (123456)
+ * - WhatsApp Cloud API: First 1000/month free
+ * - SMS via Twilio: Paid fallback
+ * - Manual: User receives code via configured channel
  */
+
 const IS_DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 const DEV_USER = {
@@ -36,143 +45,94 @@ export type UserProfile = {
   updated_at: string;
 };
 
-// ── Send OTP (Phone SMS) ──────────────────────────────────────────────
-export async function sendOTP(phone: string): Promise<{ error: string | null }> {
-  if (IS_DEV_MODE) {
-    await new Promise((r) => setTimeout(r, 500));
-    return { error: null };
-  }
+/** Response from send-otp API */
+export type SendOtpResult = {
+  error: string | null;
+  channel?: "dev" | "whatsapp" | "sms" | "manual";
+  dev_code?: string; // Only in dev mode
+  whatsapp_link?: string | null;
+};
 
-  const { error } = await supabase.auth.signInWithOtp({
-    phone: `+2${phone}`, // Egypt country code
-  });
+// ── Send OTP (Custom API — Free) ────────────────────────────────────
+export async function sendOTP(phone: string): Promise<SendOtpResult> {
+  try {
+    const res = await fetch("/api/auth/send-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone }),
+    });
 
-  if (error) {
-    if (error.message.includes("rate")) {
-      return { error: "استنى شوية قبل ما تبعت كود تاني" };
+    const data = await res.json();
+
+    if (!res.ok) {
+      return { error: data.error || "حصلت مشكلة في إرسال الكود. جرب تاني" };
     }
-    return { error: "حصلت مشكلة في إرسال الكود. جرب تاني" };
-  }
 
-  return { error: null };
+    return {
+      error: null,
+      channel: data.channel,
+      dev_code: data.dev_code,
+      whatsapp_link: data.whatsapp_link,
+    };
+  } catch {
+    return { error: "حصلت مشكلة في الاتصال. تأكد من الإنترنت وجرب تاني" };
+  }
 }
 
-// ── Send OTP via WhatsApp ─────────────────────────────────────────────
-// Uses Supabase phone OTP but opens WhatsApp for delivery (free alternative)
-export async function sendWhatsAppOTP(phone: string): Promise<{ error: string | null }> {
-  if (IS_DEV_MODE) {
-    await new Promise((r) => setTimeout(r, 500));
-    return { error: null };
-  }
-
-  // Use Supabase phone OTP — the OTP is sent via Supabase's configured provider
-  // For WhatsApp delivery, configure Twilio WhatsApp in Supabase dashboard
-  const { error } = await supabase.auth.signInWithOtp({
-    phone: `+2${phone}`,
-    options: {
-      channel: "whatsapp",
-    },
-  });
-
-  if (error) {
-    if (error.message.includes("rate")) {
-      return { error: "استنى شوية قبل ما تبعت كود تاني" };
-    }
-    return { error: "حصلت مشكلة في إرسال الكود على واتساب. جرب تاني" };
-  }
-
-  return { error: null };
-}
-
-// ── Send OTP (Email — free) ──────────────────────────────────────────
-export async function sendEmailOTP(email: string): Promise<{ error: string | null }> {
-  if (IS_DEV_MODE) {
-    await new Promise((r) => setTimeout(r, 500));
-    return { error: null };
-  }
-
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      shouldCreateUser: true,
-    },
-  });
-
-  if (error) {
-    if (error.message.includes("rate")) {
-      return { error: "استنى شوية قبل ما تبعت كود تاني" };
-    }
-    return { error: "حصلت مشكلة في إرسال الكود. جرب تاني" };
-  }
-
-  return { error: null };
-}
-
-// ── Verify OTP (Phone SMS) ──────────────────────────────────────────
+// ── Verify OTP (Custom API — Free) ──────────────────────────────────
 export async function verifyOTP(
   phone: string,
   otp: string,
   displayName?: string,
 ): Promise<{ user: UserProfile | null; error: string | null }> {
-  if (IS_DEV_MODE) {
-    await new Promise((r) => setTimeout(r, 500));
-    return { user: displayName ? { ...DEV_USER, display_name: displayName } : DEV_USER, error: null };
+  // Dev mode: accept 123456 without API call
+  if (IS_DEV_MODE && otp === "123456") {
+    await new Promise((r) => setTimeout(r, 300));
+    return {
+      user: displayName ? { ...DEV_USER, display_name: displayName } : DEV_USER,
+      error: null,
+    };
   }
 
-  const { data, error } = await supabase.auth.verifyOtp({
-    phone: `+2${phone}`,
-    token: otp,
-    type: "sms",
-  });
+  try {
+    const res = await fetch("/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, code: otp, display_name: displayName }),
+    });
 
-  if (error) {
-    if (error.message.includes("invalid") || error.message.includes("expired")) {
-      return { user: null, error: "الكود غلط أو انتهت صلاحيته. جرب تاني" };
+    const data = await res.json();
+
+    if (!res.ok) {
+      return { user: null, error: data.error || "الكود غلط أو انتهت صلاحيته" };
     }
-    return { user: null, error: "حصلت مشكلة في التحقق. جرب تاني" };
-  }
 
-  if (!data.user) {
-    return { user: null, error: "حصلت مشكلة. جرب تاني" };
-  }
+    if (!data.user) {
+      return { user: null, error: "حصلت مشكلة. جرب تاني" };
+    }
 
-  const profile = await upsertUserProfile(data.user.id, phone, displayName);
-  return { user: profile, error: null };
+    // If we got a magic link token, use it to establish a Supabase session
+    if (data.virtual_email && data.magic_link_token) {
+      try {
+        await supabase.auth.verifyOtp({
+          email: data.virtual_email,
+          token: data.magic_link_token,
+          type: "magiclink",
+        });
+      } catch {
+        // Session creation failed — user profile is still valid
+        // They'll get a new session next time
+        console.warn("[verifyOTP] Session creation failed, continuing with profile only");
+      }
+    }
+
+    return { user: data.user as UserProfile, error: null };
+  } catch {
+    return { user: null, error: "حصلت مشكلة في الاتصال. تأكد من الإنترنت وجرب تاني" };
+  }
 }
 
-// ── Verify OTP (Email) ──────────────────────────────────────────────
-export async function verifyEmailOTP(
-  email: string,
-  otp: string,
-): Promise<{ user: UserProfile | null; error: string | null }> {
-  if (IS_DEV_MODE) {
-    await new Promise((r) => setTimeout(r, 500));
-    return { user: DEV_USER, error: null };
-  }
-
-  const { data, error } = await supabase.auth.verifyOtp({
-    email,
-    token: otp,
-    type: "email",
-  });
-
-  if (error) {
-    if (error.message.includes("invalid") || error.message.includes("expired")) {
-      return { user: null, error: "الكود غلط أو انتهت صلاحيته. جرب تاني" };
-    }
-    return { user: null, error: "حصلت مشكلة في التحقق. جرب تاني" };
-  }
-
-  if (!data.user) {
-    return { user: null, error: "حصلت مشكلة. جرب تاني" };
-  }
-
-  // Use email as phone placeholder for profile
-  const profile = await upsertUserProfile(data.user.id, email);
-  return { user: profile, error: null };
-}
-
-// ── Admin Login (Email + Password) ──────────────────────────────────
+// ── Admin Login (Email + Password — kept for admin access) ──────────
 export async function adminLogin(
   email: string,
   password: string,
@@ -185,15 +145,9 @@ export async function adminLogin(
   if (error) {
     console.error("[adminLogin] Supabase error:", error.message, error.status);
     if (error.message.includes("Invalid login")) {
-      return { user: null, error: "الإيميل أو كلمة السر غلط. لو مش عندك حساب، اعمل 'أنشئ حساب جديد'" };
+      return { user: null, error: "الإيميل أو كلمة السر غلط" };
     }
-    if (error.message.includes("Email not confirmed")) {
-      return { user: null, error: "الإيميل لسه مش متأكد. جرب تأكيده الأول" };
-    }
-    if (error.message.includes("Database error") || error.message.includes("schema")) {
-      return { user: null, error: "الحساب ده مش موجود. اعمل 'أنشئ حساب جديد' الأول" };
-    }
-    return { user: null, error: "حصلت مشكلة في تسجيل الدخول. جرب 'أنشئ حساب جديد' لو مش عندك حساب" };
+    return { user: null, error: "حصلت مشكلة في تسجيل الدخول" };
   }
 
   if (!data.user) {
@@ -204,48 +158,11 @@ export async function adminLogin(
   return { user: profile, error: null };
 }
 
-// ── Admin Signup (one-time setup) ───────────────────────────────────
-export async function adminSignup(
-  email: string,
-  password: string,
-): Promise<{ user: UserProfile | null; error: string | null }> {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      // Auto-confirm email in development
-      data: { email_confirmed: true },
-    },
-  });
-
-  if (error) {
-    console.error("[adminSignup] Supabase error:", error.message, error.status);
-    if (error.message.includes("already registered")) {
-      return { user: null, error: "الإيميل ده مسجّل قبل كده. جرب تسجيل الدخول" };
-    }
-    return { user: null, error: `حصلت مشكلة في إنشاء الحساب: ${error.message}` };
-  }
-
-  if (!data.user) {
-    return { user: null, error: "حصلت مشكلة. جرب تاني" };
-  }
-
-  // If email confirmation is required, user won't have a session yet
-  if (!data.session) {
-    return { user: null, error: "تم إنشاء الحساب! محتاج تأكد إيميلك الأول. شيك على الـ inbox" };
-  }
-
-  const profile = await upsertUserProfile(data.user.id, email);
-  return { user: profile, error: null };
-}
-
 // ── Upsert user profile ───────────────────────────────────────────────
 async function upsertUserProfile(userId: string, contactInfo: string, displayName?: string): Promise<UserProfile> {
-  // Determine if contactInfo is an email or phone
   const isEmail = contactInfo.includes("@");
   const phone = isEmail ? "" : contactInfo;
 
-  // Try to fetch existing profile first (maybeSingle avoids 406 on 0 rows)
   const { data: existing, error: selectError } = await supabase
     .from("profiles" as never)
     .select("*")
@@ -258,7 +175,6 @@ async function upsertUserProfile(userId: string, contactInfo: string, displayNam
 
   if (existing) {
     const profile = existing as unknown as UserProfile;
-    // If user provided a display name and current profile doesn't have one, update it
     if (displayName && !profile.display_name) {
       const { data: updated } = await supabase
         .from("profiles" as never)
@@ -271,7 +187,6 @@ async function upsertUserProfile(userId: string, contactInfo: string, displayNam
     return profile;
   }
 
-  // Create new profile using upsert (handles both insert and conflict)
   const profileData: Record<string, unknown> = { id: userId, phone };
   if (displayName) {
     profileData.display_name = displayName;
@@ -291,7 +206,6 @@ async function upsertUserProfile(userId: string, contactInfo: string, displayNam
     return created as unknown as UserProfile;
   }
 
-  // Fallback: return minimal profile
   return {
     id: userId,
     phone,
@@ -337,7 +251,6 @@ export async function updateUserProfile(
 
 // ── Get current session ───────────────────────────────────────────────
 export async function getCurrentUser(): Promise<UserProfile | null> {
-  // Always clean up stale dev sessions in production
   if (!IS_DEV_MODE && typeof window !== "undefined") {
     localStorage.removeItem("maksab_dev_session");
   }
@@ -361,7 +274,6 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
 
   if (data) return data as unknown as UserProfile;
 
-  // Profile doesn't exist yet — create it
   const profile = await upsertUserProfile(session.user.id, session.user.email || session.user.phone || "");
   return profile;
 }
@@ -399,7 +311,7 @@ export function calcProfileCompletion(user: UserProfile): {
   ];
 
   const total = fields.length + 1;
-  let filled = 1; // phone/email is always present
+  let filled = 1; // phone is always present
   const missing: string[] = [];
 
   for (const f of fields) {

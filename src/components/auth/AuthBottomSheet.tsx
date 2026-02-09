@@ -34,6 +34,8 @@ export default function AuthBottomSheet({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
+  const [devCode, setDevCode] = useState<string | null>(null);
+  const [otpChannel, setOtpChannel] = useState<string | null>(null);
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
@@ -48,6 +50,8 @@ export default function AuthBottomSheet({
       setError(null);
       setIsSubmitting(false);
       setResendTimer(0);
+      setDevCode(null);
+      setOtpChannel(null);
       // Focus phone input when sheet opens
       setTimeout(() => phoneInputRef.current?.focus(), 400);
     }
@@ -72,13 +76,16 @@ export default function AuthBottomSheet({
     }
 
     setIsSubmitting(true);
-    const { error: sendError } = await sendOTP(phone);
+    const otpResult = await sendOTP(phone);
     setIsSubmitting(false);
 
-    if (sendError) {
-      setError(sendError);
+    if (otpResult.error) {
+      setError(otpResult.error);
       return;
     }
+
+    setOtpChannel(otpResult.channel || null);
+    setDevCode(otpResult.dev_code || null);
 
     setStep("otp");
     setResendTimer(60);
@@ -319,11 +326,17 @@ export default function AuthBottomSheet({
               <Smartphone size={24} className="text-brand-green" />
             </div>
             <p className="text-sm text-gray-text">
-              أدخل الكود اللي وصلك على{" "}
+              {otpChannel === "whatsapp" ? "أدخل الكود اللي وصلك على واتساب" : "أدخل الكود اللي وصلك على"}{" "}
               <span className="font-bold text-dark" dir="ltr">
                 {formatPhone(phone)}
               </span>
             </p>
+            {devCode && (
+              <div className="mt-2 bg-brand-gold/10 border border-brand-gold/30 rounded-lg px-3 py-1.5">
+                <p className="text-[10px] text-gray-text">كود التطوير:</p>
+                <p className="text-xl font-bold text-brand-gold tracking-widest" dir="ltr">{devCode}</p>
+              </div>
+            )}
           </div>
 
           {/* OTP 6-digit inputs */}
