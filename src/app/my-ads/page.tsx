@@ -207,7 +207,7 @@ export default function MyAdsPage() {
                               <>
                                 <button
                                   onClick={() =>
-                                    router.push(`/ad/${ad.id}`)
+                                    router.push(`/ad/${ad.id}/edit`)
                                   }
                                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-dark hover:bg-gray-light transition-colors"
                                 >

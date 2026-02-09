@@ -202,17 +202,17 @@ export default function ProfilePage() {
         <ProfileMenuItem
           icon={<Heart size={20} />}
           label="المفضلة"
-          onClick={() => {}}
+          onClick={() => router.push("/favorites")}
         />
         <ProfileMenuItem
           icon={<Settings size={20} />}
           label="الإعدادات"
-          onClick={() => {}}
+          onClick={() => router.push("/settings")}
         />
         <ProfileMenuItem
           icon={<HelpCircle size={20} />}
           label="المساعدة والدعم"
-          onClick={() => {}}
+          onClick={() => router.push("/help")}
         />
 
         <div className="pt-3">

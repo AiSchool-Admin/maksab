@@ -21,6 +21,7 @@ import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import { getRecommendations } from "@/lib/recommendations/recommendations-service";
 import { fetchFeedAds } from "@/lib/mock-data";
 import type { MockAd } from "@/lib/mock-data";
+import { toggleFavorite, getFavoriteIds } from "@/lib/favorites/favorites-service";
 
 const categories = [
   { name: "سيارات", slug: "cars" },
@@ -52,6 +53,12 @@ export default function HomePage() {
   // Personalized recommendation state
   const [personalizedAds, setPersonalizedAds] = useState<MockAd[]>([]);
   const [matchingAuctions, setMatchingAuctions] = useState<MockAd[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+
+  // Load favorites from localStorage
+  useEffect(() => {
+    setFavoriteIds(new Set(getFavoriteIds()));
+  }, []);
 
   // Load personalized recommendations
   useEffect(() => {
@@ -70,19 +77,24 @@ export default function HomePage() {
     async (id: string) => {
       const authedUser = await requireAuth();
       if (!authedUser) return;
+
+      const isNowFavorited = toggleFavorite(id);
+      setFavoriteIds(new Set(getFavoriteIds()));
+
       // Track favorite signal
-      const ad = [...personalizedAds, ...matchingAuctions, ...feedAds].find(
-        (a) => a.id === id,
-      );
-      if (ad) {
-        track("favorite", {
-          categoryId: null,
-          adId: id,
-          signalData: { price: ad.price, title: ad.title },
-          governorate: ad.governorate,
-        });
+      if (isNowFavorited) {
+        const ad = [...personalizedAds, ...matchingAuctions, ...feedAds].find(
+          (a) => a.id === id,
+        );
+        if (ad) {
+          track("favorite", {
+            categoryId: null,
+            adId: id,
+            signalData: { price: ad.price, title: ad.title },
+            governorate: ad.governorate,
+          });
+        }
       }
-      console.log("toggle favorite", id, "by", authedUser.id);
     },
     [requireAuth, personalizedAds, matchingAuctions, feedAds, track],
   );
@@ -162,6 +174,7 @@ export default function HomePage() {
                 <AdCard
                   key={ad.id}
                   {...ad}
+                  isFavorited={favoriteIds.has(ad.id)}
                   onToggleFavorite={handleToggleFavorite}
                 />
               ))}
