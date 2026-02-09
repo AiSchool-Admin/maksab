@@ -12,6 +12,7 @@ import {
   User,
   Calendar,
   Radio,
+  Star,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -41,6 +42,14 @@ import {
   formatPhone,
   formatNumber,
 } from "@/lib/utils/format";
+import SellerRatingSummaryComponent from "@/components/reviews/SellerRatingSummary";
+import ReviewForm from "@/components/reviews/ReviewForm";
+import Modal from "@/components/ui/Modal";
+import VerificationBadge, { TrustedSellerBadge, IdVerifiedBadge } from "@/components/verification/VerificationBadge";
+import PriceOfferButton from "@/components/offers/PriceOfferButton";
+import OffersListSection from "@/components/offers/OffersListSection";
+import AddToCompareButton from "@/components/comparison/AddToCompareButton";
+import ComparisonFab from "@/components/comparison/ComparisonFab";
 
 const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
 
@@ -92,6 +101,13 @@ export default function AdDetailPage({
   const [isBidding, setIsBidding] = useState(false);
   const [isBuyingNow, setIsBuyingNow] = useState(false);
 
+  // Review & verification state
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [sellerVerificationLevel, setSellerVerificationLevel] = useState<"basic" | "verified" | "premium">("basic");
+  const [sellerIsTrusted, setSellerIsTrusted] = useState(false);
+  const [sellerIsIdVerified, setSellerIsIdVerified] = useState(false);
+  const [reviewsKey, setReviewsKey] = useState(0); // force refresh reviews
+
   const currentUserId = user?.id || DEV_USER_ID;
 
   /* ── Load ad detail ──────────────────────────────────────── */
@@ -116,6 +132,22 @@ export default function AdDetailPage({
       }
     });
   }, [id]);
+
+  /* ── Load seller verification data ──────────────────────── */
+  useEffect(() => {
+    if (!ad?.seller?.id) return;
+    import("@/lib/verification/verification-service").then(({ getUserVerificationProfile }) => {
+      getUserVerificationProfile(ad.seller.id).then((profile) => {
+        setSellerVerificationLevel(profile.level);
+        setSellerIsIdVerified(profile.isIdVerified);
+      });
+    });
+    import("@/lib/reviews/reviews-service").then(({ getSellerRatingSummary }) => {
+      getSellerRatingSummary(ad.seller.id).then((summary) => {
+        setSellerIsTrusted(summary.isTrustedSeller);
+      });
+    });
+  }, [ad?.seller?.id]);
 
   /* ── Track view signal after 3 seconds ──────────────────── */
   useEffect(() => {
@@ -440,6 +472,32 @@ export default function AdDetailPage({
           />
         )}
 
+        {/* Price Offers — for cash sale type */}
+        {ad.saleType === "cash" && ad.price != null && (
+          <PriceOfferButton
+            adId={ad.id}
+            sellerId={ad.seller.id}
+            adTitle={ad.title}
+            currentPrice={ad.price}
+          />
+        )}
+
+        {/* Add to compare button */}
+        <AddToCompareButton
+          ad={{
+            id: ad.id,
+            title: ad.title,
+            price: ad.price,
+            saleType: ad.saleType,
+            image: ad.images[0] || null,
+            governorate: ad.governorate,
+            city: ad.city,
+            categoryId: ad.categoryId,
+            categoryFields: ad.categoryFields as Record<string, unknown>,
+          }}
+          variant="full"
+        />
+
         {/* Specs table */}
         <SpecsTable
           categoryId={ad.categoryId}
@@ -469,39 +527,74 @@ export default function AdDetailPage({
         {/* Seller */}
         <div>
           <h3 className="text-sm font-bold text-dark mb-3">البائع</h3>
-          <div className="flex items-center gap-3 bg-gray-light rounded-xl p-4">
-            <div className="w-12 h-12 rounded-full bg-brand-green-light flex items-center justify-center text-brand-green flex-shrink-0">
-              {ad.seller.avatarUrl ? (
-                <img
-                  src={ad.seller.avatarUrl}
-                  alt={ad.seller.displayName}
-                  className="w-full h-full rounded-full object-cover"
-                />
-              ) : (
-                <User size={24} />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-dark text-sm">
-                {ad.seller.displayName}
-              </p>
-              <div className="flex items-center gap-3 text-[11px] text-gray-text mt-1">
-                <span className="flex items-center gap-1">
-                  <Calendar size={10} />
-                  عضو منذ {memberYear}
-                </span>
-                <span>{ad.seller.totalAds} إعلان</span>
+          <div className="bg-gray-light rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-brand-green-light flex items-center justify-center text-brand-green flex-shrink-0">
+                {ad.seller.avatarUrl ? (
+                  <img
+                    src={ad.seller.avatarUrl}
+                    alt={ad.seller.displayName}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <User size={24} />
+                )}
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="font-bold text-dark text-sm">
+                    {ad.seller.displayName}
+                  </p>
+                  <VerificationBadge level={sellerVerificationLevel} />
+                  {sellerIsTrusted && <TrustedSellerBadge />}
+                  {sellerIsIdVerified && <IdVerifiedBadge />}
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-gray-text mt-1">
+                  <span className="flex items-center gap-1">
+                    <Calendar size={10} />
+                    عضو منذ {memberYear}
+                  </span>
+                  <span>{ad.seller.totalAds} إعلان</span>
+                  {ad.seller.rating > 0 && (
+                    <span className="flex items-center gap-0.5">
+                      <Star size={10} className="text-brand-gold fill-brand-gold" />
+                      {ad.seller.rating}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <a
+                href={`tel:+2${ad.seller.phone}`}
+                className="text-xs text-brand-green font-semibold"
+                dir="ltr"
+              >
+                {formatPhone(ad.seller.phone)}
+              </a>
             </div>
-            <a
-              href={`tel:+2${ad.seller.phone}`}
-              className="text-xs text-brand-green font-semibold"
-              dir="ltr"
-            >
-              {formatPhone(ad.seller.phone)}
-            </a>
+
+            {/* Review button for non-sellers */}
+            {user && user.id !== ad.seller.id && (
+              <button
+                onClick={() => setShowReviewForm(true)}
+                className="text-xs font-semibold text-brand-green hover:text-brand-green-dark transition-colors"
+              >
+                قيّم هذا البائع
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Seller Offers (visible to seller) */}
+        {user?.id === ad.seller.id && (
+          <OffersListSection
+            adId={ad.id}
+            sellerId={ad.seller.id}
+            currentUserId={currentUserId}
+          />
+        )}
+
+        {/* Seller Reviews */}
+        <SellerRatingSummaryComponent key={reviewsKey} sellerId={ad.seller.id} />
 
         {/* Views & date */}
         <div className="flex items-center justify-between text-xs text-gray-text pt-2 border-t border-gray-light">
@@ -557,6 +650,28 @@ export default function AdDetailPage({
         adId={ad.id}
         onChat={handleChat}
       />
+
+      {/* Comparison FAB */}
+      <ComparisonFab />
+
+      {/* Review Form Modal */}
+      <Modal
+        isOpen={showReviewForm}
+        onClose={() => setShowReviewForm(false)}
+        title="تقييم البائع"
+      >
+        <ReviewForm
+          adId={ad.id}
+          sellerId={ad.seller.id}
+          reviewerId={user?.id || ""}
+          adTitle={ad.title}
+          onSuccess={() => {
+            setShowReviewForm(false);
+            setReviewsKey((k) => k + 1);
+          }}
+          onCancel={() => setShowReviewForm(false)}
+        />
+      </Modal>
     </main>
   );
 }

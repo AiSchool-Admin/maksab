@@ -16,6 +16,9 @@ import {
   Banknote,
   Copy,
   Check,
+  Star,
+  DollarSign,
+  ShieldCheck,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -24,6 +27,8 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { calcProfileCompletion } from "@/lib/supabase/auth";
 import { formatPhone } from "@/lib/utils/format";
 import { isCommissionSupporter } from "@/lib/commission/commission-service";
+import VerificationSection from "@/components/verification/VerificationSection";
+import SellerRatingSummaryComponent from "@/components/reviews/SellerRatingSummary";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -189,6 +194,16 @@ export default function ProfilePage() {
         </section>
       )}
 
+      {/* Verification section */}
+      <section className="px-4 pb-5">
+        <VerificationSection userId={user!.id} />
+      </section>
+
+      {/* My Reviews */}
+      <section className="px-4 pb-5">
+        <SellerRatingSummaryComponent sellerId={user!.id} />
+      </section>
+
       {/* InstaPay commission support banner */}
       <InstaPayBanner />
 
@@ -203,6 +218,11 @@ export default function ProfilePage() {
           icon={<Heart size={20} />}
           label="المفضلة"
           onClick={() => router.push("/favorites")}
+        />
+        <ProfileMenuItem
+          icon={<DollarSign size={20} />}
+          label="عروض الأسعار"
+          onClick={() => router.push("/my-offers")}
         />
         <ProfileMenuItem
           icon={<Settings size={20} />}
