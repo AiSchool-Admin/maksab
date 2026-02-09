@@ -26,12 +26,27 @@ export default function DynamicCategoryForm({
   const reqFieldIds = new Set(override?.requiredFields ?? config.requiredFields);
 
   const visibleFields = useMemo(() => {
-    const sorted = [...config.fields].sort((a, b) => a.order - b.order);
+    // Start with base fields, apply field overrides if any
+    let fields = config.fields.map((f) => {
+      const fieldOverride = override?.fieldOverrides?.[f.id];
+      if (fieldOverride) {
+        return { ...f, ...fieldOverride } as typeof f;
+      }
+      return f;
+    });
+
     // Filter out fields hidden for this subcategory
-    return sorted.filter(
+    fields = fields.filter(
       (f) => !subcategoryId || !f.hiddenForSubcategories?.includes(subcategoryId),
     );
-  }, [config, subcategoryId]);
+
+    // Add extra fields from subcategory override
+    if (override?.extraFields) {
+      fields = [...fields, ...override.extraFields];
+    }
+
+    return fields.sort((a, b) => a.order - b.order);
+  }, [config, subcategoryId, override]);
 
   // Handle brand change — reset model when brand changes
   const handleFieldChange = (fieldId: string, value: unknown) => {

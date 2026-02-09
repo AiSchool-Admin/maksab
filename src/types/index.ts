@@ -44,6 +44,10 @@ export interface SubcategoryOverride {
   requiredFields: string[];
   titleTemplate?: string;
   descriptionTemplate?: string;
+  /** Additional fields only shown for this subcategory */
+  extraFields?: CategoryField[];
+  /** Override specific fields' options/label for this subcategory (keyed by field id) */
+  fieldOverrides?: Record<string, Partial<Pick<CategoryField, "options" | "label" | "unit" | "placeholder" | "type" | "isRequired">>>;
 }
 
 export interface SearchRequest {
