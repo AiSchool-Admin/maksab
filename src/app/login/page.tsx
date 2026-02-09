@@ -139,16 +139,27 @@ function LoginPageContent() {
     }
 
     // Store token, channel info, and dev code
-    setOtpToken(otpResult.token || "");
+    const receivedToken = otpResult.token || "";
+    const receivedCode = otpResult.dev_code || null;
+    setOtpToken(receivedToken);
     setOtpChannel(otpResult.channel || null);
-    setDevCode(otpResult.dev_code || null);
+    setDevCode(receivedCode);
+
+    // Auto-fill OTP if code is available (dev/manual channel)
+    if (receivedCode && /^\d{6}$/.test(receivedCode)) {
+      setOtp(receivedCode.split(""));
+    }
 
     setStep("otp");
     setResendTimer(60);
-    setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
 
-    // Try WebOTP API to auto-read SMS code
-    tryWebOTP();
+    // If code was auto-filled, focus the confirm button area
+    // Otherwise focus first OTP input for manual entry
+    if (!receivedCode) {
+      setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
+      // Try WebOTP API to auto-read SMS code
+      tryWebOTP();
+    }
   };
 
   // ── WebOTP: Auto-read SMS verification code ───────────────────────
@@ -258,14 +269,20 @@ function LoginPageContent() {
       return;
     }
 
-    setOtpToken(resendResult.token || "");
-    setDevCode(resendResult.dev_code || null);
+    const newToken = resendResult.token || "";
+    const newCode = resendResult.dev_code || null;
+    setOtpToken(newToken);
+    setDevCode(newCode);
     setResendTimer(60);
-    setOtp(["", "", "", "", "", ""]);
-    otpInputsRef.current[0]?.focus();
 
-    // Try WebOTP again
-    tryWebOTP();
+    // Auto-fill OTP if code is available
+    if (newCode && /^\d{6}$/.test(newCode)) {
+      setOtp(newCode.split(""));
+    } else {
+      setOtp(["", "", "", "", "", ""]);
+      otpInputsRef.current[0]?.focus();
+      tryWebOTP();
+    }
   };
 
   // ── Dev bypass ────────────────────────────────────────────────────

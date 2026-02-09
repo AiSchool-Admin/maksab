@@ -14,6 +14,7 @@ import { supabase } from "./client";
  */
 
 const IS_DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
+const SESSION_KEY = "maksab_user_session";
 
 const DEV_USER = {
   id: "dev-00000000-0000-0000-0000-000000000000",
@@ -53,6 +54,31 @@ export type SendOtpResult = {
   dev_code?: string; // Only in dev mode
   whatsapp_link?: string | null;
 };
+
+// ── Session persistence (localStorage) ──────────────────────────────
+function saveSession(user: UserProfile): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  }
+}
+
+function loadSession(): UserProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = localStorage.getItem(SESSION_KEY);
+    if (!stored) return null;
+    return JSON.parse(stored) as UserProfile;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession(): void {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem("maksab_dev_session");
+  }
+}
 
 // ── Send OTP (Custom API — Free) ────────────────────────────────────
 export async function sendOTP(phone: string): Promise<SendOtpResult> {
@@ -105,7 +131,12 @@ export async function verifyOTP(
       return { user: null, error: "حصلت مشكلة. جرب تاني" };
     }
 
-    // If we got a magic link token, use it to establish a Supabase session
+    const userProfile = data.user as UserProfile;
+
+    // Save session to localStorage for persistence
+    saveSession(userProfile);
+
+    // Try to establish a Supabase auth session (for RLS queries)
     if (data.virtual_email && data.magic_link_token) {
       try {
         await supabase.auth.verifyOtp({
@@ -114,13 +145,11 @@ export async function verifyOTP(
           type: "magiclink",
         });
       } catch {
-        // Session creation failed — user profile is still valid
-        // They'll get a new session next time
-        console.warn("[verifyOTP] Session creation failed, continuing with profile only");
+        // Session creation failed — user profile still works via localStorage
       }
     }
 
-    return { user: data.user as UserProfile, error: null };
+    return { user: userProfile, error: null };
   } catch {
     return { user: null, error: "حصلت مشكلة في الاتصال. تأكد من الإنترنت وجرب تاني" };
   }
@@ -245,50 +274,48 @@ export async function updateUserProfile(
 
 // ── Get current session ───────────────────────────────────────────────
 export async function getCurrentUser(): Promise<UserProfile | null> {
-  if (!IS_DEV_MODE && typeof window !== "undefined") {
-    localStorage.removeItem("maksab_dev_session");
-  }
+  // 1. Check localStorage for saved session (fastest — no network)
+  const savedUser = loadSession();
+  if (savedUser) return savedUser;
 
-  if (IS_DEV_MODE) {
-    if (typeof window !== "undefined") {
-      const devSession = localStorage.getItem("maksab_dev_session");
-      if (devSession) return DEV_USER;
+  // 2. Check Supabase auth session
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return null;
+
+    const { data } = await supabase
+      .from("profiles" as never)
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (data) {
+      const profile = data as unknown as UserProfile;
+      saveSession(profile); // Cache for next time
+      return profile;
     }
+
+    const profile = await upsertUserProfile(session.user.id, session.user.email || session.user.phone || "");
+    if (profile) saveSession(profile);
+    return profile;
+  } catch {
     return null;
   }
-
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return null;
-
-  const { data } = await supabase
-    .from("profiles" as never)
-    .select("*")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
-  if (data) return data as unknown as UserProfile;
-
-  const profile = await upsertUserProfile(session.user.id, session.user.email || session.user.phone || "");
-  return profile;
 }
 
 // ── Logout ────────────────────────────────────────────────────────────
 export async function logout(): Promise<void> {
-  if (IS_DEV_MODE) {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("maksab_dev_session");
-    }
-    return;
+  clearSession();
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // Silent — session might already be gone
   }
-
-  await supabase.auth.signOut();
 }
 
 // ── Dev login (saves session to localStorage) ─────────────────────────
 export function devLogin(): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("maksab_dev_session", "true");
-  }
+  saveSession(DEV_USER);
 }
 
 // ── Profile completion calculation ────────────────────────────────────
