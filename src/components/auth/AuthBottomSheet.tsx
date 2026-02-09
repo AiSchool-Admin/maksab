@@ -1,23 +1,18 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Phone, Mail, ArrowLeft, RefreshCw, Shield, Lock, Eye, EyeOff, MessageCircle } from "lucide-react";
+import { Phone, User, RefreshCw, Shield, Smartphone } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import {
   sendOTP,
-  sendWhatsAppOTP,
-  sendEmailOTP,
   verifyOTP,
-  verifyEmailOTP,
-  adminLogin,
   devLogin,
   type UserProfile,
 } from "@/lib/supabase/auth";
-import { egyptianPhoneSchema, emailSchema, otpSchema } from "@/lib/utils/validators";
+import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
 
 const IS_DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
-const PHONE_AUTH_ENABLED = process.env.NEXT_PUBLIC_PHONE_AUTH_ENABLED === "true";
 
 interface AuthBottomSheetProps {
   isOpen: boolean;
@@ -25,42 +20,36 @@ interface AuthBottomSheetProps {
   onSuccess: (user: UserProfile) => void;
 }
 
-type AuthMethod = "whatsapp" | "email" | "phone" | "admin";
-type Step = "choose" | "input" | "otp";
+type Step = "phone" | "otp";
 
 export default function AuthBottomSheet({
   isOpen,
   onClose,
   onSuccess,
 }: AuthBottomSheetProps) {
-  const [authMethod, setAuthMethod] = useState<AuthMethod>("email");
-  const [step, setStep] = useState<Step>("choose");
+  const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [displayName, setDisplayName] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
-  const emailInputRef = useRef<HTMLInputElement>(null);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      setStep("choose");
-      setAuthMethod("email");
+      setStep("phone");
       setPhone("");
-      setEmail("");
-      setPassword("");
-      setShowPassword(false);
+      setDisplayName("");
       setOtp(["", "", "", "", "", ""]);
       setError(null);
       setIsSubmitting(false);
       setResendTimer(0);
+      // Focus phone input when sheet opens
+      setTimeout(() => phoneInputRef.current?.focus(), 400);
     }
   }, [isOpen]);
 
@@ -73,24 +62,7 @@ export default function AuthBottomSheet({
     return () => clearInterval(interval);
   }, [resendTimer]);
 
-  // Focus input when moving to input step
-  useEffect(() => {
-    if (step === "input") {
-      setTimeout(() => {
-        if (authMethod === "phone" || authMethod === "whatsapp") phoneInputRef.current?.focus();
-        else emailInputRef.current?.focus();
-      }, 400);
-    }
-  }, [step, authMethod]);
-
-  // ── Choose method and go to input ─────────────────────────────────
-  const selectMethod = (method: AuthMethod) => {
-    setAuthMethod(method);
-    setStep("input");
-    setError(null);
-  };
-
-  // ── Phone submit (SMS or WhatsApp) ───────────────────────────────
+  // ── Send OTP ────────────────────────────────────────────────────
   const handlePhoneSubmit = async () => {
     setError(null);
     const result = egyptianPhoneSchema.safeParse(phone);
@@ -100,8 +72,7 @@ export default function AuthBottomSheet({
     }
 
     setIsSubmitting(true);
-    const sendFn = authMethod === "whatsapp" ? sendWhatsAppOTP : sendOTP;
-    const { error: sendError } = await sendFn(phone);
+    const { error: sendError } = await sendOTP(phone);
     setIsSubmitting(false);
 
     if (sendError) {
@@ -112,58 +83,34 @@ export default function AuthBottomSheet({
     setStep("otp");
     setResendTimer(60);
     setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
+
+    // Try WebOTP API to auto-read SMS code
+    tryWebOTP();
   };
 
-  // ── Email submit ──────────────────────────────────────────────────
-  const handleEmailSubmit = async () => {
-    setError(null);
-    const result = emailSchema.safeParse(email);
-    if (!result.success) {
-      setError(result.error.issues[0].message);
-      return;
+  // ── WebOTP: Auto-read SMS verification code ─────────────────────
+  const tryWebOTP = async () => {
+    try {
+      if ("OTPCredential" in window) {
+        const content = await navigator.credentials.get({
+          // @ts-expect-error WebOTP API not in all TS defs yet
+          otp: { transport: ["sms"] },
+        });
+        if (content && "code" in content) {
+          const code = (content as { code: string }).code;
+          if (code && /^\d{6}$/.test(code)) {
+            const digits = code.split("");
+            setOtp(digits);
+            handleOtpSubmit(code);
+          }
+        }
+      }
+    } catch {
+      // WebOTP not supported — that's fine
     }
-
-    setIsSubmitting(true);
-    const { error: sendError } = await sendEmailOTP(email);
-    setIsSubmitting(false);
-
-    if (sendError) {
-      setError(sendError);
-      return;
-    }
-
-    setStep("otp");
-    setResendTimer(60);
-    setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
   };
 
-  // ── Admin submit ──────────────────────────────────────────────────
-  const handleAdminSubmit = async () => {
-    setError(null);
-
-    const emailResult = emailSchema.safeParse(email);
-    if (!emailResult.success) {
-      setError(emailResult.error.issues[0].message);
-      return;
-    }
-    if (password.length < 6) {
-      setError("كلمة السر لازم تكون 6 حروف على الأقل");
-      return;
-    }
-
-    setIsSubmitting(true);
-    const { user, error: loginError } = await adminLogin(email, password);
-    setIsSubmitting(false);
-
-    if (loginError || !user) {
-      setError(loginError || "حصلت مشكلة. جرب تاني");
-      return;
-    }
-
-    onSuccess(user);
-  };
-
-  // ── OTP input handling ────────────────────────────────────────────
+  // ── OTP input handling ──────────────────────────────────────────
   const handleOtpChange = (index: number, value: string) => {
     const digit = value.replace(/\D/g, "").slice(-1);
     const newOtp = [...otp];
@@ -198,7 +145,7 @@ export default function AuthBottomSheet({
     }
   };
 
-  // ── OTP verification ──────────────────────────────────────────────
+  // ── OTP verification ────────────────────────────────────────────
   const handleOtpSubmit = useCallback(
     async (otpCode?: string) => {
       const code = otpCode || otp.join("");
@@ -212,12 +159,7 @@ export default function AuthBottomSheet({
 
       setIsSubmitting(true);
 
-      let response;
-      if (authMethod === "phone" || authMethod === "whatsapp") {
-        response = await verifyOTP(phone, code);
-      } else {
-        response = await verifyEmailOTP(email, code);
-      }
+      const response = await verifyOTP(phone, code, displayName.trim() || undefined);
 
       setIsSubmitting(false);
 
@@ -234,18 +176,16 @@ export default function AuthBottomSheet({
 
       onSuccess(response.user);
     },
-    [otp, phone, email, authMethod, onSuccess],
+    [otp, phone, displayName, onSuccess],
   );
 
-  // ── Resend OTP ────────────────────────────────────────────────────
+  // ── Resend OTP ──────────────────────────────────────────────────
   const handleResend = async () => {
     if (resendTimer > 0) return;
     setError(null);
     setIsSubmitting(true);
 
-    const { error: sendError } =
-      authMethod === "whatsapp" ? await sendWhatsAppOTP(phone) :
-      authMethod === "phone" ? await sendOTP(phone) : await sendEmailOTP(email);
+    const { error: sendError } = await sendOTP(phone);
 
     setIsSubmitting(false);
     if (sendError) {
@@ -256,9 +196,10 @@ export default function AuthBottomSheet({
     setResendTimer(60);
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
+    tryWebOTP();
   };
 
-  // ── Dev bypass login ──────────────────────────────────────────────
+  // ── Dev bypass login ────────────────────────────────────────────
   const handleDevLogin = async () => {
     setIsSubmitting(true);
     devLogin();
@@ -267,120 +208,35 @@ export default function AuthBottomSheet({
     if (user) onSuccess(user);
   };
 
-  // ── Get modal title ───────────────────────────────────────────────
-  const getTitle = () => {
-    if (step === "otp") return "كود التأكيد";
-    if (step === "input" && authMethod === "admin") return "دخول الأدمن";
-    if (step === "input" && authMethod === "whatsapp") return "سجّل عبر واتساب";
-    if (step === "input" && authMethod === "phone") return "سجّل برقم موبايلك";
-    if (step === "input" && authMethod === "email") return "سجّل بالإيميل";
-    return "سجّل دخولك";
+  // ── Format phone for display ────────────────────────────────────
+  const formatPhone = (p: string) => {
+    if (p.length >= 7) return `${p.slice(0, 3)}-${p.slice(3, 7)}-${p.slice(7)}`;
+    if (p.length >= 3) return `${p.slice(0, 3)}-${p.slice(3)}`;
+    return p;
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={getTitle()}>
-      {/* ── Step 1: Choose Auth Method ────────────────────────────── */}
-      {step === "choose" && (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={step === "otp" ? "كود التأكيد" : "سجّل دخولك"}
+    >
+      {/* ── Step 1: Phone + Name ──────────────────────────────────── */}
+      {step === "phone" && (
         <div className="space-y-4">
           <p className="text-sm text-gray-text">
-            اختار طريقة تسجيل الدخول
+            سجّل برقم موبايلك عشان تكمّل
           </p>
 
-          {/* Email option (primary - free) */}
-          <button
-            onClick={() => selectMethod("email")}
-            className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green/10 hover:border-brand-green border-2 border-transparent transition-all"
-          >
-            <div className="w-10 h-10 rounded-full bg-brand-green/15 flex items-center justify-center flex-shrink-0">
-              <Mail size={20} className="text-brand-green" />
-            </div>
-            <div className="text-start">
-              <p className="font-semibold text-dark">الإيميل</p>
-              <p className="text-xs text-gray-text">هيوصلك كود تأكيد على إيميلك</p>
-            </div>
-            <span className="ms-auto text-[10px] bg-brand-green text-white px-2 py-0.5 rounded-full font-bold">مُوصى به</span>
-          </button>
-
-          {/* WhatsApp option (only when Twilio is configured) */}
-          {PHONE_AUTH_ENABLED && (
-            <button
-              onClick={() => selectMethod("whatsapp")}
-              className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-green-50 hover:border-green-500 border-2 border-transparent transition-all"
-            >
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                <MessageCircle size={20} className="text-green-600" />
-              </div>
-              <div className="text-start">
-                <p className="font-semibold text-dark">واتساب</p>
-                <p className="text-xs text-gray-text">هيوصلك كود تأكيد على واتساب</p>
-              </div>
-            </button>
-          )}
-
-          {/* Phone SMS option (only when Twilio is configured) */}
-          {PHONE_AUTH_ENABLED && (
-            <button
-              onClick={() => selectMethod("phone")}
-              className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green/10 hover:border-brand-green border-2 border-transparent transition-all"
-            >
-              <div className="w-10 h-10 rounded-full bg-brand-gold/15 flex items-center justify-center flex-shrink-0">
-                <Phone size={20} className="text-brand-gold" />
-              </div>
-              <div className="text-start">
-                <p className="font-semibold text-dark">رسالة SMS</p>
-                <p className="text-xs text-gray-text">هيوصلك كود SMS على رقمك</p>
-              </div>
-            </button>
-          )}
-
-          {/* Admin option */}
-          <button
-            onClick={() => selectMethod("admin")}
-            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-light border-2 border-transparent transition-all"
-          >
-            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-              <Shield size={16} className="text-gray-text" />
-            </div>
-            <div className="text-start">
-              <p className="text-sm text-gray-text">دخول الأدمن (إيميل + كلمة سر)</p>
-            </div>
-          </button>
-
-          {/* Dev bypass */}
-          {IS_DEV_MODE && (
-            <button
-              onClick={handleDevLogin}
-              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-text hover:text-brand-green transition-colors"
-            >
-              <Shield size={16} />
-              دخول المطوّر (بدون OTP)
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ── Step 2: Input (WhatsApp / Phone) ─────────────────────── */}
-      {step === "input" && (authMethod === "phone" || authMethod === "whatsapp") && (
-        <div className="space-y-5">
-          {/* Back button */}
-          <button
-            onClick={() => { setStep("choose"); setError(null); }}
-            className="flex items-center gap-1.5 text-sm text-gray-text hover:text-dark transition-colors btn-icon-sm"
-          >
-            <ArrowLeft size={16} />
-            رجوع
-          </button>
-
-          <p className="text-sm text-gray-text">
-            {authMethod === "whatsapp"
-              ? "أدخل رقم موبايلك المصري وهنبعتلك كود تأكيد على واتساب"
-              : "أدخل رقم موبايلك المصري وهنبعتلك كود تأكيد SMS"}
-          </p>
-
+          {/* Phone number */}
           <div className="w-full">
+            <label className="block text-sm font-semibold text-dark mb-1.5">
+              <Phone size={14} className="inline ml-1 text-brand-green" />
+              رقم الموبايل
+            </label>
             <div className="relative">
-              <span className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-text pointer-events-none">
-                <Phone size={18} />
+              <span className="absolute start-3 top-1/2 -translate-y-1/2 text-sm text-gray-text font-semibold pointer-events-none select-none" dir="ltr">
+                +20
               </span>
               <input
                 ref={phoneInputRef}
@@ -389,18 +245,47 @@ export default function AuthBottomSheet({
                 inputMode="numeric"
                 maxLength={11}
                 value={phone}
-                onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setError(null); }}
-                onKeyDown={(e) => { if (e.key === "Enter") handlePhoneSubmit(); }}
+                onChange={(e) => {
+                  setPhone(e.target.value.replace(/\D/g, ""));
+                  setError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && phone.length === 11) handlePhoneSubmit();
+                }}
                 placeholder="01XXXXXXXXX"
-                className={`w-full px-4 py-3 pe-10 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-center text-lg tracking-widest placeholder:text-gray-text placeholder:tracking-normal ${error ? "border-error bg-error/5" : ""}`}
+                className={`w-full ps-14 pe-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-lg tracking-wider placeholder:text-gray-text placeholder:tracking-normal ${error ? "border-error bg-error/5" : ""}`}
                 autoComplete="tel"
               />
             </div>
-            {error && <p className="mt-1.5 text-xs text-error">{error}</p>}
-            <p className="mt-1.5 text-[11px] text-gray-text">
-              لازم يبدأ بـ 010 أو 011 أو 012 أو 015
-            </p>
           </div>
+
+          {/* Display name (optional) */}
+          <div className="w-full">
+            <label className="block text-sm font-semibold text-dark mb-1.5">
+              <User size={14} className="inline ml-1 text-brand-green" />
+              اسمك
+              <span className="text-xs text-gray-text font-normal mr-1">(اختياري)</span>
+            </label>
+            <input
+              type="text"
+              dir="rtl"
+              maxLength={50}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && phone.length === 11) handlePhoneSubmit();
+              }}
+              placeholder="اسمك اللي هيظهر للناس"
+              className="w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark placeholder:text-gray-text"
+              autoComplete="name"
+            />
+          </div>
+
+          {error && (
+            <p className="text-xs text-error text-center bg-error/5 py-2 px-3 rounded-lg">
+              {error}
+            </p>
+          )}
 
           <Button
             fullWidth
@@ -409,162 +294,35 @@ export default function AuthBottomSheet({
             onClick={handlePhoneSubmit}
             disabled={phone.length < 11}
           >
+            <Smartphone size={18} className="ml-2" />
             إرسال كود التأكيد
           </Button>
+
+          {/* Dev bypass */}
+          {IS_DEV_MODE && (
+            <button
+              onClick={handleDevLogin}
+              className="w-full flex items-center justify-center gap-2 py-2 text-sm text-gray-text hover:text-brand-green transition-colors"
+            >
+              <Shield size={16} />
+              دخول المطوّر (بدون OTP)
+            </button>
+          )}
         </div>
       )}
 
-      {/* ── Step 2: Input (Email) ──────────────────────────────────── */}
-      {step === "input" && authMethod === "email" && (
-        <div className="space-y-5">
-          <button
-            onClick={() => { setStep("choose"); setError(null); }}
-            className="flex items-center gap-1.5 text-sm text-gray-text hover:text-dark transition-colors btn-icon-sm"
-          >
-            <ArrowLeft size={16} />
-            رجوع
-          </button>
-
-          <p className="text-sm text-gray-text">
-            أدخل إيميلك وهنبعتلك كود تأكيد عليه
-          </p>
-
-          <div className="w-full">
-            <div className="relative">
-              <span className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-text pointer-events-none">
-                <Mail size={18} />
-              </span>
-              <input
-                ref={emailInputRef}
-                type="email"
-                dir="ltr"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(null); }}
-                onKeyDown={(e) => { if (e.key === "Enter") handleEmailSubmit(); }}
-                placeholder="example@email.com"
-                className={`w-full px-4 py-3 pe-10 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-center text-lg placeholder:text-gray-text ${error ? "border-error bg-error/5" : ""}`}
-                autoComplete="email"
-              />
-            </div>
-            {error && <p className="mt-1.5 text-xs text-error">{error}</p>}
-          </div>
-
-          <Button
-            fullWidth
-            size="lg"
-            isLoading={isSubmitting}
-            onClick={handleEmailSubmit}
-            disabled={!email.includes("@")}
-          >
-            إرسال كود التأكيد
-          </Button>
-        </div>
-      )}
-
-      {/* ── Step 2: Input (Admin) ──────────────────────────────────── */}
-      {step === "input" && authMethod === "admin" && (
-        <div className="space-y-5">
-          <button
-            onClick={() => { setStep("choose"); setError(null); }}
-            className="flex items-center gap-1.5 text-sm text-gray-text hover:text-dark transition-colors btn-icon-sm"
-          >
-            <ArrowLeft size={16} />
-            رجوع
-          </button>
-
-          <p className="text-sm text-gray-text">
-            سجّل دخول بإيميل وكلمة سر الأدمن
-          </p>
-
-          {/* Email */}
-          <div className="w-full">
-            <div className="relative">
-              <span className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-text pointer-events-none">
-                <Mail size={18} />
-              </span>
-              <input
-                ref={emailInputRef}
-                type="email"
-                dir="ltr"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(null); }}
-                onKeyDown={(e) => { if (e.key === "Enter") document.getElementById("admin-password")?.focus(); }}
-                placeholder="admin@maksab.com"
-                className={`w-full px-4 py-3 pe-10 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-center placeholder:text-gray-text ${error ? "border-error bg-error/5" : ""}`}
-                autoComplete="email"
-              />
-            </div>
-          </div>
-
-          {/* Password */}
-          <div className="w-full">
-            <div className="relative">
-              <span className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-text pointer-events-none">
-                <Lock size={18} />
-              </span>
-              <input
-                id="admin-password"
-                type={showPassword ? "text" : "password"}
-                dir="ltr"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(null); }}
-                onKeyDown={(e) => { if (e.key === "Enter") handleAdminSubmit(); }}
-                placeholder="كلمة السر"
-                className={`w-full px-10 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-center placeholder:text-gray-text ${error ? "border-error bg-error/5" : ""}`}
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-text hover:text-dark transition-colors"
-                aria-label={showPassword ? "إخفاء كلمة السر" : "إظهار كلمة السر"}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-            {error && <p className="mt-1.5 text-xs text-error">{error}</p>}
-          </div>
-
-          <Button
-            fullWidth
-            size="lg"
-            isLoading={isSubmitting}
-            onClick={handleAdminSubmit}
-            disabled={!email.includes("@") || password.length < 6}
-          >
-            تسجيل الدخول
-          </Button>
-        </div>
-      )}
-
-      {/* ── Step 3: OTP ───────────────────────────────────────────── */}
+      {/* ── Step 2: OTP ──────────────────────────────────────────── */}
       {step === "otp" && (
         <div className="space-y-5">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setStep("input"); setError(null); setOtp(["", "", "", "", "", ""]); }}
-              className="p-1 text-gray-text hover:text-dark transition-colors btn-icon-sm"
-              aria-label="رجوع"
-            >
-              <ArrowLeft size={18} />
-            </button>
+          <div className="text-center">
+            <div className="w-14 h-14 bg-brand-green/10 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Smartphone size={24} className="text-brand-green" />
+            </div>
             <p className="text-sm text-gray-text">
-              {authMethod === "whatsapp" ? (
-                <>
-                  أدخل الكود اللي وصلك على واتساب{" "}
-                  <span className="font-semibold text-dark" dir="ltr">{phone}</span>
-                </>
-              ) : authMethod === "phone" ? (
-                <>
-                  أدخل الكود اللي وصلك على{" "}
-                  <span className="font-semibold text-dark" dir="ltr">{phone}</span>
-                </>
-              ) : (
-                <>
-                  أدخل الكود اللي وصلك على{" "}
-                  <span className="font-semibold text-dark" dir="ltr">{email}</span>
-                </>
-              )}
+              أدخل الكود اللي وصلك على{" "}
+              <span className="font-bold text-dark" dir="ltr">
+                {formatPhone(phone)}
+              </span>
             </p>
           </div>
 
@@ -573,7 +331,9 @@ export default function AuthBottomSheet({
             {otp.map((digit, i) => (
               <input
                 key={i}
-                ref={(el) => { otpInputsRef.current[i] = el; }}
+                ref={(el) => {
+                  otpInputsRef.current[i] = el;
+                }}
                 type="text"
                 inputMode="numeric"
                 maxLength={1}
@@ -581,13 +341,17 @@ export default function AuthBottomSheet({
                 onChange={(e) => handleOtpChange(i, e.target.value)}
                 onKeyDown={(e) => handleOtpKeyDown(i, e)}
                 onPaste={i === 0 ? handleOtpPaste : undefined}
-                className={`w-11 h-13 text-center text-xl font-bold bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : ""} ${digit ? "text-dark" : "text-gray-text"}`}
+                className={`w-11 h-13 text-center text-xl font-bold bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : ""} ${digit ? "text-dark border-brand-green/30" : "text-gray-text"}`}
                 autoComplete={i === 0 ? "one-time-code" : "off"}
               />
             ))}
           </div>
 
-          {error && <p className="text-xs text-error text-center">{error}</p>}
+          {error && (
+            <p className="text-xs text-error text-center bg-error/5 py-2 px-3 rounded-lg">
+              {error}
+            </p>
+          )}
 
           <Button
             fullWidth
@@ -596,7 +360,7 @@ export default function AuthBottomSheet({
             onClick={() => handleOtpSubmit()}
             disabled={otp.join("").length < 6}
           >
-            تأكيد
+            تأكيد الرقم
           </Button>
 
           {/* Resend timer */}
@@ -604,7 +368,7 @@ export default function AuthBottomSheet({
             {resendTimer > 0 ? (
               <p className="text-sm text-gray-text">
                 إعادة إرسال الكود بعد{" "}
-                <span className="font-semibold text-dark">{resendTimer}</span>{" "}
+                <span className="font-bold text-dark">{resendTimer}</span>{" "}
                 ثانية
               </p>
             ) : (
@@ -618,6 +382,18 @@ export default function AuthBottomSheet({
               </button>
             )}
           </div>
+
+          {/* Change phone */}
+          <button
+            onClick={() => {
+              setStep("phone");
+              setError(null);
+              setOtp(["", "", "", "", "", ""]);
+            }}
+            className="w-full text-center text-xs text-gray-text hover:text-brand-green transition-colors"
+          >
+            تغيير رقم الموبايل؟
+          </button>
         </div>
       )}
     </Modal>

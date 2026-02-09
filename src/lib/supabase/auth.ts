@@ -112,10 +112,11 @@ export async function sendEmailOTP(email: string): Promise<{ error: string | nul
 export async function verifyOTP(
   phone: string,
   otp: string,
+  displayName?: string,
 ): Promise<{ user: UserProfile | null; error: string | null }> {
   if (IS_DEV_MODE) {
     await new Promise((r) => setTimeout(r, 500));
-    return { user: DEV_USER, error: null };
+    return { user: displayName ? { ...DEV_USER, display_name: displayName } : DEV_USER, error: null };
   }
 
   const { data, error } = await supabase.auth.verifyOtp({
@@ -135,7 +136,7 @@ export async function verifyOTP(
     return { user: null, error: "حصلت مشكلة. جرب تاني" };
   }
 
-  const profile = await upsertUserProfile(data.user.id, phone);
+  const profile = await upsertUserProfile(data.user.id, phone, displayName);
   return { user: profile, error: null };
 }
 
@@ -239,7 +240,7 @@ export async function adminSignup(
 }
 
 // ── Upsert user profile ───────────────────────────────────────────────
-async function upsertUserProfile(userId: string, contactInfo: string): Promise<UserProfile> {
+async function upsertUserProfile(userId: string, contactInfo: string, displayName?: string): Promise<UserProfile> {
   // Determine if contactInfo is an email or phone
   const isEmail = contactInfo.includes("@");
   const phone = isEmail ? "" : contactInfo;
@@ -256,13 +257,29 @@ async function upsertUserProfile(userId: string, contactInfo: string): Promise<U
   }
 
   if (existing) {
-    return existing as unknown as UserProfile;
+    const profile = existing as unknown as UserProfile;
+    // If user provided a display name and current profile doesn't have one, update it
+    if (displayName && !profile.display_name) {
+      const { data: updated } = await supabase
+        .from("profiles" as never)
+        .update({ display_name: displayName, updated_at: new Date().toISOString() } as never)
+        .eq("id", userId)
+        .select()
+        .maybeSingle();
+      if (updated) return updated as unknown as UserProfile;
+    }
+    return profile;
   }
 
   // Create new profile using upsert (handles both insert and conflict)
+  const profileData: Record<string, unknown> = { id: userId, phone };
+  if (displayName) {
+    profileData.display_name = displayName;
+  }
+
   const { data: created, error: insertError } = await supabase
     .from("profiles" as never)
-    .upsert({ id: userId, phone } as never, { onConflict: "id" } as never)
+    .upsert(profileData as never, { onConflict: "id" } as never)
     .select()
     .maybeSingle();
 
@@ -278,7 +295,7 @@ async function upsertUserProfile(userId: string, contactInfo: string): Promise<U
   return {
     id: userId,
     phone,
-    display_name: null,
+    display_name: displayName || null,
     avatar_url: null,
     governorate: null,
     city: null,
