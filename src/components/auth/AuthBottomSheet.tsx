@@ -192,6 +192,16 @@ export default function AuthBottomSheet({
         devLogin();
       }
 
+      // Apply referral code if stored (from ?ref= URL)
+      import("@/lib/loyalty/loyalty-service").then(({ getStoredReferralCode, applyReferralCode, clearStoredReferralCode }) => {
+        const refCode = getStoredReferralCode();
+        if (refCode && response.user) {
+          applyReferralCode(response.user.id, refCode).then(() => {
+            clearStoredReferralCode();
+          });
+        }
+      });
+
       onSuccess(response.user);
     },
     [otp, phone, displayName, otpToken, onSuccess],

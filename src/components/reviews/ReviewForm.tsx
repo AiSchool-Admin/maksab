@@ -45,6 +45,10 @@ export default function ReviewForm({
 
     if (result.success) {
       toast.success("تم إرسال تقييمك بنجاح");
+      // Award loyalty points for giving a review
+      import("@/lib/loyalty/loyalty-service").then(({ awardPoints }) => {
+        awardPoints(reviewerId, "review_given", adId);
+      });
       onSuccess();
     } else {
       toast.error(result.error || "حصل مشكلة، جرب تاني");

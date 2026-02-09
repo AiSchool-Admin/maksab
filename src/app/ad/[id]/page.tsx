@@ -51,6 +51,7 @@ import OffersListSection from "@/components/offers/OffersListSection";
 import AddToCompareButton from "@/components/comparison/AddToCompareButton";
 import ComparisonFab from "@/components/comparison/ComparisonFab";
 import PriceBadge from "@/components/price/PriceBadge";
+import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
 
 const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
 
@@ -108,6 +109,7 @@ export default function AdDetailPage({
   const [sellerIsTrusted, setSellerIsTrusted] = useState(false);
   const [sellerIsIdVerified, setSellerIsIdVerified] = useState(false);
   const [reviewsKey, setReviewsKey] = useState(0); // force refresh reviews
+  const [sellerLoyaltyLevel, setSellerLoyaltyLevel] = useState<"member" | "silver" | "gold" | "diamond">("member");
 
   const currentUserId = user?.id || DEV_USER_ID;
 
@@ -147,6 +149,10 @@ export default function AdDetailPage({
       getSellerRatingSummary(ad.seller.id).then((summary) => {
         setSellerIsTrusted(summary.isTrustedSeller);
       });
+    });
+    import("@/lib/loyalty/loyalty-service").then(({ getUserLoyaltyProfile }) => {
+      const loyaltyProfile = getUserLoyaltyProfile(ad.seller.id);
+      setSellerLoyaltyLevel(loyaltyProfile.currentLevel);
     });
   }, [ad?.seller?.id]);
 
@@ -560,6 +566,7 @@ export default function AdDetailPage({
                     {ad.seller.displayName}
                   </p>
                   <VerificationBadge level={sellerVerificationLevel} />
+                  <LoyaltyBadge level={sellerLoyaltyLevel} size="sm" />
                   {sellerIsTrusted && <TrustedSellerBadge />}
                   {sellerIsIdVerified && <IdVerifiedBadge />}
                 </div>

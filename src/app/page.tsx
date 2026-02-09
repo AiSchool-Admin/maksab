@@ -61,6 +61,18 @@ export default function HomePage() {
     setFavoriteIds(new Set(getFavoriteIds()));
   }, []);
 
+  // Capture referral code from URL (?ref=CODE)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) {
+      import("@/lib/loyalty/loyalty-service").then(({ storeReferralCode }) => {
+        storeReferralCode(ref);
+      });
+    }
+  }, []);
+
   // Load personalized recommendations
   useEffect(() => {
     const userId = user?.id || "";

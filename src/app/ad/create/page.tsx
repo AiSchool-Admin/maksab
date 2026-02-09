@@ -403,7 +403,14 @@ export default function CreateAdPage() {
         }).catch(() => {});
       }
 
-      // Success
+      // Success — award loyalty points
+      if (user?.id) {
+        import("@/lib/loyalty/loyalty-service").then(({ awardPoints, checkReferralFirstAd }) => {
+          awardPoints(user.id, "ad_created", result.ad_id);
+          checkReferralFirstAd(user.id);
+        });
+      }
+
       clearDraft();
       setPublished(true);
     } catch {

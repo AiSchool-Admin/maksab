@@ -19,6 +19,7 @@ import {
   Star,
   DollarSign,
   ShieldCheck,
+  Trophy,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -29,6 +30,10 @@ import { formatPhone } from "@/lib/utils/format";
 import { isCommissionSupporter } from "@/lib/commission/commission-service";
 import VerificationSection from "@/components/verification/VerificationSection";
 import SellerRatingSummaryComponent from "@/components/reviews/SellerRatingSummary";
+import { getUserLoyaltyProfile, awardPoints } from "@/lib/loyalty/loyalty-service";
+import type { UserLoyaltyProfile } from "@/lib/loyalty/types";
+import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
+import PointsDisplay from "@/components/loyalty/PointsDisplay";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -83,10 +88,15 @@ export default function ProfilePage() {
 
   // ── Logged in ─────────────────────────────────────────────────────
   const [isSupporter, setIsSupporter] = useState(false);
+  const [loyaltyProfile, setLoyaltyProfile] = useState<UserLoyaltyProfile | null>(null);
 
   useEffect(() => {
     if (user?.id) {
       isCommissionSupporter(user.id).then(setIsSupporter);
+      // Load loyalty profile + award daily login
+      const profile = getUserLoyaltyProfile(user.id);
+      setLoyaltyProfile(profile);
+      awardPoints(user.id, "daily_login");
     }
   }, [user?.id]);
 
@@ -135,11 +145,16 @@ export default function ProfilePage() {
                 {user!.city ? ` — ${user!.city}` : ""}
               </p>
             )}
-            {isSupporter && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-green bg-brand-green-light px-2 py-0.5 rounded-full mt-1">
-                داعم مكسب 💚
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {loyaltyProfile && (
+                <LoyaltyBadge level={loyaltyProfile.currentLevel} size="sm" />
+              )}
+              {isSupporter && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-green bg-brand-green-light px-1.5 py-0.5 rounded-full">
+                  داعم مكسب 💚
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Edit profile */}
@@ -194,6 +209,18 @@ export default function ProfilePage() {
         </section>
       )}
 
+      {/* Loyalty points card */}
+      {loyaltyProfile && (
+        <section className="px-4 pb-5">
+          <button
+            onClick={() => router.push("/rewards")}
+            className="w-full text-start"
+          >
+            <PointsDisplay profile={loyaltyProfile} compact />
+          </button>
+        </section>
+      )}
+
       {/* Verification section */}
       <section className="px-4 pb-5">
         <VerificationSection userId={user!.id} />
@@ -218,6 +245,11 @@ export default function ProfilePage() {
           icon={<Heart size={20} />}
           label="المفضلة"
           onClick={() => router.push("/favorites")}
+        />
+        <ProfileMenuItem
+          icon={<Trophy size={20} />}
+          label="المكافآت والنقاط"
+          onClick={() => router.push("/rewards")}
         />
         <ProfileMenuItem
           icon={<DollarSign size={20} />}
