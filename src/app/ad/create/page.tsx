@@ -269,7 +269,6 @@ export default function CreateAdPage() {
 
     // Reject dev/fake user IDs — must be a real UUID from Supabase Auth
     if (authedUser.id.startsWith("dev-") || authedUser.id.length < 36) {
-      // Clear stale dev session and force re-login
       if (typeof window !== "undefined") {
         localStorage.removeItem("maksab_dev_session");
       }
@@ -280,24 +279,30 @@ export default function CreateAdPage() {
     setIsPublishing(true);
 
     try {
-      // Build ad data
+      // Convert images to base64 for server upload
+      const imageFiles: string[] = [];
+      for (const img of images) {
+        try {
+          const arrayBuffer = await img.file.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString("base64");
+          imageFiles.push(base64);
+        } catch {
+          // Skip failed conversions
+        }
+      }
+
+      // Build ad data for server API
       const adData = {
-        user_id: authedUser.id,
         category_id: draft.categoryId,
-        subcategory_id: draft.subcategoryId,
-        // Store live_auction as "auction" in DB with is_live flag in category_fields
+        subcategory_id: draft.subcategoryId || null,
         sale_type: (draft.saleType === "live_auction" ? "auction" : draft.saleType) as SaleType,
         title: draft.title,
         description: draft.description,
         category_fields: {
           ...draft.categoryFields,
           ...(draft.saleType === "live_auction"
-            ? {
-                is_live_auction: true,
-                live_scheduled_at: draft.priceData.liveAuctionScheduledAt,
-              }
+            ? { is_live_auction: true, live_scheduled_at: draft.priceData.liveAuctionScheduledAt }
             : {}),
-          // Store structured exchange wanted data in JSONB
           ...(draft.saleType === "exchange" && draft.priceData.exchangeWantedCategoryId
             ? {
                 exchange_wanted: {
@@ -311,12 +316,8 @@ export default function CreateAdPage() {
         },
         governorate: draft.governorate,
         city: draft.city || null,
-        // Cash
-        price:
-          draft.saleType === "cash" ? Number(draft.priceData.price) : null,
-        is_negotiable:
-          draft.saleType === "cash" ? draft.priceData.isNegotiable : false,
-        // Auction & Live Auction
+        price: draft.saleType === "cash" ? Number(draft.priceData.price) : null,
+        is_negotiable: draft.saleType === "cash" ? draft.priceData.isNegotiable : false,
         auction_start_price:
           draft.saleType === "auction" || draft.saleType === "live_auction"
             ? Number(draft.priceData.auctionStartPrice)
@@ -335,106 +336,36 @@ export default function CreateAdPage() {
             : null,
         auction_ends_at:
           draft.saleType === "auction" || draft.saleType === "live_auction"
-            ? new Date(
-                Date.now() + (draft.priceData.auctionDuration || 24) * 3600000,
-              ).toISOString()
+            ? new Date(Date.now() + (draft.priceData.auctionDuration || 24) * 3600000).toISOString()
             : null,
         auction_status:
           draft.saleType === "auction" || draft.saleType === "live_auction" ? "active" : null,
-        // Exchange — use structured title, fallback to notes
         exchange_description:
           draft.saleType === "exchange"
             ? (draft.priceData.exchangeWantedTitle || draft.priceData.exchangeNotes || draft.priceData.exchangeDescription || null)
             : null,
         exchange_accepts_price_diff:
-          draft.saleType === "exchange"
-            ? draft.priceData.exchangeAcceptsPriceDiff
-            : false,
+          draft.saleType === "exchange" ? draft.priceData.exchangeAcceptsPriceDiff : false,
         exchange_price_diff:
           draft.saleType === "exchange" && draft.priceData.exchangePriceDiff
             ? Number(draft.priceData.exchangePriceDiff)
             : null,
         images: [] as string[],
+        image_files: imageFiles,
       };
 
-      const { supabase } = await import("@/lib/supabase/client");
+      // Call server-side API (uses service role key — bypasses RLS)
+      const res = await fetch("/api/ads/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: authedUser.id, ad_data: adData }),
+      });
 
-      // Ensure user profile exists in DB (needed for foreign key)
-      const { data: existingProfile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", authedUser.id)
-        .maybeSingle();
+      const result = await res.json();
 
-      if (!existingProfile) {
-        // Create user profile if it doesn't exist
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .upsert({
-            id: authedUser.id,
-            phone: authedUser.phone || "",
-          } as never, { onConflict: "id" } as never);
-
-        if (profileError) {
-          console.error("Profile creation error:", profileError);
-          setErrors({ publish: "مش قادرين ننشئ بروفايلك. جرب تسجل خروج وتدخل تاني" });
-          setIsPublishing(false);
-          return;
-        }
-      }
-
-      // Ensure categories exist in DB via server-side API (bypasses RLS)
-      try {
-        const seedRes = await fetch("/api/ensure-categories", { method: "POST" });
-        if (!seedRes.ok) {
-          const seedData = await seedRes.json().catch(() => ({}));
-          console.warn("Category seed warning:", seedData);
-        }
-      } catch {
-        console.warn("Category seed request failed — continuing anyway");
-      }
-
-      // Upload images (skip silently if bucket doesn't exist)
-      const uploadedUrls: string[] = [];
-      for (let i = 0; i < images.length; i++) {
-        try {
-          const img = images[i];
-          const path = `ads/${authedUser.id}/${Date.now()}_${i}.jpg`;
-          const { error: uploadError } = await supabase.storage
-            .from("ad-images")
-            .upload(path, img.file);
-          if (!uploadError) {
-            const {
-              data: { publicUrl },
-            } = supabase.storage.from("ad-images").getPublicUrl(path);
-            uploadedUrls.push(publicUrl);
-          }
-        } catch {
-          // Skip failed image uploads
-        }
-      }
-      adData.images = uploadedUrls;
-
-      // Ensure subcategory_id is null if empty (avoid FK violation)
-      if (!adData.subcategory_id) {
-        adData.subcategory_id = null as unknown as string;
-      }
-
-      // Insert ad (return the inserted row to get its ID)
-      const { data: insertedAd, error: insertError } = await supabase
-        .from("ads")
-        .insert(adData as never)
-        .select("id")
-        .maybeSingle();
-      if (insertError) {
-        console.error("Ad insert error:", insertError);
-        const msg =
-          insertError.code === "23503"
-            ? "الفئات مش موجودة في الداتابيز. افتح /api/ensure-categories في تاب جديد أو شغّل complete-setup.sql في Supabase SQL Editor"
-            : insertError.code === "23505"
-              ? "الإعلان ده موجود قبل كده"
-              : `حصل مشكلة في نشر الإعلان (${insertError.code || "unknown"}). جرب تاني`;
-        setErrors({ publish: msg });
+      if (!res.ok) {
+        console.error("Ad publish error:", result);
+        setErrors({ publish: result.error || "حصل مشكلة في نشر الإعلان. جرب تاني" });
         setIsPublishing(false);
         return;
       }
@@ -446,21 +377,19 @@ export default function CreateAdPage() {
         signalData: {
           saleType: draft.saleType,
           title: draft.title,
-          price:
-            draft.saleType === "cash" ? Number(draft.priceData.price) : null,
+          price: draft.saleType === "cash" ? Number(draft.priceData.price) : null,
         },
         governorate: draft.governorate,
       });
 
-      // Notify matching buyers (fire and forget — don't block publish)
-      const adId = (insertedAd as unknown as Record<string, unknown>)?.id;
-      if (adId) {
+      // Notify matching buyers (fire and forget)
+      if (result.ad_id) {
         fetch("/api/notifications/on-ad-created", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ad: {
-              id: adId,
+              id: result.ad_id,
               title: draft.title,
               category_id: draft.categoryId,
               subcategory_id: draft.subcategoryId,
@@ -482,7 +411,7 @@ export default function CreateAdPage() {
     } finally {
       setIsPublishing(false);
     }
-  }, [draft, images, user, requireAuth, validateStep]);
+  }, [draft, images, user, requireAuth, validateStep, track]);
 
   /* ── Price label for preview ───────────────────────── */
   const getPriceLabel = () => {

@@ -1,0 +1,171 @@
+/**
+ * POST /api/ads/create
+ *
+ * Server-side ad creation using service role key (bypasses RLS).
+ * This is needed because our custom HMAC OTP auth doesn't establish
+ * a Supabase client-side session, so client-side INSERT would fail with 42501.
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+function getServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Missing Supabase env vars");
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { user_id, ad_data } = body;
+
+    if (!user_id || !ad_data) {
+      return NextResponse.json(
+        { error: "بيانات ناقصة" },
+        { status: 400 },
+      );
+    }
+
+    const supabase = getServiceClient();
+
+    // Verify user exists in profiles
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", user_id)
+      .maybeSingle();
+
+    if (!profile) {
+      return NextResponse.json(
+        { error: "المستخدم مش موجود. سجل خروج وادخل تاني" },
+        { status: 401 },
+      );
+    }
+
+    // Ensure categories exist
+    try {
+      const { data: catCheck } = await supabase
+        .from("categories")
+        .select("id")
+        .eq("id", ad_data.category_id)
+        .maybeSingle();
+
+      if (!catCheck) {
+        // Try to seed categories
+        const categoriesModule = await import("@/lib/categories/categories-config");
+        const allCategories = categoriesModule.categoriesConfig || [];
+
+        for (const cat of allCategories) {
+          await supabase
+            .from("categories")
+            .upsert(
+              { id: cat.id, name: cat.name, icon: cat.icon, slug: cat.slug, sort_order: 0, is_active: true },
+              { onConflict: "id" },
+            );
+
+          for (const sub of cat.subcategories || []) {
+            await supabase
+              .from("subcategories")
+              .upsert(
+                { id: sub.id, category_id: cat.id, name: sub.name, slug: sub.slug, sort_order: 0, is_active: true },
+                { onConflict: "id" },
+              );
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[ads/create] Category seed warning:", e);
+    }
+
+    // Upload images if provided as base64
+    const uploadedUrls: string[] = [];
+    if (ad_data.image_files && Array.isArray(ad_data.image_files)) {
+      for (let i = 0; i < ad_data.image_files.length; i++) {
+        try {
+          const base64 = ad_data.image_files[i];
+          const buffer = Buffer.from(base64, "base64");
+          const path = `ads/${user_id}/${Date.now()}_${i}.jpg`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("ad-images")
+            .upload(path, buffer, {
+              contentType: "image/jpeg",
+              upsert: false,
+            });
+
+          if (!uploadError) {
+            const { data: { publicUrl } } = supabase.storage.from("ad-images").getPublicUrl(path);
+            uploadedUrls.push(publicUrl);
+          } else {
+            console.warn("[ads/create] Image upload error:", uploadError.message);
+          }
+        } catch {
+          // Skip failed image uploads
+        }
+      }
+    }
+
+    // Build the ad record
+    const adRecord: Record<string, unknown> = {
+      user_id,
+      category_id: ad_data.category_id,
+      subcategory_id: ad_data.subcategory_id || null,
+      sale_type: ad_data.sale_type,
+      title: ad_data.title,
+      description: ad_data.description || null,
+      category_fields: ad_data.category_fields || {},
+      governorate: ad_data.governorate || null,
+      city: ad_data.city || null,
+      images: uploadedUrls.length > 0 ? uploadedUrls : (ad_data.images || []),
+      // Cash
+      price: ad_data.price ?? null,
+      is_negotiable: ad_data.is_negotiable ?? false,
+      // Auction
+      auction_start_price: ad_data.auction_start_price ?? null,
+      auction_buy_now_price: ad_data.auction_buy_now_price ?? null,
+      auction_duration_hours: ad_data.auction_duration_hours ?? null,
+      auction_min_increment: ad_data.auction_min_increment ?? null,
+      auction_ends_at: ad_data.auction_ends_at ?? null,
+      auction_status: ad_data.auction_status ?? null,
+      // Exchange
+      exchange_description: ad_data.exchange_description ?? null,
+      exchange_accepts_price_diff: ad_data.exchange_accepts_price_diff ?? false,
+      exchange_price_diff: ad_data.exchange_price_diff ?? null,
+    };
+
+    // Insert ad
+    const { data: insertedAd, error: insertError } = await supabase
+      .from("ads")
+      .insert(adRecord)
+      .select("id")
+      .maybeSingle();
+
+    if (insertError) {
+      console.error("[ads/create] Insert error:", insertError);
+      return NextResponse.json(
+        {
+          error: insertError.code === "23503"
+            ? "الفئات مش موجودة. جرب تاني أو تواصل مع الدعم"
+            : `حصل مشكلة في نشر الإعلان (${insertError.code}). جرب تاني`,
+          code: insertError.code,
+        },
+        { status: 409 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      ad_id: (insertedAd as Record<string, unknown>)?.id || null,
+    });
+  } catch (err) {
+    console.error("[ads/create] Error:", err);
+    return NextResponse.json(
+      { error: "حصل مشكلة. جرب تاني" },
+      { status: 500 },
+    );
+  }
+}

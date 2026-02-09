@@ -137,15 +137,15 @@ export async function verifyOTP(
     saveSession(userProfile);
 
     // Try to establish a Supabase auth session (for RLS queries)
-    if (data.virtual_email && data.magic_link_token) {
+    if (data.magic_link_token) {
       try {
         await supabase.auth.verifyOtp({
-          email: data.virtual_email,
-          token: data.magic_link_token,
+          token_hash: data.magic_link_token,
           type: "magiclink",
         });
       } catch {
         // Session creation failed — user profile still works via localStorage
+        // Ad creation uses server-side API with service role key as fallback
       }
     }
 
