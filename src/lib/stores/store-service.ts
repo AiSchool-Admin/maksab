@@ -1,6 +1,6 @@
 /**
  * Store Service — CRUD operations for the stores system.
- * Uses Supabase client for reads, falls back to dev seed data when DEV_MODE=true.
+ * Uses Supabase client for reads, falls back to demo data when DB is empty.
  */
 
 import { supabase } from "@/lib/supabase/client";
@@ -28,8 +28,6 @@ import type {
   SubscriptionPlan,
 } from "@/types";
 
-const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
-
 // ============================================
 // READ Operations (Public)
 // ============================================
@@ -39,71 +37,73 @@ export async function getStoreBySlug(
   slug: string,
   currentUserId?: string,
 ): Promise<StoreWithStats | null> {
-  const { data: store, error } = await supabase
-    .from("stores" as never)
-    .select("*")
-    .eq("slug", slug)
-    .eq("status", "active")
-    .maybeSingle();
+  try {
+    const { data: store, error } = await supabase
+      .from("stores" as never)
+      .select("*")
+      .eq("slug", slug)
+      .eq("status", "active")
+      .maybeSingle();
 
-  if (error || !store) {
-    // Dev fallback
-    if (IS_DEV) return getDemoStoreBySlug(slug);
-    return null;
+    if (error || !store) {
+      return getDemoStoreBySlug(slug);
+    }
+
+    const s = store as unknown as Store;
+
+    // Fetch stats in parallel
+    const [followers, reviews, products, badges, isFollowing] = await Promise.all(
+      [
+        supabase
+          .from("store_followers" as never)
+          .select("id", { count: "exact", head: true })
+          .eq("store_id", s.id),
+        supabase
+          .from("store_reviews" as never)
+          .select("overall_rating")
+          .eq("store_id", s.id),
+        supabase
+          .from("ads" as never)
+          .select("id", { count: "exact", head: true })
+          .eq("store_id", s.id)
+          .eq("status", "active"),
+        supabase
+          .from("store_badges" as never)
+          .select("*")
+          .eq("store_id", s.id)
+          .eq("is_active", true),
+        currentUserId
+          ? supabase
+              .from("store_followers" as never)
+              .select("id")
+              .eq("store_id", s.id)
+              .eq("user_id", currentUserId)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+      ],
+    );
+
+    const reviewsData = (reviews.data || []) as { overall_rating: number }[];
+    const avgRating =
+      reviewsData.length > 0
+        ? reviewsData.reduce((sum, r) => sum + r.overall_rating, 0) /
+          reviewsData.length
+        : 0;
+
+    return {
+      ...s,
+      avg_rating: Math.round(avgRating * 10) / 10,
+      total_reviews: reviewsData.length,
+      total_followers: followers.count || 0,
+      total_products: products.count || 0,
+      total_sales: 0,
+      avg_response_time: null,
+      is_following: !!isFollowing.data,
+      badges: (badges.data || []) as StoreWithStats["badges"],
+    };
+  } catch {
+    return getDemoStoreBySlug(slug);
   }
-
-  const s = store as unknown as Store;
-
-  // Fetch stats in parallel
-  const [followers, reviews, products, badges, isFollowing] = await Promise.all(
-    [
-      supabase
-        .from("store_followers" as never)
-        .select("id", { count: "exact", head: true })
-        .eq("store_id", s.id),
-      supabase
-        .from("store_reviews" as never)
-        .select("overall_rating")
-        .eq("store_id", s.id),
-      supabase
-        .from("ads" as never)
-        .select("id", { count: "exact", head: true })
-        .eq("store_id", s.id)
-        .eq("status", "active"),
-      supabase
-        .from("store_badges" as never)
-        .select("*")
-        .eq("store_id", s.id)
-        .eq("is_active", true),
-      currentUserId
-        ? supabase
-            .from("store_followers" as never)
-            .select("id")
-            .eq("store_id", s.id)
-            .eq("user_id", currentUserId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-    ],
-  );
-
-  const reviewsData = (reviews.data || []) as { overall_rating: number }[];
-  const avgRating =
-    reviewsData.length > 0
-      ? reviewsData.reduce((sum, r) => sum + r.overall_rating, 0) /
-        reviewsData.length
-      : 0;
-
-  return {
-    ...s,
-    avg_rating: Math.round(avgRating * 10) / 10,
-    total_reviews: reviewsData.length,
-    total_followers: followers.count || 0,
-    total_products: products.count || 0,
-    total_sales: 0,
-    avg_response_time: null,
-    is_following: !!isFollowing.data,
-    badges: (badges.data || []) as StoreWithStats["badges"],
-  };
 }
 
 /** Fetch all active stores with optional filters */
@@ -118,41 +118,47 @@ export async function getStores(params?: {
   const limit = params?.limit || 20;
   const from = (page - 1) * limit;
 
-  let query = supabase
-    .from("stores" as never)
-    .select("*", { count: "exact" })
-    .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .range(from, from + limit - 1);
+  try {
+    let query = supabase
+      .from("stores" as never)
+      .select("*", { count: "exact" })
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .range(from, from + limit - 1);
 
-  if (params?.category) {
-    query = query.eq("main_category", params.category);
-  }
-  if (params?.governorate) {
-    query = query.eq("location_gov", params.governorate);
-  }
-  if (params?.search) {
-    query = query.ilike("name", `%${params.search}%`);
-  }
+    if (params?.category) {
+      query = query.eq("main_category", params.category);
+    }
+    if (params?.governorate) {
+      query = query.eq("location_gov", params.governorate);
+    }
+    if (params?.search) {
+      query = query.ilike("name", `%${params.search}%`);
+    }
 
-  const { data, count, error } = await query;
+    const { data, count, error } = await query;
 
-  if (error || !data || data.length === 0) {
-    // Dev fallback
-    if (IS_DEV) {
+    if (error || !data || data.length === 0) {
+      // Fall back to demo stores
       return getDemoStores({
         category: params?.category,
         governorate: params?.governorate,
         search: params?.search,
       });
     }
-    return { stores: [], total: 0 };
-  }
 
-  return {
-    stores: (data || []) as unknown as Store[],
-    total: count || 0,
-  };
+    return {
+      stores: (data || []) as unknown as Store[],
+      total: count || 0,
+    };
+  } catch {
+    // Network error — use demo data
+    return getDemoStores({
+      category: params?.category,
+      governorate: params?.governorate,
+      search: params?.search,
+    });
+  }
 }
 
 /** Fetch store products (ads) */
@@ -168,52 +174,67 @@ export async function getStoreProducts(
   const limit = params?.limit || 20;
   const from = (page - 1) * limit;
 
-  let query = supabase
-    .from("ads" as never)
-    .select("*", { count: "exact" })
-    .eq("store_id", storeId)
-    .eq("status", "active")
-    .order("is_pinned", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(from, from + limit - 1);
+  try {
+    let query = supabase
+      .from("ads" as never)
+      .select("*", { count: "exact" })
+      .eq("store_id", storeId)
+      .eq("status", "active")
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(from, from + limit - 1);
 
-  if (params?.categoryId) {
-    query = query.eq("store_category_id", params.categoryId);
-  }
+    if (params?.categoryId) {
+      query = query.eq("store_category_id", params.categoryId);
+    }
 
-  const { data, count, error } = await query;
+    const { data, count, error } = await query;
 
-  if (error || !data || data.length === 0) {
-    if (IS_DEV && storeId.startsWith("demo-store-")) {
+    if (error || !data || data.length === 0) {
+      if (storeId.startsWith("demo-store-")) {
+        const result = getDemoStoreProducts(storeId);
+        return { products: result.products, total: result.total };
+      }
+      return { products: [], total: 0 };
+    }
+
+    return {
+      products: data || [],
+      total: count || 0,
+    };
+  } catch {
+    if (storeId.startsWith("demo-store-")) {
       const result = getDemoStoreProducts(storeId);
       return { products: result.products, total: result.total };
     }
     return { products: [], total: 0 };
   }
-
-  return {
-    products: data || [],
-    total: count || 0,
-  };
 }
 
 /** Fetch store categories (internal sections) */
 export async function getStoreCategories(
   storeId: string,
 ): Promise<StoreCategory[]> {
-  const { data, error } = await supabase
-    .from("store_categories" as never)
-    .select("*")
-    .eq("store_id", storeId)
-    .order("sort_order", { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from("store_categories" as never)
+      .select("*")
+      .eq("store_id", storeId)
+      .order("sort_order", { ascending: true });
 
-  if (error || !data || data.length === 0) {
-    if (IS_DEV && storeId.startsWith("demo-store-")) {
+    if (error || !data || data.length === 0) {
+      if (storeId.startsWith("demo-store-")) {
+        return getDemoStoreCategories(storeId);
+      }
+      return [];
+    }
+    return (data || []) as unknown as StoreCategory[];
+  } catch {
+    if (storeId.startsWith("demo-store-")) {
       return getDemoStoreCategories(storeId);
     }
     return [];
   }
-  return (data || []) as unknown as StoreCategory[];
 }
 
 /** Fetch store reviews */
@@ -224,43 +245,57 @@ export async function getStoreReviews(
 ): Promise<{ reviews: StoreReview[]; total: number }> {
   const from = (page - 1) * limit;
 
-  const { data, count, error } = await supabase
-    .from("store_reviews" as never)
-    .select("*", { count: "exact" })
-    .eq("store_id", storeId)
-    .order("created_at", { ascending: false })
-    .range(from, from + limit - 1);
+  try {
+    const { data, count, error } = await supabase
+      .from("store_reviews" as never)
+      .select("*", { count: "exact" })
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false })
+      .range(from, from + limit - 1);
 
-  if (error || !data || data.length === 0) {
-    if (IS_DEV && storeId.startsWith("demo-store-")) {
+    if (error || !data || data.length === 0) {
+      if (storeId.startsWith("demo-store-")) {
+        return getDemoStoreReviews(storeId);
+      }
+      return { reviews: [], total: 0 };
+    }
+    return {
+      reviews: (data || []) as unknown as StoreReview[],
+      total: count || 0,
+    };
+  } catch {
+    if (storeId.startsWith("demo-store-")) {
       return getDemoStoreReviews(storeId);
     }
     return { reviews: [], total: 0 };
   }
-  return {
-    reviews: (data || []) as unknown as StoreReview[],
-    total: count || 0,
-  };
 }
 
 /** Fetch store promotions */
 export async function getStorePromotions(
   storeId: string,
 ): Promise<StorePromotion[]> {
-  const { data, error } = await supabase
-    .from("store_promotions" as never)
-    .select("*")
-    .eq("store_id", storeId)
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from("store_promotions" as never)
+      .select("*")
+      .eq("store_id", storeId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
 
-  if (error || !data || data.length === 0) {
-    if (IS_DEV && storeId.startsWith("demo-store-")) {
+    if (error || !data || data.length === 0) {
+      if (storeId.startsWith("demo-store-")) {
+        return getDemoStorePromotions(storeId);
+      }
+      return [];
+    }
+    return (data || []) as unknown as StorePromotion[];
+  } catch {
+    if (storeId.startsWith("demo-store-")) {
       return getDemoStorePromotions(storeId);
     }
     return [];
   }
-  return (data || []) as unknown as StorePromotion[];
 }
 
 /** Fetch store analytics (owner only) */
@@ -281,20 +316,23 @@ export async function getStoreAnalytics(
   const fromDate = new Date();
   fromDate.setDate(fromDate.getDate() - days);
 
-  const { data, error } = await supabase
-    .from("store_analytics" as never)
-    .select("*")
-    .eq("store_id", storeId)
-    .gte("date", fromDate.toISOString().split("T")[0])
-    .order("date", { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from("store_analytics" as never)
+      .select("*")
+      .eq("store_id", storeId)
+      .gte("date", fromDate.toISOString().split("T")[0])
+      .order("date", { ascending: true });
 
-  if (error || !data || data.length === 0) {
-    if (IS_DEV) return getDemoAnalytics(days);
-    return [];
+    if (error || !data || data.length === 0) {
+      return getDemoAnalytics(days);
+    }
+    return (data || []) as unknown as ReturnType<
+      typeof getStoreAnalytics
+    > extends Promise<infer T> ? T : never;
+  } catch {
+    return getDemoAnalytics(days);
   }
-  return (data || []) as unknown as ReturnType<
-    typeof getStoreAnalytics
-  > extends Promise<infer T> ? T : never;
 }
 
 // ============================================
@@ -331,7 +369,7 @@ export async function toggleFollow(
 
 /** Record a store view for analytics */
 export async function recordStoreView(storeId: string): Promise<void> {
-  if (IS_DEV && storeId.startsWith("demo-store-")) return;
+  if (storeId.startsWith("demo-store-")) return;
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -356,40 +394,54 @@ export async function recordStoreView(storeId: string): Promise<void> {
 export async function getStoreSubscription(
   storeId: string,
 ): Promise<StoreSubscription | null> {
-  const { data, error } = await supabase
-    .from("store_subscriptions" as never)
-    .select("*")
-    .eq("store_id", storeId)
-    .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .maybeSingle();
+  try {
+    const { data, error } = await supabase
+      .from("store_subscriptions" as never)
+      .select("*")
+      .eq("store_id", storeId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .maybeSingle();
 
-  if (error || !data) {
-    if (IS_DEV && storeId.startsWith("demo-store-")) {
+    if (error || !data) {
+      if (storeId.startsWith("demo-store-")) {
+        return getDemoSubscription();
+      }
+      return null;
+    }
+    return data as unknown as StoreSubscription;
+  } catch {
+    if (storeId.startsWith("demo-store-")) {
       return getDemoSubscription();
     }
     return null;
   }
-  return data as unknown as StoreSubscription;
 }
 
 /** Fetch full subscription history for a store */
 export async function getSubscriptionHistory(
   storeId: string,
 ): Promise<StoreSubscription[]> {
-  const { data, error } = await supabase
-    .from("store_subscriptions" as never)
-    .select("*")
-    .eq("store_id", storeId)
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from("store_subscriptions" as never)
+      .select("*")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false });
 
-  if (error || !data || data.length === 0) {
-    if (IS_DEV && storeId.startsWith("demo-store-")) {
+    if (error || !data || data.length === 0) {
+      if (storeId.startsWith("demo-store-")) {
+        return getDemoSubscriptionHistory();
+      }
+      return [];
+    }
+    return (data || []) as unknown as StoreSubscription[];
+  } catch {
+    if (storeId.startsWith("demo-store-")) {
       return getDemoSubscriptionHistory();
     }
     return [];
   }
-  return (data || []) as unknown as StoreSubscription[];
 }
 
 /** Get the current plan for a store (defaults to 'free' if none found) */
@@ -401,39 +453,49 @@ export async function getCurrentPlan(
 }
 
 // ============================================
-// DEV Helpers (for dashboard pages)
+// Helpers (for dashboard pages)
 // ============================================
 
 /** Get store by user ID — for dashboard pages */
 export async function getStoreByUserId(userId: string): Promise<Store | null> {
-  const { data, error } = await supabase
-    .from("stores" as never)
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
+  try {
+    const { data, error } = await supabase
+      .from("stores" as never)
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-  if (error || !data) {
-    if (IS_DEV) return getDemoStoreByUserId(userId) || getDemoUserStore();
-    return null;
+    if (error || !data) {
+      return getDemoStoreByUserId(userId) || getDemoUserStore();
+    }
+    return data as unknown as Store;
+  } catch {
+    return getDemoStoreByUserId(userId) || getDemoUserStore();
   }
-  return data as unknown as Store;
 }
 
 /** Get store products for dashboard (includes all statuses) */
 export async function getStoreProductsForDashboard(storeId: string): Promise<DemoProduct[]> {
-  const { data, error } = await supabase
-    .from("ads" as never)
-    .select("id, title, price, images, status, sale_type, is_pinned, views_count, created_at, store_id, governorate, city, is_negotiable, exchange_description")
-    .eq("store_id", storeId)
-    .neq("status", "deleted")
-    .order("is_pinned", { ascending: false })
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from("ads" as never)
+      .select("id, title, price, images, status, sale_type, is_pinned, views_count, created_at, store_id, governorate, city, is_negotiable, exchange_description")
+      .eq("store_id", storeId)
+      .neq("status", "deleted")
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: false });
 
-  if (error || !data || data.length === 0) {
-    if (IS_DEV && storeId.startsWith("demo-store-")) {
+    if (error || !data || data.length === 0) {
+      if (storeId.startsWith("demo-store-")) {
+        return getDemoStoreProducts(storeId).products;
+      }
+      return [];
+    }
+    return data as unknown as DemoProduct[];
+  } catch {
+    if (storeId.startsWith("demo-store-")) {
       return getDemoStoreProducts(storeId).products;
     }
     return [];
   }
-  return data as unknown as DemoProduct[];
 }
