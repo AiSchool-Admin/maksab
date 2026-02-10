@@ -10,10 +10,12 @@
 -- PART 1: Test Users in auth.users
 -- Password for all: Test123456
 -- bcrypt hash of 'Test123456'
+--
+-- IMPORTANT: Each user is inserted independently so one failure
+-- does NOT roll back the others.
 -- ============================================
 
--- Helper: Generate bcrypt hash (Supabase uses $2a$ format)
--- The hash below is for password "Test123456"
+-- Helper: each user in its own exception-safe block
 DO $$
 DECLARE
   pwd_hash TEXT := '$2a$10$PwGnSEfKdMg8c.WfYr3zKuT7jXSJ6DfJP0xDFhKJqrYaEfV7EbGHi';
@@ -23,168 +25,238 @@ BEGIN
   -- ══════════════════════════════════════════
   -- 1. محمد أحمد — بائع سيارات — القاهرة
   -- ══════════════════════════════════════════
-  INSERT INTO auth.users (
-    id, instance_id, aud, role, email, encrypted_password,
-    email_confirmed_at, phone, phone_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data,
-    created_at, updated_at, confirmation_token, recovery_token
-  ) VALUES (
-    'a1111111-1111-1111-1111-111111111111',
-    '00000000-0000-0000-0000-000000000000',
-    'authenticated', 'authenticated',
-    'mohamed@test.maksab.app', pwd_hash,
-    ts, '+201012345678', ts,
-    '{"provider":"email","providers":["email"]}',
-    '{"display_name":"محمد أحمد"}',
-    ts, ts, '', ''
-  ) ON CONFLICT (id) DO NOTHING;
+  BEGIN
+    INSERT INTO auth.users (
+      id, instance_id, aud, role, email, encrypted_password,
+      email_confirmed_at, phone, phone_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at, confirmation_token, recovery_token
+    ) VALUES (
+      'a1111111-1111-1111-1111-111111111111',
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated', 'authenticated',
+      'mohamed@test.maksab.app', pwd_hash,
+      ts, '+201012345678', ts,
+      '{"provider":"email","providers":["email"]}',
+      '{"display_name":"محمد أحمد"}',
+      ts, ts, '', ''
+    ) ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 1 (محمد أحمد) auth: % — skipping', SQLERRM;
+  END;
 
-  INSERT INTO auth.identities (
-    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-  ) VALUES (
-    'a1111111-1111-1111-1111-111111111111',
-    'a1111111-1111-1111-1111-111111111111',
-    'mohamed@test.maksab.app',
-    '{"sub":"a1111111-1111-1111-1111-111111111111","email":"mohamed@test.maksab.app"}',
-    'email', ts, ts, ts
-  ) ON CONFLICT DO NOTHING;
+  BEGIN
+    INSERT INTO auth.identities (
+      id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      'a1111111-1111-1111-1111-111111111111',
+      'a1111111-1111-1111-1111-111111111111',
+      'mohamed@test.maksab.app',
+      '{"sub":"a1111111-1111-1111-1111-111111111111","email":"mohamed@test.maksab.app"}',
+      'email', ts, ts, ts
+    ) ON CONFLICT DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 1 (محمد أحمد) identity: % — skipping', SQLERRM;
+  END;
 
   -- ══════════════════════════════════════════
   -- 2. فاطمة علي — بائعة موبايلات — الجيزة
   -- ══════════════════════════════════════════
-  INSERT INTO auth.users (
-    id, instance_id, aud, role, email, encrypted_password,
-    email_confirmed_at, phone, phone_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data,
-    created_at, updated_at, confirmation_token, recovery_token
-  ) VALUES (
-    'b2222222-2222-2222-2222-222222222222',
-    '00000000-0000-0000-0000-000000000000',
-    'authenticated', 'authenticated',
-    'fatma@test.maksab.app', pwd_hash,
-    ts, '+201198765432', ts,
-    '{"provider":"email","providers":["email"]}',
-    '{"display_name":"فاطمة علي"}',
-    ts, ts, '', ''
-  ) ON CONFLICT (id) DO NOTHING;
+  BEGIN
+    INSERT INTO auth.users (
+      id, instance_id, aud, role, email, encrypted_password,
+      email_confirmed_at, phone, phone_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at, confirmation_token, recovery_token
+    ) VALUES (
+      'b2222222-2222-2222-2222-222222222222',
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated', 'authenticated',
+      'fatma@test.maksab.app', pwd_hash,
+      ts, '+201198765432', ts,
+      '{"provider":"email","providers":["email"]}',
+      '{"display_name":"فاطمة علي"}',
+      ts, ts, '', ''
+    ) ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 2 (فاطمة علي) auth: % — skipping', SQLERRM;
+  END;
 
-  INSERT INTO auth.identities (
-    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-  ) VALUES (
-    'b2222222-2222-2222-2222-222222222222',
-    'b2222222-2222-2222-2222-222222222222',
-    'fatma@test.maksab.app',
-    '{"sub":"b2222222-2222-2222-2222-222222222222","email":"fatma@test.maksab.app"}',
-    'email', ts, ts, ts
-  ) ON CONFLICT DO NOTHING;
+  BEGIN
+    INSERT INTO auth.identities (
+      id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      'b2222222-2222-2222-2222-222222222222',
+      'b2222222-2222-2222-2222-222222222222',
+      'fatma@test.maksab.app',
+      '{"sub":"b2222222-2222-2222-2222-222222222222","email":"fatma@test.maksab.app"}',
+      'email', ts, ts, ts
+    ) ON CONFLICT DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 2 (فاطمة علي) identity: % — skipping', SQLERRM;
+  END;
 
   -- ══════════════════════════════════════════
   -- 3. أحمد حسن — بائع عقارات — الإسكندرية
   -- ══════════════════════════════════════════
-  INSERT INTO auth.users (
-    id, instance_id, aud, role, email, encrypted_password,
-    email_confirmed_at, phone, phone_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data,
-    created_at, updated_at, confirmation_token, recovery_token
-  ) VALUES (
-    'c3333333-3333-3333-3333-333333333333',
-    '00000000-0000-0000-0000-000000000000',
-    'authenticated', 'authenticated',
-    'ahmed@test.maksab.app', pwd_hash,
-    ts, '+201234567890', ts,
-    '{"provider":"email","providers":["email"]}',
-    '{"display_name":"أحمد حسن"}',
-    ts, ts, '', ''
-  ) ON CONFLICT (id) DO NOTHING;
+  BEGIN
+    INSERT INTO auth.users (
+      id, instance_id, aud, role, email, encrypted_password,
+      email_confirmed_at, phone, phone_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at, confirmation_token, recovery_token
+    ) VALUES (
+      'c3333333-3333-3333-3333-333333333333',
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated', 'authenticated',
+      'ahmed@test.maksab.app', pwd_hash,
+      ts, '+201234567890', ts,
+      '{"provider":"email","providers":["email"]}',
+      '{"display_name":"أحمد حسن"}',
+      ts, ts, '', ''
+    ) ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 3 (أحمد حسن) auth: % — skipping', SQLERRM;
+  END;
 
-  INSERT INTO auth.identities (
-    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-  ) VALUES (
-    'c3333333-3333-3333-3333-333333333333',
-    'c3333333-3333-3333-3333-333333333333',
-    'ahmed@test.maksab.app',
-    '{"sub":"c3333333-3333-3333-3333-333333333333","email":"ahmed@test.maksab.app"}',
-    'email', ts, ts, ts
-  ) ON CONFLICT DO NOTHING;
+  BEGIN
+    INSERT INTO auth.identities (
+      id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      'c3333333-3333-3333-3333-333333333333',
+      'c3333333-3333-3333-3333-333333333333',
+      'ahmed@test.maksab.app',
+      '{"sub":"c3333333-3333-3333-3333-333333333333","email":"ahmed@test.maksab.app"}',
+      'email', ts, ts, ts
+    ) ON CONFLICT DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 3 (أحمد حسن) identity: % — skipping', SQLERRM;
+  END;
 
   -- ══════════════════════════════════════════
   -- 4. نورا محمود — بائعة موضة — الدقهلية
   -- ══════════════════════════════════════════
-  INSERT INTO auth.users (
-    id, instance_id, aud, role, email, encrypted_password,
-    email_confirmed_at, phone, phone_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data,
-    created_at, updated_at, confirmation_token, recovery_token
-  ) VALUES (
-    'd4444444-4444-4444-4444-444444444444',
-    '00000000-0000-0000-0000-000000000000',
-    'authenticated', 'authenticated',
-    'noura@test.maksab.app', pwd_hash,
-    ts, '+201556789012', ts,
-    '{"provider":"email","providers":["email"]}',
-    '{"display_name":"نورا محمود"}',
-    ts, ts, '', ''
-  ) ON CONFLICT (id) DO NOTHING;
+  BEGIN
+    INSERT INTO auth.users (
+      id, instance_id, aud, role, email, encrypted_password,
+      email_confirmed_at, phone, phone_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at, confirmation_token, recovery_token
+    ) VALUES (
+      'd4444444-4444-4444-4444-444444444444',
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated', 'authenticated',
+      'noura@test.maksab.app', pwd_hash,
+      ts, '+201556789012', ts,
+      '{"provider":"email","providers":["email"]}',
+      '{"display_name":"نورا محمود"}',
+      ts, ts, '', ''
+    ) ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 4 (نورا محمود) auth: % — skipping', SQLERRM;
+  END;
 
-  INSERT INTO auth.identities (
-    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-  ) VALUES (
-    'd4444444-4444-4444-4444-444444444444',
-    'd4444444-4444-4444-4444-444444444444',
-    'noura@test.maksab.app',
-    '{"sub":"d4444444-4444-4444-4444-444444444444","email":"noura@test.maksab.app"}',
-    'email', ts, ts, ts
-  ) ON CONFLICT DO NOTHING;
+  BEGIN
+    INSERT INTO auth.identities (
+      id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      'd4444444-4444-4444-4444-444444444444',
+      'd4444444-4444-4444-4444-444444444444',
+      'noura@test.maksab.app',
+      '{"sub":"d4444444-4444-4444-4444-444444444444","email":"noura@test.maksab.app"}',
+      'email', ts, ts, ts
+    ) ON CONFLICT DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 4 (نورا محمود) identity: % — skipping', SQLERRM;
+  END;
 
   -- ══════════════════════════════════════════
   -- 5. عمر خالد — بائع أجهزة منزلية — الغربية
   -- ══════════════════════════════════════════
-  INSERT INTO auth.users (
-    id, instance_id, aud, role, email, encrypted_password,
-    email_confirmed_at, phone, phone_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data,
-    created_at, updated_at, confirmation_token, recovery_token
-  ) VALUES (
-    'e5555555-5555-5555-5555-555555555555',
-    '00000000-0000-0000-0000-000000000000',
-    'authenticated', 'authenticated',
-    'omar@test.maksab.app', pwd_hash,
-    ts, '+201087654321', ts,
-    '{"provider":"email","providers":["email"]}',
-    '{"display_name":"عمر خالد"}',
-    ts, ts, '', ''
-  ) ON CONFLICT (id) DO NOTHING;
+  BEGIN
+    INSERT INTO auth.users (
+      id, instance_id, aud, role, email, encrypted_password,
+      email_confirmed_at, phone, phone_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at, confirmation_token, recovery_token
+    ) VALUES (
+      'e5555555-5555-5555-5555-555555555555',
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated', 'authenticated',
+      'omar@test.maksab.app', pwd_hash,
+      ts, '+201087654321', ts,
+      '{"provider":"email","providers":["email"]}',
+      '{"display_name":"عمر خالد"}',
+      ts, ts, '', ''
+    ) ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 5 (عمر خالد) auth: % — skipping', SQLERRM;
+  END;
 
-  INSERT INTO auth.identities (
-    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-  ) VALUES (
-    'e5555555-5555-5555-5555-555555555555',
-    'e5555555-5555-5555-5555-555555555555',
-    'omar@test.maksab.app',
-    '{"sub":"e5555555-5555-5555-5555-555555555555","email":"omar@test.maksab.app"}',
-    'email', ts, ts, ts
-  ) ON CONFLICT DO NOTHING;
+  BEGIN
+    INSERT INTO auth.identities (
+      id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      'e5555555-5555-5555-5555-555555555555',
+      'e5555555-5555-5555-5555-555555555555',
+      'omar@test.maksab.app',
+      '{"sub":"e5555555-5555-5555-5555-555555555555","email":"omar@test.maksab.app"}',
+      'email', ts, ts, ts
+    ) ON CONFLICT DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'User 5 (عمر خالد) identity: % — skipping', SQLERRM;
+  END;
 
 END;
 $$;
 
 
 -- ============================================
+-- PART 1B: Verify auth.users exist before continuing
+-- ============================================
+DO $$
+DECLARE
+  auth_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO auth_count
+  FROM auth.users
+  WHERE id IN (
+    'a1111111-1111-1111-1111-111111111111',
+    'b2222222-2222-2222-2222-222222222222',
+    'c3333333-3333-3333-3333-333333333333',
+    'd4444444-4444-4444-4444-444444444444',
+    'e5555555-5555-5555-5555-555555555555'
+  );
+  RAISE NOTICE 'auth.users found: % / 5', auth_count;
+  IF auth_count = 0 THEN
+    RAISE EXCEPTION 'No auth.users were created! Cannot continue with profiles/stores. Check auth schema.';
+  END IF;
+END;
+$$;
+
+
+-- ============================================
 -- PART 2: User Profiles in public.profiles
+-- Uses DO UPDATE so existing profiles get seller_type updated
 -- ============================================
 
--- NOTE: seller_type = 'store' for merchants, 'individual' for regular users
 INSERT INTO public.profiles (id, phone, display_name, governorate, city, bio, is_commission_supporter, total_ads_count, rating, seller_type) VALUES
   ('a1111111-1111-1111-1111-111111111111', '01012345678', 'محمد أحمد', 'القاهرة', 'مدينة نصر', 'بائع سيارات مستعملة — خبرة 10 سنين في السوق', true, 5, 4.8, 'store'),
   ('b2222222-2222-2222-2222-222222222222', '01198765432', 'فاطمة علي', 'الجيزة', 'المهندسين', 'بيع وشراء موبايلات وتابلت — أصلي ومضمون', false, 3, 4.5, 'store'),
   ('c3333333-3333-3333-3333-333333333333', '01234567890', 'أحمد حسن', 'الإسكندرية', 'سموحة', 'مكتب عقارات — شقق وفيلات في إسكندرية', true, 4, 4.9, 'store'),
   ('d4444444-4444-4444-4444-444444444444', '01556789012', 'نورا محمود', 'الدقهلية', 'المنصورة', 'ملابس ماركات أصلية — جديد ومستعمل نضيف', false, 3, 4.2, 'individual'),
   ('e5555555-5555-5555-5555-555555555555', '01087654321', 'عمر خالد', 'الغربية', 'طنطا', 'أجهزة منزلية مستعملة بحالة ممتازة — ضمان شخصي', false, 3, 4.6, 'individual')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  display_name = EXCLUDED.display_name,
+  governorate = EXCLUDED.governorate,
+  city = EXCLUDED.city,
+  bio = EXCLUDED.bio,
+  seller_type = EXCLUDED.seller_type;
 
 
 -- ============================================
 -- PART 2B: Stores for Merchant Accounts (تجار)
+-- Uses DO UPDATE so re-running is safe
 -- ============================================
 
 INSERT INTO stores (id, user_id, name, slug, description, main_category, theme, layout, primary_color, location_gov, location_area, phone, is_verified, status) VALUES
@@ -212,7 +284,11 @@ INSERT INTO stores (id, user_id, name, slug, description, main_category, theme, 
    'مكتب عقارات متخصص في شقق وفيلات إسكندرية — بيع وإيجار',
    'real_estate', 'elegant', 'list', '#145C2E',
    'الإسكندرية', 'سموحة', '01234567890', true, 'active')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  main_category = EXCLUDED.main_category,
+  is_verified = EXCLUDED.is_verified;
 
 -- Link stores to profiles
 UPDATE public.profiles SET store_id = 'f1111111-1111-1111-1111-111111111111' WHERE id = 'a1111111-1111-1111-1111-111111111111';
@@ -559,20 +635,32 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================
 DO $$
 DECLARE
+  auth_count INTEGER;
   user_count INTEGER;
+  store_count INTEGER;
   ad_count INTEGER;
   bid_count INTEGER;
   conv_count INTEGER;
   msg_count INTEGER;
 BEGIN
+  SELECT COUNT(*) INTO auth_count FROM auth.users WHERE id IN (
+    'a1111111-1111-1111-1111-111111111111',
+    'b2222222-2222-2222-2222-222222222222',
+    'c3333333-3333-3333-3333-333333333333',
+    'd4444444-4444-4444-4444-444444444444',
+    'e5555555-5555-5555-5555-555555555555'
+  );
   SELECT COUNT(*) INTO user_count FROM public.profiles;
+  SELECT COUNT(*) INTO store_count FROM stores;
   SELECT COUNT(*) INTO ad_count FROM ads;
   SELECT COUNT(*) INTO bid_count FROM auction_bids;
   SELECT COUNT(*) INTO conv_count FROM conversations;
   SELECT COUNT(*) INTO msg_count FROM messages;
 
   RAISE NOTICE '✅ Test data seeded!';
-  RAISE NOTICE '   Users: %', user_count;
+  RAISE NOTICE '   Auth Users (test): %/5', auth_count;
+  RAISE NOTICE '   Profiles: %', user_count;
+  RAISE NOTICE '   Stores: %', store_count;
   RAISE NOTICE '   Ads: %', ad_count;
   RAISE NOTICE '   Auction Bids: %', bid_count;
   RAISE NOTICE '   Conversations: %', conv_count;

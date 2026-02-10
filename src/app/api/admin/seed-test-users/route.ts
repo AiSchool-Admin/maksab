@@ -318,30 +318,54 @@ export async function POST(request: Request) {
   results.auth_users = `تم إنشاء ${usersCreated} حساب (${usersSkipped} موجودين مسبقاً)`;
 
   // Step 2: Create public profiles (without store_id first)
-  const profiles = TEST_USERS.map((u) => ({
-    id: u.id,
-    phone: u.phone,
-    display_name: u.display_name,
-    governorate: u.governorate,
-    city: u.city,
-    bio: u.bio,
-    is_commission_supporter: u.is_commission_supporter,
-    total_ads_count: u.total_ads_count,
-    rating: u.rating,
-    seller_type: u.seller_type,
-  }));
-
-  const { error: profileError } = await admin
-    .from("profiles")
-    .upsert(profiles, { onConflict: "id" });
-  results.profiles = profileError
-    ? `خطأ: ${profileError.message}`
-    : `تم إضافة ${profiles.length} بروفايل`;
+  // Insert one by one so one FK failure doesn't block all
+  let profilesCreated = 0;
+  let profilesFailed = 0;
+  for (const u of TEST_USERS) {
+    const { error: pErr } = await admin
+      .from("profiles")
+      .upsert({
+        id: u.id,
+        phone: u.phone,
+        display_name: u.display_name,
+        governorate: u.governorate,
+        city: u.city,
+        bio: u.bio,
+        is_commission_supporter: u.is_commission_supporter,
+        total_ads_count: u.total_ads_count,
+        rating: u.rating,
+        seller_type: u.seller_type,
+      }, { onConflict: "id" });
+    if (pErr) {
+      profilesFailed++;
+      results[`profile_${u.email}`] = `خطأ: ${pErr.message}`;
+    } else {
+      profilesCreated++;
+    }
+  }
+  results.profiles = profilesFailed > 0
+    ? `خطأ: تم إضافة ${profilesCreated} بروفايل، فشل ${profilesFailed}`
+    : `تم إضافة ${profilesCreated} بروفايل`;
 
   // Step 3: Create stores for merchant accounts
+  // Only create store if the profile actually exists
   const merchantUsers = TEST_USERS.filter((u) => u.seller_type === "store" && u.store);
   let storesCreated = 0;
+  let storesSkipped = 0;
   for (const u of merchantUsers) {
+    // Verify profile exists before creating store
+    const { data: profileExists } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("id", u.id)
+      .maybeSingle();
+
+    if (!profileExists) {
+      storesSkipped++;
+      results[`store_${u.store!.slug}`] = `تخطي: البروفايل ${u.display_name} مش موجود`;
+      continue;
+    }
+
     const s = u.store!;
     const { error: storeErr } = await admin
       .from("stores")
@@ -383,9 +407,12 @@ export async function POST(request: Request) {
           price: 0,
           start_at: new Date().toISOString(),
         });
+    } else {
+      results[`store_${s.slug}`] = `خطأ: ${storeErr.message}`;
     }
   }
-  results.stores = `تم إنشاء ${storesCreated} متجر (${merchantUsers.length - storesCreated} موجودين مسبقاً)`;
+  results.stores = `تم إنشاء ${storesCreated} متجر` +
+    (storesSkipped > 0 ? ` (${storesSkipped} اتخطوا — بروفايل مش موجود)` : "");
 
   // Step 4: Create sample ads
   const { error: adsError } = await admin
