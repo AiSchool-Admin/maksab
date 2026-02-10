@@ -41,19 +41,48 @@ export async function getStoreBySlug(
   slug: string,
   currentUserId?: string,
 ): Promise<StoreWithStats | null> {
+  // Decode slug in case it's URL-encoded (Arabic slugs)
+  const decodedSlug = decodeURIComponent(slug);
+
+  const { data: store, error } = await supabase
+    .from("stores" as never)
+    .select("*")
+    .eq("slug", decodedSlug)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (error || !store) {
+    // Fallback: try via API route for server-side fetch (bypasses client RLS edge cases)
+    try {
+      const res = await fetch(`/api/stores/${encodeURIComponent(decodedSlug)}`);
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          ...data,
+          total_sales: data.total_sales || 0,
+          avg_response_time: data.avg_response_time || null,
+          is_following: data.is_following || false,
+          badges: data.badges || [],
+        } as StoreWithStats;
+      }
+    } catch {
+      // API fallback also failed
+    }
+    return null;
+  }
+
+  const s = store as unknown as Store;
+
+  // Fetch stats separately — errors here should NOT prevent store display
+  let totalFollowers = 0;
+  let totalReviews = 0;
+  let avgRating = 0;
+  let totalProducts = 0;
+  let isFollowing = false;
+  let storeBadges: StoreWithStats["badges"] = [];
+
   try {
-    const { data: store, error } = await supabase
-      .from("stores" as never)
-      .select("*")
-      .eq("slug", slug)
-      .eq("status", "active")
-      .maybeSingle();
-
-    if (error || !store) return null;
-
-    const s = store as unknown as Store;
-
-    const [followers, reviews, products, badges, isFollowing] = await Promise.all(
+    const [followers, reviews, products, badges, followCheck] = await Promise.all(
       [
         supabase
           .from("store_followers" as never)
@@ -84,27 +113,33 @@ export async function getStoreBySlug(
       ],
     );
 
+    totalFollowers = followers.count || 0;
+    totalProducts = products.count || 0;
+    isFollowing = !!followCheck.data;
+    storeBadges = (badges.data || []) as StoreWithStats["badges"];
+
     const reviewsData = (reviews.data || []) as { overall_rating: number }[];
-    const avgRating =
+    totalReviews = reviewsData.length;
+    avgRating =
       reviewsData.length > 0
         ? reviewsData.reduce((sum, r) => sum + r.overall_rating, 0) /
           reviewsData.length
         : 0;
-
-    return {
-      ...s,
-      avg_rating: Math.round(avgRating * 10) / 10,
-      total_reviews: reviewsData.length,
-      total_followers: followers.count || 0,
-      total_products: products.count || 0,
-      total_sales: 0,
-      avg_response_time: null,
-      is_following: !!isFollowing.data,
-      badges: (badges.data || []) as StoreWithStats["badges"],
-    };
   } catch {
-    return null;
+    // Stats failed but store was found — show store with zero stats
   }
+
+  return {
+    ...s,
+    avg_rating: Math.round(avgRating * 10) / 10,
+    total_reviews: totalReviews,
+    total_followers: totalFollowers,
+    total_products: totalProducts,
+    total_sales: 0,
+    avg_response_time: null,
+    is_following: isFollowing,
+    badges: storeBadges,
+  };
 }
 
 /** Fetch all active stores with optional filters, including stats */
