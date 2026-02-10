@@ -1,15 +1,9 @@
 /**
- * In-memory signal store for dev mode.
- * In production, signals go directly to Supabase user_signals table.
+ * Signal store — tracks user behavior signals in Supabase user_signals table.
  */
 
 import type { UserSignal, SignalType, UserInterest } from "./types";
 import { SIGNAL_WEIGHTS } from "./types";
-
-const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
-
-/** In-memory signal storage for dev mode */
-const devSignals: UserSignal[] = [];
 
 /** Track a user behavior signal — fire and forget */
 export async function trackSignal(params: {
@@ -34,14 +28,7 @@ export async function trackSignal(params: {
     created_at: new Date().toISOString(),
   };
 
-  if (IS_DEV) {
-    devSignals.push(signal);
-    // Keep only last 200 signals in dev
-    if (devSignals.length > 200) devSignals.splice(0, devSignals.length - 200);
-    return;
-  }
-
-  // Production: insert into Supabase (fire and forget)
+  // Insert into Supabase (fire and forget)
   try {
     const { supabase } = await import("@/lib/supabase/client");
     supabase
@@ -60,11 +47,6 @@ export async function trackSignal(params: {
   } catch {
     // Silent fail — don't block UI
   }
-}
-
-/** Get user signals from dev store (for testing recommendations locally) */
-export function getDevSignals(userId: string): UserSignal[] {
-  return devSignals.filter((s) => s.user_id === userId);
 }
 
 /** Build user interest profile from signals */

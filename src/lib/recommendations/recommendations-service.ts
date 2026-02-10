@@ -63,12 +63,6 @@ function apiAdToMockAd(ad: RecommendedAdFromAPI): MockAd {
 
 /* ── Get personalized recommendations ─────────────────────────────────── */
 
-/**
- * Fetch personalized recommendations from server API.
- * The API analyzes user_signals to return:
- * 1. Ads matching user's browsing/search/favorite patterns
- * 2. Auctions matching user's interests (with urgency scoring)
- */
 export async function getRecommendations(
   userId: string,
   userGovernorate?: string,
@@ -110,7 +104,6 @@ export async function getRecommendations(
     };
   } catch (err) {
     console.error("Recommendations error:", err);
-    // Fallback: use client-side Supabase directly
     return fallbackRecommendations(userId);
   }
 }
@@ -145,25 +138,9 @@ async function fallbackRecommendations(userId: string): Promise<RecommendationRe
       ? (auctionData as Record<string, unknown>[]).map(rowToMockAd)
       : [];
 
-    // If DB is empty, use demo data
-    if (personalizedAds.length === 0 || matchingAuctions.length === 0) {
-      const { demoAds, getDemoAuctionAds } = await import("@/lib/demo/demo-data");
-      return {
-        personalizedAds: personalizedAds.length > 0 ? personalizedAds : demoAds.slice(0, 10),
-        matchingAuctions: matchingAuctions.length > 0 ? matchingAuctions : getDemoAuctionAds(),
-        hasSignals: false,
-      };
-    }
-
     return { personalizedAds, matchingAuctions, hasSignals: false };
   } catch {
-    // Full fallback to demo data
-    const { demoAds, getDemoAuctionAds } = await import("@/lib/demo/demo-data");
-    return {
-      personalizedAds: demoAds.slice(0, 10),
-      matchingAuctions: getDemoAuctionAds(),
-      hasSignals: false,
-    };
+    return { personalizedAds: [], matchingAuctions: [], hasSignals: false };
   }
 }
 
@@ -187,9 +164,6 @@ function rowToMockAd(row: Record<string, unknown>): MockAd {
 
 /* ── Exchange matching ────────────────────────────────────────────────── */
 
-/**
- * Find matching ads for exchange — uses smart exchange engine.
- */
 export async function findExchangeMatches(
   adTitle: string,
   exchangeDescription: string,
@@ -199,7 +173,6 @@ export async function findExchangeMatches(
   try {
     const { supabase } = await import("@/lib/supabase/client");
 
-    // Multi-angle search for exchange matches
     const { data } = await supabase
       .from("ads" as never)
       .select("*")
@@ -230,9 +203,6 @@ export async function findExchangeMatches(
 
 /* ── Seller insights ──────────────────────────────────────────────────── */
 
-/**
- * Fetch real seller insights — how many potential buyers exist.
- */
 export async function getSellerInsights(params: {
   categoryId: string;
   subcategoryId?: string;
@@ -288,9 +258,6 @@ export async function getSellerInsights(params: {
 
 /* ── Enhanced similar search ads ──────────────────────────────────────── */
 
-/**
- * Enhanced "شبيه اللي بتدور عليه" — handled by search service.
- */
 export function getEnhancedSimilarAds(
   _query: string,
   _mainResultIds: Set<string>,

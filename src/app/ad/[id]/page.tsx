@@ -34,7 +34,6 @@ import {
   placeBid,
   buyNow,
   subscribeToAuction,
-  initDevAuctionState,
   checkAuctionEnd,
   fetchAuctionState,
 } from "@/lib/auction/auction-service";
@@ -54,8 +53,6 @@ import AddToCompareButton from "@/components/comparison/AddToCompareButton";
 import ComparisonFab from "@/components/comparison/ComparisonFab";
 import PriceBadge from "@/components/price/PriceBadge";
 import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
-
-const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
 
 /** Convert MockAdDetail to AuctionState for the auction component */
 function toAuctionState(ad: MockAdDetail): AuctionState {
@@ -113,7 +110,7 @@ export default function AdDetailPage({
   const [reviewsKey, setReviewsKey] = useState(0); // force refresh reviews
   const [sellerLoyaltyLevel, setSellerLoyaltyLevel] = useState<"member" | "silver" | "gold" | "diamond">("member");
 
-  const currentUserId = user?.id || DEV_USER_ID;
+  const currentUserId = user?.id || "";
 
   /* ── Load ad detail ──────────────────────────────────────── */
   useEffect(() => {
@@ -133,7 +130,6 @@ export default function AdDetailPage({
       if (data.saleType === "auction" && data.auctionStartPrice) {
         const state = toAuctionState(data);
         setAuctionState(state);
-        initDevAuctionState(state);
       }
     });
   }, [id]);
@@ -184,15 +180,8 @@ export default function AdDetailPage({
       setAuctionState(updatedState);
     });
 
-    // Periodic check: dev mode uses in-memory, production re-fetches
+    // Periodic check: re-fetch when timer expires client-side
     const endCheckInterval = setInterval(async () => {
-      // Dev mode: check in-memory state
-      const ended = checkAuctionEnd(id);
-      if (ended) {
-        setAuctionState(ended);
-        return;
-      }
-      // Production: check if timer expired client-side
       if (auctionState.endsAt) {
         const remaining = new Date(auctionState.endsAt).getTime() - Date.now();
         if (remaining <= 0) {
@@ -281,7 +270,7 @@ export default function AdDetailPage({
       setIsBidding(true);
       const result = await placeBid(
         id,
-        authedUser.id || DEV_USER_ID,
+        authedUser.id,
         authedUser.display_name || "مستخدم",
         amount,
       );
@@ -305,7 +294,7 @@ export default function AdDetailPage({
     setIsBuyingNow(true);
     const result = await buyNow(
       id,
-      authedUser.id || DEV_USER_ID,
+      authedUser.id,
       authedUser.display_name || "مستخدم",
     );
     setIsBuyingNow(false);

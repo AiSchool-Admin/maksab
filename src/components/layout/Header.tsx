@@ -34,7 +34,6 @@ export default function Header({
 
   const handleLogout = async () => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("maksab_dev_session");
       const keys = Object.keys(localStorage);
       for (const key of keys) {
         if (key.startsWith("sb-") || key.includes("supabase")) {

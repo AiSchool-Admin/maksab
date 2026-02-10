@@ -1,10 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { PLANS, isUpgrade } from "@/lib/stores/subscription-plans";
-import { upgradeDemoSubscription } from "@/lib/demo/demo-stores";
 import type { SubscriptionPlan } from "@/types";
-
-const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 /**
  * POST /api/stores/subscription/upgrade
@@ -38,16 +35,6 @@ export async function POST(request: Request) {
         { error: "الباقة غير موجودة" },
         { status: 400 },
       );
-    }
-
-    // Dev mode fallback
-    if (IS_DEV && (!supabaseUrl || !serviceRoleKey)) {
-      const sub = upgradeDemoSubscription(plan, billing_cycle || "monthly");
-      return NextResponse.json({
-        success: true,
-        subscription: sub,
-        message: `تم الترقية لباقة ${PLANS[plan].name} بنجاح! (وضع التطوير)`,
-      });
     }
 
     if (!supabaseUrl || !serviceRoleKey) {

@@ -18,8 +18,6 @@ import type {
   PaymentResult,
 } from "./types";
 
-const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
-
 // ── Payment Methods Configuration ─────────────────────────────────────
 
 // Replace these with real values for production
@@ -72,14 +70,6 @@ export function getAvailablePaymentMethods(): PaymentMethodInfo[] {
 export async function processPayment(
   request: PaymentRequest,
 ): Promise<PaymentResult> {
-  if (IS_DEV) {
-    console.log("💰 Payment processed (dev):", request);
-    return {
-      success: true,
-      transactionId: `txn-dev-${Date.now()}`,
-    };
-  }
-
   switch (request.method) {
     case "vodafone_cash":
     case "instapay":

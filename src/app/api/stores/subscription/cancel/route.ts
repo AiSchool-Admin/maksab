@@ -1,8 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { cancelDemoSubscription } from "@/lib/demo/demo-stores";
-
-const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 /**
  * POST /api/stores/subscription/cancel
@@ -24,15 +21,6 @@ export async function POST(request: Request) {
         { error: "البيانات ناقصة" },
         { status: 400 },
       );
-    }
-
-    // Dev mode fallback
-    if (IS_DEV && (!supabaseUrl || !serviceRoleKey)) {
-      cancelDemoSubscription();
-      return NextResponse.json({
-        success: true,
-        message: "تم إلغاء الاشتراك. هترجع للباقة المجانية. (وضع التطوير)",
-      });
     }
 
     if (!supabaseUrl || !serviceRoleKey) {

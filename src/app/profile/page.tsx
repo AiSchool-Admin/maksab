@@ -276,9 +276,8 @@ export default function ProfilePage() {
         <div className="pt-3">
           <button
             onClick={async () => {
-              // Clear all sessions including dev
+              // Clear all sessions
               if (typeof window !== "undefined") {
-                localStorage.removeItem("maksab_dev_session");
                 const keys = Object.keys(localStorage);
                 for (const key of keys) {
                   if (key.startsWith("sb-") || key.includes("supabase")) {

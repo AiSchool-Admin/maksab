@@ -94,7 +94,6 @@ function cleanStaleData(newVersion: string) {
     // Keys to preserve across updates
     const PRESERVE_KEYS = [
       "maksab_user_session",
-      "maksab_dev_session",
       "maksab_favorites",
       "maksab_app_version",
     ];

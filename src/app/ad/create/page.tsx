@@ -268,15 +268,6 @@ export default function CreateAdPage() {
     const authedUser = user || (await requireAuth());
     if (!authedUser) return;
 
-    // Reject dev/fake user IDs — must be a real UUID from Supabase Auth
-    if (authedUser.id.startsWith("dev-") || authedUser.id.length < 36) {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("maksab_dev_session");
-      }
-      setErrors({ publish: "لازم تسجل دخول بحساب حقيقي. اعمل logout وسجل دخول تاني من صفحة /login" });
-      return;
-    }
-
     setIsPublishing(true);
 
     try {

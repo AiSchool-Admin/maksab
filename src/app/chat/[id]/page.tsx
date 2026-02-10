@@ -23,8 +23,6 @@ import { useRealtimeChat } from "@/lib/hooks/useRealtimeChat";
 import { useTyping } from "@/lib/hooks/useTyping";
 import { useIsOnline } from "@/lib/hooks/usePresence";
 
-const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
-
 export default function ChatPage({
   params,
 }: {
@@ -52,7 +50,7 @@ export default function ChatPage({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const messages = messagesByConversation[conversationId] || [];
-  const currentUserId = user?.id || DEV_USER_ID;
+  const currentUserId = user?.id || "";
 
   // Check if the other user is online via presence
   const otherUserOnline = useIsOnline(conversation?.otherUser.id || null);
@@ -70,7 +68,7 @@ export default function ChatPage({
   useEffect(() => {
     loadMessages(conversationId);
     // Mark messages as read in DB
-    if (currentUserId !== DEV_USER_ID) {
+    if (currentUserId) {
       markMessagesAsRead(conversationId, currentUserId);
     }
     markAsRead(conversationId);
@@ -81,7 +79,7 @@ export default function ChatPage({
     (msg: ChatMessage) => {
       addMessage(msg);
       // Mark as read immediately since user is viewing this conversation
-      if (currentUserId !== DEV_USER_ID) {
+      if (currentUserId) {
         markMessagesAsRead(conversationId, currentUserId);
       }
     },
