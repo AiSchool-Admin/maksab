@@ -16,15 +16,13 @@ import { createHmac } from "crypto";
 
 const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
-const DEV_HMAC_SECRET = "dev-secret-for-local-testing-only";
-const isDev = process.env.NODE_ENV !== "production";
 
 function getSecret(): string {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (secret) return secret;
-  // In development, use a fallback secret so OTP flow works without service role key
-  if (isDev) return DEV_HMAC_SECRET;
-  throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+  if (!secret) {
+    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+  }
+  return secret;
 }
 
 /** Create HMAC-SHA256 signature */
@@ -89,19 +87,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // In development: return code directly so dev can enter it manually
-    if (isDev) {
-      console.log(`[DEV OTP] Phone: ${phone} → Code: ${code}`);
-      return NextResponse.json({
-        success: true,
-        token,
-        channel: "dev",
-        expires_at: expiresAt,
-        dev_code: code, // Only returned in development!
-      });
-    }
-
-    // No delivery channel configured — cannot send OTP
+    // No delivery channel configured
     return NextResponse.json(
       { error: "مش قادرين نبعتلك كود دلوقتي. جرب تاني بعدين" },
       { status: 503 }

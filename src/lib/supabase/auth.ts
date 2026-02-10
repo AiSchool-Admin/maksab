@@ -35,9 +35,8 @@ export type UserProfile = {
 export type SendOtpResult = {
   error: string | null;
   token?: string; // HMAC-signed token to send back with verify
-  channel?: "whatsapp" | "sms" | "dev";
+  channel?: "whatsapp" | "sms";
   whatsapp_link?: string | null;
-  dev_code?: string; // Only in development mode
 };
 
 // ── Session persistence (localStorage) ──────────────────────────────
@@ -84,7 +83,6 @@ export async function sendOTP(phone: string): Promise<SendOtpResult> {
       token: data.token,
       channel: data.channel,
       whatsapp_link: data.whatsapp_link,
-      dev_code: data.dev_code, // Only set in dev mode
     };
   } catch {
     return { error: "حصلت مشكلة في الاتصال. تأكد من الإنترنت وجرب تاني" };
