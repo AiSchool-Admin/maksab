@@ -1,16 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Search, SlidersHorizontal, Plus, Store } from "lucide-react";
 import StoreCard from "@/components/store/StoreCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { StoresGridSkeleton } from "@/components/store/StoreSkeleton";
 import { getStores } from "@/lib/stores/store-service";
 import { categoriesConfig } from "@/lib/categories/categories-config";
 import { governorates } from "@/lib/data/governorates";
+import { useAuth } from "@/components/auth/AuthProvider";
 import type { StoreWithStats } from "@/types";
 
 export default function StoresDirectoryPage() {
+  const router = useRouter();
+  const { user } = useAuth();
   const [stores, setStores] = useState<StoreWithStats[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,6 +24,7 @@ export default function StoresDirectoryPage() {
   const [selectedGov, setSelectedGov] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
+  const hasFilters = !!(search || selectedCategory || selectedGov);
 
   const loadStores = useCallback(async (reset = false) => {
     const currentPage = reset ? 1 : page;
@@ -58,11 +64,31 @@ export default function StoresDirectoryPage() {
     if (page > 1) loadStores(false);
   }, [page]);
 
+  const isStoreOwner = user?.seller_type === "store";
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
       <header className="bg-white border-b border-gray-light px-4 py-3 sticky top-0 z-40">
-        <h1 className="text-lg font-bold text-dark mb-3">🏪 المتاجر</h1>
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-lg font-bold text-dark">🏪 المتاجر</h1>
+          {isStoreOwner ? (
+            <Link
+              href="/store/dashboard"
+              className="text-xs font-bold text-brand-green bg-brand-green-light px-3 py-1.5 rounded-full"
+            >
+              متجري
+            </Link>
+          ) : (
+            <Link
+              href="/store/create"
+              className="text-xs font-bold text-white bg-brand-green px-3 py-1.5 rounded-full flex items-center gap-1"
+            >
+              <Plus size={14} />
+              افتح محلك
+            </Link>
+          )}
+        </div>
 
         {/* Search */}
         <div className="flex gap-2">
@@ -179,14 +205,69 @@ export default function StoresDirectoryPage() {
               </button>
             )}
           </>
-        ) : (
+        ) : hasFilters ? (
+          /* No search results */
           <EmptyState
-            icon="🏪"
-            title="مفيش متاجر"
+            icon="🔍"
+            title="مفيش نتائج"
             description="مفيش متاجر تطابق البحث. جرب تغير الفلاتر"
           />
+        ) : (
+          /* No stores at all — show CTA to create a store */
+          <div className="py-12 text-center px-4">
+            <div className="w-24 h-24 bg-brand-green-light rounded-full flex items-center justify-center mx-auto mb-5">
+              <Store size={40} className="text-brand-green" />
+            </div>
+            <h3 className="text-xl font-bold text-dark mb-2">
+              كن أول تاجر على مكسب!
+            </h3>
+            <p className="text-sm text-gray-text mb-2 max-w-xs mx-auto">
+              افتح محلك مجاناً واعرض منتجاتك لآلاف المشترين
+            </p>
+            <div className="flex flex-col gap-2 mt-6 max-w-xs mx-auto">
+              <div className="flex items-center gap-3 text-start bg-white rounded-xl p-3 border border-gray-light">
+                <span className="text-lg">1️⃣</span>
+                <div>
+                  <p className="text-sm font-bold text-dark">سجّل دخولك</p>
+                  <p className="text-[11px] text-gray-text">برقم موبايلك في ثانية</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-start bg-white rounded-xl p-3 border border-gray-light">
+                <span className="text-lg">2️⃣</span>
+                <div>
+                  <p className="text-sm font-bold text-dark">افتح محلك</p>
+                  <p className="text-[11px] text-gray-text">اختار اسم وقسم وخصّص الشكل</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-start bg-white rounded-xl p-3 border border-gray-light">
+                <span className="text-lg">3️⃣</span>
+                <div>
+                  <p className="text-sm font-bold text-dark">اعرض منتجاتك</p>
+                  <p className="text-[11px] text-gray-text">أضف إعلانات وابدأ بيع</p>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push("/store/create")}
+              className="mt-6 bg-brand-green text-white text-sm font-bold px-8 py-3 rounded-xl hover:bg-brand-green-dark transition-colors inline-flex items-center gap-2"
+            >
+              <Store size={18} />
+              افتح محلك دلوقتي — مجاناً
+            </button>
+          </div>
         )}
       </div>
+
+      {/* FAB — Create Store (for individual users) */}
+      {!isStoreOwner && (
+        <Link
+          href="/store/create"
+          className="fixed bottom-20 end-4 z-40 w-14 h-14 bg-brand-green text-white rounded-full shadow-lg shadow-brand-green/30 flex items-center justify-center hover:bg-brand-green-dark active:scale-95 transition-all"
+          aria-label="افتح محلك"
+        >
+          <Store size={24} />
+        </Link>
+      )}
     </div>
   );
 }
