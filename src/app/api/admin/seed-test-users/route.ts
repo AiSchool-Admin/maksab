@@ -83,7 +83,7 @@ const SAMPLE_ADS = [
   {
     id: "11111111-0001-0001-0001-000000000001",
     user_id: "a1111111-1111-1111-1111-111111111111",
-    category_id: "cars", subcategory_id: "cars_passenger", sale_type: "cash",
+    category_id: "cars", subcategory_id: "passenger", sale_type: "cash",
     title: "تويوتا كورولا 2022 — 35,000 كم — أوتوماتيك",
     description: "سيارة تويوتا كورولا موديل 2022، مسافة 35,000 كم، أوتوماتيك، بنزين، لون أبيض، مُرخصة. السيارة بحالة ممتازة، صيانة وكالة.",
     price: 450000, is_negotiable: true,
@@ -93,7 +93,7 @@ const SAMPLE_ADS = [
   {
     id: "11111111-0001-0001-0001-000000000002",
     user_id: "a1111111-1111-1111-1111-111111111111",
-    category_id: "cars", subcategory_id: "cars_passenger", sale_type: "auction",
+    category_id: "cars", subcategory_id: "passenger", sale_type: "auction",
     title: "هيونداي توسان 2021 — 50,000 كم — فول أوبشن",
     description: "هيونداي توسان موديل 2021، فول أوبشن، مسافة 50,000 كم، بنزين، أوتوماتيك. بانوراما، كاميرا خلفية.",
     price: null, is_negotiable: false,
@@ -107,7 +107,7 @@ const SAMPLE_ADS = [
   {
     id: "11111111-0001-0001-0001-000000000003",
     user_id: "a1111111-1111-1111-1111-111111111111",
-    category_id: "cars", subcategory_id: "cars_passenger", sale_type: "exchange",
+    category_id: "cars", subcategory_id: "passenger", sale_type: "exchange",
     title: "نيسان صني 2020 — 60,000 كم — للتبديل بكورولا",
     description: "نيسان صني موديل 2020، مسافة 60,000 كم، أوتوماتيك، بنزين، لون أسود. فابريكة بالكامل.",
     price: null, is_negotiable: false,
@@ -120,7 +120,7 @@ const SAMPLE_ADS = [
   {
     id: "22222222-0002-0002-0002-000000000001",
     user_id: "b2222222-2222-2222-2222-222222222222",
-    category_id: "phones", subcategory_id: "phones_mobile", sale_type: "cash",
+    category_id: "phones", subcategory_id: "mobile", sale_type: "cash",
     title: "آيفون 15 برو ماكس — 256GB — مستعمل زيرو",
     description: "آيفون 15 برو ماكس، 256 جيجا، تيتانيوم أسود. البطارية 98%، مع العلبة والشاحن الأصلي.",
     price: 52000, is_negotiable: true,
@@ -130,7 +130,7 @@ const SAMPLE_ADS = [
   {
     id: "22222222-0002-0002-0002-000000000002",
     user_id: "b2222222-2222-2222-2222-222222222222",
-    category_id: "phones", subcategory_id: "phones_mobile", sale_type: "auction",
+    category_id: "phones", subcategory_id: "mobile", sale_type: "auction",
     title: "سامسونج S24 Ultra — 512GB — جديد متبرشم",
     description: "سامسونج جالاكسي S24 ألترا، 512 جيجا، بنفسجي، جديد متبرشم. ضمان دولي.",
     price: null, is_negotiable: false,
@@ -145,7 +145,7 @@ const SAMPLE_ADS = [
   {
     id: "33333333-0003-0003-0003-000000000001",
     user_id: "c3333333-3333-3333-3333-333333333333",
-    category_id: "real_estate", subcategory_id: "re_apartments_sale", sale_type: "cash",
+    category_id: "real_estate", subcategory_id: "apartments-sale", sale_type: "cash",
     title: "شقة 180م² — 3 غرف — سوبر لوكس — سموحة",
     description: "شقة 180 متر في سموحة، 3 غرف، 2 حمام، سوبر لوكس، الطابق الخامس، أسانسير. واجهة بحري.",
     price: 2800000, is_negotiable: true,
@@ -155,7 +155,7 @@ const SAMPLE_ADS = [
   {
     id: "33333333-0003-0003-0003-000000000002",
     user_id: "c3333333-3333-3333-3333-333333333333",
-    category_id: "real_estate", subcategory_id: "re_apartments_rent", sale_type: "cash",
+    category_id: "real_estate", subcategory_id: "apartments-rent", sale_type: "cash",
     title: "شقة 120م² للإيجار — 2 غرف — سيدي جابر",
     description: "شقة 120 متر للإيجار الشهري، 2 غرف، حمام، مطبخ مجهز. قريبة من المحطة.",
     price: 8000, is_negotiable: false,
@@ -166,7 +166,7 @@ const SAMPLE_ADS = [
   {
     id: "44444444-0004-0004-0004-000000000001",
     user_id: "d4444444-4444-4444-4444-444444444444",
-    category_id: "fashion", subcategory_id: "fashion_women", sale_type: "cash",
+    category_id: "fashion", subcategory_id: "women", sale_type: "cash",
     title: "جاكت جلد طبيعي — Zara — مقاس M — جديد بالتاج",
     description: "جاكت جلد طبيعي من زارا، مقاس M، لون أسود. جديد بالتاج، اتشرى من برة.",
     price: 3500, is_negotiable: false,
@@ -176,7 +176,7 @@ const SAMPLE_ADS = [
   {
     id: "44444444-0004-0004-0004-000000000002",
     user_id: "d4444444-4444-4444-4444-444444444444",
-    category_id: "fashion", subcategory_id: "fashion_bags", sale_type: "auction",
+    category_id: "fashion", subcategory_id: "bags", sale_type: "auction",
     title: "شنطة Michael Kors — أصلي بالضمان — مستعملة ممتاز",
     description: "شنطة مايكل كورس أصلية، لون بني، استعمال خفيف. مع الداست باج والفاتورة.",
     price: null, is_negotiable: false,
@@ -191,7 +191,7 @@ const SAMPLE_ADS = [
   {
     id: "55555555-0005-0005-0005-000000000001",
     user_id: "e5555555-5555-5555-5555-555555555555",
-    category_id: "appliances", subcategory_id: "app_washers", sale_type: "cash",
+    category_id: "appliances", subcategory_id: "washers", sale_type: "cash",
     title: "غسالة توشيبا 10 كيلو — 2023 — مستعملة ممتاز",
     description: "غسالة توشيبا فول أوتوماتيك 10 كيلو، موديل 2023، أبيض. مستعملة 6 شهور. حالة الزيرو.",
     price: 9500, is_negotiable: true,
@@ -201,7 +201,7 @@ const SAMPLE_ADS = [
   {
     id: "55555555-0005-0005-0005-000000000002",
     user_id: "e5555555-5555-5555-5555-555555555555",
-    category_id: "appliances", subcategory_id: "app_fridges", sale_type: "auction",
+    category_id: "appliances", subcategory_id: "fridges", sale_type: "auction",
     title: "ثلاجة شارب 18 قدم — نوفروست — 2022",
     description: "ثلاجة شارب 18 قدم نوفروست، 2022، سيلفر. بحالة ممتازة.",
     price: null, is_negotiable: false,
@@ -215,7 +215,7 @@ const SAMPLE_ADS = [
   {
     id: "55555555-0005-0005-0005-000000000003",
     user_id: "e5555555-5555-5555-5555-555555555555",
-    category_id: "appliances", subcategory_id: "app_ac", sale_type: "cash",
+    category_id: "appliances", subcategory_id: "ac", sale_type: "cash",
     title: "مكيف كاريير 1.5 حصان — بارد ساخن — 2024",
     description: "مكيف كاريير 1.5 حصان بارد ساخن، 2024، إنفرتر. جديد متبرشم — ضمان وكالة سنتين.",
     price: 18000, is_negotiable: false,
