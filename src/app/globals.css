@@ -82,6 +82,20 @@ a,
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+/* Update banner slide-down animation */
+@keyframes slide-down {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s ease-out;
+}
+
 /* Modal backdrop */
 .backdrop-blur-overlay {
   backdrop-filter: blur(4px);

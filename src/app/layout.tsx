@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import AuthProvider from "@/components/auth/AuthProvider";
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration";
+import UpdateBanner from "@/components/pwa/UpdateBanner";
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget";
 import "./globals.css";
 
@@ -63,6 +64,7 @@ export default function RootLayout({
       </head>
       <body className="font-cairo antialiased bg-white">
         <ServiceWorkerRegistration />
+        <UpdateBanner />
         <AuthProvider>
           {/* Main content with bottom padding to avoid BottomNav overlap */}
           <div className="min-h-screen pb-20">{children}</div>

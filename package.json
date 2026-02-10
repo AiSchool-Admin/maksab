@@ -5,6 +5,7 @@
   "description": "منصة مكسب - منصة تعليمية عربية",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/bump-sw-version.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
