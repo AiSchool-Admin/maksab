@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Gavel, SlidersHorizontal } from "lucide-react";
+import { Gavel, SlidersHorizontal, Home } from "lucide-react";
+import Link from "next/link";
 import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
-import BottomNav from "@/components/layout/BottomNav";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { supabase } from "@/lib/supabase/client";
 import type { MockAd } from "@/lib/mock-data";
 
@@ -175,16 +176,25 @@ export default function AuctionsPage() {
               <Gavel size={22} className="text-brand-gold" />
               المزادات
             </h1>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`p-2 rounded-lg transition-colors ${
-                showFilters
-                  ? "bg-brand-green-light text-brand-green"
-                  : "text-gray-text hover:bg-gray-light"
-              }`}
-            >
-              <SlidersHorizontal size={18} />
-            </button>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/"
+                className="p-2 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-lg transition-colors"
+                aria-label="الرئيسية"
+              >
+                <Home size={18} />
+              </Link>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`p-2 rounded-lg transition-colors ${
+                  showFilters
+                    ? "bg-brand-green-light text-brand-green"
+                    : "text-gray-text hover:bg-gray-light"
+                }`}
+              >
+                <SlidersHorizontal size={18} />
+              </button>
+            </div>
           </div>
 
           {/* Stats bar */}
@@ -300,7 +310,7 @@ export default function AuctionsPage() {
         )}
       </div>
 
-      <BottomNav />
+      <BottomNavWithBadge />
     </main>
   );
 }

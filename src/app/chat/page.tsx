@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { MessageCircle, LogIn } from "lucide-react";
 import Header from "@/components/layout/Header";
-import BottomNav from "@/components/layout/BottomNav";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import ConversationItem from "@/components/chat/ConversationItem";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import Button from "@/components/ui/Button";
@@ -126,7 +126,7 @@ export default function ChatListPage() {
         </div>
       )}
 
-      <BottomNav unreadMessages={unreadCount} />
+      <BottomNavWithBadge />
     </main>
   );
 }

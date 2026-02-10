@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, List, SlidersHorizontal, X, Navigation, ChevronLeft } from "lucide-react";
+import { MapPin, List, SlidersHorizontal, X, Navigation, ChevronLeft, Home } from "lucide-react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase/client";
 import { formatPrice, formatTimeAgo } from "@/lib/utils/format";
 import { haversineDistance, formatDistance, getCurrentPosition, findNearestGovernorate, governorateCoordinates } from "@/lib/utils/geo";
-import BottomNav from "@/components/layout/BottomNav";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 
 // Dynamic import for map (SSR-safe)
 const MapView = dynamic(() => import("@/components/map/MapView"), {
@@ -175,6 +176,13 @@ export default function MapPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="p-2 rounded-xl text-brand-green hover:bg-green-50 transition-colors"
+              aria-label="الرئيسية"
+            >
+              <Home size={18} />
+            </Link>
             <button
               onClick={() => setShowList(!showList)}
               className={`p-2 rounded-xl transition-colors ${showList ? "bg-brand-green text-white" : "bg-gray-100 text-gray-text"}`}
@@ -386,7 +394,7 @@ export default function MapPage() {
         </div>
       )}
 
-      <BottomNav />
+      <BottomNavWithBadge />
     </main>
   );
 }

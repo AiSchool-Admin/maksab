@@ -13,8 +13,10 @@ import {
   Calendar,
   Radio,
   Star,
+  Home,
 } from "lucide-react";
 import Link from "next/link";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import ImageGallery from "@/components/ad/ImageGallery";
@@ -350,13 +352,22 @@ export default function AdDetailPage({
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-light">
         <div className="flex items-center justify-between px-4 h-14">
-          <button
-            onClick={() => router.back()}
-            className="p-1 -me-1 text-gray-text hover:text-dark transition-colors"
-            aria-label="رجوع"
-          >
-            <ChevronRight size={24} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => router.back()}
+              className="p-1 -me-1 text-gray-text hover:text-dark transition-colors"
+              aria-label="رجوع"
+            >
+              <ChevronRight size={24} />
+            </button>
+            <Link
+              href="/"
+              className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+              aria-label="الرئيسية"
+            >
+              <Home size={18} />
+            </Link>
+          </div>
           <div className="flex items-center gap-1">
             <button
               onClick={handleShare}
@@ -693,6 +704,8 @@ export default function AdDetailPage({
           onCancel={() => setShowReviewForm(false)}
         />
       </Modal>
+
+      <BottomNavWithBadge />
     </main>
   );
 }

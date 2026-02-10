@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronRight, X, MapPin, ExternalLink } from "lucide-react";
+import { ChevronRight, X, MapPin, ExternalLink, Home } from "lucide-react";
 import Link from "next/link";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useComparisonStore } from "@/stores/comparison-store";
 import { categoriesConfig } from "@/lib/categories/categories-config";
 import { formatPrice } from "@/lib/utils/format";
@@ -14,13 +15,20 @@ export default function ComparePage() {
   // If less than 2 ads, redirect back
   if (ads.length < 2) {
     return (
-      <main className="min-h-screen bg-white">
+      <main className="min-h-screen bg-white pb-20">
         <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
           <div className="flex items-center gap-3 px-4 h-14">
             <button onClick={() => router.back()} className="p-1 text-gray-text">
               <ChevronRight size={24} />
             </button>
             <h1 className="text-lg font-bold text-dark">مقارنة الإعلانات</h1>
+            <Link
+              href="/"
+              className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+              aria-label="الرئيسية"
+            >
+              <Home size={18} />
+            </Link>
           </div>
         </header>
         <div className="px-4 py-12 text-center">
@@ -36,6 +44,7 @@ export default function ComparePage() {
             تصفح الإعلانات
           </button>
         </div>
+        <BottomNavWithBadge />
       </main>
     );
   }
@@ -94,7 +103,7 @@ export default function ComparePage() {
   };
 
   return (
-    <main className="min-h-screen bg-white pb-8">
+    <main className="min-h-screen bg-white pb-20">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
         <div className="flex items-center gap-3 px-4 h-14">
@@ -107,6 +116,13 @@ export default function ComparePage() {
           <h1 className="text-lg font-bold text-dark flex-1">
             مقارنة {categoryConfig?.name || "إعلانات"}
           </h1>
+          <Link
+            href="/"
+            className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+            aria-label="الرئيسية"
+          >
+            <Home size={18} />
+          </Link>
           <button
             onClick={() => {
               clearAll();
@@ -219,6 +235,8 @@ export default function ComparePage() {
           </tbody>
         </table>
       </div>
+
+      <BottomNavWithBadge />
     </main>
   );
 }

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, PlusCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlusCircle, Home } from "lucide-react";
+import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getCategoryById } from "@/lib/categories/categories-config";
@@ -506,9 +507,18 @@ export default function CreateAdPage() {
               {stepTitles[draft.currentStep - 1]}
             </h1>
           </div>
-          <span className="text-sm text-gray-text font-medium">
-            {draft.currentStep} / {TOTAL_STEPS}
-          </span>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+              aria-label="الرئيسية"
+            >
+              <Home size={18} />
+            </Link>
+            <span className="text-sm text-gray-text font-medium">
+              {draft.currentStep} / {TOTAL_STEPS}
+            </span>
+          </div>
         </div>
 
         {/* Progress bar */}

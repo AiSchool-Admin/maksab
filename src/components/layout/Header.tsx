@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronRight, Plus, LogIn, LogOut } from "lucide-react";
+import { Bell, ChevronRight, Plus, LogIn, LogOut, Home } from "lucide-react";
 import { useNotificationStore } from "@/stores/notification-store";
 import { useAuth } from "@/components/auth/AuthProvider";
 import NotificationDropdown from "@/components/notifications/NotificationDropdown";
@@ -61,7 +61,16 @@ export default function Header({
             </button>
           ) : null}
           {showBack ? (
-            <h1 className="text-lg font-bold text-dark">{title}</h1>
+            <>
+              <h1 className="text-lg font-bold text-dark">{title}</h1>
+              <Link
+                href="/"
+                className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+                aria-label="الرئيسية"
+              >
+                <Home size={18} />
+              </Link>
+            </>
           ) : (
             <Link href="/" className="flex items-center">
               <h1 className="text-xl font-bold text-brand-green">{title}</h1>

@@ -2,7 +2,8 @@
 
 import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, RefreshCw, Phone, User, Shield, Smartphone } from "lucide-react";
+import { ArrowLeft, RefreshCw, Phone, User, Shield, Smartphone, Home } from "lucide-react";
+import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
@@ -292,9 +293,16 @@ function LoginPageContent() {
         >
           <ArrowLeft size={22} />
         </button>
-        <h1 className="text-lg font-bold text-dark">
+        <h1 className="text-lg font-bold text-dark flex-1">
           {step === "otp" ? "كود التأكيد" : "تسجيل الدخول"}
         </h1>
+        <Link
+          href="/"
+          className="p-2 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+          aria-label="الرئيسية"
+        >
+          <Home size={20} />
+        </Link>
       </div>
 
       <div className="flex-1 px-5 pb-8">

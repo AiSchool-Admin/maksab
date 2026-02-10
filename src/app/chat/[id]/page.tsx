@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, User, Phone } from "lucide-react";
+import { ChevronRight, User, Phone, Home } from "lucide-react";
+import Link from "next/link";
 import ChatBubble from "@/components/chat/ChatBubble";
 import ChatInput from "@/components/chat/ChatInput";
 import ChatAdLink from "@/components/chat/ChatAdLink";
@@ -329,6 +330,15 @@ export default function ChatPage({
               />
             )}
           </div>
+
+          {/* Home button */}
+          <Link
+            href="/"
+            className="p-2 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors flex-shrink-0"
+            aria-label="الرئيسية"
+          >
+            <Home size={18} />
+          </Link>
 
           {/* Call button */}
           <a

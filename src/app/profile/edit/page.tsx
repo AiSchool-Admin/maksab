@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Button from "@/components/ui/Button";
@@ -63,7 +64,7 @@ export default function EditProfilePage() {
   };
 
   return (
-    <main className="bg-white">
+    <main className="bg-white pb-20">
       <Header title="تعديل البروفايل" showBack showNotifications={false} />
 
       <div className="px-4 py-5 space-y-5">
@@ -135,6 +136,8 @@ export default function EditProfilePage() {
           حفظ التعديلات
         </Button>
       </div>
+
+      <BottomNavWithBadge />
     </main>
   );
 }

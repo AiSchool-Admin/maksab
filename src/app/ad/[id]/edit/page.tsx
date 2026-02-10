@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Edit3, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Edit3, Loader2, Home } from "lucide-react";
+import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getCategoryById } from "@/lib/categories/categories-config";
@@ -375,9 +376,18 @@ export default function EditAdPage({
               {stepTitles[currentStep - 1]}
             </h1>
           </div>
-          <span className="text-sm text-gray-text font-medium">
-            {currentStep} / {TOTAL_STEPS}
-          </span>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+              aria-label="الرئيسية"
+            >
+              <Home size={18} />
+            </Link>
+            <span className="text-sm text-gray-text font-medium">
+              {currentStep} / {TOTAL_STEPS}
+            </span>
+          </div>
         </div>
         <div className="h-1 bg-gray-100">
           <div
