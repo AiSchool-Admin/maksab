@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, RefreshCw, Phone, User, Smartphone, Home, Store, UserCheck, FlaskConical } from "lucide-react";
+import { ArrowLeft, RefreshCw, Phone, User, Smartphone, Home } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -83,42 +83,9 @@ function LoginPageContent() {
     }
   }, [step]);
 
-  const [devLoading, setDevLoading] = useState<"individual" | "store" | null>(null);
-  const [devOtpCode, setDevOtpCode] = useState<string | null>(null);
-
   const handleSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);
     router.replace(redirectTo);
-  };
-
-  // ── Dev login (development only) ─────────────────────────────────
-  const handleDevLogin = async (type: "individual" | "store") => {
-    setDevLoading(type);
-    setError(null);
-    try {
-      const res = await fetch("/api/auth/dev-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "حصلت مشكلة");
-        setDevLoading(null);
-        return;
-      }
-      if (data.warning) {
-        console.warn("[Dev Login]", data.warning);
-      }
-      if (data.user) {
-        // Save to localStorage manually (same key as auth.ts)
-        localStorage.setItem("maksab_user_session", JSON.stringify(data.user));
-        handleSuccess(data.user as UserProfile);
-      }
-    } catch {
-      setError("حصلت مشكلة في الاتصال");
-    }
-    setDevLoading(null);
   };
 
   // ── Handle phone input changes (normalize autofill values) ─────────
@@ -150,7 +117,6 @@ function LoginPageContent() {
 
     setOtpToken(otpResult.token || "");
     setOtpChannel(otpResult.channel || null);
-    setDevOtpCode(otpResult.dev_code || null);
 
     setStep("otp");
     setResendTimer(60);
@@ -401,44 +367,6 @@ function LoginPageContent() {
               <span className="text-brand-green font-semibold">سياسة الخصوصية</span>
             </p>
 
-            {/* ── Dev Mode Quick Login ─────────────────────────────── */}
-            {process.env.NODE_ENV !== "production" && (
-              <div className="mt-6 pt-5 border-t-2 border-dashed border-orange-200">
-                <div className="flex items-center justify-center gap-2 mb-3">
-                  <FlaskConical size={16} className="text-orange-500" />
-                  <span className="text-sm font-bold text-orange-600">وضع الاختبار</span>
-                </div>
-                <p className="text-[11px] text-gray-text text-center mb-3">
-                  ادخل مباشرة بحساب تجريبي بدون كود
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleDevLogin("individual")}
-                    disabled={devLoading !== null}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 px-3 bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 rounded-xl text-sm font-semibold text-blue-700 transition-all disabled:opacity-50"
-                  >
-                    {devLoading === "individual" ? (
-                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <UserCheck size={18} />
-                    )}
-                    مستخدم عادي
-                  </button>
-                  <button
-                    onClick={() => handleDevLogin("store")}
-                    disabled={devLoading !== null}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 px-3 bg-green-50 hover:bg-green-100 border-2 border-green-200 rounded-xl text-sm font-semibold text-green-700 transition-all disabled:opacity-50"
-                  >
-                    {devLoading === "store" ? (
-                      <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Store size={18} />
-                    )}
-                    تاجر (متجر)
-                  </button>
-                </div>
-              </div>
-            )}
           </form>
         )}
 
@@ -458,19 +386,6 @@ function LoginPageContent() {
                 </span>
               </p>
             </div>
-
-            {/* Dev mode: show OTP code */}
-            {devOtpCode && (
-              <div className="bg-orange-50 border-2 border-dashed border-orange-300 rounded-xl p-3 text-center">
-                <p className="text-xs text-orange-600 mb-1">
-                  <FlaskConical size={12} className="inline ml-1" />
-                  كود التأكيد (وضع الاختبار)
-                </p>
-                <p className="text-3xl font-bold text-orange-700 tracking-[0.3em] font-mono" dir="ltr">
-                  {devOtpCode}
-                </p>
-              </div>
-            )}
 
             {/* OTP 6-digit inputs */}
             <div className="flex gap-2.5 justify-center py-2" dir="ltr">
