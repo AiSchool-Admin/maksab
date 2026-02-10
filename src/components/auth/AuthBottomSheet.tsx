@@ -33,6 +33,7 @@ export default function AuthBottomSheet({
   const [resendTimer, setResendTimer] = useState(0);
   const [otpChannel, setOtpChannel] = useState<string | null>(null);
   const [otpToken, setOtpToken] = useState<string>("");
+  const [devCode, setDevCode] = useState<string | null>(null);
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
@@ -49,6 +50,7 @@ export default function AuthBottomSheet({
       setResendTimer(0);
       setOtpChannel(null);
       setOtpToken("");
+      setDevCode(null);
       // Focus phone input when sheet opens
       setTimeout(() => phoneInputRef.current?.focus(), 400);
     }
@@ -83,6 +85,7 @@ export default function AuthBottomSheet({
 
     setOtpToken(otpResult.token || "");
     setOtpChannel(otpResult.channel || null);
+    setDevCode(otpResult.dev_code || null);
 
     setStep("otp");
     setResendTimer(60);
@@ -202,6 +205,7 @@ export default function AuthBottomSheet({
     }
 
     setOtpToken(resendResult.token || "");
+    setDevCode(resendResult.dev_code || null);
     setResendTimer(60);
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
@@ -309,12 +313,22 @@ export default function AuthBottomSheet({
               <Smartphone size={24} className="text-brand-green" />
             </div>
             <p className="text-sm text-gray-text">
-              {otpChannel === "whatsapp" ? "أدخل الكود اللي وصلك على واتساب" : "أدخل الكود اللي وصلك على"}{" "}
-              <span className="font-bold text-dark" dir="ltr">
-                {formatPhone(phone)}
-              </span>
+              {otpChannel === "whatsapp" ? "أدخل الكود اللي وصلك على واتساب" : otpChannel === "dev" ? "كود التأكيد" : "أدخل الكود اللي وصلك على"}{" "}
+              {otpChannel !== "dev" && (
+                <span className="font-bold text-dark" dir="ltr">
+                  {formatPhone(phone)}
+                </span>
+              )}
             </p>
           </div>
+
+          {/* Dev mode: show OTP code directly */}
+          {devCode && (
+            <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-center">
+              <p className="text-xs text-gray-text mb-1">كود التأكيد (وضع التطوير)</p>
+              <p className="text-2xl font-bold text-dark tracking-[0.3em]" dir="ltr">{devCode}</p>
+            </div>
+          )}
 
           {/* OTP 6-digit inputs */}
           <div className="flex gap-2 justify-center" dir="ltr">

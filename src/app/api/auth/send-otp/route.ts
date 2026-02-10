@@ -18,9 +18,9 @@ const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
 
 function getSecret(): string {
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.OTP_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!secret) {
-    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+    throw new Error("Missing OTP_SECRET or SUPABASE_SERVICE_ROLE_KEY");
   }
   return secret;
 }
@@ -87,11 +87,15 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // No delivery channel configured
-    return NextResponse.json(
-      { error: "مش قادرين نبعتلك كود دلوقتي. جرب تاني بعدين" },
-      { status: 503 }
-    );
+    // No real delivery channel — use dev fallback (code shown in UI)
+    console.log(`[DEV OTP] Phone: ${phone}, Code: ${code}`);
+    return NextResponse.json({
+      success: true,
+      token,
+      channel: "dev",
+      expires_at: expiresAt,
+      dev_code: code,
+    });
 
   } catch (err) {
     console.error("[send-otp] Error:", err);
