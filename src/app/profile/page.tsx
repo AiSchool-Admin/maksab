@@ -35,6 +35,7 @@ import { getUserLoyaltyProfile, awardPoints } from "@/lib/loyalty/loyalty-servic
 import type { UserLoyaltyProfile } from "@/lib/loyalty/types";
 import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
 import PointsDisplay from "@/components/loyalty/PointsDisplay";
+import UpgradeToStoreBanner from "@/components/store/UpgradeToStoreBanner";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -222,6 +223,13 @@ export default function ProfilePage() {
         </section>
       )}
 
+      {/* Upgrade to Store CTA (individual users only) */}
+      {(!user!.seller_type || user!.seller_type === "individual") && (
+        <section className="px-4 pb-5">
+          <UpgradeToStoreBanner variant="profile" />
+        </section>
+      )}
+
       {/* Verification section */}
       <section className="px-4 pb-5">
         <VerificationSection userId={user!.id} />
@@ -235,13 +243,28 @@ export default function ProfilePage() {
       {/* InstaPay commission support banner */}
       <InstaPayBanner />
 
+      {/* Bottom upgrade banner (individual sellers) */}
+      {(!user!.seller_type || user!.seller_type === "individual") && (
+        <section className="px-4 pb-5">
+          <UpgradeToStoreBanner variant="profile-bottom" />
+        </section>
+      )}
+
       {/* Menu sections */}
       <section className="px-4 pb-6 space-y-2">
-        <ProfileMenuItem
-          icon={<Store size={20} />}
-          label="متجري"
-          onClick={() => router.push("/store/dashboard")}
-        />
+        {user!.seller_type === "store" ? (
+          <ProfileMenuItem
+            icon={<Store size={20} />}
+            label="متجري"
+            onClick={() => router.push("/store/dashboard")}
+          />
+        ) : (
+          <ProfileMenuItem
+            icon={<Store size={20} />}
+            label="افتح محلك"
+            onClick={() => router.push("/store/create")}
+          />
+        )}
         <ProfileMenuItem
           icon={<ShoppingBag size={20} />}
           label="إعلاناتي"

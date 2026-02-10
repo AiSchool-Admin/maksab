@@ -19,11 +19,20 @@ export async function POST(request: Request) {
       location_gov,
       location_area,
       phone,
+      logo_url,
     } = body;
 
+    // ── Validation ──────────────────────────────────────────────
     if (!user_id || !name || !main_category) {
       return NextResponse.json(
         { error: "الاسم والقسم مطلوبين" },
+        { status: 400 },
+      );
+    }
+
+    if (name.trim().length > 30) {
+      return NextResponse.json(
+        { error: "اسم المتجر لازم يكون أقل من 30 حرف" },
         { status: 400 },
       );
     }
@@ -39,7 +48,7 @@ export async function POST(request: Request) {
       auth: { persistSession: false },
     });
 
-    // Check user exists
+    // ── Check user exists and is individual ─────────────────────
     const { data: profile } = await adminClient
       .from("profiles")
       .select("id, seller_type, store_id")
@@ -53,7 +62,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if user already has a store
     if (profile.store_id) {
       return NextResponse.json(
         { error: "عندك متجر بالفعل. المستخدم يقدر ينشئ متجر واحد بس" },
@@ -61,14 +69,28 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate slug
+    // ── Validate store name uniqueness ──────────────────────────
+    const { data: existingStore } = await adminClient
+      .from("stores")
+      .select("id")
+      .ilike("name", name.trim())
+      .maybeSingle();
+
+    if (existingStore) {
+      return NextResponse.json(
+        { error: "الاسم ده مستخدم بالفعل. اختار اسم تاني لمتجرك" },
+        { status: 409 },
+      );
+    }
+
+    // ── Generate slug ───────────────────────────────────────────
     const { data: slugData } = await adminClient.rpc(
       "generate_store_slug" as never,
       { store_name: name } as never,
     );
     const slug = (slugData as string) || `store-${Date.now()}`;
 
-    // Create store
+    // ── Create store (single transaction) ───────────────────────
     const { data: store, error: storeError } = await adminClient
       .from("stores")
       .insert({
@@ -76,6 +98,7 @@ export async function POST(request: Request) {
         name: name.trim(),
         slug,
         description: description || null,
+        logo_url: logo_url || null,
         main_category,
         theme: theme || "classic",
         layout: layout || "grid",
@@ -95,7 +118,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update profile with store_id and seller_type
+    // ── Update profile: seller_type → store, link store_id ──────
     await adminClient
       .from("profiles")
       .update({
@@ -104,7 +127,22 @@ export async function POST(request: Request) {
       })
       .eq("id", user_id);
 
-    // Auto-create FREE subscription
+    // ── Migrate existing products to store ──────────────────────
+    // First count how many ads to migrate
+    const { count: migratedCount } = await adminClient
+      .from("ads")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user_id)
+      .neq("status", "deleted");
+
+    // Then update them all
+    await adminClient
+      .from("ads")
+      .update({ store_id: store.id } as never)
+      .eq("user_id", user_id)
+      .neq("status", "deleted");
+
+    // ── Auto-create FREE subscription ───────────────────────────
     await adminClient
       .from("store_subscriptions")
       .insert({
@@ -117,9 +155,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      id: store.id,
-      slug: store.slug,
-      message: "تم إنشاء المتجر بنجاح!",
+      store: {
+        id: store.id,
+        slug: store.slug,
+        name: name.trim(),
+      },
+      migrated_products: migratedCount || 0,
     });
   } catch (err) {
     return NextResponse.json(
