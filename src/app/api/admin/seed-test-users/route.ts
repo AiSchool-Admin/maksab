@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
  */
 
 const TEST_USERS = [
+  // ── تجار (Merchants with Stores) ──────────
   {
     id: "a1111111-1111-1111-1111-111111111111",
     email: "mohamed@test.maksab.app",
@@ -23,6 +24,19 @@ const TEST_USERS = [
     is_commission_supporter: true,
     total_ads_count: 5,
     rating: 4.8,
+    seller_type: "store" as const,
+    store: {
+      id: "f1111111-1111-1111-1111-111111111111",
+      name: "سيارات محمد أحمد",
+      slug: "mohamed-cars",
+      description: "أكبر معرض سيارات مستعملة في مدينة نصر — خبرة 10 سنين — كل السيارات مضمونة",
+      main_category: "cars",
+      theme: "modern",
+      layout: "grid",
+      primary_color: "#1B7A3D",
+      is_verified: true,
+      plan: "gold",
+    },
   },
   {
     id: "b2222222-2222-2222-2222-222222222222",
@@ -36,6 +50,19 @@ const TEST_USERS = [
     is_commission_supporter: false,
     total_ads_count: 3,
     rating: 4.5,
+    seller_type: "store" as const,
+    store: {
+      id: "f2222222-2222-2222-2222-222222222222",
+      name: "موبايلات فاطمة",
+      slug: "fatma-phones",
+      description: "موبايلات أصلية ومضمونة — آيفون وسامسونج — جديد ومستعمل",
+      main_category: "phones",
+      theme: "classic",
+      layout: "grid",
+      primary_color: "#D4A843",
+      is_verified: false,
+      plan: "free",
+    },
   },
   {
     id: "c3333333-3333-3333-3333-333333333333",
@@ -49,7 +76,21 @@ const TEST_USERS = [
     is_commission_supporter: true,
     total_ads_count: 4,
     rating: 4.9,
+    seller_type: "store" as const,
+    store: {
+      id: "f3333333-3333-3333-3333-333333333333",
+      name: "عقارات أحمد حسن",
+      slug: "ahmed-realestate",
+      description: "مكتب عقارات متخصص في شقق وفيلات إسكندرية — بيع وإيجار",
+      main_category: "real_estate",
+      theme: "elegant",
+      layout: "list",
+      primary_color: "#145C2E",
+      is_verified: true,
+      plan: "platinum",
+    },
   },
+  // ── أفراد (Individual Users) ──────────
   {
     id: "d4444444-4444-4444-4444-444444444444",
     email: "noura@test.maksab.app",
@@ -62,6 +103,7 @@ const TEST_USERS = [
     is_commission_supporter: false,
     total_ads_count: 3,
     rating: 4.2,
+    seller_type: "individual" as const,
   },
   {
     id: "e5555555-5555-5555-5555-555555555555",
@@ -75,6 +117,7 @@ const TEST_USERS = [
     is_commission_supporter: false,
     total_ads_count: 3,
     rating: 4.6,
+    seller_type: "individual" as const,
   },
 ];
 
@@ -274,7 +317,7 @@ export async function POST(request: Request) {
   }
   results.auth_users = `تم إنشاء ${usersCreated} حساب (${usersSkipped} موجودين مسبقاً)`;
 
-  // Step 2: Create public profiles
+  // Step 2: Create public profiles (without store_id first)
   const profiles = TEST_USERS.map((u) => ({
     id: u.id,
     phone: u.phone,
@@ -285,6 +328,7 @@ export async function POST(request: Request) {
     is_commission_supporter: u.is_commission_supporter,
     total_ads_count: u.total_ads_count,
     rating: u.rating,
+    seller_type: u.seller_type,
   }));
 
   const { error: profileError } = await admin
@@ -294,13 +338,66 @@ export async function POST(request: Request) {
     ? `خطأ: ${profileError.message}`
     : `تم إضافة ${profiles.length} بروفايل`;
 
-  // Step 3: Create sample ads
+  // Step 3: Create stores for merchant accounts
+  const merchantUsers = TEST_USERS.filter((u) => u.seller_type === "store" && u.store);
+  let storesCreated = 0;
+  for (const u of merchantUsers) {
+    const s = u.store!;
+    const { error: storeErr } = await admin
+      .from("stores")
+      .upsert({
+        id: s.id,
+        user_id: u.id,
+        name: s.name,
+        slug: s.slug,
+        description: s.description,
+        main_category: s.main_category,
+        theme: s.theme,
+        layout: s.layout,
+        primary_color: s.primary_color,
+        location_gov: u.governorate,
+        location_area: u.city,
+        phone: u.phone,
+        is_verified: s.is_verified,
+        status: "active",
+      }, { onConflict: "id" });
+
+    if (!storeErr) {
+      storesCreated++;
+      // Link store to profile
+      await admin
+        .from("profiles")
+        .update({ store_id: s.id })
+        .eq("id", u.id);
+      // Create subscription
+      await admin
+        .from("store_subscriptions")
+        .upsert({
+          store_id: s.id,
+          plan: s.plan,
+          status: "active",
+          price: 0,
+          start_at: new Date().toISOString(),
+        }, { onConflict: "store_id" } as never);
+    }
+  }
+  results.stores = `تم إنشاء ${storesCreated} متجر (${merchantUsers.length - storesCreated} موجودين مسبقاً)`;
+
+  // Step 4: Create sample ads
   const { error: adsError } = await admin
     .from("ads")
     .upsert(SAMPLE_ADS, { onConflict: "id" });
   results.ads = adsError
     ? `خطأ: ${adsError.message}`
     : `تم إضافة ${SAMPLE_ADS.length} إعلان`;
+
+  // Step 5: Link merchant ads to their stores
+  for (const u of merchantUsers) {
+    await admin
+      .from("ads")
+      .update({ store_id: u.store!.id } as never)
+      .eq("user_id", u.id);
+  }
 
   const hasErrors = Object.values(results).some((r) => r.startsWith("خطأ"));
 
@@ -317,6 +414,9 @@ export async function POST(request: Request) {
         name: u.display_name,
         phone: u.phone,
         location: `${u.governorate} — ${u.city}`,
+        type: u.seller_type === "store" ? "تاجر" : "فرد",
+        store_name: u.seller_type === "store" && u.store ? u.store.name : null,
+        store_slug: u.seller_type === "store" && u.store ? u.store.slug : null,
       })),
     },
     { status: hasErrors ? 207 : 200 },
