@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus, Loader2, MapPin } from "lucide-react";
+import { Search, Plus, Loader2, MapPin, ChevronRight } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
@@ -148,6 +148,13 @@ export default function HomePage() {
         {/* Quick search chips */}
         <div className="flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide">
           <Link
+            href="/souk"
+            className="flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 bg-amber-100 text-amber-800 text-xs font-bold rounded-full hover:bg-amber-200 transition-colors border border-amber-200"
+          >
+            🏪
+            السوق
+          </Link>
+          <Link
             href="/map"
             className="flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 bg-brand-green-light text-brand-green text-xs font-semibold rounded-full hover:bg-brand-green hover:text-white transition-colors"
           >
@@ -183,6 +190,30 @@ export default function HomePage() {
             </Link>
           ))}
         </div>
+      </section>
+
+      {/* ─── Souk Banner ──────────────────────────────────────── */}
+      <section className="px-4 pb-4">
+        <Link href="/souk" className="block group">
+          <div className="relative bg-gradient-to-l from-amber-700 via-amber-800 to-amber-900 rounded-2xl p-4 overflow-hidden active:scale-[0.98] transition-transform">
+            {/* Decorative pattern */}
+            <div className="absolute top-0 end-0 w-20 h-20 bg-amber-600/20 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 start-0 w-16 h-16 bg-amber-600/20 rounded-full translate-y-1/2 -translate-x-1/2" />
+
+            <div className="relative flex items-center gap-3">
+              <div className="text-4xl">🏪</div>
+              <div className="flex-1">
+                <h3 className="text-white font-bold text-base mb-0.5">
+                  اتجوّل في سوق مكسب
+                </h3>
+                <p className="text-amber-200 text-xs leading-relaxed">
+                  ادخل المحلات واتفرج على المنتجات زي السوق الحقيقي
+                </p>
+              </div>
+              <ChevronRight size={20} className="text-amber-300 group-hover:-translate-x-1 transition-transform rotate-180" />
+            </div>
+          </div>
+        </Link>
       </section>
 
       {/* ─── 3. Recommended Ads (horizontal scroll) ────────────── */}

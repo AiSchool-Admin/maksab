@@ -160,3 +160,87 @@ video {
     user-select: none;
   }
 }
+
+/* ── Souk (Virtual Market) Animations ────────────────────────── */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out both;
+}
+
+@keyframes walk-right {
+  0% { transform: translateX(-40px); opacity: 0; }
+  10% { opacity: 0.5; }
+  90% { opacity: 0.5; }
+  100% { transform: translateX(calc(100vw + 40px)); opacity: 0; }
+}
+
+@keyframes walk-left {
+  0% { transform: translateX(calc(100vw + 40px)); opacity: 0; }
+  10% { opacity: 0.5; }
+  90% { opacity: 0.5; }
+  100% { transform: translateX(-40px); opacity: 0; }
+}
+
+.animate-walk-right {
+  animation: walk-right 12s linear infinite;
+}
+
+.animate-walk-left {
+  animation: walk-left 15s linear infinite;
+}
+
+@keyframes step-left {
+  0%, 100% { transform: rotate(-10deg); }
+  50% { transform: rotate(10deg); }
+}
+
+@keyframes step-right {
+  0%, 100% { transform: rotate(10deg); }
+  50% { transform: rotate(-10deg); }
+}
+
+.animate-step-left {
+  transform-origin: top center;
+  animation: step-left 0.5s ease-in-out infinite;
+}
+
+.animate-step-right {
+  transform-origin: top center;
+  animation: step-right 0.5s ease-in-out infinite;
+}
+
+@keyframes float-lantern {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+
+.animate-lantern {
+  transform-origin: top center;
+  animation: float-lantern 3s ease-in-out infinite;
+}
+
+@keyframes souk-gate-open {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-gate-open {
+  animation: souk-gate-open 0.5s ease-out both;
+}
