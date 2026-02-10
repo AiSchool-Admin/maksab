@@ -42,36 +42,46 @@ export default function StorePublicPage() {
 
   // Load store data
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       setIsLoading(true);
       const storeData = await getStoreBySlug(slug, user?.id);
+      if (cancelled) return;
       if (!storeData) {
         setIsLoading(false);
         return;
       }
       setStore(storeData);
 
-      // Parallel fetches
-      const [cats, promos, prods] = await Promise.all([
-        getStoreCategories(storeData.id),
-        getStorePromotions(storeData.id),
-        getStoreProducts(storeData.id),
-      ]);
-      setCategories(cats);
-      setPromotions(promos);
-      setProducts(prods.products as unknown as Record<string, unknown>[]);
+      // Parallel fetches — wrapped individually so one failure doesn't block others
+      try {
+        const [cats, promos, prods] = await Promise.all([
+          getStoreCategories(storeData.id).catch(() => []),
+          getStorePromotions(storeData.id).catch(() => []),
+          getStoreProducts(storeData.id).catch(() => ({ products: [], total: 0 })),
+        ]);
+        if (cancelled) return;
+        setCategories(cats);
+        setPromotions(promos);
+        setProducts(prods.products as unknown as Record<string, unknown>[]);
 
-      // Filter pinned
-      const pinned = (prods.products as unknown as Record<string, unknown>[]).filter(
-        (p) => p.is_pinned,
-      );
-      setPinnedProducts(pinned);
+        // Filter pinned
+        const pinned = (prods.products as unknown as Record<string, unknown>[]).filter(
+          (p) => p.is_pinned,
+        );
+        setPinnedProducts(pinned);
+      } catch {
+        // Secondary data failed — store still displays
+      }
 
-      // Record view
-      recordStoreView(storeData.id);
-      setIsLoading(false);
+      // Record view (fire-and-forget)
+      recordStoreView(storeData.id).catch(() => {});
+      if (!cancelled) setIsLoading(false);
     }
     load();
+
+    return () => { cancelled = true; };
   }, [slug, user?.id]);
 
   // Filter products by category
