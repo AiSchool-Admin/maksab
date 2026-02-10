@@ -1,8 +1,10 @@
 /**
  * Search service — queries Supabase for ads.
+ * Falls back to demo data when DB returns no results.
  */
 
 import { supabase } from "@/lib/supabase/client";
+import { searchDemoAds, demoAds } from "@/lib/demo/demo-data";
 import type { MockAd } from "@/lib/mock-data";
 
 /* ── Search request / response ──────────────────────────────────────── */
@@ -44,6 +46,34 @@ function rowToMockAd(row: Record<string, unknown>): MockAd {
     auctionEndsAt: (row.auction_ends_at as string) ?? undefined,
     exchangeDescription: (row.exchange_description as string) ?? undefined,
   };
+}
+
+/** Client-side filtering of demo ads based on search filters */
+function filterDemoAds(filters: SearchFilters): MockAd[] {
+  let results = filters.query ? searchDemoAds(filters.query) : [...demoAds];
+
+  if (filters.saleType) {
+    results = results.filter((ad) => ad.saleType === filters.saleType);
+  }
+  if (filters.priceMin != null) {
+    results = results.filter((ad) => ad.price != null && ad.price >= filters.priceMin!);
+  }
+  if (filters.priceMax != null) {
+    results = results.filter((ad) => ad.price != null && ad.price <= filters.priceMax!);
+  }
+  if (filters.governorate) {
+    results = results.filter((ad) => ad.governorate === filters.governorate);
+  }
+
+  // Sort
+  if (filters.sortBy === "price_asc") {
+    results.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+  } else if (filters.sortBy === "price_desc") {
+    results.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+  }
+  // "newest" is already default order
+
+  return results;
 }
 
 /* ── Main search function ───────────────────────────────────────────── */
@@ -115,8 +145,15 @@ export async function searchAds(
 
     const { data, error, count } = await query;
 
-    if (error || !data) {
-      return { ads: [], total: 0, hasMore: false };
+    if (error || !data || (data as unknown[]).length === 0) {
+      // Fallback to demo data
+      const demoResults = filterDemoAds(filters);
+      const pageResults = demoResults.slice(from, to + 1);
+      return {
+        ads: pageResults,
+        total: demoResults.length,
+        hasMore: to + 1 < demoResults.length,
+      };
     }
 
     const ads = (data as Record<string, unknown>[]).map(rowToMockAd);
@@ -128,7 +165,16 @@ export async function searchAds(
       hasMore: from + PAGE_SIZE < total,
     };
   } catch {
-    return { ads: [], total: 0, hasMore: false };
+    // Network/DB error — use demo data
+    const demoResults = filterDemoAds(filters);
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const pageResults = demoResults.slice(from, to + 1);
+    return {
+      ads: pageResults,
+      total: demoResults.length,
+      hasMore: to + 1 < demoResults.length,
+    };
   }
 }
 
@@ -153,11 +199,13 @@ export async function getSimilarSearchAds(
 
     const { data, error } = await query;
 
-    if (error || !data) return [];
+    if (error || !data || (data as unknown[]).length === 0) {
+      return demoAds.slice(0, 6);
+    }
 
     return (data as Record<string, unknown>[]).map(rowToMockAd);
   } catch {
-    return [];
+    return demoAds.slice(0, 6);
   }
 }
 

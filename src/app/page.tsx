@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus, Loader2, MapPin } from "lucide-react";
+import { Search, Plus, Loader2, MapPin, Play } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
@@ -22,6 +22,7 @@ import { getRecommendations } from "@/lib/recommendations/recommendations-servic
 import { fetchFeedAds } from "@/lib/mock-data";
 import type { MockAd } from "@/lib/mock-data";
 import { toggleFavorite, getFavoriteIds } from "@/lib/favorites/favorites-service";
+import { isDemoMode } from "@/lib/demo/demo-mode";
 
 const categories = [
   { name: "سيارات", slug: "cars" },
@@ -184,6 +185,41 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* ─── Demo Mode Banner ───────────────────────────────────── */}
+      {!user && !isDemoMode() && (
+        <section className="px-4 pb-4">
+          <Link
+            href="/demo"
+            className="flex items-center gap-3 bg-gradient-to-l from-brand-gold-light to-white border border-brand-gold/30 rounded-xl p-4 hover:shadow-sm transition-shadow active:scale-[0.99]"
+          >
+            <div className="w-10 h-10 rounded-full bg-brand-gold/20 flex items-center justify-center flex-shrink-0">
+              <Play size={18} className="text-brand-gold" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-dark">جرّب التطبيق كمستخدم حقيقي</p>
+              <p className="text-xs text-gray-text">
+                شوف إعلانات تجريبية، مزادات، تبديل — بدون تسجيل
+              </p>
+            </div>
+            <span className="text-gray-text text-lg">←</span>
+          </Link>
+        </section>
+      )}
+
+      {isDemoMode() && (
+        <section className="px-4 pb-4">
+          <div className="flex items-center gap-2 bg-brand-gold-light/50 border border-brand-gold/20 rounded-xl px-4 py-2.5">
+            <span className="text-base">🧪</span>
+            <p className="flex-1 text-xs font-semibold text-brand-gold">
+              وضع التجربة مفعّل — البيانات تجريبية
+            </p>
+            <Link href="/demo" className="text-xs text-brand-gold font-bold hover:underline">
+              إدارة
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* ─── Browse Stores ─────────────────────────────────────── */}
       <section className="px-4 pb-5">
