@@ -178,7 +178,7 @@ export async function setupPushNotifications(
 }
 
 /**
- * Show a local push notification (for dev/testing).
+ * Show a local push notification.
  */
 export function showLocalNotification(title: string, body: string): void {
   if (Notification.permission !== "granted") return;

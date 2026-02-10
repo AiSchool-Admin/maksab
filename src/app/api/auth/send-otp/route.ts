@@ -86,15 +86,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Channel 3: No delivery channel — dev/manual mode
-    // Show code directly so the app works during development
-    return NextResponse.json({
-      success: true,
-      token,
-      channel: "dev",
-      dev_code: code,
-      expires_at: expiresAt,
-    });
+    // No delivery channel configured — cannot send OTP
+    return NextResponse.json(
+      { error: "مش قادرين نبعتلك كود دلوقتي. جرب تاني بعدين" },
+      { status: 503 }
+    );
 
   } catch (err) {
     console.error("[send-otp] Error:", err);

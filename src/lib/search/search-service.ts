@@ -8,7 +8,7 @@
  * - Image search
  */
 
-import type { MockAd } from "@/lib/mock-data";
+import type { AdSummary } from "@/lib/ad-data";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -27,7 +27,7 @@ export interface AdvancedSearchFilters {
 }
 
 export interface AdvancedSearchResult {
-  ads: MockAd[];
+  ads: AdSummary[];
   total: number;
   hasMore: boolean;
   searchMethod: string;
@@ -84,12 +84,12 @@ export async function advancedSearch(
 
     const data = await response.json();
 
-    // Convert to MockAd format for backwards compatibility
-    const ads: MockAd[] = (data.ads || []).map((ad: Record<string, unknown>) => ({
+    // Convert API response to AdSummary format
+    const ads: AdSummary[] = (data.ads || []).map((ad: Record<string, unknown>) => ({
       id: ad.id as string,
       title: ad.title as string,
       price: ad.price as number | null,
-      saleType: ad.saleType as MockAd["saleType"],
+      saleType: ad.saleType as AdSummary["saleType"],
       image: ad.image as string | null,
       governorate: ad.governorate as string | null,
       city: ad.city as string | null,
@@ -109,7 +109,7 @@ export async function advancedSearch(
   } catch (err) {
     console.error("Advanced search error:", err);
     // Import fallback only when needed
-    const { searchAds } = await import("./mock-search");
+    const { searchAds } = await import("./search-data");
     const result = await searchAds(
       {
         query: filters.query,

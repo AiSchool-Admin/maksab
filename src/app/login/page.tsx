@@ -54,7 +54,6 @@ function LoginPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [otpChannel, setOtpChannel] = useState<string | null>(null);
   const [otpToken, setOtpToken] = useState<string>("");
 
@@ -116,28 +115,13 @@ function LoginPageContent() {
       return;
     }
 
-    // Store token, channel info, and dev code
-    const receivedToken = otpResult.token || "";
-    const receivedCode = otpResult.dev_code || null;
-    setOtpToken(receivedToken);
+    setOtpToken(otpResult.token || "");
     setOtpChannel(otpResult.channel || null);
-    setDevCode(receivedCode);
-
-    // Auto-fill OTP if code is available (dev/manual channel)
-    if (receivedCode && /^\d{6}$/.test(receivedCode)) {
-      setOtp(receivedCode.split(""));
-    }
 
     setStep("otp");
     setResendTimer(60);
-
-    // If code was auto-filled, user just taps confirm
-    // Otherwise focus first OTP input for manual entry
-    if (!receivedCode) {
-      setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
-      // Try WebOTP API to auto-read SMS code
-      tryWebOTP();
-    }
+    setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
+    tryWebOTP();
   };
 
   // ── WebOTP: Auto-read SMS verification code ───────────────────────
@@ -243,20 +227,11 @@ function LoginPageContent() {
       return;
     }
 
-    const newToken = resendResult.token || "";
-    const newCode = resendResult.dev_code || null;
-    setOtpToken(newToken);
-    setDevCode(newCode);
+    setOtpToken(resendResult.token || "");
     setResendTimer(60);
-
-    // Auto-fill OTP if code is available
-    if (newCode && /^\d{6}$/.test(newCode)) {
-      setOtp(newCode.split(""));
-    } else {
-      setOtp(["", "", "", "", "", ""]);
-      otpInputsRef.current[0]?.focus();
-      tryWebOTP();
-    }
+    setOtp(["", "", "", "", "", ""]);
+    otpInputsRef.current[0]?.focus();
+    tryWebOTP();
   };
 
   // ── Format phone for display ──────────────────────────────────────
@@ -409,12 +384,6 @@ function LoginPageContent() {
                   {formatPhone(phone)}
                 </span>
               </p>
-              {devCode && (
-                <div className="mt-2 bg-brand-gold/10 border border-brand-gold/30 rounded-lg px-3 py-2">
-                  <p className="text-xs text-gray-text">كود التأكيد:</p>
-                  <p className="text-2xl font-bold text-brand-gold tracking-widest" dir="ltr">{devCode}</p>
-                </div>
-              )}
             </div>
 
             {/* OTP 6-digit inputs */}

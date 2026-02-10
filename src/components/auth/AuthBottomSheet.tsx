@@ -31,7 +31,6 @@ export default function AuthBottomSheet({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [otpChannel, setOtpChannel] = useState<string | null>(null);
   const [otpToken, setOtpToken] = useState<string>("");
 
@@ -48,7 +47,6 @@ export default function AuthBottomSheet({
       setError(null);
       setIsSubmitting(false);
       setResendTimer(0);
-      setDevCode(null);
       setOtpChannel(null);
       setOtpToken("");
       // Focus phone input when sheet opens
@@ -83,24 +81,13 @@ export default function AuthBottomSheet({
       return;
     }
 
-    const receivedToken = otpResult.token || "";
-    const receivedCode = otpResult.dev_code || null;
-    setOtpToken(receivedToken);
+    setOtpToken(otpResult.token || "");
     setOtpChannel(otpResult.channel || null);
-    setDevCode(receivedCode);
-
-    // Auto-fill OTP if code is available
-    if (receivedCode && /^\d{6}$/.test(receivedCode)) {
-      setOtp(receivedCode.split(""));
-    }
 
     setStep("otp");
     setResendTimer(60);
-
-    if (!receivedCode) {
-      setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
-      tryWebOTP();
-    }
+    setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
+    tryWebOTP();
   };
 
   // ── WebOTP: Auto-read SMS verification code ─────────────────────
@@ -214,19 +201,11 @@ export default function AuthBottomSheet({
       return;
     }
 
-    const newToken = resendResult.token || "";
-    const newCode = resendResult.dev_code || null;
-    setOtpToken(newToken);
-    setDevCode(newCode);
+    setOtpToken(resendResult.token || "");
     setResendTimer(60);
-
-    if (newCode && /^\d{6}$/.test(newCode)) {
-      setOtp(newCode.split(""));
-    } else {
-      setOtp(["", "", "", "", "", ""]);
-      otpInputsRef.current[0]?.focus();
-      tryWebOTP();
-    }
+    setOtp(["", "", "", "", "", ""]);
+    otpInputsRef.current[0]?.focus();
+    tryWebOTP();
   };
 
   // ── Format phone for display ────────────────────────────────────
@@ -335,12 +314,6 @@ export default function AuthBottomSheet({
                 {formatPhone(phone)}
               </span>
             </p>
-            {devCode && (
-              <div className="mt-2 bg-brand-gold/10 border border-brand-gold/30 rounded-lg px-3 py-1.5">
-                <p className="text-[10px] text-gray-text">كود التطوير:</p>
-                <p className="text-xl font-bold text-brand-gold tracking-widest" dir="ltr">{devCode}</p>
-              </div>
-            )}
           </div>
 
           {/* OTP 6-digit inputs */}

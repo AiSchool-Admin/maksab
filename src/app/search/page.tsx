@@ -22,7 +22,7 @@ import {
   searchAds,
   getSimilarSearchAds,
   type SearchFilters,
-} from "@/lib/search/mock-search";
+} from "@/lib/search/search-data";
 import {
   advancedSearch,
   searchByImage,
@@ -33,7 +33,7 @@ import {
   getCategoryById,
   getCategoryBySlug,
 } from "@/lib/categories/categories-config";
-import type { MockAd } from "@/lib/mock-data";
+import type { AdSummary } from "@/lib/ad-data";
 import type { AIParsedQuery, SearchRefinement, EmptySuggestion, SearchWish } from "@/lib/search/ai-search-types";
 
 /** Resolve a category param (could be id or slug) to an id */
@@ -65,8 +65,8 @@ function SearchPageInner() {
     Record<string, string>
   >({});
   const [sortBy, setSortBy] = useState("relevance");
-  const [results, setResults] = useState<MockAd[]>([]);
-  const [similarAds, setSimilarAds] = useState<MockAd[]>([]);
+  const [results, setResults] = useState<AdSummary[]>([]);
+  const [similarAds, setSimilarAds] = useState<AdSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -83,7 +83,7 @@ function SearchPageInner() {
   const [wishRefreshTrigger, setWishRefreshTrigger] = useState(0);
   const [showInterpretation, setShowInterpretation] = useState(false);
   const [searchMethod, setSearchMethod] = useState<string>("none");
-  const [imageSearchResults, setImageSearchResults] = useState<MockAd[]>([]);
+  const [imageSearchResults, setImageSearchResults] = useState<AdSummary[]>([]);
   const [isImageSearching, setIsImageSearching] = useState(false);
 
   /* ── Build SearchFilters from state ────────────────────────────────── */
@@ -216,12 +216,12 @@ function SearchPageInner() {
 
       const { results: imgResults, detectedCategory } = await searchByImage(tags, category);
 
-      // Convert to MockAd format
-      const ads: MockAd[] = imgResults.map((r: ImageSearchResult) => ({
+      // Convert to AdSummary format
+      const ads: AdSummary[] = imgResults.map((r: ImageSearchResult) => ({
         id: r.id,
         title: r.title,
         price: r.price,
-        saleType: r.saleType as MockAd["saleType"],
+        saleType: r.saleType as AdSummary["saleType"],
         image: r.image,
         governorate: r.governorate,
         city: r.city,

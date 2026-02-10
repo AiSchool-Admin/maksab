@@ -124,9 +124,7 @@ export async function checkAuctionEnd(adId: string): Promise<AuctionState | null
 export type AuctionUnsubscribe = () => void;
 
 /**
- * Subscribe to real-time auction updates.
- * In dev mode: uses in-memory pub/sub.
- * In production: uses Supabase Realtime on auction_bids table.
+ * Subscribe to real-time auction updates via Supabase Realtime.
  */
 export function subscribeToAuction(
   adId: string,

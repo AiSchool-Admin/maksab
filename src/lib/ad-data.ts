@@ -5,7 +5,7 @@
 
 import { supabase } from "@/lib/supabase/client";
 
-export interface MockAd {
+export interface AdSummary {
   id: string;
   title: string;
   price: number | null;
@@ -23,14 +23,14 @@ export interface MockAd {
   isLiveAuction?: boolean;
 }
 
-/** Convert a Supabase ad row to MockAd */
-function rowToMockAd(row: Record<string, unknown>): MockAd {
+/** Convert a Supabase ad row to AdSummary */
+function rowToAdSummary(row: Record<string, unknown>): AdSummary {
   const categoryFields = (row.category_fields as Record<string, unknown>) ?? {};
   return {
     id: row.id as string,
     title: row.title as string,
     price: row.price ? Number(row.price) : null,
-    saleType: row.sale_type as MockAd["saleType"],
+    saleType: row.sale_type as AdSummary["saleType"],
     image: ((row.images as string[]) ?? [])[0] ?? null,
     governorate: (row.governorate as string) ?? null,
     city: (row.city as string) ?? null,
@@ -44,15 +44,15 @@ function rowToMockAd(row: Record<string, unknown>): MockAd {
 }
 
 // Empty arrays — no hardcoded data
-export const recommendedAds: MockAd[] = [];
-export const auctionAds: MockAd[] = [];
+export const recommendedAds: AdSummary[] = [];
+export const auctionAds: AdSummary[] = [];
 
 const PAGE_SIZE = 8;
 
 /**
  * Fetch paginated feed ads from Supabase.
  */
-export async function fetchFeedAds(page: number): Promise<{ ads: MockAd[]; hasMore: boolean }> {
+export async function fetchFeedAds(page: number): Promise<{ ads: AdSummary[]; hasMore: boolean }> {
   const from = page * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
@@ -68,7 +68,7 @@ export async function fetchFeedAds(page: number): Promise<{ ads: MockAd[]; hasMo
       return { ads: [], hasMore: false };
     }
 
-    const ads = (data as Record<string, unknown>[]).map(rowToMockAd);
+    const ads = (data as Record<string, unknown>[]).map(rowToAdSummary);
     return { ads, hasMore: ads.length === PAGE_SIZE };
   } catch {
     return { ads: [], hasMore: false };
@@ -78,7 +78,7 @@ export async function fetchFeedAds(page: number): Promise<{ ads: MockAd[]; hasMo
 /**
  * Fetch recommended ads from Supabase (latest active ads).
  */
-export async function fetchRecommendedAds(): Promise<MockAd[]> {
+export async function fetchRecommendedAds(): Promise<AdSummary[]> {
   try {
     const { data, error } = await supabase
       .from("ads" as never)
@@ -90,7 +90,7 @@ export async function fetchRecommendedAds(): Promise<MockAd[]> {
     if (error || !data || (data as unknown[]).length === 0) {
       return [];
     }
-    return (data as Record<string, unknown>[]).map(rowToMockAd);
+    return (data as Record<string, unknown>[]).map(rowToAdSummary);
   } catch {
     return [];
   }
@@ -99,7 +99,7 @@ export async function fetchRecommendedAds(): Promise<MockAd[]> {
 /**
  * Fetch active auction ads from Supabase.
  */
-export async function fetchAuctionAds(): Promise<MockAd[]> {
+export async function fetchAuctionAds(): Promise<AdSummary[]> {
   try {
     const { data, error } = await supabase
       .from("ads" as never)
@@ -112,7 +112,7 @@ export async function fetchAuctionAds(): Promise<MockAd[]> {
     if (error || !data || (data as unknown[]).length === 0) {
       return [];
     }
-    return (data as Record<string, unknown>[]).map(rowToMockAd);
+    return (data as Record<string, unknown>[]).map(rowToAdSummary);
   } catch {
     return [];
   }

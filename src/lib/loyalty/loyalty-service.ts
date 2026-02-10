@@ -4,7 +4,7 @@
  * Handles points accumulation, level calculation, referral codes,
  * and benefits management.
  *
- * Uses localStorage for demo/dev mode with Supabase integration ready.
+ * Uses localStorage with Supabase sync.
  */
 
 import { supabase } from "@/lib/supabase/client";
@@ -108,7 +108,7 @@ export async function awardPoints(
   action: PointAction,
   referenceId?: string,
 ): Promise<{ success: boolean; pointsAwarded: number; newTotal: number; levelUp?: LoyaltyLevel }> {
-  if (!userId || userId.startsWith("dev-")) {
+  if (!userId) {
     return { success: false, pointsAwarded: 0, newTotal: 0 };
   }
 

@@ -4,7 +4,7 @@
  */
 
 import { supabase } from "@/lib/supabase/client";
-import type { MockAd } from "@/lib/mock-data";
+import type { AdSummary } from "@/lib/ad-data";
 
 /* ── Search request / response ──────────────────────────────────────── */
 
@@ -22,20 +22,20 @@ export interface SearchFilters {
 }
 
 export interface SearchResult {
-  ads: MockAd[];
+  ads: AdSummary[];
   total: number;
   hasMore: boolean;
 }
 
 const PAGE_SIZE = 12;
 
-/** Convert Supabase row to MockAd */
-function rowToMockAd(row: Record<string, unknown>): MockAd {
+/** Convert Supabase row to AdSummary */
+function rowToAdSummary(row: Record<string, unknown>): AdSummary {
   return {
     id: row.id as string,
     title: row.title as string,
     price: row.price ? Number(row.price) : null,
-    saleType: row.sale_type as MockAd["saleType"],
+    saleType: row.sale_type as AdSummary["saleType"],
     image: ((row.images as string[]) ?? [])[0] ?? null,
     governorate: (row.governorate as string) ?? null,
     city: (row.city as string) ?? null,
@@ -107,7 +107,7 @@ export async function searchAds(
       return { ads: [], total: 0, hasMore: false };
     }
 
-    const ads = (data as Record<string, unknown>[]).map(rowToMockAd);
+    const ads = (data as Record<string, unknown>[]).map(rowToAdSummary);
     const total = count ?? ads.length;
 
     return {
@@ -125,7 +125,7 @@ export async function searchAds(
  */
 export async function getSimilarSearchAds(
   filters: SearchFilters,
-): Promise<MockAd[]> {
+): Promise<AdSummary[]> {
   try {
     let query = supabase
       .from("ads" as never)
@@ -144,7 +144,7 @@ export async function getSimilarSearchAds(
       return [];
     }
 
-    return (data as Record<string, unknown>[]).map(rowToMockAd);
+    return (data as Record<string, unknown>[]).map(rowToAdSummary);
   } catch {
     return [];
   }

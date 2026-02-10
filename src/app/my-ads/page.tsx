@@ -23,7 +23,7 @@ import {
   deleteAd,
   getStatusLabel,
   type MyAd,
-} from "@/lib/my-ads/mock-my-ads";
+} from "@/lib/my-ads/my-ads-service";
 import { formatTimeAgo } from "@/lib/utils/format";
 import type { AdStatus } from "@/types";
 

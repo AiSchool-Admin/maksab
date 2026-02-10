@@ -35,8 +35,7 @@ export type UserProfile = {
 export type SendOtpResult = {
   error: string | null;
   token?: string; // HMAC-signed token to send back with verify
-  channel?: "dev" | "whatsapp" | "sms" | "manual";
-  dev_code?: string; // Only in dev mode
+  channel?: "whatsapp" | "sms";
   whatsapp_link?: string | null;
 };
 
@@ -83,7 +82,6 @@ export async function sendOTP(phone: string): Promise<SendOtpResult> {
       error: null,
       token: data.token,
       channel: data.channel,
-      dev_code: data.dev_code,
       whatsapp_link: data.whatsapp_link,
     };
   } catch {
