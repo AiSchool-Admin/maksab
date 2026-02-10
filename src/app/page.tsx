@@ -185,6 +185,25 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ─── Browse Stores ─────────────────────────────────────── */}
+      <section className="px-4 pb-5">
+        <Link
+          href="/stores"
+          className="flex items-center justify-between bg-gradient-to-l from-brand-green-light to-white border border-brand-green/20 rounded-xl p-4 hover:shadow-sm transition-shadow"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🏪</span>
+            <div>
+              <p className="text-sm font-bold text-dark">تصفّح المتاجر</p>
+              <p className="text-xs text-gray-text">
+                اكتشف متاجر موثوقة وعروض حصرية
+              </p>
+            </div>
+          </div>
+          <span className="text-gray-text text-lg">←</span>
+        </Link>
+      </section>
+
       {/* ─── 3. Recommended Ads (horizontal scroll) ────────────── */}
       <HorizontalSection
         title="عروض مقترحة ليك"
