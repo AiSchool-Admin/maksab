@@ -16,9 +16,9 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "crypto";
 
 function getSecret(): string {
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.OTP_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!secret) {
-    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+    throw new Error("Missing OTP_SECRET or SUPABASE_SERVICE_ROLE_KEY");
   }
   return secret;
 }

@@ -56,6 +56,7 @@ function LoginPageContent() {
   const [resendTimer, setResendTimer] = useState(0);
   const [otpChannel, setOtpChannel] = useState<string | null>(null);
   const [otpToken, setOtpToken] = useState<string>("");
+  const [devCode, setDevCode] = useState<string | null>(null);
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
@@ -117,6 +118,7 @@ function LoginPageContent() {
 
     setOtpToken(otpResult.token || "");
     setOtpChannel(otpResult.channel || null);
+    setDevCode(otpResult.dev_code || null);
 
     setStep("otp");
     setResendTimer(60);
@@ -228,6 +230,7 @@ function LoginPageContent() {
     }
 
     setOtpToken(resendResult.token || "");
+    setDevCode(resendResult.dev_code || null);
     setResendTimer(60);
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
@@ -380,12 +383,22 @@ function LoginPageContent() {
               </div>
               <h2 className="text-lg font-bold text-dark mb-2">أدخل كود التأكيد</h2>
               <p className="text-sm text-gray-text">
-                {otpChannel === "whatsapp" ? "بعتنالك كود على واتساب" : "بعتنالك كود على"}{" "}
-                <span className="font-bold text-dark" dir="ltr">
-                  {formatPhone(phone)}
-                </span>
+                {otpChannel === "whatsapp" ? "بعتنالك كود على واتساب" : otpChannel === "dev" ? "كود التأكيد" : "بعتنالك كود على"}{" "}
+                {otpChannel !== "dev" && (
+                  <span className="font-bold text-dark" dir="ltr">
+                    {formatPhone(phone)}
+                  </span>
+                )}
               </p>
             </div>
+
+            {/* Dev mode: show OTP code directly */}
+            {devCode && (
+              <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-text mb-1">كود التأكيد (وضع التطوير)</p>
+                <p className="text-2xl font-bold text-dark tracking-[0.3em]" dir="ltr">{devCode}</p>
+              </div>
+            )}
 
             {/* OTP 6-digit inputs */}
             <div className="flex gap-2.5 justify-center py-2" dir="ltr">
