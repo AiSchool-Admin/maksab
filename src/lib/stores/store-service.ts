@@ -10,6 +10,8 @@ import type {
   StoreCategory,
   StoreReview,
   StorePromotion,
+  StoreSubscription,
+  SubscriptionPlan,
 } from "@/types";
 
 // ============================================
@@ -286,4 +288,46 @@ export async function recordStoreView(storeId: string): Promise<void> {
     } as never,
     { onConflict: "store_id,date" },
   );
+}
+
+// ============================================
+// SUBSCRIPTION Operations
+// ============================================
+
+/** Fetch the active subscription for a store */
+export async function getStoreSubscription(
+  storeId: string,
+): Promise<StoreSubscription | null> {
+  const { data, error } = await supabase
+    .from("store_subscriptions" as never)
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as unknown as StoreSubscription;
+}
+
+/** Fetch full subscription history for a store */
+export async function getSubscriptionHistory(
+  storeId: string,
+): Promise<StoreSubscription[]> {
+  const { data, error } = await supabase
+    .from("store_subscriptions" as never)
+    .select("*")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false });
+
+  if (error) return [];
+  return (data || []) as unknown as StoreSubscription[];
+}
+
+/** Get the current plan for a store (defaults to 'free' if none found) */
+export async function getCurrentPlan(
+  storeId: string,
+): Promise<SubscriptionPlan> {
+  const sub = await getStoreSubscription(storeId);
+  return sub?.plan || "free";
 }

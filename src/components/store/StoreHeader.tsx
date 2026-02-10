@@ -2,20 +2,23 @@
 
 import Image from "next/image";
 import { Star, MapPin, Clock, Share2 } from "lucide-react";
-import type { StoreWithStats } from "@/types";
+import type { StoreWithStats, SubscriptionPlan } from "@/types";
 import StoreBadges from "./StoreBadges";
+import SubscriptionBadge from "./SubscriptionBadge";
 import FollowButton from "./FollowButton";
 import { formatPhone } from "@/lib/utils/format";
 
 interface StoreHeaderProps {
   store: StoreWithStats;
   isOwner?: boolean;
+  subscriptionPlan?: SubscriptionPlan;
   onFollowToggle?: () => void;
 }
 
 export default function StoreHeader({
   store,
   isOwner = false,
+  subscriptionPlan,
   onFollowToggle,
 }: StoreHeaderProps) {
   const handleShare = async () => {
@@ -89,12 +92,15 @@ export default function StoreHeader({
         </div>
 
         {/* Name + Badges */}
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <h1 className="text-xl font-bold text-dark">{store.name}</h1>
           {store.is_verified && (
             <span className="text-brand-green" title="متجر موثّق">
               ✅
             </span>
+          )}
+          {subscriptionPlan && (
+            <SubscriptionBadge plan={subscriptionPlan} size="md" />
           )}
         </div>
 

@@ -14,6 +14,7 @@ import {
   TrendingUp,
   Plus,
   ExternalLink,
+  Crown,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -149,6 +150,13 @@ export default function StoreDashboardPage() {
       label: "العروض",
       desc: "إدارة الخصومات",
       color: "text-red-600 bg-red-50",
+    },
+    {
+      href: "/store/dashboard/billing",
+      icon: <Crown size={20} />,
+      label: "الاشتراك والباقات",
+      desc: "ترقية أو إدارة باقتك",
+      color: "text-brand-gold bg-brand-gold-light",
     },
     {
       href: "/store/dashboard/settings",
