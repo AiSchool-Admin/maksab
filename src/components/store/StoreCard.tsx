@@ -4,7 +4,8 @@ import { memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { MapPin, Star, Users, Package } from "lucide-react";
-import type { Store } from "@/types";
+import type { Store, SubscriptionPlan } from "@/types";
+import SubscriptionBadge from "./SubscriptionBadge";
 
 interface StoreCardProps {
   store: Store;
@@ -12,6 +13,7 @@ interface StoreCardProps {
   productsCount?: number;
   avgRating?: number;
   totalReviews?: number;
+  subscriptionPlan?: SubscriptionPlan;
 }
 
 function StoreCard({
@@ -20,6 +22,7 @@ function StoreCard({
   productsCount = 0,
   avgRating = 0,
   totalReviews = 0,
+  subscriptionPlan,
 }: StoreCardProps) {
   return (
     <Link href={`/store/${store.slug}`} className="block">
@@ -67,9 +70,14 @@ function StoreCard({
           </div>
 
           {/* Store name */}
-          <h3 className="text-sm font-bold text-dark line-clamp-1 mb-1">
-            {store.name}
-          </h3>
+          <div className="flex items-center gap-1.5 mb-1">
+            <h3 className="text-sm font-bold text-dark line-clamp-1">
+              {store.name}
+            </h3>
+            {subscriptionPlan && (
+              <SubscriptionBadge plan={subscriptionPlan} />
+            )}
+          </div>
 
           {/* Description */}
           {store.description && (

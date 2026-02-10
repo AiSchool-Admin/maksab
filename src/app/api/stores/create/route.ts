@@ -104,6 +104,17 @@ export async function POST(request: Request) {
       })
       .eq("id", user_id);
 
+    // Auto-create FREE subscription
+    await adminClient
+      .from("store_subscriptions")
+      .insert({
+        store_id: store.id,
+        plan: "free",
+        status: "active",
+        price: 0,
+        start_at: new Date().toISOString(),
+      });
+
     return NextResponse.json({
       success: true,
       id: store.id,
