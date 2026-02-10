@@ -13,12 +13,76 @@
 -- ═══════════════════════════════════════════════════════════════════
 
 -- ────────────────────────────────────────────────
+-- PART 0: Auth Users (required before profiles)
+-- ────────────────────────────────────────────────
+-- profiles.id references auth.users(id), so we must create auth entries first.
+-- Each insert is wrapped in BEGIN/EXCEPTION so one failure doesn't block others.
+-- Password for all: Test123456
+
+DO $$
+DECLARE
+  pwd_hash TEXT := '$2a$10$PwGnSEfKdMg8c.WfYr3zKuT7jXSJ6DfJP0xDFhKJqrYaEfV7EbGHi';
+  ts TIMESTAMPTZ := NOW();
+
+  -- All 13 test users: (id, email, phone, display_name)
+  user_data TEXT[][] := ARRAY[
+    ARRAY['a1111111-1111-1111-1111-111111111111', 'mohamed@test.maksab.app', '+201012345678', 'محمد أحمد'],
+    ARRAY['b2222222-2222-2222-2222-222222222222', 'fatma@test.maksab.app', '+201198765432', 'فاطمة علي'],
+    ARRAY['c3333333-3333-3333-3333-333333333333', 'ahmed@test.maksab.app', '+201234567890', 'أحمد حسن'],
+    ARRAY['d4444444-4444-4444-4444-444444444444', 'noura@test.maksab.app', '+201556789012', 'نورا محمود'],
+    ARRAY['e5555555-5555-5555-5555-555555555555', 'omar@test.maksab.app', '+201087654321', 'عمر خالد'],
+    ARRAY['f6666666-6666-6666-6666-666666666666', 'sara@test.maksab.app', '+201023456789', 'سارة إبراهيم'],
+    ARRAY['a7777777-7777-7777-7777-777777777777', 'hussein@test.maksab.app', '+201134567890', 'حسين علاء'],
+    ARRAY['b8888888-8888-8888-8888-888888888888', 'mona@test.maksab.app', '+201245678901', 'منى عبدالله'],
+    ARRAY['c9999999-9999-9999-9999-999999999999', 'karim@test.maksab.app', '+201556781234', 'كريم مصطفى'],
+    ARRAY['d0000000-aaaa-bbbb-cccc-111111111111', 'yasmin@test.maksab.app', '+201067891234', 'ياسمين حسن'],
+    ARRAY['e1111111-aaaa-bbbb-cccc-222222222222', 'tarek@test.maksab.app', '+201178901234', 'طارق محمود'],
+    ARRAY['f2222222-aaaa-bbbb-cccc-333333333333', 'heba@test.maksab.app', '+201289012345', 'هبة سعيد'],
+    ARRAY['a3333333-aaaa-bbbb-cccc-444444444444', 'mahmoud@test.maksab.app', '+201590123456', 'محمود رضا']
+  ];
+  u TEXT[];
+BEGIN
+  FOREACH u SLICE 1 IN ARRAY user_data LOOP
+    BEGIN
+      INSERT INTO auth.users (
+        id, instance_id, aud, role, email, encrypted_password,
+        email_confirmed_at, phone, phone_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data,
+        created_at, updated_at, confirmation_token, recovery_token
+      ) VALUES (
+        u[1]::UUID,
+        '00000000-0000-0000-0000-000000000000',
+        'authenticated', 'authenticated',
+        u[2], pwd_hash,
+        ts, u[3], ts,
+        '{"provider":"email","providers":["email"]}',
+        format('{"display_name":"%s"}', u[4])::jsonb,
+        ts, ts, '', ''
+      ) ON CONFLICT (id) DO NOTHING;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'auth.users %: % — skipping', u[2], SQLERRM;
+    END;
+
+    BEGIN
+      INSERT INTO auth.identities (
+        id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+      ) VALUES (
+        u[1]::UUID, u[1]::UUID, u[2],
+        format('{"sub":"%s","email":"%s"}', u[1], u[2])::jsonb,
+        'email', ts, ts, ts
+      ) ON CONFLICT DO NOTHING;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'auth.identities %: % — skipping', u[2], SQLERRM;
+    END;
+  END LOOP;
+
+  RAISE NOTICE 'auth.users creation complete for 13 test users';
+END;
+$$;
+
+-- ────────────────────────────────────────────────
 -- PART 1: Test Profiles
 -- ────────────────────────────────────────────────
--- NOTE: Auth users cannot be created via SQL. Use the API endpoint
--- /api/admin/seed-test-data for full auth user + profile creation.
--- The profiles below are for reference / direct DB seeding when
--- auth users already exist.
 
 INSERT INTO profiles (id, phone, display_name, governorate, city, bio, is_commission_supporter, total_ads_count, rating)
 VALUES
