@@ -15,16 +15,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "crypto";
 
+const DEV_HMAC_SECRET = "dev-secret-for-local-testing-only";
+const isDev = process.env.NODE_ENV !== "production";
+
 function getSecret(): string {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!secret) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
-  return secret;
+  if (secret) return secret;
+  if (isDev) return DEV_HMAC_SECRET;
+  throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
 }
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Missing Supabase env vars");
+  if (!url || !key) {
+    if (isDev) return null; // In dev without service role key, return null
+    throw new Error("Missing Supabase env vars");
+  }
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -105,6 +112,33 @@ export async function POST(req: NextRequest) {
 
     // ── Find or create user ──────────────────────────────────────────
     const supabase = getServiceClient();
+
+    // Dev mode without service role key — return mock profile
+    if (!supabase) {
+      const mockProfile = {
+        id: `dev-${phone}`,
+        phone,
+        display_name: displayName || "مستخدم " + phone.slice(-4),
+        avatar_url: null,
+        governorate: null,
+        city: null,
+        bio: null,
+        is_commission_supporter: false,
+        total_ads_count: 0,
+        rating: 0,
+        seller_type: "individual",
+        store_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      console.log("[DEV verify-otp] Returning mock profile (no service role key)");
+      return NextResponse.json({
+        user: mockProfile,
+        magic_link_token: null,
+        dev_warning: "جلسة وهمية — ضيف SUPABASE_SERVICE_ROLE_KEY عشان كل حاجة تشتغل",
+      });
+    }
+
     const profile = await findOrCreateUser(supabase, phone, displayName);
 
     if (!profile) {
