@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import EmptyState from "@/components/ui/EmptyState";
+import { getStoreByUserId, getStoreProductsForDashboard, getStoreReviews } from "@/lib/stores/store-service";
 import { supabase } from "@/lib/supabase/client";
 import type { Store } from "@/types";
 
@@ -46,41 +47,30 @@ export default function StoreDashboardPage() {
     async function load() {
       setIsLoading(true);
 
-      // Get user's store
-      const { data: storeData } = await supabase
-        .from("stores" as never)
-        .select("*")
-        .eq("user_id", user!.id)
-        .maybeSingle();
+      // Get user's store (with dev fallback)
+      const s = await getStoreByUserId(user!.id);
 
-      if (!storeData) {
+      if (!s) {
         setIsLoading(false);
         return;
       }
 
-      const s = storeData as unknown as Store;
       setStore(s);
 
-      // Fetch stats in parallel
-      const [products, followers, reviews] = await Promise.all([
-        supabase
-          .from("ads" as never)
-          .select("id", { count: "exact", head: true })
-          .eq("store_id", s.id)
-          .eq("status", "active"),
-        supabase
-          .from("store_followers" as never)
-          .select("id", { count: "exact", head: true })
-          .eq("store_id", s.id),
-        supabase
-          .from("store_reviews" as never)
-          .select("overall_rating")
-          .eq("store_id", s.id),
+      // Fetch stats using store-service helpers (with dev fallback)
+      const [productsData, reviewsResult] = await Promise.all([
+        getStoreProductsForDashboard(s.id),
+        getStoreReviews(s.id, 1, 100),
       ]);
 
-      const reviewsData = (reviews.data || []) as {
-        overall_rating: number;
-      }[];
+      // Also try to get followers count from Supabase
+      const { count: followersCount } = await supabase
+        .from("store_followers" as never)
+        .select("id", { count: "exact", head: true })
+        .eq("store_id", s.id);
+
+      const activeProducts = productsData.filter((p) => p.status === "active");
+      const reviewsData = reviewsResult.reviews;
       const avg =
         reviewsData.length > 0
           ? reviewsData.reduce((sum, r) => sum + r.overall_rating, 0) /
@@ -88,9 +78,9 @@ export default function StoreDashboardPage() {
           : 0;
 
       setStats({
-        totalProducts: products.count || 0,
+        totalProducts: activeProducts.length,
         totalViews: 0,
-        totalFollowers: followers.count || 0,
+        totalFollowers: followersCount || 0,
         totalReviews: reviewsData.length,
         avgRating: Math.round(avg * 10) / 10,
       });

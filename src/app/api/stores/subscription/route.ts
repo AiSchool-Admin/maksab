@@ -1,7 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { PLANS } from "@/lib/stores/subscription-plans";
+import { getDemoSubscription } from "@/lib/demo/demo-stores";
 import type { StoreSubscription, SubscriptionPlan } from "@/types";
+
+const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 /**
  * GET /api/stores/subscription?store_id=xxx
@@ -20,6 +23,18 @@ export async function GET(request: Request) {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  // Dev mode fallback
+  if (IS_DEV && (!supabaseUrl || !serviceRoleKey)) {
+    const sub = getDemoSubscription();
+    const currentPlan: SubscriptionPlan = sub.plan;
+    return NextResponse.json({
+      subscription: sub,
+      currentPlan,
+      planConfig: PLANS[currentPlan],
+      allPlans: PLANS,
+    });
+  }
 
   if (!supabaseUrl || !serviceRoleKey) {
     return NextResponse.json(

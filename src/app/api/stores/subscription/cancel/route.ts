@@ -1,25 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { cancelDemoSubscription } from "@/lib/demo/demo-stores";
+
+const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 /**
  * POST /api/stores/subscription/cancel
  * Cancels the current active subscription.
- * The subscription remains active until end_at, then expires.
  */
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json(
-      { error: "Server configuration missing" },
-      { status: 500 },
-    );
-  }
-
-  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
 
   try {
     const body = await request.json();
@@ -34,6 +25,26 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    // Dev mode fallback
+    if (IS_DEV && (!supabaseUrl || !serviceRoleKey)) {
+      cancelDemoSubscription();
+      return NextResponse.json({
+        success: true,
+        message: "تم إلغاء الاشتراك. هترجع للباقة المجانية. (وضع التطوير)",
+      });
+    }
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json(
+        { error: "Server configuration missing" },
+        { status: 500 },
+      );
+    }
+
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
 
     // Verify store ownership
     const { data: store } = await adminClient
@@ -72,7 +83,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Mark as cancelled — it stays active until end_at
+    // Mark as cancelled
     await adminClient
       .from("store_subscriptions")
       .update({ status: "cancelled" })

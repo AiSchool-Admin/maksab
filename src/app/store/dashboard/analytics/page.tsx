@@ -12,8 +12,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
-import { supabase } from "@/lib/supabase/client";
-import { getStoreAnalytics } from "@/lib/stores/store-service";
+import { getStoreByUserId, getStoreAnalytics } from "@/lib/stores/store-service";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import EmptyState from "@/components/ui/EmptyState";
 import type { Store } from "@/types";
@@ -43,17 +42,12 @@ export default function DashboardAnalyticsPage() {
     }
     async function load() {
       setIsLoading(true);
-      const { data: storeData } = await supabase
-        .from("stores" as never)
-        .select("*")
-        .eq("user_id", user!.id)
-        .maybeSingle();
+      const s = await getStoreByUserId(user!.id);
 
-      if (!storeData) {
+      if (!s) {
         setIsLoading(false);
         return;
       }
-      const s = storeData as unknown as Store;
       setStore(s);
 
       const analytics = await getStoreAnalytics(s.id, period);

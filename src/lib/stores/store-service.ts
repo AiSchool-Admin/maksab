@@ -1,9 +1,23 @@
 /**
  * Store Service — CRUD operations for the stores system.
- * Uses Supabase client with service role for writes, anon for reads.
+ * Uses Supabase client for reads, falls back to dev seed data when DEV_MODE=true.
  */
 
 import { supabase } from "@/lib/supabase/client";
+import {
+  getDemoStores,
+  getDemoStoreBySlug,
+  getDemoStoreProducts,
+  getDemoStoreCategories,
+  getDemoStoreReviews,
+  getDemoStorePromotions,
+  getDemoAnalytics,
+  getDemoSubscription,
+  getDemoSubscriptionHistory,
+  getDemoStoreByUserId,
+  getDemoUserStore,
+  type DemoProduct,
+} from "@/lib/demo/demo-stores";
 import type {
   Store,
   StoreWithStats,
@@ -13,6 +27,8 @@ import type {
   StoreSubscription,
   SubscriptionPlan,
 } from "@/types";
+
+const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 // ============================================
 // READ Operations (Public)
@@ -30,7 +46,11 @@ export async function getStoreBySlug(
     .eq("status", "active")
     .maybeSingle();
 
-  if (error || !store) return null;
+  if (error || !store) {
+    // Dev fallback
+    if (IS_DEV) return getDemoStoreBySlug(slug);
+    return null;
+  }
 
   const s = store as unknown as Store;
 
@@ -116,7 +136,18 @@ export async function getStores(params?: {
   }
 
   const { data, count, error } = await query;
-  if (error) return { stores: [], total: 0 };
+
+  if (error || !data || data.length === 0) {
+    // Dev fallback
+    if (IS_DEV) {
+      return getDemoStores({
+        category: params?.category,
+        governorate: params?.governorate,
+        search: params?.search,
+      });
+    }
+    return { stores: [], total: 0 };
+  }
 
   return {
     stores: (data || []) as unknown as Store[],
@@ -151,7 +182,14 @@ export async function getStoreProducts(
   }
 
   const { data, count, error } = await query;
-  if (error) return { products: [], total: 0 };
+
+  if (error || !data || data.length === 0) {
+    if (IS_DEV && storeId.startsWith("demo-store-")) {
+      const result = getDemoStoreProducts(storeId);
+      return { products: result.products, total: result.total };
+    }
+    return { products: [], total: 0 };
+  }
 
   return {
     products: data || [],
@@ -169,7 +207,12 @@ export async function getStoreCategories(
     .eq("store_id", storeId)
     .order("sort_order", { ascending: true });
 
-  if (error) return [];
+  if (error || !data || data.length === 0) {
+    if (IS_DEV && storeId.startsWith("demo-store-")) {
+      return getDemoStoreCategories(storeId);
+    }
+    return [];
+  }
   return (data || []) as unknown as StoreCategory[];
 }
 
@@ -188,7 +231,12 @@ export async function getStoreReviews(
     .order("created_at", { ascending: false })
     .range(from, from + limit - 1);
 
-  if (error) return { reviews: [], total: 0 };
+  if (error || !data || data.length === 0) {
+    if (IS_DEV && storeId.startsWith("demo-store-")) {
+      return getDemoStoreReviews(storeId);
+    }
+    return { reviews: [], total: 0 };
+  }
   return {
     reviews: (data || []) as unknown as StoreReview[],
     total: count || 0,
@@ -206,7 +254,12 @@ export async function getStorePromotions(
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
-  if (error) return [];
+  if (error || !data || data.length === 0) {
+    if (IS_DEV && storeId.startsWith("demo-store-")) {
+      return getDemoStorePromotions(storeId);
+    }
+    return [];
+  }
   return (data || []) as unknown as StorePromotion[];
 }
 
@@ -235,7 +288,10 @@ export async function getStoreAnalytics(
     .gte("date", fromDate.toISOString().split("T")[0])
     .order("date", { ascending: true });
 
-  if (error) return [];
+  if (error || !data || data.length === 0) {
+    if (IS_DEV) return getDemoAnalytics(days);
+    return [];
+  }
   return (data || []) as unknown as ReturnType<
     typeof getStoreAnalytics
   > extends Promise<infer T> ? T : never;
@@ -275,6 +331,8 @@ export async function toggleFollow(
 
 /** Record a store view for analytics */
 export async function recordStoreView(storeId: string): Promise<void> {
+  if (IS_DEV && storeId.startsWith("demo-store-")) return;
+
   const today = new Date().toISOString().split("T")[0];
 
   // Upsert analytics row for today
@@ -306,7 +364,12 @@ export async function getStoreSubscription(
     .order("created_at", { ascending: false })
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    if (IS_DEV && storeId.startsWith("demo-store-")) {
+      return getDemoSubscription();
+    }
+    return null;
+  }
   return data as unknown as StoreSubscription;
 }
 
@@ -320,7 +383,12 @@ export async function getSubscriptionHistory(
     .eq("store_id", storeId)
     .order("created_at", { ascending: false });
 
-  if (error) return [];
+  if (error || !data || data.length === 0) {
+    if (IS_DEV && storeId.startsWith("demo-store-")) {
+      return getDemoSubscriptionHistory();
+    }
+    return [];
+  }
   return (data || []) as unknown as StoreSubscription[];
 }
 
@@ -330,4 +398,42 @@ export async function getCurrentPlan(
 ): Promise<SubscriptionPlan> {
   const sub = await getStoreSubscription(storeId);
   return sub?.plan || "free";
+}
+
+// ============================================
+// DEV Helpers (for dashboard pages)
+// ============================================
+
+/** Get store by user ID — for dashboard pages */
+export async function getStoreByUserId(userId: string): Promise<Store | null> {
+  const { data, error } = await supabase
+    .from("stores" as never)
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (IS_DEV) return getDemoStoreByUserId(userId) || getDemoUserStore();
+    return null;
+  }
+  return data as unknown as Store;
+}
+
+/** Get store products for dashboard (includes all statuses) */
+export async function getStoreProductsForDashboard(storeId: string): Promise<DemoProduct[]> {
+  const { data, error } = await supabase
+    .from("ads" as never)
+    .select("id, title, price, images, status, sale_type, is_pinned, views_count, created_at, store_id, governorate, city, is_negotiable, exchange_description")
+    .eq("store_id", storeId)
+    .neq("status", "deleted")
+    .order("is_pinned", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error || !data || data.length === 0) {
+    if (IS_DEV && storeId.startsWith("demo-store-")) {
+      return getDemoStoreProducts(storeId).products;
+    }
+    return [];
+  }
+  return data as unknown as DemoProduct[];
 }

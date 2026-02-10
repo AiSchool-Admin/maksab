@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Crown, History, AlertCircle } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/lib/supabase/client";
+import { getStoreByUserId, getSubscriptionHistory } from "@/lib/stores/store-service";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import Button from "@/components/ui/Button";
 import PlanCard from "@/components/store/PlanCard";
@@ -35,28 +36,19 @@ export default function BillingPage() {
     setIsLoading(true);
 
     // Get store
-    const { data: storeData } = await supabase
-      .from("stores" as never)
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const s = await getStoreByUserId(user.id);
 
-    if (!storeData) {
+    if (!s) {
       setIsLoading(false);
       return;
     }
 
-    const s = storeData as unknown as Store;
     setStore(s);
 
     // Fetch subscription & history in parallel
-    const [subRes, histRes] = await Promise.all([
+    const [subRes, hist] = await Promise.all([
       fetch(`/api/stores/subscription?store_id=${s.id}`),
-      supabase
-        .from("store_subscriptions" as never)
-        .select("*")
-        .eq("store_id", s.id)
-        .order("created_at", { ascending: false }),
+      getSubscriptionHistory(s.id),
     ]);
 
     if (subRes.ok) {
@@ -65,7 +57,7 @@ export default function BillingPage() {
       setCurrentPlan(subData.currentPlan);
     }
 
-    setHistory((histRes.data || []) as unknown as StoreSubscription[]);
+    setHistory(hist);
     setIsLoading(false);
   }, [user]);
 
