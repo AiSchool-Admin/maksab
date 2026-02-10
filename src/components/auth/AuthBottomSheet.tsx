@@ -11,6 +11,7 @@ import {
   type UserProfile,
 } from "@/lib/supabase/auth";
 import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
+import { activateDemoMode, DEMO_USER } from "@/lib/demo/demo-mode";
 
 const IS_DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
@@ -236,13 +237,30 @@ export default function AuthBottomSheet({
     }
   };
 
-  // ── Dev bypass login ────────────────────────────────────────────
-  const handleDevLogin = async () => {
-    setIsSubmitting(true);
+  // ── Dev bypass login (client-side only) ─────────────────────────
+  const handleDevLogin = () => {
     devLogin();
-    const { user } = await verifyOTP("01000000000", "000000", "");
-    setIsSubmitting(false);
-    if (user) onSuccess(user);
+    const devUser: UserProfile = {
+      id: "dev-00000000-0000-0000-0000-000000000000",
+      phone: "01000000000",
+      display_name: "مطوّر مكسب",
+      avatar_url: null,
+      governorate: "القاهرة",
+      city: "وسط البلد",
+      bio: "حساب المطوّر للاختبار",
+      is_commission_supporter: false,
+      total_ads_count: 0,
+      rating: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    onSuccess(devUser);
+  };
+
+  // ── Demo mode login ───────────────────────────────────────────
+  const handleDemoLogin = () => {
+    activateDemoMode();
+    onSuccess(DEMO_USER);
   };
 
   // ── Format phone for display ────────────────────────────────────
@@ -334,6 +352,15 @@ export default function AuthBottomSheet({
             <Smartphone size={18} className="ml-2" />
             إرسال كود التأكيد
           </Button>
+
+          {/* Demo mode — always visible */}
+          <button
+            onClick={handleDemoLogin}
+            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-brand-green bg-brand-green-light hover:bg-brand-green hover:text-white rounded-xl transition-all"
+          >
+            <Smartphone size={16} />
+            جرّب بدون تسجيل
+          </button>
 
           {/* Dev bypass */}
           {IS_DEV_MODE && (

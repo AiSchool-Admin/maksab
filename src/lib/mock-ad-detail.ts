@@ -1,8 +1,11 @@
 /**
  * Ad detail data layer — fetches from Supabase.
+ * Falls back to demo data for demo ads.
  */
 
 import { supabase } from "@/lib/supabase/client";
+import { isDemoAd } from "@/lib/demo/demo-mode";
+import { getDemoAdDetail, demoAds } from "@/lib/demo/demo-data";
 import type { MockAd } from "./mock-data";
 import type { AuctionStatus } from "./auction/types";
 
@@ -64,8 +67,14 @@ export interface MockAdDetail {
 
 /**
  * Fetch ad detail by ID from Supabase.
+ * If ID starts with "demo-ad-", returns demo data directly.
  */
 export async function fetchAdDetail(id: string): Promise<MockAdDetail | null> {
+  // Demo ad — return from local data
+  if (isDemoAd(id)) {
+    return getDemoAdDetail(id);
+  }
+
   try {
     // Fetch the ad
     const { data: adData, error: adError } = await supabase
@@ -182,6 +191,13 @@ export async function fetchAdDetail(id: string): Promise<MockAdDetail | null> {
 
 /** Get similar ads for the detail page bottom section */
 export async function getSimilarAds(currentId: string, categoryId?: string): Promise<MockAd[]> {
+  // For demo ads, return other demo ads
+  if (isDemoAd(currentId)) {
+    return demoAds
+      .filter((a) => a.id !== currentId)
+      .slice(0, 6);
+  }
+
   try {
     let query = supabase
       .from("ads" as never)
@@ -197,7 +213,10 @@ export async function getSimilarAds(currentId: string, categoryId?: string): Pro
 
     const { data, error } = await query;
 
-    if (error || !data) return [];
+    if (error || !data || (data as unknown[]).length === 0) {
+      // Fallback to demo ads
+      return demoAds.filter((a) => a.id !== currentId).slice(0, 6);
+    }
 
     return (data as Record<string, unknown>[]).map((row) => ({
       id: row.id as string,
@@ -214,6 +233,6 @@ export async function getSimilarAds(currentId: string, categoryId?: string): Pro
       exchangeDescription: (row.exchange_description as string) ?? undefined,
     }));
   } catch {
-    return [];
+    return demoAds.filter((a) => a.id !== currentId).slice(0, 6);
   }
 }

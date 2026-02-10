@@ -128,7 +128,7 @@ async function fallbackRecommendations(userId: string): Promise<RecommendationRe
       .order("created_at", { ascending: false })
       .limit(10);
 
-    const personalizedAds = adsData
+    const personalizedAds = adsData && (adsData as unknown[]).length > 0
       ? (adsData as Record<string, unknown>[]).map(rowToMockAd)
       : [];
 
@@ -141,13 +141,29 @@ async function fallbackRecommendations(userId: string): Promise<RecommendationRe
       .order("created_at", { ascending: false })
       .limit(8);
 
-    const matchingAuctions = auctionData
+    const matchingAuctions = auctionData && (auctionData as unknown[]).length > 0
       ? (auctionData as Record<string, unknown>[]).map(rowToMockAd)
       : [];
 
+    // If DB is empty, use demo data
+    if (personalizedAds.length === 0 || matchingAuctions.length === 0) {
+      const { demoAds, getDemoAuctionAds } = await import("@/lib/demo/demo-data");
+      return {
+        personalizedAds: personalizedAds.length > 0 ? personalizedAds : demoAds.slice(0, 10),
+        matchingAuctions: matchingAuctions.length > 0 ? matchingAuctions : getDemoAuctionAds(),
+        hasSignals: false,
+      };
+    }
+
     return { personalizedAds, matchingAuctions, hasSignals: false };
   } catch {
-    return { personalizedAds: [], matchingAuctions: [], hasSignals: false };
+    // Full fallback to demo data
+    const { demoAds, getDemoAuctionAds } = await import("@/lib/demo/demo-data");
+    return {
+      personalizedAds: demoAds.slice(0, 10),
+      matchingAuctions: getDemoAuctionAds(),
+      hasSignals: false,
+    };
   }
 }
 

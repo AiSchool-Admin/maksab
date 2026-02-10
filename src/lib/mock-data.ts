@@ -1,9 +1,12 @@
 /**
  * Data layer for ads — queries Supabase for real data.
+ * Falls back to demo data when DB is empty or demo mode is active.
  * Keeps the MockAd interface for backward compatibility with components.
  */
 
 import { supabase } from "@/lib/supabase/client";
+import { isDemoMode } from "@/lib/demo/demo-mode";
+import { demoAds, getDemoAuctionAds } from "@/lib/demo/demo-data";
 
 export interface MockAd {
   id: string;
@@ -51,6 +54,7 @@ const PAGE_SIZE = 8;
 
 /**
  * Fetch paginated feed ads from Supabase.
+ * Falls back to demo ads when DB is empty or in demo mode.
  */
 export async function fetchFeedAds(page: number): Promise<{ ads: MockAd[]; hasMore: boolean }> {
   const from = page * PAGE_SIZE;
@@ -64,14 +68,27 @@ export async function fetchFeedAds(page: number): Promise<{ ads: MockAd[]; hasMo
       .order("created_at", { ascending: false })
       .range(from, to);
 
-    if (error || !data) {
-      return { ads: [], hasMore: false };
+    if (error || !data || (data as unknown[]).length === 0) {
+      // Fall back to demo ads
+      const allAds = demoAds;
+      const pageAds = allAds.slice(from, to + 1);
+      return { ads: pageAds, hasMore: to + 1 < allAds.length };
     }
 
     const ads = (data as Record<string, unknown>[]).map(rowToMockAd);
+
+    // If DB has some data but also in demo mode, merge demo ads
+    if (isDemoMode() && page === 0) {
+      const merged = [...ads, ...demoAds.filter(d => !ads.some(a => a.id === d.id))];
+      return { ads: merged.slice(0, PAGE_SIZE), hasMore: true };
+    }
+
     return { ads, hasMore: ads.length === PAGE_SIZE };
   } catch {
-    return { ads: [], hasMore: false };
+    // Network error or DB issue — use demo data
+    const allAds = demoAds;
+    const pageAds = allAds.slice(from, to + 1);
+    return { ads: pageAds, hasMore: to + 1 < allAds.length };
   }
 }
 
@@ -87,10 +104,13 @@ export async function fetchRecommendedAds(): Promise<MockAd[]> {
       .order("created_at", { ascending: false })
       .limit(10);
 
-    if (error || !data) return [];
+    if (error || !data || (data as unknown[]).length === 0) {
+      // Return a mix of demo ads
+      return demoAds.slice(0, 10);
+    }
     return (data as Record<string, unknown>[]).map(rowToMockAd);
   } catch {
-    return [];
+    return demoAds.slice(0, 10);
   }
 }
 
@@ -107,9 +127,11 @@ export async function fetchAuctionAds(): Promise<MockAd[]> {
       .order("created_at", { ascending: false })
       .limit(8);
 
-    if (error || !data) return [];
+    if (error || !data || (data as unknown[]).length === 0) {
+      return getDemoAuctionAds();
+    }
     return (data as Record<string, unknown>[]).map(rowToMockAd);
   } catch {
-    return [];
+    return getDemoAuctionAds();
   }
 }
