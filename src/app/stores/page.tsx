@@ -8,10 +8,10 @@ import { StoresGridSkeleton } from "@/components/store/StoreSkeleton";
 import { getStores } from "@/lib/stores/store-service";
 import { categoriesConfig } from "@/lib/categories/categories-config";
 import { governorates } from "@/lib/data/governorates";
-import type { Store } from "@/types";
+import type { StoreWithStats } from "@/types";
 
 export default function StoresDirectoryPage() {
-  const [stores, setStores] = useState<Store[]>([]);
+  const [stores, setStores] = useState<StoreWithStats[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -160,7 +160,14 @@ export default function StoresDirectoryPage() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {stores.map((store) => (
-                <StoreCard key={store.id} store={store} />
+                <StoreCard
+                  key={store.id}
+                  store={store}
+                  followersCount={store.total_followers}
+                  productsCount={store.total_products}
+                  avgRating={store.avg_rating}
+                  totalReviews={store.total_reviews}
+                />
               ))}
             </div>
             {stores.length < total && (

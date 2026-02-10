@@ -2129,3 +2129,25 @@ CREATE TRIGGER trg_stores_updated
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ✅ Part 11: Stores & Unified Seller System tables created!
+
+-- ============================================
+-- PART 12: Seed Demo Stores
+-- ============================================
+-- ⚠️ Stores need auth.users entries (profiles → auth.users FK).
+-- Cannot seed from SQL alone. Use the API endpoint instead:
+--
+--   GET /api/seed-stores
+--
+-- This creates 8 demo stores with owners and products:
+--   1. سيارات الفاروق (cars) — القاهرة
+--   2. موبايلات سمير (phones) — الجيزة
+--   3. صاغة الحسين (gold) — القاهرة
+--   4. ستايل سارة (fashion) — الإسكندرية
+--   5. عقارات التجمع (real_estate) — القاهرة
+--   6. توكيل الأجهزة (appliances) — الجيزة
+--   7. أثاث دمياط الأصلي (furniture) — الدقهلية
+--   8. خردة شبرا (scrap) — القاهرة
+--
+-- Run after deploying: visit your-app-url/api/seed-stores
+-- Requires SUPABASE_SERVICE_ROLE_KEY in environment variables.
+-- ============================================

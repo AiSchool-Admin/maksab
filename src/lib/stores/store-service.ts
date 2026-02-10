@@ -107,14 +107,14 @@ export async function getStoreBySlug(
   }
 }
 
-/** Fetch all active stores with optional filters */
+/** Fetch all active stores with optional filters, including stats */
 export async function getStores(params?: {
   category?: string;
   governorate?: string;
   search?: string;
   page?: number;
   limit?: number;
-}): Promise<{ stores: Store[]; total: number }> {
+}): Promise<{ stores: StoreWithStats[]; total: number }> {
   const page = params?.page || 1;
   const limit = params?.limit || 20;
   const from = (page - 1) * limit;
@@ -143,8 +143,50 @@ export async function getStores(params?: {
       return { stores: [], total: 0 };
     }
 
+    const rawStores = (data || []) as unknown as Store[];
+
+    // Enrich each store with stats
+    const storesWithStats: StoreWithStats[] = await Promise.all(
+      rawStores.map(async (s) => {
+        const [followers, reviews, products] = await Promise.all([
+          supabase
+            .from("store_followers" as never)
+            .select("id", { count: "exact", head: true })
+            .eq("store_id", s.id),
+          supabase
+            .from("store_reviews" as never)
+            .select("overall_rating")
+            .eq("store_id", s.id),
+          supabase
+            .from("ads" as never)
+            .select("id", { count: "exact", head: true })
+            .eq("store_id", s.id)
+            .eq("status", "active"),
+        ]);
+
+        const reviewsData = (reviews.data || []) as { overall_rating: number }[];
+        const avgRating =
+          reviewsData.length > 0
+            ? reviewsData.reduce((sum, r) => sum + r.overall_rating, 0) /
+              reviewsData.length
+            : 0;
+
+        return {
+          ...s,
+          avg_rating: Math.round(avgRating * 10) / 10,
+          total_reviews: reviewsData.length,
+          total_followers: followers.count || 0,
+          total_products: products.count || 0,
+          total_sales: 0,
+          avg_response_time: null,
+          is_following: false,
+          badges: [],
+        };
+      }),
+    );
+
     return {
-      stores: (data || []) as unknown as Store[],
+      stores: storesWithStats,
       total: count || 0,
     };
   } catch {
