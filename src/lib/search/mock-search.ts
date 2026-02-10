@@ -1,10 +1,9 @@
 /**
  * Search service — queries Supabase for ads.
- * Falls back to demo data when DB returns no results.
+ * Returns empty results when DB has no data.
  */
 
 import { supabase } from "@/lib/supabase/client";
-import { searchDemoAds, demoAds } from "@/lib/demo/demo-data";
 import type { MockAd } from "@/lib/mock-data";
 
 /* ── Search request / response ──────────────────────────────────────── */
@@ -48,34 +47,6 @@ function rowToMockAd(row: Record<string, unknown>): MockAd {
   };
 }
 
-/** Client-side filtering of demo ads based on search filters */
-function filterDemoAds(filters: SearchFilters): MockAd[] {
-  let results = filters.query ? searchDemoAds(filters.query) : [...demoAds];
-
-  if (filters.saleType) {
-    results = results.filter((ad) => ad.saleType === filters.saleType);
-  }
-  if (filters.priceMin != null) {
-    results = results.filter((ad) => ad.price != null && ad.price >= filters.priceMin!);
-  }
-  if (filters.priceMax != null) {
-    results = results.filter((ad) => ad.price != null && ad.price <= filters.priceMax!);
-  }
-  if (filters.governorate) {
-    results = results.filter((ad) => ad.governorate === filters.governorate);
-  }
-
-  // Sort
-  if (filters.sortBy === "price_asc") {
-    results.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-  } else if (filters.sortBy === "price_desc") {
-    results.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
-  }
-  // "newest" is already default order
-
-  return results;
-}
-
 /* ── Main search function ───────────────────────────────────────────── */
 
 export async function searchAds(
@@ -91,42 +62,30 @@ export async function searchAds(
       .select("*", { count: "exact" })
       .neq("status", "deleted");
 
-    // Text search
     if (filters.query) {
       query = query.or(
         `title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`
       );
     }
-
-    // Category filter
     if (filters.category) {
       query = query.eq("category_id", filters.category);
     }
-
-    // Subcategory filter
     if (filters.subcategory) {
       query = query.eq("subcategory_id", filters.subcategory);
     }
-
-    // Sale type filter
     if (filters.saleType) {
       query = query.eq("sale_type", filters.saleType);
     }
-
-    // Price range
     if (filters.priceMin != null) {
       query = query.gte("price", filters.priceMin);
     }
     if (filters.priceMax != null) {
       query = query.lte("price", filters.priceMax);
     }
-
-    // Governorate
     if (filters.governorate) {
       query = query.eq("governorate", filters.governorate);
     }
 
-    // Sorting
     switch (filters.sortBy) {
       case "price_asc":
         query = query.order("price", { ascending: true, nullsFirst: false });
@@ -140,20 +99,12 @@ export async function searchAds(
         break;
     }
 
-    // Pagination
     query = query.range(from, to);
 
     const { data, error, count } = await query;
 
     if (error || !data || (data as unknown[]).length === 0) {
-      // Fallback to demo data
-      const demoResults = filterDemoAds(filters);
-      const pageResults = demoResults.slice(from, to + 1);
-      return {
-        ads: pageResults,
-        total: demoResults.length,
-        hasMore: to + 1 < demoResults.length,
-      };
+      return { ads: [], total: 0, hasMore: false };
     }
 
     const ads = (data as Record<string, unknown>[]).map(rowToMockAd);
@@ -165,16 +116,7 @@ export async function searchAds(
       hasMore: from + PAGE_SIZE < total,
     };
   } catch {
-    // Network/DB error — use demo data
-    const demoResults = filterDemoAds(filters);
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-    const pageResults = demoResults.slice(from, to + 1);
-    return {
-      ads: pageResults,
-      total: demoResults.length,
-      hasMore: to + 1 < demoResults.length,
-    };
+    return { ads: [], total: 0, hasMore: false };
   }
 }
 
@@ -192,7 +134,6 @@ export async function getSimilarSearchAds(
       .order("created_at", { ascending: false })
       .limit(6);
 
-    // Same category but broader search
     if (filters.category) {
       query = query.eq("category_id", filters.category);
     }
@@ -200,12 +141,12 @@ export async function getSimilarSearchAds(
     const { data, error } = await query;
 
     if (error || !data || (data as unknown[]).length === 0) {
-      return demoAds.slice(0, 6);
+      return [];
     }
 
     return (data as Record<string, unknown>[]).map(rowToMockAd);
   } catch {
-    return demoAds.slice(0, 6);
+    return [];
   }
 }
 

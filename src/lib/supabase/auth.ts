@@ -7,29 +7,12 @@ import { supabase } from "./client";
  * instead of Supabase's built-in phone auth (which requires paid Twilio SMS).
  *
  * OTP delivery channels (configured via env vars):
- * - Dev mode: Code shown on screen (123456)
  * - WhatsApp Cloud API: First 1000/month free
  * - SMS via Twilio: Paid fallback
  * - Manual: User receives code via configured channel
  */
 
-const IS_DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 const SESSION_KEY = "maksab_user_session";
-
-const DEV_USER = {
-  id: "dev-00000000-0000-0000-0000-000000000000",
-  phone: "01000000000",
-  display_name: "مطوّر مكسب",
-  avatar_url: null,
-  governorate: "القاهرة",
-  city: "وسط البلد",
-  bio: "حساب المطوّر للاختبار",
-  is_commission_supporter: false,
-  total_ads_count: 0,
-  rating: 0,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
 
 export type UserProfile = {
   id: string;
@@ -76,7 +59,6 @@ function loadSession(): UserProfile | null {
 function clearSession(): void {
   if (typeof window !== "undefined") {
     localStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem("maksab_dev_session");
   }
 }
 
@@ -250,14 +232,6 @@ export async function updateUserProfile(
   userId: string,
   updates: Partial<Pick<UserProfile, "display_name" | "avatar_url" | "governorate" | "city" | "bio">>,
 ): Promise<{ user: UserProfile | null; error: string | null }> {
-  if (IS_DEV_MODE) {
-    await new Promise((r) => setTimeout(r, 300));
-    return {
-      user: { ...DEV_USER, ...updates },
-      error: null,
-    };
-  }
-
   const { data, error } = await supabase
     .from("profiles" as never)
     .update({ ...updates, updated_at: new Date().toISOString() } as never)
@@ -311,11 +285,6 @@ export async function logout(): Promise<void> {
   } catch {
     // Silent — session might already be gone
   }
-}
-
-// ── Dev login (saves session to localStorage) ─────────────────────────
-export function devLogin(): void {
-  saveSession(DEV_USER);
 }
 
 // ── Profile completion calculation ────────────────────────────────────

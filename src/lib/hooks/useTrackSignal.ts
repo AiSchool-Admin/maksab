@@ -14,8 +14,6 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { trackSignal } from "@/lib/recommendations/signal-store";
 import type { SignalType } from "@/lib/recommendations/types";
 
-const DEV_USER_ID = "dev-00000000-0000-0000-0000-000000000000";
-
 /** Minimum interval between identical signal types (in ms) */
 const THROTTLE_MS = 2000;
 
@@ -42,7 +40,8 @@ export function useTrackSignal() {
       }
       lastTracked.current[key] = now;
 
-      const userId = user?.id || DEV_USER_ID;
+      const userId = user?.id;
+      if (!userId) return; // Don't track signals for unauthenticated users
 
       // Fire and forget — don't await, don't block UI
       trackSignal({

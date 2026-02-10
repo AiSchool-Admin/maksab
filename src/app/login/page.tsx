@@ -2,20 +2,16 @@
 
 import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, RefreshCw, Phone, User, Shield, Smartphone, Home } from "lucide-react";
+import { ArrowLeft, RefreshCw, Phone, User, Smartphone, Home } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   sendOTP,
   verifyOTP,
-  devLogin,
   type UserProfile,
 } from "@/lib/supabase/auth";
 import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
-import { activateDemoMode, DEMO_USER } from "@/lib/demo/demo-mode";
-
-const IS_DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 type Step = "phone" | "otp";
 
@@ -228,10 +224,6 @@ function LoginPageContent() {
         return;
       }
 
-      if (IS_DEV_MODE) {
-        devLogin();
-      }
-
       handleSuccess(response.user);
     },
     [otp, phone, displayName, otpToken],
@@ -265,35 +257,6 @@ function LoginPageContent() {
       otpInputsRef.current[0]?.focus();
       tryWebOTP();
     }
-  };
-
-  // ── Dev bypass (client-side only — no backend needed) ─────────────
-  const handleDevLogin = () => {
-    setIsSubmitting(true);
-    devLogin();
-    // Use the DEV_USER directly — no backend call needed
-    const devUser: UserProfile = {
-      id: "dev-00000000-0000-0000-0000-000000000000",
-      phone: "01000000000",
-      display_name: "مطوّر مكسب",
-      avatar_url: null,
-      governorate: "القاهرة",
-      city: "وسط البلد",
-      bio: "حساب المطوّر للاختبار",
-      is_commission_supporter: false,
-      total_ads_count: 0,
-      rating: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    setIsSubmitting(false);
-    handleSuccess(devUser);
-  };
-
-  // ── Demo mode (try the app with sample data) ───────────────────
-  const handleDemoLogin = () => {
-    activateDemoMode();
-    handleSuccess(DEMO_USER);
   };
 
   // ── Format phone for display ──────────────────────────────────────
@@ -420,28 +383,6 @@ function LoginPageContent() {
               <Smartphone size={18} className="ml-2" />
               إرسال كود التأكيد
             </Button>
-
-            {/* Demo mode — always visible */}
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              className="w-full flex items-center justify-center gap-2 py-3 text-sm font-semibold text-brand-green bg-brand-green-light hover:bg-brand-green hover:text-white rounded-xl transition-all"
-            >
-              <Smartphone size={16} />
-              جرّب التطبيق بدون تسجيل
-            </button>
-
-            {/* Dev bypass */}
-            {IS_DEV_MODE && (
-              <button
-                type="button"
-                onClick={handleDevLogin}
-                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-text hover:text-brand-green transition-colors"
-              >
-                <Shield size={16} />
-                دخول المطوّر (بدون OTP)
-              </button>
-            )}
 
             {/* Terms notice */}
             <p className="text-[11px] text-gray-text text-center leading-relaxed">

@@ -1,8 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { createDemoStore } from "@/lib/demo/demo-stores";
-
-const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,29 +26,6 @@ export async function POST(request: Request) {
         { error: "الاسم والقسم مطلوبين" },
         { status: 400 },
       );
-    }
-
-    // Dev mode fallback — create store locally
-    if (IS_DEV && (!supabaseUrl || !serviceRoleKey)) {
-      const result = createDemoStore({
-        name,
-        description,
-        main_category,
-        theme,
-        layout,
-        primary_color,
-        secondary_color,
-        location_gov,
-        location_area,
-        phone,
-      });
-
-      return NextResponse.json({
-        success: true,
-        id: result.id,
-        slug: result.slug,
-        message: "تم إنشاء المتجر بنجاح! (وضع التطوير)",
-      });
     }
 
     if (!supabaseUrl || !serviceRoleKey) {

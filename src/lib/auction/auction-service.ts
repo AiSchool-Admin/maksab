@@ -2,38 +2,11 @@
  * Auction service — handles bidding, anti-sniping, buy now,
  * and Supabase Realtime subscriptions.
  *
- * In dev mode, uses in-memory state. In production, uses API routes + Supabase Realtime.
+ * Uses API routes + Supabase Realtime.
  */
 
 import { supabase } from "@/lib/supabase/client";
 import type { AuctionState, AuctionBid, AuctionStatus } from "./types";
-import { calcMinNextBid } from "./types";
-
-const IS_DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
-
-/** 5 minutes in ms — the anti-sniping threshold */
-const ANTI_SNIPE_THRESHOLD_MS = 5 * 60 * 1000;
-
-/* ── In-memory auction state for dev mode ───────────────────────────── */
-
-const devAuctionStates = new Map<string, AuctionState>();
-const devSubscribers = new Map<
-  string,
-  Set<(state: AuctionState) => void>
->();
-
-/** Initialize dev auction state from mock ad detail */
-export function initDevAuctionState(state: AuctionState): void {
-  devAuctionStates.set(state.adId, state);
-}
-
-/** Notify all subscribers of an auction update */
-function notifySubscribers(adId: string, state: AuctionState): void {
-  const subs = devSubscribers.get(adId);
-  if (subs) {
-    for (const cb of subs) cb(state);
-  }
-}
 
 /* ── Place a bid ────────────────────────────────────────────────────── */
 
@@ -50,73 +23,10 @@ export async function placeBid(
   bidderName: string,
   amount: number,
 ): Promise<PlaceBidResult> {
-  if (IS_DEV_MODE) {
-    return placeBidDev(adId, bidderId, bidderName, amount);
-  }
-  return placeBidProduction(adId, bidderId, bidderName, amount);
+  return placeBidImpl(adId, bidderId, bidderName, amount);
 }
 
-function placeBidDev(
-  adId: string,
-  bidderId: string,
-  bidderName: string,
-  amount: number,
-): PlaceBidResult {
-  const state = devAuctionStates.get(adId);
-  if (!state) return { success: false, error: "المزاد مش موجود" };
-  if (state.status !== "active")
-    return { success: false, error: "المزاد مش نشط" };
-
-  const now = Date.now();
-  const endsAtMs = new Date(state.endsAt).getTime();
-  if (now >= endsAtMs)
-    return { success: false, error: "المزاد انتهى" };
-
-  const currentPrice = state.currentHighestBid ?? state.startPrice;
-  const minNext = calcMinNextBid(currentPrice);
-  if (amount < minNext)
-    return {
-      success: false,
-      error: `الحد الأدنى للمزايدة ${minNext.toLocaleString("en-US")} جنيه`,
-    };
-
-  // Anti-sniping: extend by 5 minutes if bid in last 5 minutes
-  let antiSnipeExtended = false;
-  const timeRemaining = endsAtMs - now;
-  let newEndsAt = state.endsAt;
-  if (timeRemaining <= ANTI_SNIPE_THRESHOLD_MS) {
-    const extendedTime = new Date(now + ANTI_SNIPE_THRESHOLD_MS);
-    newEndsAt = extendedTime.toISOString();
-    antiSnipeExtended = true;
-  }
-
-  const newBid: AuctionBid = {
-    id: `bid-${Date.now()}`,
-    adId,
-    bidderId,
-    bidderName,
-    amount,
-    createdAt: new Date().toISOString(),
-  };
-
-  const updatedState: AuctionState = {
-    ...state,
-    currentHighestBid: amount,
-    highestBidderName: bidderName,
-    highestBidderId: bidderId,
-    bidsCount: state.bidsCount + 1,
-    bids: [newBid, ...state.bids],
-    endsAt: newEndsAt,
-    wasExtended: state.wasExtended || antiSnipeExtended,
-  };
-
-  devAuctionStates.set(adId, updatedState);
-  notifySubscribers(adId, updatedState);
-
-  return { success: true, updatedState, antiSnipeExtended };
-}
-
-async function placeBidProduction(
+async function placeBidImpl(
   adId: string,
   bidderId: string,
   bidderName: string,
@@ -166,41 +76,10 @@ export async function buyNow(
   buyerId: string,
   buyerName: string,
 ): Promise<BuyNowResult> {
-  if (IS_DEV_MODE) {
-    return buyNowDev(adId, buyerId, buyerName);
-  }
-  return buyNowProduction(adId, buyerId, buyerName);
+  return buyNowImpl(adId, buyerId, buyerName);
 }
 
-function buyNowDev(
-  adId: string,
-  buyerId: string,
-  buyerName: string,
-): BuyNowResult {
-  const state = devAuctionStates.get(adId);
-  if (!state) return { success: false, error: "المزاد مش موجود" };
-  if (state.status !== "active")
-    return { success: false, error: "المزاد مش نشط" };
-  if (!state.buyNowPrice)
-    return { success: false, error: "مفيش سعر شراء فوري" };
-
-  const updatedState: AuctionState = {
-    ...state,
-    status: "bought_now",
-    currentHighestBid: state.buyNowPrice,
-    highestBidderName: buyerName,
-    highestBidderId: buyerId,
-    winnerId: buyerId,
-    winnerName: buyerName,
-  };
-
-  devAuctionStates.set(adId, updatedState);
-  notifySubscribers(adId, updatedState);
-
-  return { success: true, updatedState };
-}
-
-async function buyNowProduction(
+async function buyNowImpl(
   adId: string,
   buyerId: string,
   buyerName: string,
@@ -236,31 +115,8 @@ async function buyNowProduction(
 
 /* ── Check and finalize ended auctions ──────────────────────────────── */
 
-export function checkAuctionEnd(adId: string): AuctionState | null {
-  if (!IS_DEV_MODE) return null;
-
-  const state = devAuctionStates.get(adId);
-  if (!state || state.status !== "active") return null;
-
-  const now = Date.now();
-  const endsAtMs = new Date(state.endsAt).getTime();
-  if (now < endsAtMs) return null;
-
-  // Auction has ended
-  const finalStatus: AuctionStatus =
-    state.bidsCount > 0 ? "ended_winner" : "ended_no_bids";
-
-  const updatedState: AuctionState = {
-    ...state,
-    status: finalStatus,
-    winnerId: state.highestBidderId,
-    winnerName: state.highestBidderName,
-  };
-
-  devAuctionStates.set(adId, updatedState);
-  notifySubscribers(adId, updatedState);
-
-  return updatedState;
+export async function checkAuctionEnd(adId: string): Promise<AuctionState | null> {
+  return fetchAuctionState(adId);
 }
 
 /* ── Real-time subscriptions ────────────────────────────────────────── */
@@ -276,17 +132,7 @@ export function subscribeToAuction(
   adId: string,
   onUpdate: (state: AuctionState) => void,
 ): AuctionUnsubscribe {
-  if (IS_DEV_MODE) {
-    if (!devSubscribers.has(adId)) {
-      devSubscribers.set(adId, new Set());
-    }
-    devSubscribers.get(adId)!.add(onUpdate);
-    return () => {
-      devSubscribers.get(adId)?.delete(onUpdate);
-    };
-  }
-
-  // Production: subscribe to Supabase Realtime
+  // Subscribe to Supabase Realtime
   const channel = supabase
     .channel(`auction-${adId}`)
     .on(

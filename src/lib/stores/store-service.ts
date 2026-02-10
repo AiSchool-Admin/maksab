@@ -1,23 +1,9 @@
 /**
  * Store Service — CRUD operations for the stores system.
- * Uses Supabase client for reads, falls back to demo data when DB is empty.
+ * Queries Supabase, returns empty results when DB has no data.
  */
 
 import { supabase } from "@/lib/supabase/client";
-import {
-  getDemoStores,
-  getDemoStoreBySlug,
-  getDemoStoreProducts,
-  getDemoStoreCategories,
-  getDemoStoreReviews,
-  getDemoStorePromotions,
-  getDemoAnalytics,
-  getDemoSubscription,
-  getDemoSubscriptionHistory,
-  getDemoStoreByUserId,
-  getDemoUserStore,
-  type DemoProduct,
-} from "@/lib/demo/demo-stores";
 import type {
   Store,
   StoreWithStats,
@@ -27,6 +13,24 @@ import type {
   StoreSubscription,
   SubscriptionPlan,
 } from "@/types";
+
+// Product type for dashboard views
+export interface StoreProduct {
+  id: string;
+  title: string;
+  price: number | null;
+  images: string[];
+  status: string;
+  sale_type: string;
+  is_pinned: boolean;
+  views_count: number;
+  created_at: string;
+  store_id: string;
+  governorate: string | null;
+  city: string | null;
+  is_negotiable: boolean;
+  exchange_description: string | null;
+}
 
 // ============================================
 // READ Operations (Public)
@@ -45,13 +49,10 @@ export async function getStoreBySlug(
       .eq("status", "active")
       .maybeSingle();
 
-    if (error || !store) {
-      return getDemoStoreBySlug(slug);
-    }
+    if (error || !store) return null;
 
     const s = store as unknown as Store;
 
-    // Fetch stats in parallel
     const [followers, reviews, products, badges, isFollowing] = await Promise.all(
       [
         supabase
@@ -102,7 +103,7 @@ export async function getStoreBySlug(
       badges: (badges.data || []) as StoreWithStats["badges"],
     };
   } catch {
-    return getDemoStoreBySlug(slug);
+    return null;
   }
 }
 
@@ -139,12 +140,7 @@ export async function getStores(params?: {
     const { data, count, error } = await query;
 
     if (error || !data || data.length === 0) {
-      // Fall back to demo stores
-      return getDemoStores({
-        category: params?.category,
-        governorate: params?.governorate,
-        search: params?.search,
-      });
+      return { stores: [], total: 0 };
     }
 
     return {
@@ -152,12 +148,7 @@ export async function getStores(params?: {
       total: count || 0,
     };
   } catch {
-    // Network error — use demo data
-    return getDemoStores({
-      category: params?.category,
-      governorate: params?.governorate,
-      search: params?.search,
-    });
+    return { stores: [], total: 0 };
   }
 }
 
@@ -191,10 +182,6 @@ export async function getStoreProducts(
     const { data, count, error } = await query;
 
     if (error || !data || data.length === 0) {
-      if (storeId.startsWith("demo-store-")) {
-        const result = getDemoStoreProducts(storeId);
-        return { products: result.products, total: result.total };
-      }
       return { products: [], total: 0 };
     }
 
@@ -203,10 +190,6 @@ export async function getStoreProducts(
       total: count || 0,
     };
   } catch {
-    if (storeId.startsWith("demo-store-")) {
-      const result = getDemoStoreProducts(storeId);
-      return { products: result.products, total: result.total };
-    }
     return { products: [], total: 0 };
   }
 }
@@ -222,17 +205,9 @@ export async function getStoreCategories(
       .eq("store_id", storeId)
       .order("sort_order", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      if (storeId.startsWith("demo-store-")) {
-        return getDemoStoreCategories(storeId);
-      }
-      return [];
-    }
+    if (error || !data || data.length === 0) return [];
     return (data || []) as unknown as StoreCategory[];
   } catch {
-    if (storeId.startsWith("demo-store-")) {
-      return getDemoStoreCategories(storeId);
-    }
     return [];
   }
 }
@@ -254,9 +229,6 @@ export async function getStoreReviews(
       .range(from, from + limit - 1);
 
     if (error || !data || data.length === 0) {
-      if (storeId.startsWith("demo-store-")) {
-        return getDemoStoreReviews(storeId);
-      }
       return { reviews: [], total: 0 };
     }
     return {
@@ -264,9 +236,6 @@ export async function getStoreReviews(
       total: count || 0,
     };
   } catch {
-    if (storeId.startsWith("demo-store-")) {
-      return getDemoStoreReviews(storeId);
-    }
     return { reviews: [], total: 0 };
   }
 }
@@ -283,17 +252,9 @@ export async function getStorePromotions(
       .eq("is_active", true)
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      if (storeId.startsWith("demo-store-")) {
-        return getDemoStorePromotions(storeId);
-      }
-      return [];
-    }
+    if (error || !data || data.length === 0) return [];
     return (data || []) as unknown as StorePromotion[];
   } catch {
-    if (storeId.startsWith("demo-store-")) {
-      return getDemoStorePromotions(storeId);
-    }
     return [];
   }
 }
@@ -302,17 +263,7 @@ export async function getStorePromotions(
 export async function getStoreAnalytics(
   storeId: string,
   days = 30,
-): Promise<
-  {
-    date: string;
-    total_views: number;
-    unique_visitors: number;
-    source_search: number;
-    source_direct: number;
-    source_followers: number;
-    source_product_card: number;
-  }[]
-> {
+) {
   const fromDate = new Date();
   fromDate.setDate(fromDate.getDate() - days);
 
@@ -324,14 +275,18 @@ export async function getStoreAnalytics(
       .gte("date", fromDate.toISOString().split("T")[0])
       .order("date", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return getDemoAnalytics(days);
-    }
-    return (data || []) as unknown as ReturnType<
-      typeof getStoreAnalytics
-    > extends Promise<infer T> ? T : never;
+    if (error || !data || data.length === 0) return [];
+    return data as unknown as {
+      date: string;
+      total_views: number;
+      unique_visitors: number;
+      source_search: number;
+      source_direct: number;
+      source_followers: number;
+      source_product_card: number;
+    }[];
   } catch {
-    return getDemoAnalytics(days);
+    return [];
   }
 }
 
@@ -344,7 +299,6 @@ export async function toggleFollow(
   storeId: string,
   userId: string,
 ): Promise<boolean> {
-  // Check if already following
   const { data: existing } = await supabase
     .from("store_followers" as never)
     .select("id")
@@ -358,22 +312,19 @@ export async function toggleFollow(
       .delete()
       .eq("store_id", storeId)
       .eq("user_id", userId);
-    return false; // unfollowed
+    return false;
   } else {
     await supabase
       .from("store_followers" as never)
       .insert({ store_id: storeId, user_id: userId } as never);
-    return true; // followed
+    return true;
   }
 }
 
 /** Record a store view for analytics */
 export async function recordStoreView(storeId: string): Promise<void> {
-  if (storeId.startsWith("demo-store-")) return;
-
   const today = new Date().toISOString().split("T")[0];
 
-  // Upsert analytics row for today
   await supabase.from("store_analytics" as never).upsert(
     {
       store_id: storeId,
@@ -403,17 +354,9 @@ export async function getStoreSubscription(
       .order("created_at", { ascending: false })
       .maybeSingle();
 
-    if (error || !data) {
-      if (storeId.startsWith("demo-store-")) {
-        return getDemoSubscription();
-      }
-      return null;
-    }
+    if (error || !data) return null;
     return data as unknown as StoreSubscription;
   } catch {
-    if (storeId.startsWith("demo-store-")) {
-      return getDemoSubscription();
-    }
     return null;
   }
 }
@@ -429,17 +372,9 @@ export async function getSubscriptionHistory(
       .eq("store_id", storeId)
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      if (storeId.startsWith("demo-store-")) {
-        return getDemoSubscriptionHistory();
-      }
-      return [];
-    }
+    if (error || !data || data.length === 0) return [];
     return (data || []) as unknown as StoreSubscription[];
   } catch {
-    if (storeId.startsWith("demo-store-")) {
-      return getDemoSubscriptionHistory();
-    }
     return [];
   }
 }
@@ -465,17 +400,15 @@ export async function getStoreByUserId(userId: string): Promise<Store | null> {
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (error || !data) {
-      return getDemoStoreByUserId(userId) || getDemoUserStore();
-    }
+    if (error || !data) return null;
     return data as unknown as Store;
   } catch {
-    return getDemoStoreByUserId(userId) || getDemoUserStore();
+    return null;
   }
 }
 
 /** Get store products for dashboard (includes all statuses) */
-export async function getStoreProductsForDashboard(storeId: string): Promise<DemoProduct[]> {
+export async function getStoreProductsForDashboard(storeId: string): Promise<StoreProduct[]> {
   try {
     const { data, error } = await supabase
       .from("ads" as never)
@@ -485,17 +418,9 @@ export async function getStoreProductsForDashboard(storeId: string): Promise<Dem
       .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      if (storeId.startsWith("demo-store-")) {
-        return getDemoStoreProducts(storeId).products;
-      }
-      return [];
-    }
-    return data as unknown as DemoProduct[];
+    if (error || !data || data.length === 0) return [];
+    return data as unknown as StoreProduct[];
   } catch {
-    if (storeId.startsWith("demo-store-")) {
-      return getDemoStoreProducts(storeId).products;
-    }
     return [];
   }
 }

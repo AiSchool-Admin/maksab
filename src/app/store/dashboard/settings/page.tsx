@@ -6,7 +6,6 @@ import { ArrowRight, Upload } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/lib/supabase/client";
 import { getStoreByUserId } from "@/lib/stores/store-service";
-import { updateDemoStore } from "@/lib/demo/demo-stores";
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { categoriesConfig } from "@/lib/categories/categories-config";
@@ -75,8 +74,6 @@ export default function DashboardSettingsPage() {
     load();
   }, [user, router]);
 
-  const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
-
   const handleSave = async () => {
     if (!store) return;
     setIsSaving(true);
@@ -93,13 +90,6 @@ export default function DashboardSettingsPage() {
       location_area: locationArea || null,
       phone: phone || null,
     };
-
-    if (IS_DEV && store.id.startsWith("demo-store-")) {
-      updateDemoStore(updates as Partial<Store>);
-      toast.success("تم حفظ التعديلات");
-      setIsSaving(false);
-      return;
-    }
 
     const { error } = await supabase
       .from("stores" as never)

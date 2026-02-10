@@ -11,7 +11,6 @@ export default function LogoutPage() {
     async function doLogout() {
       // Clear ALL local storage
       if (typeof window !== "undefined") {
-        localStorage.removeItem("maksab_dev_session");
         localStorage.removeItem("maksab_draft");
         // Clear any Supabase auth tokens
         const keys = Object.keys(localStorage);
