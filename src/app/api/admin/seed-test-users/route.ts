@@ -369,16 +369,20 @@ export async function POST(request: Request) {
         .from("profiles")
         .update({ store_id: s.id })
         .eq("id", u.id);
-      // Create subscription
+      // Create subscription (delete old first, no unique constraint on store_id)
       await admin
         .from("store_subscriptions")
-        .upsert({
+        .delete()
+        .eq("store_id", s.id);
+      await admin
+        .from("store_subscriptions")
+        .insert({
           store_id: s.id,
           plan: s.plan,
           status: "active",
           price: 0,
           start_at: new Date().toISOString(),
-        }, { onConflict: "store_id" } as never);
+        });
     }
   }
   results.stores = `تم إنشاء ${storesCreated} متجر (${merchantUsers.length - storesCreated} موجودين مسبقاً)`;
