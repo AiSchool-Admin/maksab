@@ -20,6 +20,7 @@ import {
   DollarSign,
   ShieldCheck,
   Trophy,
+  Store,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -236,6 +237,11 @@ export default function ProfilePage() {
 
       {/* Menu sections */}
       <section className="px-4 pb-6 space-y-2">
+        <ProfileMenuItem
+          icon={<Store size={20} />}
+          label="متجري"
+          onClick={() => router.push("/store/dashboard")}
+        />
         <ProfileMenuItem
           icon={<ShoppingBag size={20} />}
           label="إعلاناتي"
