@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, MessageCircle, User, Plus } from "lucide-react";
+import { Home, Store, MessageCircle, User, Plus } from "lucide-react";
 
 const tabs = [
   { href: "/", icon: Home, label: "الرئيسية" },
+  { href: "/stores", icon: Store, label: "المتاجر" },
   { href: "/ad/create", icon: Plus, label: "أضف إعلانك", isAdd: true },
   { href: "/chat", icon: MessageCircle, label: "الرسائل", hasBadge: true },
   { href: "/profile", icon: User, label: "حسابي" },
