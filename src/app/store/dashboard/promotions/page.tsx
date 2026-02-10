@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Plus, Tag, Clock, Trash2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/lib/supabase/client";
+import { getStoreByUserId, getStorePromotions, getStoreProductsForDashboard } from "@/lib/stores/store-service";
 import { formatPrice, formatTimeAgo } from "@/lib/utils/format";
 import EmptyState from "@/components/ui/EmptyState";
 import Button from "@/components/ui/Button";
@@ -36,41 +37,22 @@ export default function DashboardPromotionsPage() {
     }
     async function load() {
       setIsLoading(true);
-      const { data: storeData } = await supabase
-        .from("stores" as never)
-        .select("*")
-        .eq("user_id", user!.id)
-        .maybeSingle();
+      const s = await getStoreByUserId(user!.id);
 
-      if (!storeData) {
+      if (!s) {
         setIsLoading(false);
         return;
       }
-      const s = storeData as unknown as Store;
       setStore(s);
 
       const [promos, products] = await Promise.all([
-        supabase
-          .from("store_promotions" as never)
-          .select("*")
-          .eq("store_id", s.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("ads" as never)
-          .select("id, title, price")
-          .eq("store_id", s.id)
-          .eq("status", "active"),
+        getStorePromotions(s.id),
+        getStoreProductsForDashboard(s.id),
       ]);
 
-      setPromotions(
-        (promos.data || []) as unknown as StorePromotion[],
-      );
+      setPromotions(promos);
       setStoreProducts(
-        (products.data || []) as unknown as {
-          id: string;
-          title: string;
-          price: number | null;
-        }[],
+        products.map((p) => ({ id: p.id, title: p.title, price: p.price })),
       );
       setIsLoading(false);
     }

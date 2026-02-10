@@ -59,10 +59,10 @@ export default function StorePublicPage() {
       ]);
       setCategories(cats);
       setPromotions(promos);
-      setProducts(prods.products as Record<string, unknown>[]);
+      setProducts(prods.products as unknown as Record<string, unknown>[]);
 
       // Filter pinned
-      const pinned = (prods.products as Record<string, unknown>[]).filter(
+      const pinned = (prods.products as unknown as Record<string, unknown>[]).filter(
         (p) => p.is_pinned,
       );
       setPinnedProducts(pinned);
@@ -83,7 +83,7 @@ export default function StorePublicPage() {
       const result = await getStoreProducts(store.id, {
         categoryId: catId || undefined,
       });
-      setProducts(result.products as Record<string, unknown>[]);
+      setProducts(result.products as unknown as Record<string, unknown>[]);
       setProductsLoading(false);
     },
     [store],

@@ -1,28 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { PLANS, isUpgrade } from "@/lib/stores/subscription-plans";
+import { upgradeDemoSubscription } from "@/lib/demo/demo-stores";
 import type { SubscriptionPlan } from "@/types";
+
+const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 /**
  * POST /api/stores/subscription/upgrade
  * Request an upgrade to a new plan.
- * For now: records the subscription request with payment_method & payment_ref.
- * (Payment gateway integration will come later — currently manual verification.)
  */
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json(
-      { error: "Server configuration missing" },
-      { status: 500 },
-    );
-  }
-
-  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
 
   try {
     const body = await request.json();
@@ -49,6 +39,27 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    // Dev mode fallback
+    if (IS_DEV && (!supabaseUrl || !serviceRoleKey)) {
+      const sub = upgradeDemoSubscription(plan, billing_cycle || "monthly");
+      return NextResponse.json({
+        success: true,
+        subscription: sub,
+        message: `تم الترقية لباقة ${PLANS[plan].name} بنجاح! (وضع التطوير)`,
+      });
+    }
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json(
+        { error: "Server configuration missing" },
+        { status: 500 },
+      );
+    }
+
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
 
     // Verify store ownership
     const { data: store } = await adminClient
@@ -127,14 +138,12 @@ export async function POST(request: Request) {
 
     // Add plan badge to store (gold or platinum)
     if (plan === "gold" || plan === "platinum") {
-      // Remove old plan badges
       await adminClient
         .from("store_badges")
         .delete()
         .eq("store_id", store_id)
         .in("badge_type", ["gold", "platinum"]);
 
-      // Add new badge
       await adminClient
         .from("store_badges")
         .insert({

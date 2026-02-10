@@ -13,6 +13,7 @@ import {
   Edit,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
+import { getStoreByUserId, getStoreProductsForDashboard } from "@/lib/stores/store-service";
 import { supabase } from "@/lib/supabase/client";
 import { formatPrice, formatTimeAgo } from "@/lib/utils/format";
 import EmptyState from "@/components/ui/EmptyState";
@@ -46,29 +47,16 @@ export default function DashboardProductsPage() {
     }
     async function load() {
       setIsLoading(true);
-      const { data: storeData } = await supabase
-        .from("stores" as never)
-        .select("*")
-        .eq("user_id", user!.id)
-        .maybeSingle();
+      const s = await getStoreByUserId(user!.id);
 
-      if (!storeData) {
+      if (!s) {
         setIsLoading(false);
         return;
       }
-      const s = storeData as unknown as Store;
       setStore(s);
 
-      const { data: prods } = await supabase
-        .from("ads" as never)
-        .select(
-          "id, title, price, images, status, sale_type, is_pinned, views_count, created_at",
-        )
-        .eq("store_id", s.id)
-        .order("is_pinned", { ascending: false })
-        .order("created_at", { ascending: false });
-
-      setProducts((prods || []) as unknown as Product[]);
+      const prods = await getStoreProductsForDashboard(s.id);
+      setProducts(prods as unknown as Product[]);
       setIsLoading(false);
     }
     load();

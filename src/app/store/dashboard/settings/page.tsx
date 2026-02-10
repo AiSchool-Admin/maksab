@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Upload } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/lib/supabase/client";
+import { getStoreByUserId } from "@/lib/stores/store-service";
+import { updateDemoStore } from "@/lib/demo/demo-stores";
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { categoriesConfig } from "@/lib/categories/categories-config";
@@ -51,17 +53,12 @@ export default function DashboardSettingsPage() {
     }
     async function load() {
       setIsLoading(true);
-      const { data: storeData } = await supabase
-        .from("stores" as never)
-        .select("*")
-        .eq("user_id", user!.id)
-        .maybeSingle();
+      const s = await getStoreByUserId(user!.id);
 
-      if (!storeData) {
+      if (!s) {
         router.push("/store/create");
         return;
       }
-      const s = storeData as unknown as Store;
       setStore(s);
       setName(s.name);
       setDescription(s.description || "");
@@ -78,24 +75,35 @@ export default function DashboardSettingsPage() {
     load();
   }, [user, router]);
 
+  const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === "true";
+
   const handleSave = async () => {
     if (!store) return;
     setIsSaving(true);
 
+    const updates = {
+      name,
+      description: description || null,
+      main_category: mainCategory,
+      theme,
+      layout,
+      primary_color: primaryColor,
+      secondary_color: secondaryColor || null,
+      location_gov: locationGov || null,
+      location_area: locationArea || null,
+      phone: phone || null,
+    };
+
+    if (IS_DEV && store.id.startsWith("demo-store-")) {
+      updateDemoStore(updates as Partial<Store>);
+      toast.success("تم حفظ التعديلات");
+      setIsSaving(false);
+      return;
+    }
+
     const { error } = await supabase
       .from("stores" as never)
-      .update({
-        name,
-        description: description || null,
-        main_category: mainCategory,
-        theme,
-        layout,
-        primary_color: primaryColor,
-        secondary_color: secondaryColor || null,
-        location_gov: locationGov || null,
-        location_area: locationArea || null,
-        phone: phone || null,
-      } as never)
+      .update(updates as never)
       .eq("id", store.id);
 
     if (error) {
