@@ -4,13 +4,13 @@ import { useRef } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import AdCard from "@/components/ad/AdCard";
-import type { MockAd } from "@/lib/mock-data";
+import type { AdSummary } from "@/lib/ad-data";
 
 interface HorizontalSectionProps {
   title: string;
   subtitle?: string;
   icon?: string;
-  ads: MockAd[];
+  ads: AdSummary[];
   href?: string;
   onToggleFavorite?: (id: string) => void;
 }

@@ -23,8 +23,8 @@ import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import { getRecommendations } from "@/lib/recommendations/recommendations-service";
-import { fetchFeedAds } from "@/lib/mock-data";
-import type { MockAd } from "@/lib/mock-data";
+import { fetchFeedAds } from "@/lib/ad-data";
+import type { AdSummary } from "@/lib/ad-data";
 import { toggleFavorite, getFavoriteIds } from "@/lib/favorites/favorites-service";
 
 const categories = [
@@ -49,14 +49,14 @@ export default function HomePage() {
     isLoadingMore,
     hasMore,
     sentinelRef,
-  } = useInfiniteScroll<MockAd>({ fetchFn: fetchFeedAds });
+  } = useInfiniteScroll<AdSummary>({ fetchFn: fetchFeedAds });
 
   const { requireAuth, user } = useAuth();
   const { track } = useTrackSignal();
 
   // Personalized recommendation state
-  const [personalizedAds, setPersonalizedAds] = useState<MockAd[]>([]);
-  const [matchingAuctions, setMatchingAuctions] = useState<MockAd[]>([]);
+  const [personalizedAds, setPersonalizedAds] = useState<AdSummary[]>([]);
+  const [matchingAuctions, setMatchingAuctions] = useState<AdSummary[]>([]);
   const [hasSignals, setHasSignals] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 

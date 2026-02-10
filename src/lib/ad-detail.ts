@@ -3,17 +3,17 @@
  */
 
 import { supabase } from "@/lib/supabase/client";
-import type { MockAd } from "./mock-data";
+import type { AdSummary } from "./ad-data";
 import type { AuctionStatus } from "./auction/types";
 
-export interface MockBid {
+export interface BidInfo {
   id: string;
   bidderName: string;
   amount: number;
   createdAt: string;
 }
 
-export interface MockSeller {
+export interface SellerInfo {
   id: string;
   displayName: string;
   phone: string;
@@ -23,7 +23,7 @@ export interface MockSeller {
   rating: number;
 }
 
-export interface MockAdDetail {
+export interface AdDetail {
   id: string;
   title: string;
   description: string;
@@ -51,13 +51,13 @@ export interface MockAdDetail {
   auctionStatus: AuctionStatus | null;
   auctionWinnerId: string | null;
   auctionWinnerName: string | null;
-  bids: MockBid[];
+  bids: BidInfo[];
   // Exchange
   exchangeDescription: string | null;
   exchangeAcceptsPriceDiff: boolean;
   exchangePriceDiff: number | null;
   // Seller
-  seller: MockSeller;
+  seller: SellerInfo;
   // Favorite state
   isFavorited: boolean;
 }
@@ -65,7 +65,7 @@ export interface MockAdDetail {
 /**
  * Fetch ad detail by ID from Supabase.
  */
-export async function fetchAdDetail(id: string): Promise<MockAdDetail | null> {
+export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
   try {
     // Fetch the ad
     const { data: adData, error: adError } = await supabase
@@ -79,7 +79,7 @@ export async function fetchAdDetail(id: string): Promise<MockAdDetail | null> {
     const ad = adData as Record<string, unknown>;
 
     // Fetch seller profile
-    let seller: MockSeller = {
+    let seller: SellerInfo = {
       id: ad.user_id as string,
       displayName: "مستخدم",
       phone: "",
@@ -111,7 +111,7 @@ export async function fetchAdDetail(id: string): Promise<MockAdDetail | null> {
     }
 
     // Fetch auction bids if auction
-    let bids: MockBid[] = [];
+    let bids: BidInfo[] = [];
     let highestBid: number | null = null;
     let highestBidderName: string | null = null;
     let highestBidderId: string | null = null;
@@ -181,7 +181,7 @@ export async function fetchAdDetail(id: string): Promise<MockAdDetail | null> {
 }
 
 /** Get similar ads for the detail page bottom section */
-export async function getSimilarAds(currentId: string, categoryId?: string): Promise<MockAd[]> {
+export async function getSimilarAds(currentId: string, categoryId?: string): Promise<AdSummary[]> {
   try {
     let query = supabase
       .from("ads" as never)
@@ -205,7 +205,7 @@ export async function getSimilarAds(currentId: string, categoryId?: string): Pro
       id: row.id as string,
       title: row.title as string,
       price: row.price ? Number(row.price) : null,
-      saleType: row.sale_type as MockAd["saleType"],
+      saleType: row.sale_type as AdSummary["saleType"],
       image: ((row.images as string[]) ?? [])[0] ?? null,
       governorate: (row.governorate as string) ?? null,
       city: (row.city as string) ?? null,

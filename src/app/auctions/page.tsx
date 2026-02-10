@@ -7,7 +7,7 @@ import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { supabase } from "@/lib/supabase/client";
-import type { MockAd } from "@/lib/mock-data";
+import type { AdSummary } from "@/lib/ad-data";
 
 type SortOption = "ending_soon" | "newest" | "most_bids" | "price_asc" | "price_desc";
 type StatusFilter = "active" | "ended" | "all";
@@ -25,7 +25,7 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "الكل" },
 ];
 
-interface AuctionAd extends MockAd {
+interface AuctionAd extends AdSummary {
   auctionStartPrice?: number;
   auctionStatus?: string;
 }

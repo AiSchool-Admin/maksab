@@ -26,9 +26,9 @@ import ExchangeMatchSection from "@/components/ad/ExchangeMatchSection";
 import ContactBar from "@/components/ad/ContactBar";
 import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
-import { fetchAdDetail, getSimilarAds } from "@/lib/mock-ad-detail";
-import type { MockAdDetail } from "@/lib/mock-ad-detail";
-import type { MockAd } from "@/lib/mock-data";
+import { fetchAdDetail, getSimilarAds } from "@/lib/ad-detail";
+import type { AdDetail } from "@/lib/ad-detail";
+import type { AdSummary } from "@/lib/ad-data";
 import type { AuctionState } from "@/lib/auction/types";
 import {
   placeBid,
@@ -54,8 +54,8 @@ import ComparisonFab from "@/components/comparison/ComparisonFab";
 import PriceBadge from "@/components/price/PriceBadge";
 import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
 
-/** Convert MockAdDetail to AuctionState for the auction component */
-function toAuctionState(ad: MockAdDetail): AuctionState {
+/** Convert AdDetail to AuctionState for the auction component */
+function toAuctionState(ad: AdDetail): AuctionState {
   return {
     adId: ad.id,
     status: ad.auctionStatus ?? "active",
@@ -92,8 +92,8 @@ export default function AdDetailPage({
   const { requireAuth, user } = useAuth();
   const { track } = useTrackSignal();
 
-  const [ad, setAd] = useState<MockAdDetail | null>(null);
-  const [similarAds, setSimilarAds] = useState<MockAd[]>([]);
+  const [ad, setAd] = useState<AdDetail | null>(null);
+  const [similarAds, setSimilarAds] = useState<AdSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorited, setIsFavorited] = useState(false);
 

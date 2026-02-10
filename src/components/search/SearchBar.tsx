@@ -8,7 +8,7 @@ import {
   clearRecentSearches,
 } from "@/lib/search/recent-searches";
 import { getAutoSuggestions } from "@/lib/search/smart-parser";
-import { popularSearches } from "@/lib/search/mock-search";
+import { popularSearches } from "@/lib/search/search-data";
 
 interface SearchBarProps {
   initialQuery?: string;

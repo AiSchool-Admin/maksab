@@ -8,11 +8,11 @@ import AdCard from "@/components/ad/AdCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { supabase } from "@/lib/supabase/client";
-import type { MockAd } from "@/lib/mock-data";
+import type { AdSummary } from "@/lib/ad-data";
 
 const FAVORITES_KEY = "maksab_favorites";
 
-/** Get favorites from localStorage (works for both dev & real users) */
+/** Get favorites from localStorage */
 function getLocalFavorites(): string[] {
   if (typeof window === "undefined") return [];
   try {
@@ -31,7 +31,7 @@ function saveLocalFavorites(ids: string[]) {
 
 export default function FavoritesPage() {
   const { user, isLoading: authLoading, requireAuth } = useAuth();
-  const [favorites, setFavorites] = useState<MockAd[]>([]);
+  const [favorites, setFavorites] = useState<AdSummary[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
 
@@ -64,11 +64,11 @@ export default function FavoritesPage() {
         return;
       }
 
-      const ads = (data as Record<string, unknown>[]).map((row): MockAd => ({
+      const ads = (data as Record<string, unknown>[]).map((row): AdSummary => ({
         id: row.id as string,
         title: row.title as string,
         price: row.price ? Number(row.price) : null,
-        saleType: row.sale_type as MockAd["saleType"],
+        saleType: row.sale_type as AdSummary["saleType"],
         image: ((row.images as string[]) ?? [])[0] ?? null,
         governorate: (row.governorate as string) ?? null,
         city: (row.city as string) ?? null,

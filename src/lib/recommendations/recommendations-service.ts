@@ -4,14 +4,14 @@
  * analyzing user_signals for real personalization.
  */
 
-import type { MockAd } from "@/lib/mock-data";
+import type { AdSummary } from "@/lib/ad-data";
 import type { ExchangeMatch, SellerInsights } from "./types";
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
 export interface RecommendationResult {
-  personalizedAds: MockAd[];
-  matchingAuctions: (MockAd & {
+  personalizedAds: AdSummary[];
+  matchingAuctions: (AdSummary & {
     matchReason?: string;
     timeRemainingHours?: number | null;
   })[];
@@ -42,14 +42,14 @@ interface RecommendedAdFromAPI {
   timeRemainingHours?: number | null;
 }
 
-/* ── Convert API response to MockAd format ──────────────────────────────── */
+/* ── Convert API response to AdSummary format ──────────────────────────────── */
 
-function apiAdToMockAd(ad: RecommendedAdFromAPI): MockAd {
+function apiAdToAdSummary(ad: RecommendedAdFromAPI): AdSummary {
   return {
     id: ad.id,
     title: ad.title,
     price: ad.price,
-    saleType: ad.saleType as MockAd["saleType"],
+    saleType: ad.saleType as AdSummary["saleType"],
     image: ad.image,
     governorate: ad.governorate,
     city: ad.city,
@@ -86,12 +86,12 @@ export async function getRecommendations(
     const data = await response.json();
 
     const personalizedAds = (data.personalizedAds || []).map(
-      (ad: RecommendedAdFromAPI) => apiAdToMockAd(ad),
+      (ad: RecommendedAdFromAPI) => apiAdToAdSummary(ad),
     );
 
     const matchingAuctions = (data.matchingAuctions || []).map(
       (ad: RecommendedAdFromAPI) => ({
-        ...apiAdToMockAd(ad),
+        ...apiAdToAdSummary(ad),
         matchReason: ad.matchReason || "",
         timeRemainingHours: ad.timeRemainingHours ?? null,
       }),
@@ -122,7 +122,7 @@ async function fallbackRecommendations(userId: string): Promise<RecommendationRe
       .limit(10);
 
     const personalizedAds = adsData && (adsData as unknown[]).length > 0
-      ? (adsData as Record<string, unknown>[]).map(rowToMockAd)
+      ? (adsData as Record<string, unknown>[]).map(rowToAdSummary)
       : [];
 
     const { data: auctionData } = await supabase
@@ -135,7 +135,7 @@ async function fallbackRecommendations(userId: string): Promise<RecommendationRe
       .limit(8);
 
     const matchingAuctions = auctionData && (auctionData as unknown[]).length > 0
-      ? (auctionData as Record<string, unknown>[]).map(rowToMockAd)
+      ? (auctionData as Record<string, unknown>[]).map(rowToAdSummary)
       : [];
 
     return { personalizedAds, matchingAuctions, hasSignals: false };
@@ -144,13 +144,13 @@ async function fallbackRecommendations(userId: string): Promise<RecommendationRe
   }
 }
 
-/** Convert Supabase row to MockAd */
-function rowToMockAd(row: Record<string, unknown>): MockAd {
+/** Convert Supabase row to AdSummary */
+function rowToAdSummary(row: Record<string, unknown>): AdSummary {
   return {
     id: row.id as string,
     title: row.title as string,
     price: row.price ? Number(row.price) : null,
-    saleType: row.sale_type as MockAd["saleType"],
+    saleType: row.sale_type as AdSummary["saleType"],
     image: ((row.images as string[]) ?? [])[0] ?? null,
     governorate: (row.governorate as string) ?? null,
     city: (row.city as string) ?? null,
@@ -262,6 +262,6 @@ export function getEnhancedSimilarAds(
   _query: string,
   _mainResultIds: Set<string>,
   _category?: string,
-): MockAd[] {
+): AdSummary[] {
   return [];
 }
