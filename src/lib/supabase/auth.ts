@@ -25,6 +25,8 @@ export type UserProfile = {
   is_commission_supporter: boolean;
   total_ads_count: number;
   rating: number;
+  seller_type: "individual" | "store";
+  store_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -222,6 +224,8 @@ async function upsertUserProfile(userId: string, contactInfo: string, displayNam
     is_commission_supporter: false,
     total_ads_count: 0,
     rating: 0,
+    seller_type: "individual" as const,
+    store_id: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

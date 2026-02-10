@@ -15,6 +15,10 @@ const HorizontalSection = dynamic(
   () => import("@/components/home/HorizontalSection"),
   { ssr: false },
 );
+const UpgradeToStoreBanner = dynamic(
+  () => import("@/components/store/UpgradeToStoreBanner"),
+  { ssr: false },
+);
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
@@ -184,6 +188,11 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* ─── Upgrade to Store Banner (individual users only) ──── */}
+      {user && (!user.seller_type || user.seller_type === "individual") && (
+        <UpgradeToStoreBanner variant="home" />
+      )}
 
       {/* ─── Browse Stores ─────────────────────────────────────── */}
       <section className="px-4 pb-5">

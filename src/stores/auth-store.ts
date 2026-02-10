@@ -7,6 +7,8 @@ interface User {
   avatar_url: string | null;
   governorate: string | null;
   city: string | null;
+  seller_type: "individual" | "store";
+  store_id: string | null;
 }
 
 interface AuthState {
