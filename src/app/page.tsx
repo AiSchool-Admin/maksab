@@ -303,6 +303,18 @@ export default function HomePage() {
         )}
       </section>
 
+      {/* ─── Merchant: Add Regular Ad (green CTA) ────────────── */}
+      {user?.seller_type === "store" && user?.store_id && (
+        <section className="px-4 pb-6">
+          <Link href="/ad/create" className="block">
+            <div className="flex items-center justify-center gap-2 bg-brand-green hover:bg-brand-green-dark active:scale-[0.98] text-white py-3.5 rounded-xl shadow-md shadow-brand-green/20 transition-all">
+              <Plus size={20} strokeWidth={2.5} />
+              <span className="text-sm font-bold">أضف إعلان</span>
+            </div>
+          </Link>
+        </section>
+      )}
+
       <BottomNavWithBadge />
     </main>
   );

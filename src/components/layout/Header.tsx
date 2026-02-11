@@ -101,13 +101,23 @@ export default function Header({
           )}
 
           {!showBack && (
-            <Link
-              href="/ad/create"
-              className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white px-3 py-1.5 rounded-full transition-all shadow-sm"
-            >
-              <Plus size={18} strokeWidth={2.5} />
-              <span className="text-sm font-bold">أضف إعلان</span>
-            </Link>
+            user?.seller_type === "store" && user?.store_id ? (
+              <Link
+                href="/store/dashboard/products/quick-add"
+                className="flex items-center gap-1.5 bg-brand-orange hover:bg-brand-orange-dark active:scale-95 text-white px-3 py-1.5 rounded-full transition-all shadow-sm"
+              >
+                <Plus size={18} strokeWidth={2.5} />
+                <span className="text-sm font-bold">أضف منتج</span>
+              </Link>
+            ) : (
+              <Link
+                href="/ad/create"
+                className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white px-3 py-1.5 rounded-full transition-all shadow-sm"
+              >
+                <Plus size={18} strokeWidth={2.5} />
+                <span className="text-sm font-bold">أضف إعلان</span>
+              </Link>
+            )
           )}
           {actions}
           {showNotifications && (
