@@ -64,30 +64,45 @@ export default function SettingsPage() {
     saveSettings(updated);
   };
 
+  const [cacheCleared, setCacheCleared] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const handleClearCache = () => {
     if (typeof window !== "undefined") {
-      // Clear cached data except auth
-      const authSession = localStorage.getItem("maksab_user_session");
       const keys = Object.keys(localStorage);
       for (const key of keys) {
         if (
-          key !== "maksab_user_session" &&
           key !== SETTINGS_KEY &&
           !key.startsWith("sb-")
         ) {
           localStorage.removeItem(key);
         }
       }
+      setCacheCleared(true);
+      setTimeout(() => setCacheCleared(false), 2000);
     }
   };
 
   const handleDeleteAccount = async () => {
-    // For now, just log out and clear all data
-    if (typeof window !== "undefined") {
-      localStorage.clear();
+    setIsDeleting(true);
+    try {
+      // Delete user data from database via Supabase
+      const { supabase } = await import("@/lib/supabase/client");
+      if (user?.id) {
+        // Delete user's ads
+        await supabase.from("ads" as never).delete().eq("user_id", user.id);
+        // Delete user profile
+        await supabase.from("profiles" as never).delete().eq("id", user.id);
+      }
+      // Clear all local data
+      if (typeof window !== "undefined") {
+        localStorage.clear();
+      }
+      await logout();
+      router.push("/");
+    } catch {
+      setIsDeleting(false);
     }
-    await logout();
-    router.push("/");
   };
 
   return (
@@ -181,7 +196,9 @@ export default function SettingsPage() {
               className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-light transition-colors"
             >
               <span className="text-sm text-dark">مسح الكاش</span>
-              <span className="text-xs text-gray-text">تحديث البيانات</span>
+              <span className="text-xs text-gray-text">
+                {cacheCleared ? "تم المسح ✓" : "تحديث البيانات"}
+              </span>
             </button>
           </div>
         </section>
@@ -227,9 +244,10 @@ export default function SettingsPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={handleDeleteAccount}
-                      className="flex-1 py-2 bg-error text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors"
+                      disabled={isDeleting}
+                      className="flex-1 py-2 bg-error text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                     >
-                      نعم، احذف حسابي
+                      {isDeleting ? "جاري الحذف..." : "نعم، احذف حسابي"}
                     </button>
                     <button
                       onClick={() => setShowDeleteConfirm(false)}

@@ -14,6 +14,8 @@ interface UseInfiniteScrollReturn<T> {
   isLoading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
+  error: boolean;
+  retry: () => void;
   sentinelRef: (node: HTMLDivElement | null) => void;
 }
 
@@ -26,25 +28,30 @@ export function useInfiniteScroll<T>({
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const fetchingRef = useRef(false);
 
   // Fetch initial page
-  useEffect(() => {
-    let cancelled = false;
+  const fetchInitial = useCallback(() => {
     setIsLoading(true);
+    setError(false);
 
-    fetchFn(initialPage).then(({ ads, hasMore: more }) => {
-      if (cancelled) return;
-      setItems(ads);
-      setHasMore(more);
-      setIsLoading(false);
-      setPage(initialPage + 1);
-    });
+    fetchFn(initialPage)
+      .then(({ ads, hasMore: more }) => {
+        setItems(ads);
+        setHasMore(more);
+        setIsLoading(false);
+        setPage(initialPage + 1);
+      })
+      .catch(() => {
+        setError(true);
+        setIsLoading(false);
+      });
+  }, [fetchFn, initialPage]);
 
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    fetchInitial();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -54,12 +61,17 @@ export function useInfiniteScroll<T>({
     fetchingRef.current = true;
     setIsLoadingMore(true);
 
-    const { ads, hasMore: more } = await fetchFn(page);
-    setItems((prev) => [...prev, ...ads]);
-    setHasMore(more);
-    setPage((p) => p + 1);
-    setIsLoadingMore(false);
-    fetchingRef.current = false;
+    try {
+      const { ads, hasMore: more } = await fetchFn(page);
+      setItems((prev) => [...prev, ...ads]);
+      setHasMore(more);
+      setPage((p) => p + 1);
+    } catch {
+      // Silently fail on load-more — user can scroll again to retry
+    } finally {
+      setIsLoadingMore(false);
+      fetchingRef.current = false;
+    }
   }, [fetchFn, hasMore, page]);
 
   // Sentinel ref callback for IntersectionObserver
@@ -85,5 +97,5 @@ export function useInfiniteScroll<T>({
     [hasMore, loadMore],
   );
 
-  return { items, isLoading, isLoadingMore, hasMore, sentinelRef };
+  return { items, isLoading, isLoadingMore, hasMore, error, retry: fetchInitial, sentinelRef };
 }

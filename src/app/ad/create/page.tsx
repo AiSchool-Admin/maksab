@@ -275,8 +275,17 @@ export default function CreateAdPage() {
       const imageFiles: string[] = [];
       for (const img of images) {
         try {
-          const arrayBuffer = await img.file.arrayBuffer();
-          const base64 = Buffer.from(arrayBuffer).toString("base64");
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              // Remove data URL prefix (e.g. "data:image/jpeg;base64,")
+              const base64Data = result.split(",")[1] || result;
+              resolve(base64Data);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(img.file);
+          });
           imageFiles.push(base64);
         } catch {
           // Skip failed conversions

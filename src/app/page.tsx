@@ -49,6 +49,8 @@ export default function HomePage() {
     isLoadingMore,
     hasMore,
     sentinelRef,
+    error: feedError,
+    retry: retryFeed,
   } = useInfiniteScroll<AdSummary>({ fetchFn: fetchFeedAds });
 
   const { requireAuth, user } = useAuth();
@@ -144,7 +146,7 @@ export default function HomePage() {
               <div className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
                 <Search size={20} className="text-white" strokeWidth={2.5} />
               </div>
-              <span className="flex-1 text-sm text-gray-text">ابحث عن السيارات، الهواتف وأكتر...</span>
+              <span className="flex-1 text-sm text-gray-text">ابحث في مكسب... سيارات، موبايلات، عقارات</span>
             </div>
           </Link>
         </div>
@@ -238,6 +240,17 @@ export default function HomePage() {
 
         {isLoading ? (
           <AdGridSkeleton count={4} />
+        ) : feedError ? (
+          <div className="py-8 text-center">
+            <p className="text-4xl mb-3">⚠️</p>
+            <p className="text-sm text-gray-text mb-3">حصل مشكلة في تحميل الإعلانات</p>
+            <button
+              onClick={retryFeed}
+              className="text-sm font-bold text-brand-green hover:text-brand-green-dark"
+            >
+              جرب تاني
+            </button>
+          </div>
         ) : feedAds.length > 0 ? (
           <>
             <div className="grid grid-cols-2 gap-3">
@@ -275,8 +288,11 @@ export default function HomePage() {
             <h3 className="text-lg font-bold text-dark mb-2">
               أهلاً بيك في مكسب!
             </h3>
+            <p className="text-sm text-gray-text mb-1">
+              أسهل وأذكى سوق على الإطلاق
+            </p>
             <p className="text-sm text-gray-text mb-4">
-              لسه مفيش إعلانات. كن أول واحد يضيف إعلان!
+              كن أول واحد يضيف إعلان!
             </p>
             <Link href="/ad/create">
               <Button icon={<Plus size={18} />} size="lg">

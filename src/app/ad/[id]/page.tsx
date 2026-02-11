@@ -110,48 +110,61 @@ export default function AdDetailPage({
   const [reviewsKey, setReviewsKey] = useState(0); // force refresh reviews
   const [sellerLoyaltyLevel, setSellerLoyaltyLevel] = useState<"member" | "silver" | "gold" | "diamond">("member");
 
+  const [notFound, setNotFound] = useState(false);
   const currentUserId = user?.id || "";
 
   /* ── Load ad detail ──────────────────────────────────────── */
   useEffect(() => {
     setIsLoading(true);
+    setNotFound(false);
     fetchAdDetail(id).then(async (data) => {
       if (!data) {
+        setNotFound(true);
         setIsLoading(false);
         return;
       }
       setAd(data);
       setIsFavorited(data.isFavorited);
-      const similar = await getSimilarAds(id, data.categoryId);
-      setSimilarAds(similar);
-      setIsLoading(false);
 
       // Initialize auction state
       if (data.saleType === "auction" && data.auctionStartPrice) {
         const state = toAuctionState(data);
         setAuctionState(state);
       }
+
+      // Load similar ads in parallel (non-blocking)
+      getSimilarAds(id, data.categoryId).then(setSimilarAds).catch(() => {});
+
+      setIsLoading(false);
+    }).catch(() => {
+      setNotFound(true);
+      setIsLoading(false);
     });
   }, [id]);
 
-  /* ── Load seller verification data ──────────────────────── */
+  /* ── Load seller verification data (parallel) ───────────── */
   useEffect(() => {
     if (!ad?.seller?.id) return;
-    import("@/lib/verification/verification-service").then(({ getUserVerificationProfile }) => {
-      getUserVerificationProfile(ad.seller.id).then((profile) => {
-        setSellerVerificationLevel(profile.level);
-        setSellerIsIdVerified(profile.isIdVerified);
-      });
-    });
-    import("@/lib/reviews/reviews-service").then(({ getSellerRatingSummary }) => {
-      getSellerRatingSummary(ad.seller.id).then((summary) => {
-        setSellerIsTrusted(summary.isTrustedSeller);
-      });
-    });
-    import("@/lib/loyalty/loyalty-service").then(({ getUserLoyaltyProfile }) => {
-      const loyaltyProfile = getUserLoyaltyProfile(ad.seller.id);
-      setSellerLoyaltyLevel(loyaltyProfile.currentLevel);
-    });
+    const sellerId = ad.seller.id;
+
+    // Load all seller metadata in parallel
+    Promise.allSettled([
+      import("@/lib/verification/verification-service").then(({ getUserVerificationProfile }) =>
+        getUserVerificationProfile(sellerId).then((profile) => {
+          setSellerVerificationLevel(profile.level);
+          setSellerIsIdVerified(profile.isIdVerified);
+        })
+      ),
+      import("@/lib/reviews/reviews-service").then(({ getSellerRatingSummary }) =>
+        getSellerRatingSummary(sellerId).then((summary) => {
+          setSellerIsTrusted(summary.isTrustedSeller);
+        })
+      ),
+      import("@/lib/loyalty/loyalty-service").then(({ getUserLoyaltyProfile }) => {
+        const loyaltyProfile = getUserLoyaltyProfile(sellerId);
+        setSellerLoyaltyLevel(loyaltyProfile.currentLevel);
+      }),
+    ]).catch(() => {});
   }, [ad?.seller?.id]);
 
   /* ── Track view signal after 3 seconds ──────────────────── */
@@ -303,6 +316,38 @@ export default function AdDetailPage({
       setAuctionState(result.updatedState);
     }
   }, [id, requireAuth]);
+
+  /* ── Not found state ──────────────────────────────────── */
+  if (notFound && !isLoading) {
+    return (
+      <main className="min-h-screen bg-white pb-20">
+        <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
+          <div className="flex items-center px-4 h-14 gap-2">
+            <button onClick={() => router.back()} className="p-1 text-gray-text" aria-label="رجوع">
+              <ChevronRight size={24} />
+            </button>
+            <Link href="/" className="p-1.5 text-brand-green rounded-full" aria-label="الرئيسية">
+              <Home size={18} />
+            </Link>
+          </div>
+        </header>
+        <div className="flex flex-col items-center justify-center px-4 py-20 text-center">
+          <div className="text-6xl mb-4">🔍</div>
+          <h2 className="text-xl font-bold text-dark mb-2">الإعلان مش موجود</h2>
+          <p className="text-sm text-gray-text mb-6">
+            الإعلان ده ممكن يكون اتحذف أو مش متاح حالياً
+          </p>
+          <Link
+            href="/"
+            className="bg-brand-green text-white font-bold py-3 px-8 rounded-xl hover:bg-brand-green-dark transition-colors"
+          >
+            تصفح إعلانات تانية
+          </Link>
+        </div>
+        <BottomNavWithBadge />
+      </main>
+    );
+  }
 
   /* ── Loading skeleton ──────────────────────────────────── */
   if (isLoading || !ad) {
@@ -562,9 +607,9 @@ export default function AdDetailPage({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="font-bold text-dark text-sm">
+                  <Link href={`/user/${ad.seller.id}`} className="font-bold text-dark text-sm hover:text-brand-green transition-colors">
                     {ad.seller.displayName}
-                  </p>
+                  </Link>
                   <VerificationBadge level={sellerVerificationLevel} />
                   <LoyaltyBadge level={sellerLoyaltyLevel} size="sm" />
                   {sellerIsTrusted && <TrustedSellerBadge />}

@@ -45,13 +45,21 @@ export default function MyAdsPage() {
   const [activeTab, setActiveTab] = useState<TabFilter>("all");
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
 
+  const [error, setError] = useState(false);
+
   // Load ads
   useEffect(() => {
     setIsLoading(true);
-    fetchMyAds().then((data) => {
-      setAds(data);
-      setIsLoading(false);
-    });
+    setError(false);
+    fetchMyAds()
+      .then((data) => {
+        setAds(data);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        setError(true);
+        setIsLoading(false);
+      });
   }, []);
 
   // Filter ads by tab
@@ -137,7 +145,24 @@ export default function MyAdsPage() {
 
       {/* Content */}
       <div className="px-4 py-4 space-y-3">
-        {isLoading ? (
+        {error ? (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-3">⚠️</div>
+            <p className="text-sm text-gray-text mb-3">حصل مشكلة في تحميل إعلاناتك</p>
+            <button
+              onClick={() => {
+                setError(false);
+                setIsLoading(true);
+                fetchMyAds()
+                  .then((data) => { setAds(data); setIsLoading(false); })
+                  .catch(() => { setError(true); setIsLoading(false); });
+              }}
+              className="text-sm font-bold text-brand-green hover:text-brand-green-dark"
+            >
+              جرب تاني
+            </button>
+          </div>
+        ) : isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
@@ -174,14 +199,28 @@ export default function MyAdsPage() {
                 key={ad.id}
                 className="bg-white border border-gray-light rounded-xl p-3 relative"
               >
-                <div className="flex gap-3">
-                  {/* Image placeholder */}
-                  <div className="w-20 h-20 bg-gray-light rounded-lg flex-shrink-0 flex items-center justify-center text-2xl">
-                    {ad.saleType === "auction"
-                      ? "🔨"
-                      : ad.saleType === "exchange"
-                        ? "🔄"
-                        : "📷"}
+                <div
+                  className="flex gap-3 cursor-pointer"
+                  onClick={() => router.push(`/ad/${ad.id}`)}
+                >
+                  {/* Image thumbnail */}
+                  <div className="w-20 h-20 bg-gray-light rounded-lg flex-shrink-0 overflow-hidden">
+                    {ad.image ? (
+                      <img
+                        src={ad.image}
+                        alt={ad.title}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-2xl">
+                        {ad.saleType === "auction"
+                          ? "🔨"
+                          : ad.saleType === "exchange"
+                            ? "🔄"
+                            : "📷"}
+                      </div>
+                    )}
                   </div>
 
                   {/* Details */}
