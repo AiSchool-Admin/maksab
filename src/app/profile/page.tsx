@@ -21,6 +21,9 @@ import {
   ShieldCheck,
   Trophy,
   Store,
+  LayoutDashboard,
+  Package,
+  Plus,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -230,6 +233,53 @@ export default function ProfilePage() {
         </section>
       )}
 
+      {/* Merchant store management card */}
+      {user!.seller_type === "store" && user!.store_id && (
+        <section className="px-4 pb-5">
+          <div className="bg-gradient-to-l from-brand-green-light to-emerald-50 border border-brand-green/20 rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-brand-green/10 flex items-center justify-center">
+                <Store size={20} className="text-brand-green" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-dark">إدارة متجري</p>
+                <p className="text-xs text-gray-text">تحكم في منتجاتك ومتجرك</p>
+              </div>
+              <button
+                onClick={() => router.push("/store/dashboard")}
+                className="text-brand-green"
+                aria-label="لوحة التحكم"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => router.push("/store/dashboard")}
+                className="flex flex-col items-center gap-1.5 p-3 bg-white rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                <LayoutDashboard size={20} className="text-brand-green" />
+                <span className="text-[11px] font-semibold text-dark">لوحة التحكم</span>
+              </button>
+              <button
+                onClick={() => router.push("/store/dashboard/products")}
+                className="flex flex-col items-center gap-1.5 p-3 bg-white rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                <Package size={20} className="text-brand-green" />
+                <span className="text-[11px] font-semibold text-dark">المنتجات</span>
+              </button>
+              <button
+                onClick={() => router.push("/store/dashboard/products/quick-add")}
+                className="flex flex-col items-center gap-1.5 p-3 bg-brand-green rounded-xl hover:bg-brand-green-dark transition-colors"
+              >
+                <Plus size={20} className="text-white" />
+                <span className="text-[11px] font-bold text-white">أضف منتج</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Verification section */}
       <section className="px-4 pb-5">
         <VerificationSection userId={user!.id} />
@@ -243,22 +293,9 @@ export default function ProfilePage() {
       {/* InstaPay commission support banner */}
       <InstaPayBanner />
 
-      {/* Bottom upgrade banner (individual sellers) */}
-      {(!user!.seller_type || user!.seller_type === "individual") && (
-        <section className="px-4 pb-5">
-          <UpgradeToStoreBanner variant="profile-bottom" />
-        </section>
-      )}
-
       {/* Menu sections */}
       <section className="px-4 pb-6 space-y-2">
-        {user!.seller_type === "store" ? (
-          <ProfileMenuItem
-            icon={<Store size={20} />}
-            label="متجري"
-            onClick={() => router.push("/store/dashboard")}
-          />
-        ) : (
+        {user!.seller_type !== "store" && (
           <ProfileMenuItem
             icon={<Store size={20} />}
             label="افتح محلك"
