@@ -38,6 +38,7 @@ export type SendOtpResult = {
   channel?: "whatsapp" | "sms" | "firebase" | "dev";
   whatsapp_link?: string | null;
   dev_code?: string; // OTP code shown in UI when no real delivery channel is configured
+  retry_after?: number; // Seconds until rate limit resets (when 429)
 };
 
 // ── Session persistence (localStorage) ──────────────────────────────
@@ -76,7 +77,10 @@ export async function sendOTP(phone: string): Promise<SendOtpResult> {
     const data = await res.json();
 
     if (!res.ok) {
-      return { error: data.error || "حصلت مشكلة في إرسال الكود. جرب تاني" };
+      return {
+        error: data.error || "حصلت مشكلة في إرسال الكود. جرب تاني",
+        retry_after: data.retry_after,
+      };
     }
 
     return {

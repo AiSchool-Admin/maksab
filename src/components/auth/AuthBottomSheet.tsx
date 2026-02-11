@@ -94,6 +94,10 @@ export default function AuthBottomSheet({
     if (otpResult.error) {
       setIsSubmitting(false);
       setError(otpResult.error);
+      // If rate limited, set a longer resend timer
+      if (otpResult.retry_after) {
+        setResendTimer(otpResult.retry_after);
+      }
       return;
     }
 
@@ -271,6 +275,10 @@ export default function AuthBottomSheet({
     if (resendResult.error) {
       setIsSubmitting(false);
       setError(resendResult.error);
+      // If rate limited, set the timer from the server response
+      if (resendResult.retry_after) {
+        setResendTimer(resendResult.retry_after);
+      }
       return;
     }
 
