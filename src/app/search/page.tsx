@@ -265,23 +265,16 @@ function SearchPageInner() {
       setShowInterpretation(parsed.confidence > 0.5);
       saveRecentSearch(q);
 
-      // Apply AI-extracted filters
-      const newFilters: ActiveFilters = { ...filters };
-      if (parsed.primaryCategory && !filters.category) {
-        newFilters.category = parsed.primaryCategory;
-      }
-      if (parsed.governorate && !filters.governorate) {
-        newFilters.governorate = parsed.governorate;
-      }
-      if (parsed.saleType) {
-        newFilters.saleType = parsed.saleType;
-      }
-      if (parsed.priceMin != null || parsed.priceMax != null) {
-        if (parsed.priceMin != null) newFilters.priceMin = parsed.priceMin;
-        if (parsed.priceMax != null) newFilters.priceMax = parsed.priceMax;
-      }
+      // Start with FRESH filters from AI parsing — don't accumulate old ones
+      const newFilters: ActiveFilters = {};
+      if (parsed.primaryCategory) newFilters.category = parsed.primaryCategory;
+      if (parsed.governorate) newFilters.governorate = parsed.governorate;
+      if (parsed.saleType) newFilters.saleType = parsed.saleType;
+      if (parsed.priceMin != null) newFilters.priceMin = parsed.priceMin;
+      if (parsed.priceMax != null) newFilters.priceMax = parsed.priceMax;
 
       setFilters(newFilters);
+      setCategoryFilters({}); // Reset category-specific filters for new search
 
       // Generate refinements
       setRefinements(generateRefinements(parsed));
@@ -292,7 +285,7 @@ function SearchPageInner() {
       if (newFilters.category) params.set("category", newFilters.category);
       router.replace(`/search?${params.toString()}`, { scroll: false });
     },
-    [filters, router],
+    [router],
   );
 
   /* ── Handle saving a wish ("دوّر لي") ─────────────────────────────── */
@@ -387,12 +380,24 @@ function SearchPageInner() {
   );
 
   /* ── Auto-execute search when filters/sort change ──────────────────── */
+  const isInitialMount = useRef(true);
   useEffect(() => {
+    // Skip the very first render — the initial search is handled by the
+    // mount effect below (which also sets filters via handleAISearch)
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      // Only execute immediately if there's no initialQuery
+      // (otherwise handleAISearch below will trigger this effect)
+      if (!initialQuery) {
+        executeSearch(true);
+      }
+      return;
+    }
     executeSearch(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, sortBy, categoryFilters]);
 
-  /* ── Initial search on mount (if query or category from URL) ───────── */
+  /* ── Initial search on mount (if query from URL) ────────────────────── */
   useEffect(() => {
     if (initialQuery) {
       const parsed = aiParseQuery(initialQuery);

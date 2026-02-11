@@ -129,9 +129,15 @@ async function fallbackSearch(
     .eq("status", "active");
 
   if (body.query) {
-    q = q.or(
-      `title.ilike.%${body.query}%,description.ilike.%${body.query}%`
-    );
+    // Sanitize query for PostgREST .or() filter — escape special chars
+    const sanitized = String(body.query)
+      .replace(/[%_\\]/g, "\\$&")   // escape LIKE wildcards
+      .replace(/[(),."']/g, "");     // remove PostgREST control chars
+    if (sanitized.trim()) {
+      q = q.or(
+        `title.ilike.%${sanitized}%,description.ilike.%${sanitized}%`
+      );
+    }
   }
   if (body.category) q = q.eq("category_id", body.category);
   if (body.subcategory) q = q.eq("subcategory_id", body.subcategory);

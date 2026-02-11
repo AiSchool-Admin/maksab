@@ -63,9 +63,15 @@ export async function searchAds(
       .eq("status", "active");
 
     if (filters.query) {
-      query = query.or(
-        `title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`
-      );
+      // Sanitize for PostgREST .or() filter
+      const sanitized = filters.query
+        .replace(/[%_\\]/g, "\\$&")
+        .replace(/[(),."']/g, "");
+      if (sanitized.trim()) {
+        query = query.or(
+          `title.ilike.%${sanitized}%,description.ilike.%${sanitized}%`
+        );
+      }
     }
     if (filters.category) {
       query = query.eq("category_id", filters.category);
@@ -122,23 +128,34 @@ export async function searchAds(
 
 /**
  * Get similar/related ads for the "شبيه اللي بتدور عليه" section.
+ * Falls back to all categories if the filtered category returns nothing.
  */
 export async function getSimilarSearchAds(
   filters: SearchFilters,
 ): Promise<AdSummary[]> {
   try {
-    let query = supabase
+    // First try with category filter
+    if (filters.category) {
+      const { data, error } = await supabase
+        .from("ads" as never)
+        .select("*")
+        .eq("status", "active")
+        .eq("category_id", filters.category)
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (!error && data && (data as unknown[]).length > 0) {
+        return (data as Record<string, unknown>[]).map(rowToAdSummary);
+      }
+    }
+
+    // Fallback: fetch from all categories
+    const { data, error } = await supabase
       .from("ads" as never)
       .select("*")
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(6);
-
-    if (filters.category) {
-      query = query.eq("category_id", filters.category);
-    }
-
-    const { data, error } = await query;
 
     if (error || !data || (data as unknown[]).length === 0) {
       return [];
