@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Eye,
   X,
+  Zap,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { getStoreByUserId, getStoreProductsForDashboard } from "@/lib/stores/store-service";
@@ -174,13 +175,21 @@ export default function DashboardProductsPage() {
           </button>
           <h1 className="text-base font-bold text-dark">المنتجات</h1>
         </div>
-        <Link
-          href="/ad/create"
-          className="flex items-center gap-1 bg-brand-green text-white text-xs font-bold px-3 py-2 rounded-xl"
-        >
-          <Plus size={14} />
-          إضافة منتج
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/store/dashboard/products/quick-add"
+            className="flex items-center gap-1 bg-brand-green text-white text-xs font-bold px-3 py-2 rounded-xl"
+          >
+            <Zap size={14} />
+            إضافة سريعة
+          </Link>
+          <Link
+            href="/ad/create"
+            className="flex items-center gap-1 bg-white text-brand-green text-xs font-bold px-2.5 py-2 rounded-xl border border-brand-green"
+          >
+            <Plus size={14} />
+          </Link>
+        </div>
       </header>
 
       {/* Status filter tabs */}
