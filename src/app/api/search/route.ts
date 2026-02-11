@@ -126,7 +126,7 @@ async function fallbackSearch(
   let q = supabase
     .from("ads" as never)
     .select("*", { count: "exact" })
-    .neq("status", "deleted");
+    .eq("status", "active");
 
   if (body.query) {
     q = q.or(

@@ -60,7 +60,7 @@ export async function searchAds(
     let query = supabase
       .from("ads" as never)
       .select("*", { count: "exact" })
-      .neq("status", "deleted");
+      .eq("status", "active");
 
     if (filters.query) {
       query = query.or(

@@ -605,51 +605,63 @@ function SearchPageInner() {
         )}
 
         {/* ── Smart Empty State ── */}
-        {!isLoading && hasSearched && results.length === 0 && (
-          <div className="py-8 text-center">
-            <SearchX size={48} className="text-gray-text mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-dark mb-2">مفيش نتائج</h3>
-            <p className="text-sm text-gray-text mb-4">
-              {query
-                ? `مفيش إعلانات تطابق "${query}" دلوقتي`
-                : "جرّب تغيير الفلاتر أو البحث بكلمات مختلفة"}
-            </p>
-
-            {/* AI Suggestions for empty state */}
-            {emptySuggestions.length > 0 && (
-              <div className="space-y-2 max-w-sm mx-auto text-start">
-                <p className="text-xs font-bold text-gray-text text-center mb-3">
-                  💡 جرّب واحدة من دول:
+        {!isLoading && hasSearched && results.length === 0 && imageSearchResults.length === 0 && (
+          <>
+            {/* Full empty state only when no similar ads either */}
+            {similarAds.length === 0 ? (
+              <div className="py-8 text-center">
+                <SearchX size={48} className="text-gray-text mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-dark mb-2">مفيش نتائج</h3>
+                <p className="text-sm text-gray-text mb-4">
+                  {query
+                    ? `مفيش إعلانات تطابق "${query}" دلوقتي`
+                    : "جرّب تغيير الفلاتر أو البحث بكلمات مختلفة"}
                 </p>
-                {emptySuggestions.map((sug, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => {
-                      if (sug.query === "__SAVE_WISH__") {
-                        if (parsedQuery) handleSaveWish(query, parsedQuery);
-                      } else {
-                        const parsed = aiParseQuery(sug.query);
-                        handleAISearch(sug.query, parsed);
-                      }
-                    }}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-start ${
-                      sug.query === "__SAVE_WISH__"
-                        ? "bg-blue-50 border-blue-200 hover:bg-blue-100"
-                        : "bg-white border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
-                    <span className="text-lg">{sug.icon}</span>
-                    <span className={`text-sm ${
-                      sug.query === "__SAVE_WISH__" ? "text-blue-700 font-bold" : "text-dark"
-                    }`}>
-                      {sug.text}
-                    </span>
-                  </button>
-                ))}
+
+                {/* AI Suggestions for empty state */}
+                {emptySuggestions.length > 0 && (
+                  <div className="space-y-2 max-w-sm mx-auto text-start">
+                    <p className="text-xs font-bold text-gray-text text-center mb-3">
+                      💡 جرّب واحدة من دول:
+                    </p>
+                    {emptySuggestions.map((sug, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          if (sug.query === "__SAVE_WISH__") {
+                            if (parsedQuery) handleSaveWish(query, parsedQuery);
+                          } else {
+                            const parsed = aiParseQuery(sug.query);
+                            handleAISearch(sug.query, parsed);
+                          }
+                        }}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-start ${
+                          sug.query === "__SAVE_WISH__"
+                            ? "bg-blue-50 border-blue-200 hover:bg-blue-100"
+                            : "bg-white border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="text-lg">{sug.icon}</span>
+                        <span className={`text-sm ${
+                          sug.query === "__SAVE_WISH__" ? "text-blue-700 font-bold" : "text-dark"
+                        }`}>
+                          {sug.text}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+            ) : (
+              /* Softer message when similar ads exist */
+              <p className="text-xs text-gray-text text-center py-2">
+                {query
+                  ? `مفيش نتيجة مطابقة لـ "${query}" — بس لقينالك إعلانات شبيهة 👇`
+                  : "مفيش نتائج مطابقة — بس ممكن تلاقي حاجة شبيهة 👇"}
+              </p>
             )}
-          </div>
+          </>
         )}
 
         {/* Similar ads section — "شبيه اللي بتدور عليه" */}
