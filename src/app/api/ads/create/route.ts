@@ -109,6 +109,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // If store_id provided, verify ownership
+    let storeId: string | null = null;
+    if (ad_data.store_id) {
+      const { data: storeCheck } = await supabase
+        .from("stores")
+        .select("id")
+        .eq("id", ad_data.store_id)
+        .eq("user_id", user_id)
+        .maybeSingle();
+
+      if (storeCheck) {
+        storeId = ad_data.store_id;
+      }
+    }
+
     // Build the ad record
     const adRecord: Record<string, unknown> = {
       user_id,
@@ -135,6 +150,8 @@ export async function POST(req: NextRequest) {
       exchange_description: ad_data.exchange_description ?? null,
       exchange_accepts_price_diff: ad_data.exchange_accepts_price_diff ?? false,
       exchange_price_diff: ad_data.exchange_price_diff ?? null,
+      // Store (merchant)
+      store_id: storeId,
     };
 
     // Insert ad

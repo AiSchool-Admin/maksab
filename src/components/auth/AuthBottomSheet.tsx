@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Phone, RefreshCw, Smartphone, Store, User as UserIcon } from "lucide-react";
+import { Phone, RefreshCw, Smartphone, Store, User as UserIcon, UserCircle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import {
@@ -28,6 +28,7 @@ export default function AuthBottomSheet({
 }: AuthBottomSheetProps) {
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("individual");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export default function AuthBottomSheet({
     if (isOpen) {
       setStep("phone");
       setPhone("");
+      setDisplayName("");
       setAccountType("individual");
       setOtp(["", "", "", "", "", ""]);
       setError(null);
@@ -165,7 +167,7 @@ export default function AuthBottomSheet({
 
       setIsSubmitting(true);
 
-      const response = await verifyOTP(phone, code, otpToken);
+      const response = await verifyOTP(phone, code, otpToken, displayName.trim() || undefined);
 
       setIsSubmitting(false);
 
@@ -188,7 +190,7 @@ export default function AuthBottomSheet({
 
       onSuccess(response.user, accountType);
     },
-    [otp, phone, otpToken, onSuccess, accountType],
+    [otp, phone, otpToken, displayName, onSuccess, accountType],
   );
 
   // ── Resend OTP ──────────────────────────────────────────────────
@@ -262,6 +264,24 @@ export default function AuthBottomSheet({
                 autoComplete="tel"
               />
             </div>
+          </div>
+
+          {/* Display name (optional) */}
+          <div className="w-full">
+            <label className="block text-sm font-semibold text-dark mb-1.5">
+              <UserCircle size={14} className="inline ml-1 text-brand-green" />
+              الاسم
+              <span className="text-gray-text font-normal text-xs mr-1">(اختياري)</span>
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="اسمك اللي هيظهر للناس"
+              maxLength={50}
+              className="w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-sm placeholder:text-gray-text"
+              autoComplete="name"
+            />
           </div>
 
           {/* Account type selection */}

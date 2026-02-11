@@ -355,6 +355,11 @@ export default function CreateAdPage() {
         image_files: imageFiles,
       };
 
+      // If user is a merchant with a store, attach store_id to the ad
+      if (authedUser.store_id) {
+        (adData as Record<string, unknown>).store_id = authedUser.store_id;
+      }
+
       // Call server-side API (uses service role key — bypasses RLS)
       const res = await fetch("/api/ads/create", {
         method: "POST",
