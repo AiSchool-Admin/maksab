@@ -9,9 +9,11 @@ import { useAuth, setPendingMerchant } from "@/components/auth/AuthProvider";
 import {
   sendOTP,
   verifyOTP,
+  verifyOTPViaFirebase,
   type UserProfile,
 } from "@/lib/supabase/auth";
 import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
+import { isFirebaseConfigured } from "@/lib/firebase/config";
 
 type Step = "phone" | "otp";
 type AccountType = "individual" | "merchant";
@@ -117,11 +119,34 @@ function LoginPageContent() {
 
     setIsSubmitting(true);
     const otpResult = await sendOTP(phone);
-    setIsSubmitting(false);
 
     if (otpResult.error) {
+      setIsSubmitting(false);
       setError(otpResult.error);
       return;
+    }
+
+    // Firebase channel: send OTP via Firebase client SDK
+    if (otpResult.channel === "firebase" && isFirebaseConfigured()) {
+      try {
+        const { setupRecaptcha, sendFirebaseOTP } = await import(
+          "@/lib/firebase/phone-auth"
+        );
+        setupRecaptcha("recaptcha-container");
+        const firebaseResult = await sendFirebaseOTP(phone);
+        setIsSubmitting(false);
+
+        if (!firebaseResult.success) {
+          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
+          return;
+        }
+      } catch {
+        setIsSubmitting(false);
+        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
+        return;
+      }
+    } else {
+      setIsSubmitting(false);
     }
 
     setOtpToken(otpResult.token || "");
@@ -131,7 +156,10 @@ function LoginPageContent() {
     setStep("otp");
     setResendTimer(60);
     setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
-    tryWebOTP();
+
+    if (otpResult.channel !== "firebase") {
+      tryWebOTP();
+    }
   };
 
   // ── WebOTP: Auto-read SMS verification code ───────────────────────
@@ -207,6 +235,43 @@ function LoginPageContent() {
 
       setIsSubmitting(true);
 
+      // Firebase channel: verify via Firebase, then exchange for our session
+      if (otpChannel === "firebase") {
+        try {
+          const { verifyFirebaseOTP } = await import("@/lib/firebase/phone-auth");
+          const fbResult = await verifyFirebaseOTP(code);
+
+          if (!fbResult.success || !fbResult.idToken) {
+            setIsSubmitting(false);
+            setError(fbResult.error || "الكود غلط. جرب تاني");
+            setOtp(["", "", "", "", "", ""]);
+            otpInputsRef.current[0]?.focus();
+            return;
+          }
+
+          // Exchange Firebase token for our session
+          const response = await verifyOTPViaFirebase(fbResult.idToken);
+          setIsSubmitting(false);
+
+          if (response.error || !response.user) {
+            setError(response.error || "حصلت مشكلة. جرب تاني");
+            setOtp(["", "", "", "", "", ""]);
+            otpInputsRef.current[0]?.focus();
+            return;
+          }
+
+          handleSuccess(response.user);
+          return;
+        } catch {
+          setIsSubmitting(false);
+          setError("حصلت مشكلة في التحقق. جرب تاني");
+          setOtp(["", "", "", "", "", ""]);
+          otpInputsRef.current[0]?.focus();
+          return;
+        }
+      }
+
+      // Standard HMAC verification
       const response = await verifyOTP(phone, code, otpToken);
 
       setIsSubmitting(false);
@@ -220,8 +285,17 @@ function LoginPageContent() {
 
       handleSuccess(response.user);
     },
-    [otp, phone, otpToken, accountType],
+    [otp, phone, otpToken, otpChannel, accountType],
   );
+
+  // ── Cleanup Firebase reCAPTCHA on unmount ────────────────────────
+  useEffect(() => {
+    return () => {
+      import("@/lib/firebase/phone-auth").then(({ cleanupRecaptcha }) => {
+        cleanupRecaptcha();
+      }).catch(() => {});
+    };
+  }, []);
 
   // ── Resend OTP ────────────────────────────────────────────────────
   const handleResend = async () => {
@@ -231,18 +305,45 @@ function LoginPageContent() {
 
     const resendResult = await sendOTP(phone);
 
-    setIsSubmitting(false);
     if (resendResult.error) {
+      setIsSubmitting(false);
       setError(resendResult.error);
       return;
     }
 
+    // Firebase channel: re-send via Firebase
+    if (resendResult.channel === "firebase" && isFirebaseConfigured()) {
+      try {
+        const { setupRecaptcha, sendFirebaseOTP } = await import(
+          "@/lib/firebase/phone-auth"
+        );
+        setupRecaptcha("recaptcha-container");
+        const firebaseResult = await sendFirebaseOTP(phone);
+        setIsSubmitting(false);
+
+        if (!firebaseResult.success) {
+          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
+          return;
+        }
+      } catch {
+        setIsSubmitting(false);
+        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
+        return;
+      }
+    } else {
+      setIsSubmitting(false);
+    }
+
     setOtpToken(resendResult.token || "");
+    setOtpChannel(resendResult.channel || null);
     setDevCode(resendResult.dev_code || null);
     setResendTimer(60);
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
-    tryWebOTP();
+
+    if (resendResult.channel !== "firebase") {
+      tryWebOTP();
+    }
   };
 
   // ── Format phone for display ──────────────────────────────────────
@@ -414,7 +515,7 @@ function LoginPageContent() {
               </div>
               <h2 className="text-lg font-bold text-dark mb-2">أدخل كود التأكيد</h2>
               <p className="text-sm text-gray-text">
-                {otpChannel === "whatsapp" ? "بعتنالك كود على واتساب" : otpChannel === "dev" ? "كود التأكيد" : "بعتنالك كود على"}{" "}
+                {otpChannel === "whatsapp" ? "بعتنالك كود على واتساب" : otpChannel === "firebase" ? "بعتنالك كود SMS على" : otpChannel === "dev" ? "كود التأكيد" : "بعتنالك كود على"}{" "}
                 {otpChannel !== "dev" && (
                   <span className="font-bold text-dark" dir="ltr">
                     {formatPhone(phone)}
@@ -501,6 +602,9 @@ function LoginPageContent() {
           </div>
         )}
       </div>
+
+      {/* Invisible reCAPTCHA container for Firebase Phone Auth */}
+      <div id="recaptcha-container" />
     </main>
   );
 }

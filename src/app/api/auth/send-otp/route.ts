@@ -76,7 +76,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Channel 2: SMS (if configured)
+    // Channel 2: Firebase Phone Auth (10,000 free/month)
+    const firebaseConfigured = !!(
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    );
+    if (firebaseConfigured) {
+      // Firebase sends SMS client-side — server just needs to tell client to use Firebase
+      return NextResponse.json({
+        success: true,
+        token, // Still provide HMAC token as fallback identifier
+        channel: "firebase",
+        expires_at: expiresAt,
+      });
+    }
+
+    // Channel 3: SMS (if configured)
     const smsEnabled = process.env.NEXT_PUBLIC_PHONE_AUTH_ENABLED === "true";
     if (smsEnabled) {
       return NextResponse.json({

@@ -6,10 +6,10 @@ import { supabase } from "./client";
  * This system uses our own API routes (/api/auth/send-otp, /api/auth/verify-otp)
  * instead of Supabase's built-in phone auth (which requires paid Twilio SMS).
  *
- * OTP delivery channels (configured via env vars):
- * - WhatsApp Cloud API: First 1000/month free
- * - SMS via Twilio: Paid fallback
- * - Manual: User receives code via configured channel
+ * OTP delivery channels (priority order):
+ * 1. WhatsApp Cloud API: First 1000/month free
+ * 2. Firebase Phone Auth: 10,000 free SMS/month
+ * 3. Dev mode: Code shown in UI (development only)
  */
 
 const SESSION_KEY = "maksab_user_session";
@@ -35,7 +35,7 @@ export type UserProfile = {
 export type SendOtpResult = {
   error: string | null;
   token?: string; // HMAC-signed token to send back with verify
-  channel?: "whatsapp" | "sms" | "dev";
+  channel?: "whatsapp" | "sms" | "firebase" | "dev";
   whatsapp_link?: string | null;
   dev_code?: string; // OTP code shown in UI when no real delivery channel is configured
 };
@@ -130,6 +130,54 @@ export async function verifyOTP(
       } catch {
         // Session creation failed — user profile still works via localStorage
         // Ad creation uses server-side API with service role key as fallback
+      }
+    }
+
+    return { user: userProfile, error: null };
+  } catch {
+    return { user: null, error: "حصلت مشكلة في الاتصال. تأكد من الإنترنت وجرب تاني" };
+  }
+}
+
+// ── Verify OTP via Firebase (ID Token → Server) ─────────────────────
+export async function verifyOTPViaFirebase(
+  firebaseIdToken: string,
+  displayName?: string,
+): Promise<{ user: UserProfile | null; error: string | null }> {
+  try {
+    const res = await fetch("/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firebase_id_token: firebaseIdToken,
+        display_name: displayName,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return { user: null, error: data.error || "التحقق فشل. جرب تاني" };
+    }
+
+    if (!data.user) {
+      return { user: null, error: "حصلت مشكلة. جرب تاني" };
+    }
+
+    const userProfile = data.user as UserProfile;
+
+    // Save session to localStorage for persistence
+    saveSession(userProfile);
+
+    // Try to establish a Supabase auth session (for RLS queries)
+    if (data.magic_link_token) {
+      try {
+        await supabase.auth.verifyOtp({
+          token_hash: data.magic_link_token,
+          type: "magiclink",
+        });
+      } catch {
+        // Session creation failed — user profile still works via localStorage
       }
     }
 
