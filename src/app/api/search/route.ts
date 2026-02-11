@@ -146,6 +146,16 @@ async function fallbackSearch(
   if (body.priceMax != null) q = q.lte("price", body.priceMax);
   if (body.governorate) q = q.eq("governorate", body.governorate);
 
+  // Apply category-specific JSONB filters (brand, karat, storage, etc.)
+  if (body.categoryFilters && typeof body.categoryFilters === "object") {
+    const cf = body.categoryFilters as Record<string, string>;
+    for (const [key, value] of Object.entries(cf)) {
+      if (key && value && typeof value === "string" && /^[a-z_]+$/i.test(key)) {
+        q = q.eq(`category_fields->>${key}`, value);
+      }
+    }
+  }
+
   switch (body.sortBy) {
     case "price_asc":
       q = q.order("price", { ascending: true, nullsFirst: false });

@@ -92,6 +92,15 @@ export async function searchAds(
       query = query.eq("governorate", filters.governorate);
     }
 
+    // Apply category-specific JSONB filters (brand, karat, storage, etc.)
+    if (filters.categoryFilters) {
+      for (const [key, value] of Object.entries(filters.categoryFilters)) {
+        if (key && value && /^[a-z_]+$/i.test(key)) {
+          query = query.eq(`category_fields->>${key}`, value);
+        }
+      }
+    }
+
     switch (filters.sortBy) {
       case "price_asc":
         query = query.order("price", { ascending: true, nullsFirst: false });

@@ -272,9 +272,31 @@ function SearchPageInner() {
       if (parsed.saleType) newFilters.saleType = parsed.saleType;
       if (parsed.priceMin != null) newFilters.priceMin = parsed.priceMin;
       if (parsed.priceMax != null) newFilters.priceMax = parsed.priceMax;
+      // Map condition hint to condition filter
+      if (parsed.conditionHint === "new") newFilters.condition = "new";
+      else if (parsed.conditionHint !== "any") newFilters.condition = "used";
 
       setFilters(newFilters);
-      setCategoryFilters({}); // Reset category-specific filters for new search
+
+      // Map AI-extracted fields (brand, karat, storage, etc.) to category filters
+      const newCategoryFilters: Record<string, string> = {};
+      if (parsed.extractedFields && parsed.primaryCategory) {
+        const catConfig = getCategoryById(parsed.primaryCategory);
+        if (catConfig) {
+          // Only map to select fields that exist in the category config
+          const selectFieldIds = new Set(
+            catConfig.fields
+              .filter((f) => f.type === "select" && f.options && f.options.length > 0)
+              .map((f) => f.id),
+          );
+          for (const [key, value] of Object.entries(parsed.extractedFields)) {
+            if (value && selectFieldIds.has(key)) {
+              newCategoryFilters[key] = value;
+            }
+          }
+        }
+      }
+      setCategoryFilters(newCategoryFilters);
 
       // Generate refinements
       setRefinements(generateRefinements(parsed));

@@ -125,11 +125,16 @@ export default function AISearchBar({
   );
 
   const handleSuggestionClick = useCallback(
-    (text: string) => {
+    (text: string, suggestionCategory?: string | null) => {
       setQuery(text);
       setIsFocused(false);
       setShowImageSearch(false);
       const parsed = aiParseQuery(text);
+      // If the server suggestion has a category and the AI parser didn't detect one, use it
+      if (suggestionCategory && !parsed.primaryCategory) {
+        parsed.primaryCategory = suggestionCategory;
+        parsed.categories = [...new Set([...parsed.categories, suggestionCategory])];
+      }
       onSearch(text, parsed);
     },
     [onSearch],
@@ -379,7 +384,7 @@ export default function AISearchBar({
                 <button
                   key={`sug-${i}`}
                   type="button"
-                  onClick={() => handleSuggestionClick(s.text)}
+                  onClick={() => handleSuggestionClick(s.text, s.category)}
                   className="w-full flex items-center gap-3 px-4 py-2 text-sm text-dark hover:bg-gray-light transition-colors text-start"
                 >
                   <Search size={14} className="text-brand-green flex-shrink-0" />
