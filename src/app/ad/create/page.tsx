@@ -271,24 +271,31 @@ export default function CreateAdPage() {
     setIsPublishing(true);
 
     try {
-      // Convert images to base64 for server upload
-      const imageFiles: string[] = [];
-      for (const img of images) {
+      // Upload images via /api/upload (FormData, not base64 in JSON)
+      const uploadedImageUrls: string[] = [];
+      for (let i = 0; i < images.length; i++) {
         try {
-          const base64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result as string;
-              // Remove data URL prefix (e.g. "data:image/jpeg;base64,")
-              const base64Data = result.split(",")[1] || result;
-              resolve(base64Data);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(img.file);
+          const formData = new FormData();
+          formData.append("file", images[i].file);
+          formData.append("bucket", "ad-images");
+          formData.append(
+            "path",
+            `ads/${authedUser.id}/${Date.now()}_${i}.jpg`,
+          );
+
+          const uploadRes = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
           });
-          imageFiles.push(base64);
+
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            if (uploadData.url) {
+              uploadedImageUrls.push(uploadData.url);
+            }
+          }
         } catch {
-          // Skip failed conversions
+          // Skip failed image upload
         }
       }
 
@@ -351,8 +358,7 @@ export default function CreateAdPage() {
           draft.saleType === "exchange" && draft.priceData.exchangePriceDiff
             ? Number(draft.priceData.exchangePriceDiff)
             : null,
-        images: [] as string[],
-        image_files: imageFiles,
+        images: uploadedImageUrls,
       };
 
       // If user is a merchant with a store, attach store_id to the ad
