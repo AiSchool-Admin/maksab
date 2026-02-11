@@ -50,7 +50,7 @@ export default function BottomNav({ unreadMessages = 0, isMerchant = false }: Bo
           // Prominent add button — elevated pill
           if (tab.isAdd) {
             const addBtnClass = isMerchant
-              ? "relative -top-4 flex items-center gap-1.5 bg-brand-orange text-white px-5 py-2.5 rounded-full shadow-lg shadow-brand-orange/30 hover:bg-brand-orange-dark active:scale-95 transition-all"
+              ? "relative -top-4 flex items-center gap-1.5 bg-orange-500 text-white px-5 py-2.5 rounded-full shadow-lg shadow-orange-500/30 hover:bg-orange-600 active:scale-95 transition-all"
               : "relative -top-4 flex items-center gap-1.5 bg-brand-green text-white px-5 py-2.5 rounded-full shadow-lg shadow-brand-green/30 hover:bg-brand-green-dark active:scale-95 transition-all";
             return (
               <Link
