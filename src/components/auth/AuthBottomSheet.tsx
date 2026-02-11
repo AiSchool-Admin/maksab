@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Phone, User, RefreshCw, Smartphone } from "lucide-react";
+import { Phone, RefreshCw, Smartphone, Store, User as UserIcon } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import {
@@ -11,10 +11,12 @@ import {
 } from "@/lib/supabase/auth";
 import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
 
+export type AccountType = "individual" | "merchant";
+
 interface AuthBottomSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: UserProfile) => void;
+  onSuccess: (user: UserProfile, accountType: AccountType) => void;
 }
 
 type Step = "phone" | "otp";
@@ -26,7 +28,7 @@ export default function AuthBottomSheet({
 }: AuthBottomSheetProps) {
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [accountType, setAccountType] = useState<AccountType>("individual");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,7 +45,7 @@ export default function AuthBottomSheet({
     if (isOpen) {
       setStep("phone");
       setPhone("");
-      setDisplayName("");
+      setAccountType("individual");
       setOtp(["", "", "", "", "", ""]);
       setError(null);
       setIsSubmitting(false);
@@ -51,7 +53,6 @@ export default function AuthBottomSheet({
       setOtpChannel(null);
       setOtpToken("");
       setDevCode(null);
-      // Focus phone input when sheet opens
       setTimeout(() => phoneInputRef.current?.focus(), 400);
     }
   }, [isOpen]);
@@ -164,7 +165,7 @@ export default function AuthBottomSheet({
 
       setIsSubmitting(true);
 
-      const response = await verifyOTP(phone, code, otpToken, displayName.trim() || undefined);
+      const response = await verifyOTP(phone, code, otpToken);
 
       setIsSubmitting(false);
 
@@ -185,9 +186,9 @@ export default function AuthBottomSheet({
         }
       });
 
-      onSuccess(response.user);
+      onSuccess(response.user, accountType);
     },
-    [otp, phone, displayName, otpToken, onSuccess],
+    [otp, phone, otpToken, onSuccess, accountType],
   );
 
   // ── Resend OTP ──────────────────────────────────────────────────
@@ -225,7 +226,7 @@ export default function AuthBottomSheet({
       onClose={onClose}
       title={step === "otp" ? "كود التأكيد" : "سجّل دخولك"}
     >
-      {/* ── Step 1: Phone + Name ──────────────────────────────────── */}
+      {/* ── Step 1: Phone + Account Type ──────────────────────────── */}
       {step === "phone" && (
         <div className="space-y-4">
           <p className="text-sm text-gray-text">
@@ -263,26 +264,48 @@ export default function AuthBottomSheet({
             </div>
           </div>
 
-          {/* Display name (optional) */}
+          {/* Account type selection */}
           <div className="w-full">
-            <label className="block text-sm font-semibold text-dark mb-1.5">
-              <User size={14} className="inline ml-1 text-brand-green" />
-              اسمك
-              <span className="text-xs text-gray-text font-normal mr-1">(اختياري)</span>
+            <label className="block text-sm font-semibold text-dark mb-2">
+              أنا...
             </label>
-            <input
-              type="text"
-              dir="rtl"
-              maxLength={50}
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && phone.length === 11) handlePhoneSubmit();
-              }}
-              placeholder="اسمك اللي هيظهر للناس"
-              className="w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark placeholder:text-gray-text"
-              autoComplete="name"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAccountType("individual")}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+                  accountType === "individual"
+                    ? "border-brand-green bg-brand-green-light"
+                    : "border-gray-light bg-white hover:border-gray-300"
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  accountType === "individual" ? "bg-brand-green text-white" : "bg-gray-light text-gray-text"
+                }`}>
+                  <UserIcon size={20} />
+                </div>
+                <span className="text-sm font-bold text-dark">فرد</span>
+                <span className="text-[10px] text-gray-text leading-tight">بيع وشراء شخصي</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAccountType("merchant")}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+                  accountType === "merchant"
+                    ? "border-brand-green bg-brand-green-light"
+                    : "border-gray-light bg-white hover:border-gray-300"
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  accountType === "merchant" ? "bg-brand-green text-white" : "bg-gray-light text-gray-text"
+                }`}>
+                  <Store size={20} />
+                </div>
+                <span className="text-sm font-bold text-dark">تاجر</span>
+                <span className="text-[10px] text-gray-text leading-tight">عندي محل / معرض / مكتب</span>
+              </button>
+            </div>
           </div>
 
           {error && (

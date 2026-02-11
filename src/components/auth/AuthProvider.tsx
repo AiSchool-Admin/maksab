@@ -9,6 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import {
   getCurrentUser,
   logout as logoutService,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/supabase/auth";
 import { supabase } from "@/lib/supabase/client";
 import { trackPresence, cleanupAllChannels } from "@/lib/chat/realtime";
-import AuthBottomSheet from "./AuthBottomSheet";
+import AuthBottomSheet, { type AccountType } from "./AuthBottomSheet";
 
 interface AuthContextValue {
   user: UserProfile | null;
@@ -41,6 +42,7 @@ export function useAuth(): AuthContextValue {
 }
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
@@ -100,13 +102,18 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const handleAuthSuccess = useCallback(
-    (loggedInUser: UserProfile) => {
+    (loggedInUser: UserProfile, accountType: AccountType) => {
       setUser(loggedInUser);
       setShowAuth(false);
       authResolve?.(loggedInUser);
       setAuthResolve(null);
+
+      // If merchant and doesn't already have a store, redirect to store creation
+      if (accountType === "merchant" && !loggedInUser.store_id) {
+        router.push("/store/create");
+      }
     },
-    [authResolve],
+    [authResolve, router],
   );
 
   const handleAuthClose = useCallback(() => {

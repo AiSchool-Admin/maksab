@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, RefreshCw, Phone, User, Smartphone, Home } from "lucide-react";
+import { ArrowLeft, RefreshCw, Phone, Smartphone, Home, Store, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -14,6 +14,7 @@ import {
 import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
 
 type Step = "phone" | "otp";
+type AccountType = "individual" | "merchant";
 
 export default function LoginPage() {
   return (
@@ -49,7 +50,7 @@ function LoginPageContent() {
 
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [accountType, setAccountType] = useState<AccountType>("individual");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,7 +87,13 @@ function LoginPageContent() {
 
   const handleSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);
-    router.replace(redirectTo);
+
+    // If merchant and doesn't have a store yet, redirect to store creation
+    if (accountType === "merchant" && !loggedInUser.store_id) {
+      router.replace("/store/create");
+    } else {
+      router.replace(redirectTo);
+    }
   };
 
   // ── Handle phone input changes (normalize autofill values) ─────────
@@ -199,7 +206,7 @@ function LoginPageContent() {
 
       setIsSubmitting(true);
 
-      const response = await verifyOTP(phone, code, otpToken, displayName.trim() || undefined);
+      const response = await verifyOTP(phone, code, otpToken);
 
       setIsSubmitting(false);
 
@@ -212,7 +219,7 @@ function LoginPageContent() {
 
       handleSuccess(response.user);
     },
-    [otp, phone, displayName, otpToken],
+    [otp, phone, otpToken, accountType],
   );
 
   // ── Resend OTP ────────────────────────────────────────────────────
@@ -268,7 +275,7 @@ function LoginPageContent() {
       </div>
 
       <div className="flex-1 px-5 pb-8">
-        {/* ── Step 1: Phone + Name ──────────────────────────────────── */}
+        {/* ── Step 1: Phone + Account Type ──────────────────────────── */}
         {step === "phone" && (
           <form
             className="space-y-5 pt-2"
@@ -289,7 +296,7 @@ function LoginPageContent() {
               </p>
             </div>
 
-            {/* Phone number input — autocomplete triggers browser autofill from SIM/Google account */}
+            {/* Phone number input */}
             <div className="w-full">
               <label htmlFor="login-phone" className="block text-sm font-semibold text-dark mb-1.5">
                 <Phone size={14} className="inline ml-1 text-brand-green" />
@@ -324,25 +331,48 @@ function LoginPageContent() {
               )}
             </div>
 
-            {/* Display name input (optional) */}
+            {/* Account type selection */}
             <div className="w-full">
-              <label htmlFor="login-name" className="block text-sm font-semibold text-dark mb-1.5">
-                <User size={14} className="inline ml-1 text-brand-green" />
-                اسمك
-                <span className="text-xs text-gray-text font-normal mr-1">(اختياري)</span>
+              <label className="block text-sm font-semibold text-dark mb-2">
+                أنا...
               </label>
-              <input
-                id="login-name"
-                name="name"
-                type="text"
-                dir="rtl"
-                maxLength={50}
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="اسمك اللي هيظهر للناس"
-                className="w-full px-4 py-3.5 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark placeholder:text-gray-text"
-                autoComplete="name"
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAccountType("individual")}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                    accountType === "individual"
+                      ? "border-brand-green bg-brand-green-light"
+                      : "border-gray-light bg-white hover:border-gray-300"
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    accountType === "individual" ? "bg-brand-green text-white" : "bg-gray-light text-gray-text"
+                  }`}>
+                    <UserIcon size={22} />
+                  </div>
+                  <span className="text-sm font-bold text-dark">فرد</span>
+                  <span className="text-[11px] text-gray-text leading-tight text-center">بيع وشراء شخصي</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAccountType("merchant")}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                    accountType === "merchant"
+                      ? "border-brand-green bg-brand-green-light"
+                      : "border-gray-light bg-white hover:border-gray-300"
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    accountType === "merchant" ? "bg-brand-green text-white" : "bg-gray-light text-gray-text"
+                  }`}>
+                    <Store size={22} />
+                  </div>
+                  <span className="text-sm font-bold text-dark">تاجر</span>
+                  <span className="text-[11px] text-gray-text leading-tight text-center">عندي محل / معرض / مكتب</span>
+                </button>
+              </div>
             </div>
 
             {error && (

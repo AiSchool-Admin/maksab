@@ -11,17 +11,25 @@ import {
   Upload,
   X,
   Sparkles,
+  Briefcase,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import Button from "@/components/ui/Button";
 import { categoriesConfig } from "@/lib/categories/categories-config";
+import {
+  businessTypesConfig,
+  type BusinessType,
+  type BusinessExtraField,
+  getBusinessTypeConfig,
+} from "@/lib/stores/business-types";
 import toast from "react-hot-toast";
 
 // ── Step definitions ──────────────────────────────────────────────
 const steps = [
-  { id: 1, title: "الأساسيات", icon: <Store size={18} /> },
-  { id: 2, title: "الهوية", icon: <ImageIcon size={18} /> },
-  { id: 3, title: "المظهر", icon: <Palette size={18} /> },
+  { id: 1, title: "نوع النشاط", icon: <Briefcase size={18} /> },
+  { id: 2, title: "الأساسيات", icon: <Store size={18} /> },
+  { id: 3, title: "الهوية", icon: <ImageIcon size={18} /> },
+  { id: 4, title: "المظهر", icon: <Palette size={18} /> },
 ];
 
 const themes = [
@@ -51,20 +59,27 @@ export default function CreateStorePage() {
     migrated: number;
   } | null>(null);
 
-  // Step 1: Basics (required)
+  // Step 1: Business Type (required)
+  const [businessType, setBusinessType] = useState<BusinessType | null>(null);
+
+  // Step 2: Basics (required)
   const [name, setName] = useState("");
   const [mainCategory, setMainCategory] = useState("");
   const [nameAvailable, setNameAvailable] = useState<boolean | null>(null);
   const [checkingName, setCheckingName] = useState(false);
+  // Business-type-specific extra fields
+  const [extraFieldValues, setExtraFieldValues] = useState<Record<string, string | boolean>>({});
 
-  // Step 2: Identity (optional)
+  // Step 3: Identity (optional)
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [description, setDescription] = useState("");
 
-  // Step 3: Appearance (optional with defaults)
+  // Step 4: Appearance (optional with defaults)
   const [theme, setTheme] = useState("classic");
   const [primaryColor, setPrimaryColor] = useState("#1B7A3D");
+
+  const selectedBusinessConfig = businessType ? getBusinessTypeConfig(businessType) : null;
 
   // ── Live name uniqueness check ────────────────────────────────
   useEffect(() => {
@@ -120,10 +135,25 @@ export default function CreateStorePage() {
     setLogoPreview(null);
   }, []);
 
+  // ── Extra field change handler ─────────────────────────────────
+  const handleExtraFieldChange = (fieldId: string, value: string | boolean) => {
+    setExtraFieldValues((prev) => ({ ...prev, [fieldId]: value }));
+  };
+
   // ── Step validation ───────────────────────────────────────────
   const canProceed = () => {
-    if (step === 1)
-      return name.trim().length >= 2 && mainCategory && nameAvailable !== false;
+    if (step === 1) return businessType !== null;
+    if (step === 2) {
+      const nameValid = name.trim().length >= 2 && nameAvailable !== false;
+      const categoryValid = !!mainCategory;
+      // Check required extra fields
+      const requiredFields = selectedBusinessConfig?.extraFields.filter((f) => f.isRequired) || [];
+      const allRequiredFilled = requiredFields.every((f) => {
+        const val = extraFieldValues[f.id];
+        return val !== undefined && val !== "" && val !== false;
+      });
+      return nameValid && categoryValid && allRequiredFilled;
+    }
     return true;
   };
 
@@ -162,6 +192,20 @@ export default function CreateStorePage() {
       // Upload logo if present
       const logoUrl = await uploadLogo(authedUser.id);
 
+      // Build business_data from extra fields
+      const businessData: Record<string, string | boolean> = {};
+      let workingHoursText: string | null = null;
+
+      for (const [key, value] of Object.entries(extraFieldValues)) {
+        if (value !== "" && value !== false) {
+          if (key === "working_hours_text") {
+            workingHoursText = value as string;
+          } else {
+            businessData[key] = value;
+          }
+        }
+      }
+
       const res = await fetch("/api/stores/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,9 +214,14 @@ export default function CreateStorePage() {
           name: name.trim(),
           description: description.trim() || null,
           main_category: mainCategory,
+          business_type: businessType,
           theme,
           primary_color: primaryColor,
           logo_url: logoUrl,
+          working_hours_text: workingHoursText,
+          business_data: Object.keys(businessData).length > 0 ? businessData : null,
+          location_gov: selectedBusinessConfig?.requiresAddress ? extraFieldValues.location_gov || null : null,
+          location_area: selectedBusinessConfig?.requiresAddress ? extraFieldValues.location_area || null : null,
         }),
       });
 
@@ -204,6 +253,8 @@ export default function CreateStorePage() {
     categoriesConfig.find((c) => c.id === mainCategory)?.name || "";
   const categoryIcon =
     categoriesConfig.find((c) => c.id === mainCategory)?.icon || "";
+  const businessTypeLabel = selectedBusinessConfig?.name || "";
+  const businessTypeIcon = selectedBusinessConfig?.icon || "";
 
   // ═══════════════════════════════════════════════════════════════
   // SUCCESS VIEW
@@ -286,6 +337,9 @@ export default function CreateStorePage() {
                 <p className="text-sm opacity-80 mt-1">{description}</p>
               )}
               <div className="flex items-center justify-center gap-2 mt-2 text-xs opacity-70">
+                <span>{businessTypeIcon}</span>
+                <span>{businessTypeLabel}</span>
+                <span>•</span>
                 <span>{categoryIcon}</span>
                 <span>{categoryLabel}</span>
               </div>
@@ -301,6 +355,12 @@ export default function CreateStorePage() {
                 <span className="font-semibold text-dark">{name}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-gray-text">نوع النشاط</span>
+                <span className="font-semibold text-dark">
+                  {businessTypeIcon} {businessTypeLabel}
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-text">القسم</span>
                 <span className="font-semibold text-dark">
                   {categoryIcon} {categoryLabel}
@@ -312,6 +372,19 @@ export default function CreateStorePage() {
                   {themes.find((t) => t.value === theme)?.label}
                 </span>
               </div>
+              {/* Show extra field values */}
+              {selectedBusinessConfig?.extraFields.map((field) => {
+                const val = extraFieldValues[field.id];
+                if (!val) return null;
+                return (
+                  <div key={field.id} className="flex justify-between">
+                    <span className="text-gray-text">{field.label}</span>
+                    <span className="font-semibold text-dark">
+                      {typeof val === "boolean" ? "نعم" : val}
+                    </span>
+                  </div>
+                );
+              })}
               {description && (
                 <div>
                   <span className="text-gray-text block mb-1">الوصف</span>
@@ -373,21 +446,21 @@ export default function CreateStorePage() {
             <div key={s.id} className="flex items-center flex-1">
               <div className="flex flex-col items-center">
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
                     step >= s.id
                       ? "bg-brand-green text-white"
                       : "bg-gray-100 text-gray-text"
                   }`}
                 >
-                  {step > s.id ? <Check size={18} /> : s.icon}
+                  {step > s.id ? <Check size={16} /> : s.icon}
                 </div>
-                <span className="text-[10px] text-gray-text mt-1">
+                <span className="text-[9px] text-gray-text mt-1">
                   {s.title}
                 </span>
               </div>
               {i < steps.length - 1 && (
                 <div
-                  className={`flex-1 h-0.5 mx-2 rounded-full ${
+                  className={`flex-1 h-0.5 mx-1.5 rounded-full ${
                     step > s.id ? "bg-brand-green" : "bg-gray-200"
                   }`}
                 />
@@ -399,13 +472,48 @@ export default function CreateStorePage() {
 
       {/* Step content */}
       <div className="px-4 mt-6">
-        {/* ── Step 1: Basics (Required) ──────────────────────────── */}
+        {/* ── Step 1: Business Type (Required) ─────────────────────── */}
         {step === 1 && (
           <div className="space-y-4">
             <div className="text-center mb-6">
               <span className="text-4xl">🏪</span>
               <h2 className="text-lg font-bold text-dark mt-2">
-                ابدأ متجرك في مكسب
+                إيه نوع نشاطك؟
+              </h2>
+              <p className="text-sm text-gray-text">
+                اختار النوع اللي يوصف نشاطك أحسن
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {businessTypesConfig.map((bt) => (
+                <button
+                  key={bt.id}
+                  onClick={() => setBusinessType(bt.id)}
+                  className={`text-right p-3 rounded-xl border-2 transition-all ${
+                    businessType === bt.id
+                      ? "border-brand-green bg-brand-green-light"
+                      : "border-gray-light bg-white hover:border-gray-300"
+                  }`}
+                >
+                  <span className="text-2xl block mb-1">{bt.icon}</span>
+                  <p className="text-sm font-bold text-dark">{bt.name}</p>
+                  <p className="text-[10px] text-gray-text leading-tight mt-0.5">
+                    {bt.description}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 2: Basics + Dynamic Fields (Required) ───────────── */}
+        {step === 2 && (
+          <div className="space-y-4">
+            <div className="text-center mb-6">
+              <span className="text-4xl">{businessTypeIcon}</span>
+              <h2 className="text-lg font-bold text-dark mt-2">
+                بيانات {businessTypeLabel}
               </h2>
               <p className="text-sm text-gray-text">
                 اختار اسم وقسم لمتجرك
@@ -481,11 +589,43 @@ export default function CreateStorePage() {
                 ))}
               </div>
             </div>
+
+            {/* Dynamic extra fields from business type */}
+            {selectedBusinessConfig && selectedBusinessConfig.extraFields.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <p className="text-sm font-semibold text-dark">
+                  بيانات إضافية {selectedBusinessConfig.extraFields.some((f) => f.isRequired) ? "" : "(اختياري)"}
+                </p>
+                {selectedBusinessConfig.extraFields.map((field) => (
+                  <ExtraFieldInput
+                    key={field.id}
+                    field={field}
+                    value={extraFieldValues[field.id]}
+                    onChange={(val) => handleExtraFieldChange(field.id, val)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Address fields if business type requires it */}
+            {selectedBusinessConfig?.requiresAddress && (
+              <div className="space-y-3 pt-2">
+                <p className="text-sm font-semibold text-dark">العنوان (اختياري)</p>
+                <input
+                  type="text"
+                  value={(extraFieldValues.address_detail as string) || ""}
+                  onChange={(e) => handleExtraFieldChange("address_detail", e.target.value)}
+                  className="w-full bg-white border border-gray-light rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-green"
+                  placeholder="مثال: 15 شارع التحرير، الدقي"
+                  maxLength={200}
+                />
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── Step 2: Identity (Optional) ────────────────────────── */}
-        {step === 2 && (
+        {/* ── Step 3: Identity (Optional) ────────────────────────── */}
+        {step === 3 && (
           <div className="space-y-4">
             <div className="text-center mb-6">
               <span className="text-4xl">🖼️</span>
@@ -555,8 +695,8 @@ export default function CreateStorePage() {
           </div>
         )}
 
-        {/* ── Step 3: Appearance (Optional with defaults) ─────────── */}
-        {step === 3 && (
+        {/* ── Step 4: Appearance (Optional with defaults) ─────────── */}
+        {step === 4 && (
           <div className="space-y-4">
             <div className="text-center mb-6">
               <span className="text-4xl">🎨</span>
@@ -568,7 +708,7 @@ export default function CreateStorePage() {
               </p>
             </div>
 
-            {/* Theme picker — 4 preview cards */}
+            {/* Theme picker */}
             <div>
               <label className="text-sm font-semibold text-dark mb-2 block">
                 الثيم
@@ -594,7 +734,7 @@ export default function CreateStorePage() {
               </div>
             </div>
 
-            {/* Color picker — 12 preset circles */}
+            {/* Color picker */}
             <div>
               <label className="text-sm font-semibold text-dark mb-2 block">
                 اللون الأساسي
@@ -651,13 +791,13 @@ export default function CreateStorePage() {
             السابق
           </Button>
         )}
-        {step < 3 ? (
+        {step < 4 ? (
           <Button
             onClick={() => setStep(step + 1)}
             disabled={!canProceed()}
             className="flex-1"
           >
-            {step === 2 ? (
+            {step === 3 ? (
               <>
                 التالي
                 <span className="text-[10px] opacity-70 mr-1">(أو تخطي)</span>
@@ -669,13 +809,96 @@ export default function CreateStorePage() {
         ) : (
           <Button
             onClick={() => setView("preview")}
-            disabled={!name.trim() || !mainCategory}
+            disabled={!name.trim() || !mainCategory || !businessType}
             className="flex-1"
           >
             معاينة المتجر
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Extra Field Input Component — renders dynamic fields per business type
+// ═══════════════════════════════════════════════════════════════════
+function ExtraFieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: BusinessExtraField;
+  value: string | boolean | undefined;
+  onChange: (val: string | boolean) => void;
+}) {
+  if (field.type === "toggle") {
+    return (
+      <label className="flex items-center justify-between bg-white border border-gray-light rounded-xl px-4 py-3 cursor-pointer">
+        <span className="text-sm text-dark">
+          {field.label}
+          {field.isRequired && <span className="text-error mr-1">*</span>}
+        </span>
+        <div className="relative">
+          <input
+            type="checkbox"
+            checked={!!value}
+            onChange={(e) => onChange(e.target.checked)}
+            className="sr-only"
+          />
+          <div
+            className={`w-11 h-6 rounded-full transition-colors ${
+              value ? "bg-brand-green" : "bg-gray-300"
+            }`}
+          >
+            <div
+              className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform absolute top-0.5 ${
+                value ? "translate-x-0.5" : "translate-x-5.5"
+              }`}
+            />
+          </div>
+        </div>
+      </label>
+    );
+  }
+
+  if (field.type === "select" && field.options) {
+    return (
+      <div>
+        <label className="text-sm text-dark mb-1.5 block">
+          {field.label}
+          {field.isRequired && <span className="text-error mr-1">*</span>}
+        </label>
+        <select
+          value={(value as string) || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-white border border-gray-light rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-green appearance-none"
+        >
+          <option value="">اختار...</option>
+          {field.options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  // Default: text input
+  return (
+    <div>
+      <label className="text-sm text-dark mb-1.5 block">
+        {field.label}
+        {field.isRequired && <span className="text-error mr-1">*</span>}
+      </label>
+      <input
+        type="text"
+        value={(value as string) || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-white border border-gray-light rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-green"
+        placeholder={field.placeholder}
+      />
     </div>
   );
 }

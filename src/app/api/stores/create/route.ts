@@ -12,6 +12,7 @@ export async function POST(request: Request) {
       name,
       description,
       main_category,
+      business_type,
       theme,
       layout,
       primary_color,
@@ -20,6 +21,9 @@ export async function POST(request: Request) {
       location_area,
       phone,
       logo_url,
+      working_hours_text,
+      business_data,
+      address_detail,
     } = body;
 
     // ── Validation ──────────────────────────────────────────────
@@ -91,6 +95,15 @@ export async function POST(request: Request) {
     const slug = (slugData as string) || `store-${Date.now()}`;
 
     // ── Create store (single transaction) ───────────────────────
+    // Validate business_type
+    const validBusinessTypes = [
+      "shop", "showroom", "office", "workshop",
+      "restaurant", "freelancer", "wholesaler", "online",
+    ];
+    const finalBusinessType = validBusinessTypes.includes(business_type)
+      ? business_type
+      : "shop";
+
     const { data: store, error: storeError } = await adminClient
       .from("stores")
       .insert({
@@ -100,6 +113,7 @@ export async function POST(request: Request) {
         description: description || null,
         logo_url: logo_url || null,
         main_category,
+        business_type: finalBusinessType,
         theme: theme || "classic",
         layout: layout || "grid",
         primary_color: primary_color || "#1B7A3D",
@@ -107,6 +121,9 @@ export async function POST(request: Request) {
         location_gov: location_gov || null,
         location_area: location_area || null,
         phone: phone || null,
+        working_hours_text: working_hours_text || null,
+        address_detail: address_detail || null,
+        business_data: business_data || {},
       })
       .select("id, slug")
       .single();
