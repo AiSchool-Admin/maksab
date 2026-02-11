@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Camera,
+  ImagePlus,
   X,
   Plus,
   Check,
@@ -401,9 +402,9 @@ export default function QuickAddProductPage() {
                 onClick={() => fileInputRef.current?.click()}
                 className="w-20 h-20 rounded-xl border-2 border-dashed border-brand-green/40 flex flex-col items-center justify-center gap-1 flex-shrink-0 bg-brand-green/5 hover:bg-brand-green/10 transition-colors"
               >
-                <Camera size={20} className="text-brand-green" />
+                <ImagePlus size={20} className="text-brand-green" />
                 <span className="text-[10px] text-brand-green font-semibold">
-                  صورة
+                  أضف صورة
                 </span>
               </button>
             )}
@@ -414,7 +415,6 @@ export default function QuickAddProductPage() {
             type="file"
             accept="image/*"
             multiple
-            capture="environment"
             onChange={handleAddImages}
             className="hidden"
           />

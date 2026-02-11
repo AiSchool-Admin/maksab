@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Camera, X, Star } from "lucide-react";
+import { ImagePlus, X, Star } from "lucide-react";
 import Input from "@/components/ui/Input";
 import ExchangeWantedForm from "./ExchangeWantedForm";
 import type { CompressedImage } from "@/lib/utils/image-compress";
@@ -446,8 +446,8 @@ export default function Step3PricePhotos({
               onClick={() => fileInputRef.current?.click()}
               className="aspect-square rounded-xl border-2 border-dashed border-gray-300 hover:border-brand-green flex flex-col items-center justify-center gap-1 text-gray-text hover:text-brand-green transition-colors"
             >
-              <Camera size={24} />
-              <span className="text-[10px] font-medium">إضافة صورة</span>
+              <ImagePlus size={24} />
+              <span className="text-[10px] font-medium">أضف صورة</span>
             </button>
           )}
         </div>
