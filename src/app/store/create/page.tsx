@@ -13,7 +13,7 @@ import {
   Sparkles,
   Briefcase,
 } from "lucide-react";
-import { useAuth } from "@/components/auth/AuthProvider";
+import { useAuth, isPendingMerchant, clearPendingMerchant } from "@/components/auth/AuthProvider";
 import Button from "@/components/ui/Button";
 import { categoriesConfig } from "@/lib/categories/categories-config";
 import {
@@ -58,6 +58,9 @@ export default function CreateStorePage() {
     name: string;
     migrated: number;
   } | null>(null);
+
+  // Forced mode: merchant must create a store before using the app
+  const forcedMode = isPendingMerchant();
 
   // Step 1: Business Type (required)
   const [businessType, setBusinessType] = useState<BusinessType | null>(null);
@@ -235,6 +238,9 @@ export default function CreateStorePage() {
 
       // Refresh user profile to pick up seller_type=store
       await refreshUser();
+
+      // Clear forced merchant flag — store created successfully
+      clearPendingMerchant();
 
       setCreatedStore({
         slug: data.store.slug,
@@ -453,11 +459,20 @@ export default function CreateStorePage() {
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
       <header className="bg-white border-b border-gray-light px-4 py-3 flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-1">
-          <ArrowRight size={20} />
-        </button>
-        <h1 className="text-base font-bold text-dark">افتح متجرك في مكسب</h1>
+        {!forcedMode && (
+          <button onClick={() => router.back()} className="p-1">
+            <ArrowRight size={20} />
+          </button>
+        )}
+        <h1 className="text-base font-bold text-dark flex-1">افتح متجرك في مكسب</h1>
       </header>
+      {forcedMode && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5">
+          <p className="text-xs text-amber-800 font-semibold text-center">
+            أنشئ متجرك الأول علشان تبدأ تعرض منتجاتك
+          </p>
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="px-4 mt-4">

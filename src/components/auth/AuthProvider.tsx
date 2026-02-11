@@ -9,7 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   getCurrentUser,
   logout as logoutService,
@@ -18,6 +18,20 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { trackPresence, cleanupAllChannels } from "@/lib/chat/realtime";
 import AuthBottomSheet, { type AccountType } from "./AuthBottomSheet";
+
+// ── Merchant pending flag ────────────────────────────────────────────
+const MERCHANT_FLAG_KEY = "maksab_pending_merchant";
+
+export function setPendingMerchant() {
+  if (typeof window !== "undefined") localStorage.setItem(MERCHANT_FLAG_KEY, "1");
+}
+export function clearPendingMerchant() {
+  if (typeof window !== "undefined") localStorage.removeItem(MERCHANT_FLAG_KEY);
+}
+export function isPendingMerchant(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(MERCHANT_FLAG_KEY) === "1";
+}
 
 interface AuthContextValue {
   user: UserProfile | null;
@@ -43,6 +57,7 @@ export function useAuth(): AuthContextValue {
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
@@ -90,6 +105,20 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id]);
 
+  // Force pending merchants to create a store
+  useEffect(() => {
+    if (!isLoading && user && isPendingMerchant() && !user.store_id) {
+      // If merchant hasn't created a store yet and isn't already on the create page
+      if (pathname !== "/store/create") {
+        router.replace("/store/create");
+      }
+    }
+    // If the user now has a store_id, clear the pending flag
+    if (user?.store_id && isPendingMerchant()) {
+      clearPendingMerchant();
+    }
+  }, [isLoading, user, pathname, router]);
+
   const requireAuth = useCallback((): Promise<UserProfile | null> => {
     // Already logged in → return immediately
     if (user) return Promise.resolve(user);
@@ -108,8 +137,9 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       authResolve?.(loggedInUser);
       setAuthResolve(null);
 
-      // If merchant and doesn't already have a store, redirect to store creation
+      // If merchant and doesn't already have a store, mark as pending and redirect
       if (accountType === "merchant" && !loggedInUser.store_id) {
+        setPendingMerchant();
         router.push("/store/create");
       }
     },
@@ -129,6 +159,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleLogout = useCallback(async () => {
     cleanupAllChannels();
+    clearPendingMerchant();
     await logoutService();
     setUser(null);
   }, []);

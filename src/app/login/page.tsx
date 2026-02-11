@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, RefreshCw, Phone, Smartphone, Home, Store, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
-import { useAuth } from "@/components/auth/AuthProvider";
+import { useAuth, setPendingMerchant } from "@/components/auth/AuthProvider";
 import {
   sendOTP,
   verifyOTP,
@@ -88,8 +88,9 @@ function LoginPageContent() {
   const handleSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);
 
-    // If merchant and doesn't have a store yet, redirect to store creation
+    // If merchant and doesn't have a store yet, mark as pending and redirect
     if (accountType === "merchant" && !loggedInUser.store_id) {
+      setPendingMerchant();
       router.replace("/store/create");
     } else {
       router.replace(redirectTo);
