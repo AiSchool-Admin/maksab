@@ -94,8 +94,7 @@ export async function POST(request: Request) {
     );
     const slug = (slugData as string) || `store-${Date.now()}`;
 
-    // ── Create store (single transaction) ───────────────────────
-    // Validate business_type
+    // ── Validate business_type ──────────────────────────────────
     const validBusinessTypes = [
       "shop", "showroom", "office", "workshop",
       "restaurant", "freelancer", "wholesaler", "online",
@@ -104,33 +103,73 @@ export async function POST(request: Request) {
       ? business_type
       : "shop";
 
-    const { data: store, error: storeError } = await adminClient
+    // ── Build settings object to store business data ─────────────
+    // Store business_type and extra fields in the existing `settings`
+    // JSONB column for compatibility (works even before migration 00014)
+    const settings: Record<string, unknown> = {
+      business_type: finalBusinessType,
+    };
+    if (working_hours_text) settings.working_hours_text = working_hours_text;
+    if (address_detail) settings.address_detail = address_detail;
+    if (business_data && Object.keys(business_data).length > 0) {
+      settings.business_data = business_data;
+    }
+
+    // ── Create store ────────────────────────────────────────────
+    // Use only columns that exist in the original migration (00012)
+    const insertData: Record<string, unknown> = {
+      user_id,
+      name: name.trim(),
+      slug,
+      description: description || null,
+      logo_url: logo_url || null,
+      main_category,
+      theme: theme || "classic",
+      layout: layout || "grid",
+      primary_color: primary_color || "#1B7A3D",
+      secondary_color: secondary_color || null,
+      location_gov: location_gov || null,
+      location_area: location_area || null,
+      phone: phone || null,
+      settings,
+    };
+
+    // Try with new columns first (if migration 00014 was applied)
+    let store: { id: string; slug: string } | null = null;
+    let storeError: { message: string } | null = null;
+
+    const fullInsert = {
+      ...insertData,
+      business_type: finalBusinessType,
+      working_hours_text: working_hours_text || null,
+      address_detail: address_detail || null,
+      business_data: business_data || {},
+    };
+
+    const result1 = await adminClient
       .from("stores")
-      .insert({
-        user_id,
-        name: name.trim(),
-        slug,
-        description: description || null,
-        logo_url: logo_url || null,
-        main_category,
-        business_type: finalBusinessType,
-        theme: theme || "classic",
-        layout: layout || "grid",
-        primary_color: primary_color || "#1B7A3D",
-        secondary_color: secondary_color || null,
-        location_gov: location_gov || null,
-        location_area: location_area || null,
-        phone: phone || null,
-        working_hours_text: working_hours_text || null,
-        address_detail: address_detail || null,
-        business_data: business_data || {},
-      })
+      .insert(fullInsert)
       .select("id, slug")
       .single();
 
-    if (storeError) {
+    if (result1.error) {
+      // Fallback: insert without the new columns (migration not yet applied)
+      const result2 = await adminClient
+        .from("stores")
+        .insert(insertData)
+        .select("id, slug")
+        .single();
+
+      store = result2.data;
+      storeError = result2.error;
+    } else {
+      store = result1.data;
+      storeError = result1.error;
+    }
+
+    if (storeError || !store) {
       return NextResponse.json(
-        { error: "فشل إنشاء المتجر: " + storeError.message },
+        { error: "فشل إنشاء المتجر: " + (storeError?.message || "unknown") },
         { status: 500 },
       );
     }
@@ -145,14 +184,12 @@ export async function POST(request: Request) {
       .eq("id", user_id);
 
     // ── Migrate existing products to store ──────────────────────
-    // First count how many ads to migrate
     const { count: migratedCount } = await adminClient
       .from("ads")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user_id)
       .neq("status", "deleted");
 
-    // Then update them all
     await adminClient
       .from("ads")
       .update({ store_id: store.id } as never)
