@@ -382,7 +382,7 @@ export default function AdDetailPage({
   const memberYear = new Date(ad.seller.memberSince).getFullYear();
 
   return (
-    <main className="min-h-screen bg-white pb-24">
+    <main className="min-h-screen bg-white pb-40">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-light">
         <div className="flex items-center justify-between px-4 h-14">
@@ -654,6 +654,7 @@ export default function AdDetailPage({
         {user?.id === ad.seller.id && (
           <OffersListSection
             adId={ad.id}
+            adTitle={ad.title}
             sellerId={ad.seller.id}
             currentUserId={currentUserId}
           />

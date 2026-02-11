@@ -515,7 +515,80 @@ export async function notifyPriceDrop(params: {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// 6. SELLER INTEREST — Aggregate buyer activity on seller's ads
+// 6. PRICE OFFER → NOTIFY SELLER (new offer) / BUYER (accept/reject/counter)
+// ────────────────────────────────────────────────────────────────────────
+
+export async function notifyPriceOffer(params: {
+  type: "new_offer" | "accepted" | "rejected" | "countered";
+  adId: string;
+  adTitle: string;
+  recipientId: string;
+  senderName: string;
+  amount: number;
+  counterAmount?: number;
+}): Promise<void> {
+  const client = getServiceClient();
+  if (!client) return;
+
+  try {
+    const formattedAmount = params.amount.toLocaleString("ar-EG");
+    let title = "";
+    let body = "";
+    let notifType = "";
+
+    switch (params.type) {
+      case "new_offer":
+        notifType = "price_offer_new";
+        title = `عرض سعر جديد — ${formattedAmount} جنيه`;
+        body = `${params.senderName} قدّم عرض ${formattedAmount} جنيه على "${params.adTitle}"`;
+        break;
+      case "accepted":
+        notifType = "price_offer_accepted";
+        title = "تم قبول عرضك! 🎉";
+        body = `البائع قبل عرضك ${formattedAmount} جنيه على "${params.adTitle}"`;
+        break;
+      case "rejected":
+        notifType = "price_offer_rejected";
+        title = "تم رفض عرضك";
+        body = `البائع رفض عرضك ${formattedAmount} جنيه على "${params.adTitle}"`;
+        break;
+      case "countered": {
+        const counterFormatted = (params.counterAmount || 0).toLocaleString("ar-EG");
+        notifType = "price_offer_countered";
+        title = `عرض مضاد — ${counterFormatted} جنيه`;
+        body = `البائع قدّم عرض مضاد ${counterFormatted} جنيه على "${params.adTitle}"`;
+        break;
+      }
+    }
+
+    // Dedup: 1 minute window
+    const dup = await isDuplicate(client, params.recipientId, notifType, params.adId, 1 / 60);
+    if (dup) return;
+
+    await client.from("notifications").insert({
+      user_id: params.recipientId,
+      type: notifType,
+      title,
+      body,
+      ad_id: params.adId,
+      data: { amount: params.amount, counter_amount: params.counterAmount },
+    });
+
+    // Push notification
+    await sendPushToUser(
+      client,
+      params.recipientId,
+      title,
+      body,
+      `/ad/${params.adId}`,
+    );
+  } catch (err) {
+    console.error("notifyPriceOffer error:", err);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 7. SELLER INTEREST — Aggregate buyer activity on seller's ads
 // ────────────────────────────────────────────────────────────────────────
 
 /**

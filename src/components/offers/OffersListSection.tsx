@@ -16,12 +16,14 @@ import toast from "react-hot-toast";
 
 interface OffersListSectionProps {
   adId: string;
+  adTitle?: string;
   sellerId: string;
   currentUserId: string;
 }
 
 export default function OffersListSection({
   adId,
+  adTitle,
   sellerId,
   currentUserId,
 }: OffersListSectionProps) {
@@ -54,6 +56,23 @@ export default function OffersListSection({
       toast.success(action === "accepted" ? "تم قبول العرض" : "تم رفض العرض");
       const updated = await getAdOffers(adId);
       setOffers(updated);
+
+      // Find the offer to get buyer info
+      const offer = offers.find((o) => o.id === offerId);
+      if (offer) {
+        fetch("/api/notifications/on-offer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: action,
+            ad_id: adId,
+            ad_title: adTitle || "إعلان",
+            recipient_id: offer.buyerId,
+            sender_name: "البائع",
+            amount: offer.amount,
+          }),
+        }).catch(() => {});
+      }
     } else {
       toast.error(result.error || "حصل مشكلة");
     }
@@ -74,6 +93,22 @@ export default function OffersListSection({
 
     if (result.success) {
       toast.success("تم إرسال العرض المضاد");
+
+      // Notify buyer about counter offer
+      fetch("/api/notifications/on-offer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "countered",
+          ad_id: adId,
+          ad_title: adTitle || "إعلان",
+          recipient_id: counterModal.buyerId,
+          sender_name: "البائع",
+          amount: counterModal.amount,
+          counter_amount: Number(counterAmount),
+        }),
+      }).catch(() => {});
+
       setCounterModal(null);
       setCounterAmount("");
       setCounterMessage("");
