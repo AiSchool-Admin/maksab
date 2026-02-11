@@ -293,7 +293,28 @@ export default function CreateStorePage() {
           onClick={() => router.push("/store/dashboard")}
           className="mt-3 text-sm text-brand-green font-semibold hover:underline"
         >
-          أو افتح لوحة التحكم
+          افتح لوحة التحكم
+        </button>
+
+        <button
+          onClick={() => {
+            setView("steps");
+            setStep(1);
+            setBusinessType(null);
+            setName("");
+            setMainCategory("");
+            setNameAvailable(null);
+            setExtraFieldValues({});
+            setLogoFile(null);
+            setLogoPreview(null);
+            setDescription("");
+            setTheme("classic");
+            setPrimaryColor("#1B7A3D");
+            setCreatedStore(null);
+          }}
+          className="mt-2 text-sm text-gray-text hover:text-dark hover:underline"
+        >
+          أو أنشئ متجر/نشاط تاني
         </button>
       </div>
     );
@@ -396,11 +417,10 @@ export default function CreateStorePage() {
             </div>
           </div>
 
-          {/* Irreversibility warning */}
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-            <p className="text-xs text-amber-800 font-semibold">
-              تنبيه: التحويل لمتجر نهائي ومش هتقدر ترجع لحساب فردي تاني.
-              إعلاناتك الحالية هتتنقل للمتجر تلقائياً.
+          {/* Info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <p className="text-xs text-blue-800 font-semibold">
+              إعلاناتك اللي مش مرتبطة بمتجر تاني هتتنقل للمتجر الجديد تلقائياً.
             </p>
           </div>
         </div>

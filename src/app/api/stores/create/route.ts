@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       auth: { persistSession: false },
     });
 
-    // ── Check user exists and is individual ─────────────────────
+    // ── Check user exists ───────────────────────────────────────
     const { data: profile } = await adminClient
       .from("profiles")
       .select("id, seller_type, store_id")
@@ -63,13 +63,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "المستخدم غير موجود" },
         { status: 404 },
-      );
-    }
-
-    if (profile.store_id) {
-      return NextResponse.json(
-        { error: "عندك متجر بالفعل. المستخدم يقدر ينشئ متجر واحد بس" },
-        { status: 409 },
       );
     }
 
@@ -174,7 +167,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // ── Update profile: seller_type → store, link store_id ──────
+    // ── Update profile: seller_type → store, link store_id (latest) ─
+    // store_id always points to the most recently created store
     await adminClient
       .from("profiles")
       .update({
@@ -183,17 +177,20 @@ export async function POST(request: Request) {
       })
       .eq("id", user_id);
 
-    // ── Migrate existing products to store ──────────────────────
+    // ── Migrate unassigned products to new store ─────────────────
+    // Only migrate ads that don't already belong to another store
     const { count: migratedCount } = await adminClient
       .from("ads")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user_id)
+      .is("store_id", null)
       .neq("status", "deleted");
 
     await adminClient
       .from("ads")
       .update({ store_id: store.id } as never)
       .eq("user_id", user_id)
+      .is("store_id", null)
       .neq("status", "deleted");
 
     // ── Auto-create FREE subscription ───────────────────────────
