@@ -270,7 +270,7 @@ export default function ProfilePage() {
               </button>
               <button
                 onClick={() => router.push("/store/dashboard/products/quick-add")}
-                className="flex flex-col items-center gap-1.5 p-3 bg-brand-green rounded-xl hover:bg-brand-green-dark transition-colors"
+                className="flex flex-col items-center gap-1.5 p-3 bg-brand-orange rounded-xl hover:bg-brand-orange-dark transition-colors"
               >
                 <Plus size={20} className="text-white" />
                 <span className="text-[11px] font-bold text-white">أضف منتج</span>
