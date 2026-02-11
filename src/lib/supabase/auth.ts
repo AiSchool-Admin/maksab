@@ -281,6 +281,54 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
   }
 }
 
+/** Refresh user profile from database, bypassing localStorage cache */
+export async function refreshCurrentUser(): Promise<UserProfile | null> {
+  // Try fetching from localStorage to get the user ID
+  const savedUser = loadSession();
+  const userId = savedUser?.id;
+
+  if (userId) {
+    // Fetch fresh profile directly from DB using the known user ID
+    try {
+      const { data } = await supabase
+        .from("profiles" as never)
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (data) {
+        const profile = data as unknown as UserProfile;
+        saveSession(profile); // Update cache
+        return profile;
+      }
+    } catch {
+      // Fall through to Supabase auth check
+    }
+  }
+
+  // Fallback: check Supabase auth session
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return savedUser || null;
+
+    const { data } = await supabase
+      .from("profiles" as never)
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (data) {
+      const profile = data as unknown as UserProfile;
+      saveSession(profile);
+      return profile;
+    }
+  } catch {
+    // Return cached user if DB query fails
+  }
+
+  return savedUser || null;
+}
+
 // ── Logout ────────────────────────────────────────────────────────────
 export async function logout(): Promise<void> {
   clearSession();

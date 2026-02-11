@@ -12,11 +12,13 @@ import {
 import { useRouter, usePathname } from "next/navigation";
 import {
   getCurrentUser,
+  refreshCurrentUser,
   logout as logoutService,
   type UserProfile,
 } from "@/lib/supabase/auth";
 import { supabase } from "@/lib/supabase/client";
 import { trackPresence, cleanupAllChannels } from "@/lib/chat/realtime";
+import { useAuthStore } from "@/stores/auth-store";
 import AuthBottomSheet, { type AccountType } from "./AuthBottomSheet";
 
 // ── Merchant pending flag ────────────────────────────────────────────
@@ -67,6 +69,31 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   >(null);
   const presenceCleanupRef = useRef<(() => void) | null>(null);
 
+  // Sync AuthProvider state → Zustand store so dashboard pages (using useAuthStore) stay in sync
+  const zustandSetUser = useAuthStore((s) => s.setUser);
+  const zustandSetLoading = useAuthStore((s) => s.setLoading);
+
+  useEffect(() => {
+    if (user) {
+      zustandSetUser({
+        id: user.id,
+        phone: user.phone,
+        display_name: user.display_name,
+        avatar_url: user.avatar_url,
+        governorate: user.governorate,
+        city: user.city,
+        seller_type: user.seller_type,
+        store_id: user.store_id,
+      });
+    } else if (!isLoading) {
+      zustandSetUser(null);
+    }
+  }, [user, isLoading, zustandSetUser]);
+
+  useEffect(() => {
+    zustandSetLoading(isLoading);
+  }, [isLoading, zustandSetLoading]);
+
   // Load current user on mount + listen for auth state changes
   useEffect(() => {
     getCurrentUser()
@@ -105,16 +132,22 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id]);
 
-  // Force pending merchants to create a store
+  // Force merchants without a store to create one
   useEffect(() => {
-    if (!isLoading && user && isPendingMerchant() && !user.store_id) {
-      // If merchant hasn't created a store yet and isn't already on the create page
-      if (pathname !== "/store/create") {
-        router.replace("/store/create");
-      }
+    if (isLoading || !user) return;
+
+    const needsStore =
+      // New merchant (just registered with "merchant" account type)
+      (isPendingMerchant() && !user.store_id) ||
+      // Returning merchant (seller_type is "store" but no store_id)
+      (user.seller_type === "store" && !user.store_id);
+
+    if (needsStore && pathname !== "/store/create") {
+      router.replace("/store/create");
     }
+
     // If the user now has a store_id, clear the pending flag
-    if (user?.store_id && isPendingMerchant()) {
+    if (user.store_id && isPendingMerchant()) {
       clearPendingMerchant();
     }
   }, [isLoading, user, pathname, router]);
@@ -153,7 +186,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   }, [authResolve]);
 
   const refreshUser = useCallback(async () => {
-    const u = await getCurrentUser();
+    const u = await refreshCurrentUser();
     setUser(u);
   }, []);
 
