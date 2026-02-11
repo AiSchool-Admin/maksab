@@ -23,6 +23,8 @@ export interface PriceOffer {
   // Enriched fields
   buyerName: string;
   buyerAvatar: string | null;
+  buyerPhone: string | null;
+  sellerPhone: string | null;
   adTitle: string;
 }
 
@@ -203,18 +205,34 @@ export async function getAdOffers(adId: string): Promise<PriceOffer[]> {
     const offers = data as Record<string, unknown>[];
     const buyerIds = [...new Set(offers.map((o) => o.buyer_id as string))];
 
+    // Fetch buyer profiles
     const { data: profilesData } = await supabase
       .from("profiles" as never)
-      .select("id, display_name, avatar_url")
+      .select("id, display_name, avatar_url, phone")
       .in("id", buyerIds);
 
-    const profilesMap = new Map<string, { name: string; avatar: string | null }>();
+    const profilesMap = new Map<string, { name: string; avatar: string | null; phone: string | null }>();
     if (profilesData) {
       for (const p of profilesData as Record<string, unknown>[]) {
         profilesMap.set(p.id as string, {
           name: (p.display_name as string) || "مستخدم",
           avatar: (p.avatar_url as string) || null,
+          phone: (p.phone as string) || null,
         });
+      }
+    }
+
+    // Fetch seller phone from first offer's seller_id
+    const sellerIds = [...new Set(offers.map((o) => o.seller_id as string))];
+    const { data: sellerProfilesData } = await supabase
+      .from("profiles" as never)
+      .select("id, phone")
+      .in("id", sellerIds);
+
+    const sellerPhoneMap = new Map<string, string | null>();
+    if (sellerProfilesData) {
+      for (const p of sellerProfilesData as Record<string, unknown>[]) {
+        sellerPhoneMap.set(p.id as string, (p.phone as string) || null);
       }
     }
 
@@ -224,6 +242,8 @@ export async function getAdOffers(adId: string): Promise<PriceOffer[]> {
         ...mapOffer(o),
         buyerName: profile?.name || "مستخدم",
         buyerAvatar: profile?.avatar || null,
+        buyerPhone: profile?.phone || null,
+        sellerPhone: sellerPhoneMap.get(o.seller_id as string) || null,
       };
     });
   } catch {
@@ -289,11 +309,26 @@ export async function getUserOffers(userId: string): Promise<PriceOffer[]> {
       }
     }
 
+    // Fetch seller phones for buyer to contact
+    const sellerIds = [...new Set(offers.map((o) => o.seller_id as string))];
+    const { data: sellerProfilesData } = await supabase
+      .from("profiles" as never)
+      .select("id, phone")
+      .in("id", sellerIds);
+
+    const sellerPhoneMap = new Map<string, string | null>();
+    if (sellerProfilesData) {
+      for (const p of sellerProfilesData as Record<string, unknown>[]) {
+        sellerPhoneMap.set(p.id as string, (p.phone as string) || null);
+      }
+    }
+
     return offers.map((o) => ({
       ...mapOffer(o),
       adTitle: adsMap.get(o.ad_id as string) || "إعلان",
       buyerName: "",
       buyerAvatar: null,
+      sellerPhone: sellerPhoneMap.get(o.seller_id as string) || null,
     }));
   } catch {
     return [];
@@ -333,6 +368,8 @@ function mapOffer(o: Record<string, unknown>): PriceOffer {
     expiresAt: o.expires_at as string,
     buyerName: "",
     buyerAvatar: null,
+    buyerPhone: null,
+    sellerPhone: null,
     adTitle: "",
   };
 }
