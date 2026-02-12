@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCategoryById } from "@/lib/categories/categories-config";
+import { generateAutoTitle } from "@/lib/categories/generate";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -62,9 +64,22 @@ export async function POST(request: NextRequest) {
     const rows = (data || []) as Record<string, unknown>[];
     const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
 
-    const ads = rows.map((row) => ({
+    const ads = rows.map((row) => {
+      // Resolve title using Arabic labels from category config
+      let title = row.title as string;
+      const catId = row.category_id as string | undefined;
+      const subId = row.subcategory_id as string | undefined;
+      const catFields = (row.category_fields as Record<string, unknown>) ?? {};
+      if (catId) {
+        const catConfig = getCategoryById(catId);
+        if (catConfig) {
+          const resolved = generateAutoTitle(catConfig, catFields, subId || undefined);
+          if (resolved) title = resolved;
+        }
+      }
+      return {
       id: row.id,
-      title: row.title,
+      title,
       price: row.price ? Number(row.price) : null,
       saleType: row.sale_type,
       image: ((row.images as string[]) ?? [])[0] ?? null,
@@ -85,7 +100,8 @@ export async function POST(request: NextRequest) {
       favoritesCount: row.favorites_count ?? 0,
       relevanceScore: row.relevance_score ? Number(row.relevance_score) : 0,
       matchType: row.match_type ?? "none",
-    }));
+    };
+    });
 
     // Log search query for trending (fire and forget)
     if (query) {
@@ -177,11 +193,23 @@ async function fallbackSearch(
   offset: number,
   limit: number
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formatRows = (rows: Record<string, unknown>[]) =>
-    rows.map((row) => ({
+    rows.map((row) => {
+      // Resolve title using Arabic labels
+      let title = row.title as string;
+      const catId = row.category_id as string | undefined;
+      const subId = row.subcategory_id as string | undefined;
+      const catFields = (row.category_fields as Record<string, unknown>) ?? {};
+      if (catId) {
+        const catConfig = getCategoryById(catId);
+        if (catConfig) {
+          const resolved = generateAutoTitle(catConfig, catFields, subId || undefined);
+          if (resolved) title = resolved;
+        }
+      }
+      return {
       id: row.id,
-      title: row.title,
+      title,
       price: row.price ? Number(row.price) : null,
       saleType: row.sale_type,
       image: ((row.images as string[]) ?? [])[0] ?? null,
@@ -193,7 +221,8 @@ async function fallbackSearch(
       exchangeDescription: row.exchange_description ?? undefined,
       relevanceScore: 0,
       matchType: "fallback",
-    }));
+    };
+    });
 
   // Try with text search first
   const q = buildFallbackQuery(supabase, body, true)

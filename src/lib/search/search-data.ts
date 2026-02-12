@@ -4,6 +4,8 @@
  */
 
 import { supabase } from "@/lib/supabase/client";
+import { getCategoryById } from "@/lib/categories/categories-config";
+import { generateAutoTitle } from "@/lib/categories/generate";
 import type { AdSummary } from "@/lib/ad-data";
 
 /* ── Search request / response ──────────────────────────────────────── */
@@ -29,11 +31,24 @@ export interface SearchResult {
 
 const PAGE_SIZE = 12;
 
+/** Resolve title using category config (Arabic labels) */
+function resolveTitle(row: Record<string, unknown>): string {
+  const storedTitle = row.title as string;
+  const categoryId = row.category_id as string | undefined;
+  const subcategoryId = row.subcategory_id as string | undefined;
+  const categoryFields = (row.category_fields as Record<string, unknown>) ?? {};
+  if (!categoryId) return storedTitle;
+  const config = getCategoryById(categoryId);
+  if (!config) return storedTitle;
+  const generated = generateAutoTitle(config, categoryFields, subcategoryId || undefined);
+  return generated || storedTitle;
+}
+
 /** Convert Supabase row to AdSummary */
 function rowToAdSummary(row: Record<string, unknown>): AdSummary {
   return {
     id: row.id as string,
-    title: row.title as string,
+    title: resolveTitle(row),
     price: row.price ? Number(row.price) : null,
     saleType: row.sale_type as AdSummary["saleType"],
     image: ((row.images as string[]) ?? [])[0] ?? null,

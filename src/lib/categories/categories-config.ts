@@ -1,4 +1,4 @@
-import type { CategoryConfig } from "@/types";
+import type { CategoryConfig, CategoryField } from "@/types";
 
 export const categoriesConfig: CategoryConfig[] = [
   {
@@ -1462,4 +1462,40 @@ export function getCategoryBySlug(slug: string): CategoryConfig | undefined {
 
 export function getCategoryById(id: string): CategoryConfig | undefined {
   return categoriesConfig.find((c) => c.id === id);
+}
+
+/**
+ * Get the effective (resolved) fields for a category + subcategory.
+ * Merges base fields with subcategory fieldOverrides and adds extraFields.
+ * This ensures field values are resolved to their proper Arabic labels.
+ */
+export function getEffectiveFields(
+  config: CategoryConfig,
+  subcategoryId?: string | null,
+): CategoryField[] {
+  const override = subcategoryId ? config.subcategoryOverrides?.[subcategoryId] : undefined;
+
+  // Start with base fields, filtering out hidden ones
+  let fields = config.fields.filter(
+    (f) => !subcategoryId || !f.hiddenForSubcategories?.includes(subcategoryId),
+  );
+
+  // Apply field overrides (e.g., different options for watches vs bags)
+  if (override?.fieldOverrides) {
+    fields = fields.map((field) => {
+      const overrideData = override.fieldOverrides?.[field.id];
+      if (overrideData) {
+        return { ...field, ...overrideData };
+      }
+      return field;
+    });
+  }
+
+  // Add extra fields from subcategory
+  if (override?.extraFields) {
+    fields = [...fields, ...override.extraFields];
+  }
+
+  // Sort by order
+  return fields.sort((a, b) => a.order - b.order);
 }

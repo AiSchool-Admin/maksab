@@ -26,6 +26,8 @@ import ExchangeMatchSection from "@/components/ad/ExchangeMatchSection";
 import ContactBar from "@/components/ad/ContactBar";
 import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
+import { getCategoryById, getEffectiveFields } from "@/lib/categories/categories-config";
+import { generateAutoTitle, generateAutoDescription } from "@/lib/categories/generate";
 import { fetchAdDetail, getSimilarAds } from "@/lib/ad-detail";
 import type { AdDetail } from "@/lib/ad-detail";
 import type { AdSummary } from "@/lib/ad-data";
@@ -381,6 +383,26 @@ export default function AdDetailPage({
     );
   }
 
+  /* ── Resolve title/description using Arabic labels ──── */
+  const resolvedTitle = (() => {
+    const config = getCategoryById(ad.categoryId);
+    if (!config) return ad.title;
+    const fields = ad.categoryFields as Record<string, unknown>;
+    // Regenerate the title from the template using proper subcategory-aware fields
+    const generated = generateAutoTitle(config, fields, ad.subcategoryId || undefined);
+    // Use regenerated title if it's non-empty and different from a raw-values title
+    return generated || ad.title;
+  })();
+
+  const resolvedDescription = (() => {
+    const config = getCategoryById(ad.categoryId);
+    if (!config) return ad.description;
+    const fields = ad.categoryFields as Record<string, unknown>;
+    const generated = generateAutoDescription(config, fields, ad.subcategoryId || undefined);
+    // Use regenerated description if available, fall back to stored
+    return generated || ad.description;
+  })();
+
   /* ── Sale type label ───────────────────────────────── */
   const saleLabel =
     ad.saleType === "cash"
@@ -480,7 +502,7 @@ export default function AdDetailPage({
 
         {/* Title */}
         <h1 className="text-lg font-bold text-dark leading-relaxed">
-          {ad.title}
+          {resolvedTitle}
         </h1>
 
         {/* Auction section */}
@@ -582,6 +604,7 @@ export default function AdDetailPage({
         {/* Specs table */}
         <SpecsTable
           categoryId={ad.categoryId}
+          subcategoryId={ad.subcategoryId}
           categoryFields={ad.categoryFields}
         />
 
@@ -600,7 +623,7 @@ export default function AdDetailPage({
         <div>
           <h3 className="text-sm font-bold text-dark mb-2">الوصف</h3>
           <p className="text-sm text-gray-text leading-relaxed whitespace-pre-line">
-            {ad.description}
+            {resolvedDescription}
           </p>
         </div>
 

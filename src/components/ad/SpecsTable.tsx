@@ -1,23 +1,28 @@
 "use client";
 
-import { getCategoryById } from "@/lib/categories/categories-config";
+import { getCategoryById, getEffectiveFields } from "@/lib/categories/categories-config";
 import { resolveFieldLabel } from "@/lib/categories/generate";
 
 interface SpecsTableProps {
   categoryId: string;
+  subcategoryId?: string | null;
   categoryFields: Record<string, unknown>;
 }
 
 export default function SpecsTable({
   categoryId,
+  subcategoryId,
   categoryFields,
 }: SpecsTableProps) {
   const config = getCategoryById(categoryId);
   if (!config) return null;
 
+  // Use effective fields (with subcategory overrides applied)
+  const effectiveFields = getEffectiveFields(config, subcategoryId);
+
   const rows: { label: string; value: string }[] = [];
 
-  for (const field of config.fields) {
+  for (const field of effectiveFields) {
     const rawValue = categoryFields[field.id];
     const resolved = resolveFieldLabel(field, rawValue);
     if (resolved) {
