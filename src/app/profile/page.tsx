@@ -24,6 +24,9 @@ import {
   LayoutDashboard,
   Package,
   Plus,
+  Bookmark,
+  Award,
+  Users,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -316,6 +319,16 @@ export default function ProfilePage() {
           icon={<Trophy size={20} />}
           label="المكافآت والنقاط"
           onClick={() => router.push("/rewards")}
+        />
+        <ProfileMenuItem
+          icon={<Bookmark size={20} />}
+          label="قوائم مكسب"
+          onClick={() => router.push("/collections")}
+        />
+        <ProfileMenuItem
+          icon={<Award size={20} />}
+          label="سفير مكسب"
+          onClick={() => router.push("/ambassador")}
         />
         <ProfileMenuItem
           icon={<DollarSign size={20} />}

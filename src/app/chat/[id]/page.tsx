@@ -10,6 +10,7 @@ import ChatAdLink from "@/components/chat/ChatAdLink";
 import OnlineIndicator from "@/components/chat/OnlineIndicator";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import BlockUserButton from "@/components/chat/BlockUserButton";
+import GroupChatManager from "@/components/chat/GroupChatManager";
 import ReportButton from "@/components/report/ReportButton";
 import SmartQuestionsSection from "@/components/chat/SmartQuestionsSection";
 import NegotiationAssistant from "@/components/chat/NegotiationAssistant";
@@ -356,9 +357,15 @@ export default function ChatPage({
             )}
           </div>
 
-          {/* Block & Report */}
+          {/* Group Chat + Block & Report */}
           {currentUserId && otherUser.id && (
             <>
+              <GroupChatManager
+                conversationId={conversationId}
+                buyerId={conversation.buyerId}
+                sellerId={conversation.sellerId}
+                otherUser={otherUser}
+              />
               <BlockUserButton
                 currentUserId={currentUserId}
                 otherUserId={otherUser.id}

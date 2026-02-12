@@ -57,6 +57,12 @@ import ReportButton from "@/components/report/ReportButton";
 import MarkAsSoldButton from "@/components/ad/MarkAsSoldButton";
 import SmartPriceDrop from "@/components/ad/SmartPriceDrop";
 import PriceMeter from "@/components/ai/PriceMeter";
+import dynamic from "next/dynamic";
+
+const ReactionsBar = dynamic(() => import("@/components/social/ReactionsBar"), { ssr: false });
+const CommentsSection = dynamic(() => import("@/components/social/CommentsSection"), { ssr: false });
+const SellerRankBadge = dynamic(() => import("@/components/social/SellerRankBadge"), { ssr: false });
+const AddToCollectionButton = dynamic(() => import("@/components/collections/AddToCollectionButton"), { ssr: false });
 
 /** Convert AdDetail to AuctionState for the auction component */
 function toAuctionState(ad: AdDetail): AuctionState {
@@ -416,6 +422,7 @@ export default function AdDetailPage({
             >
               <Share2 size={20} />
             </button>
+            <AddToCollectionButton adId={id} variant="icon" />
             <button
               onClick={handleToggleFavorite}
               className={`p-2 rounded-full transition-colors ${
@@ -467,6 +474,9 @@ export default function AdDetailPage({
             variant="card"
           />
         )}
+
+        {/* Reactions Bar */}
+        <ReactionsBar adId={ad.id} />
 
         {/* Title */}
         <h1 className="text-lg font-bold text-dark leading-relaxed">
@@ -627,6 +637,7 @@ export default function AdDetailPage({
                   <Link href={`/user/${ad.seller.id}`} className="font-bold text-dark text-sm hover:text-brand-green transition-colors">
                     {ad.seller.displayName}
                   </Link>
+                  <SellerRankBadge rank="beginner" size="sm" />
                   <VerificationBadge level={sellerVerificationLevel} />
                   <LoyaltyBadge level={sellerLoyaltyLevel} size="sm" />
                   {sellerIsTrusted && <TrustedSellerBadge />}
@@ -727,6 +738,9 @@ export default function AdDetailPage({
             {ad.favoritesCount} مفضلة
           </span>
         </div>
+
+        {/* Comments Section */}
+        <CommentsSection adId={ad.id} adOwnerId={ad.seller.id} />
 
         {/* Similar ads section */}
         {similarAds.length > 0 && (
