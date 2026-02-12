@@ -107,14 +107,36 @@ export default function VoiceToListing({ onAnalysisComplete, onCancel }: VoiceTo
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || "فشل تحليل الكلام");
+        // AI not available — create basic fallback so user can proceed with their text
+        const fallback: ProductAnalysis = {
+          category_id: "",
+          subcategory_id: null,
+          category_fields: {},
+          suggested_title: text.length > 60 ? text.substring(0, 60) + "..." : text,
+          suggested_description: text,
+          confidence: 0,
+          detected_items: [],
+        };
+        setAnalysis(fallback);
+        setState("done");
+        return;
       }
 
       setAnalysis(data.analysis);
       setState("done");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "حصل مشكلة في التحليل. جرب تاني");
-      setState("error");
+    } catch {
+      // AI failed — still allow user to proceed with their text as description
+      const fallback: ProductAnalysis = {
+        category_id: "",
+        subcategory_id: null,
+        category_fields: {},
+        suggested_title: text.length > 60 ? text.substring(0, 60) + "..." : text,
+        suggested_description: text,
+        confidence: 0,
+        detected_items: [],
+      };
+      setAnalysis(fallback);
+      setState("done");
     }
   };
 

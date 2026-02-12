@@ -81,8 +81,8 @@ function getInitialDraft(): DraftData {
     saleType: "cash",
     categoryFields: {},
     priceData: getInitialPriceData(),
-    governorate: "القاهرة",
-    city: "مدينة نصر",
+    governorate: "",
+    city: "",
     title: "",
     description: "",
     isTitleDescEdited: false,
@@ -349,16 +349,53 @@ export default function CreateAdPage() {
     }
   }, [draft.currentStep, updateDraft]);
 
-  /* ── GPS location detection ────────────────────────── */
+  /* ── GPS location detection with reverse geocoding ──── */
   const handleDetectLocation = useCallback(() => {
     if (!navigator.geolocation) return;
     setIsDetectingLocation(true);
     navigator.geolocation.getCurrentPosition(
-      () => {
-        // In a real app, reverse geocode lat/lng to governorate/city
-        // For now, just set a placeholder
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          // Use OpenStreetMap Nominatim for free reverse geocoding
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar&zoom=10`,
+            { headers: { "User-Agent": "Maksab-App" } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const address = data.address || {};
+            // Try to extract governorate and city from the response
+            const state = address.state || address.governorate || address.county || "";
+            const cityName = address.city || address.town || address.suburb || address.village || address.city_district || "";
+
+            // Map OSM state name to our governorate names
+            const { governorates: govList } = await import("@/lib/data/governorates");
+            const matchedGov = govList.find((g: string) =>
+              state.includes(g) || g.includes(state) ||
+              // Handle common aliases
+              (state.includes("القاهرة") && g === "القاهرة") ||
+              (state.includes("الجيزة") && g === "الجيزة") ||
+              (state.includes("الاسكندرية") && g === "الإسكندرية") ||
+              (state.includes("اسكندرية") && g === "الإسكندرية")
+            );
+
+            if (matchedGov) {
+              updateDraft({ governorate: matchedGov, city: cityName || "" });
+            } else if (state) {
+              // Fallback: use the state name directly
+              updateDraft({ governorate: state, city: cityName || "" });
+            } else {
+              updateDraft({ governorate: "القاهرة", city: "" });
+            }
+          } else {
+            updateDraft({ governorate: "القاهرة", city: "" });
+          }
+        } catch {
+          // Reverse geocoding failed — set empty so user picks manually
+          updateDraft({ governorate: "", city: "" });
+        }
         setIsDetectingLocation(false);
-        updateDraft({ governorate: "القاهرة" });
       },
       () => {
         setIsDetectingLocation(false);
@@ -624,6 +661,13 @@ export default function CreateAdPage() {
                 {activeAIMode === "video" && "فيديو واِبيع"}
               </h1>
             </div>
+            <Link
+              href="/"
+              className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+              aria-label="الرئيسية"
+            >
+              <Home size={18} />
+            </Link>
           </div>
         </header>
         <div className="px-4 py-5">

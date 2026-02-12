@@ -301,6 +301,9 @@ function SearchPageInner() {
       // Generate refinements
       setRefinements(generateRefinements(parsed));
 
+      // Force search re-execution even if filters didn't change
+      setSearchTrigger((n) => n + 1);
+
       // Update URL
       const params = new URLSearchParams();
       if (q) params.set("q", q);
@@ -342,6 +345,7 @@ function SearchPageInner() {
       };
       setFilters(newFilters);
       setRefinements(generateRefinements(parsed));
+      setSearchTrigger((n) => n + 1);
     },
     [],
   );
@@ -401,7 +405,10 @@ function SearchPageInner() {
     [filters],
   );
 
-  /* ── Auto-execute search when filters/sort change ──────────────────── */
+  /* ── Search trigger counter — increments to force re-execution ────── */
+  const [searchTrigger, setSearchTrigger] = useState(0);
+
+  /* ── Auto-execute search when filters/sort/query change ────────────── */
   const isInitialMount = useRef(true);
   useEffect(() => {
     // Skip the very first render — the initial search is handled by the
@@ -417,7 +424,7 @@ function SearchPageInner() {
     }
     executeSearch(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, sortBy, categoryFilters]);
+  }, [filters, sortBy, categoryFilters, searchTrigger]);
 
   /* ── Initial search on mount (if query from URL) ────────────────────── */
   useEffect(() => {

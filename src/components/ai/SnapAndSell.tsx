@@ -49,14 +49,38 @@ export default function SnapAndSell({ onAnalysisComplete, onCancel }: SnapAndSel
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || "فشل التحليل");
+        // AI not available — create a basic fallback analysis so user can proceed with photos
+        const fallback: ProductAnalysis = {
+          category_id: "",
+          subcategory_id: null,
+          category_fields: {},
+          suggested_title: "منتج جديد",
+          suggested_description: "منتج معروض للبيع على مكسب",
+          confidence: 0,
+          detected_items: [],
+        };
+        setAnalysis(fallback);
+        setError("التحليل الذكي مش متاح حالياً — كمّل البيانات يدوي");
+        setState("done");
+        return;
       }
 
       setAnalysis(data.analysis);
       setState("done");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "حصل مشكلة في التحليل. جرب تاني");
-      setState("error");
+    } catch {
+      // AI failed — still allow user to proceed with captured photos
+      const fallback: ProductAnalysis = {
+        category_id: "",
+        subcategory_id: null,
+        category_fields: {},
+        suggested_title: "منتج جديد",
+        suggested_description: "منتج معروض للبيع على مكسب",
+        confidence: 0,
+        detected_items: [],
+      };
+      setAnalysis(fallback);
+      setError("التحليل الذكي مش متاح حالياً — كمّل البيانات يدوي");
+      setState("done");
     }
   };
 
@@ -169,12 +193,21 @@ export default function SnapAndSell({ onAnalysisComplete, onCancel }: SnapAndSel
             ))}
           </div>
 
+          {/* Info message if AI was unavailable */}
+          {error && (
+            <div className="bg-brand-gold-light border border-brand-gold/30 rounded-xl px-4 py-3 text-sm text-brand-gold font-medium">
+              {error}
+            </div>
+          )}
+
           {/* Analysis card */}
           <div className="bg-brand-green-light border border-brand-green/20 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Sparkles size={16} className="text-brand-green" />
               <span className="text-xs font-bold text-brand-green">
-                تم التحليل — ثقة {Math.round(analysis.confidence * 100)}%
+                {analysis.confidence > 0
+                  ? `تم التحليل — ثقة ${Math.round(analysis.confidence * 100)}%`
+                  : "الصور جاهزة — كمّل البيانات"}
               </span>
             </div>
 

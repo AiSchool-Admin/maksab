@@ -289,6 +289,8 @@ export default function VideoToListing({
 
   /**
    * Extract 3 key frames from the recorded video at 10%, 50%, 90%.
+   * MediaRecorder WebM blobs often have duration = Infinity or 0,
+   * so we use the elapsed recording time as a fallback.
    */
   const extractKeyFrames = (videoUrl: string): Promise<string[]> => {
     return new Promise((resolve, reject) => {
@@ -306,10 +308,14 @@ export default function VideoToListing({
       }
 
       const capturedFrames: string[] = [];
-      const seekPositions = [0.1, 0.5, 0.9]; // 10%, 50%, 90%
       let currentSeekIndex = 0;
 
       const captureFrame = () => {
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+          // Skip invalid frames
+          currentSeekIndex++;
+          return;
+        }
         canvas.width = Math.min(video.videoWidth, 1280);
         canvas.height = Math.min(
           video.videoHeight,
@@ -320,28 +326,55 @@ export default function VideoToListing({
         capturedFrames.push(dataUrl);
 
         currentSeekIndex++;
-        if (currentSeekIndex < seekPositions.length) {
-          video.currentTime = video.duration * seekPositions[currentSeekIndex];
+      };
+
+      // Use the recording duration we tracked as fallback
+      const recordedDuration = elapsedSeconds > 0 ? elapsedSeconds : MAX_DURATION;
+      const seekTimes = [
+        Math.max(0.5, recordedDuration * 0.1),
+        Math.max(1, recordedDuration * 0.5),
+        Math.max(1.5, recordedDuration * 0.9),
+      ];
+
+      video.addEventListener("seeked", () => {
+        captureFrame();
+        if (currentSeekIndex < seekTimes.length) {
+          video.currentTime = seekTimes[currentSeekIndex];
         } else {
-          // All frames captured
           video.removeEventListener("seeked", captureFrame);
           video.src = "";
           resolve(capturedFrames);
         }
-      };
-
-      video.addEventListener("seeked", captureFrame);
+      });
 
       video.addEventListener("loadedmetadata", () => {
-        if (video.duration <= 0 || !isFinite(video.duration)) {
-          reject(new Error("مدة الفيديو غير صالحة"));
+        // Use actual duration if valid, otherwise use recorded elapsed time
+        const duration = (video.duration > 0 && isFinite(video.duration))
+          ? video.duration
+          : recordedDuration;
+
+        if (duration <= 0) {
+          // Even fallback failed — try to capture at least the first frame
+          video.currentTime = 0.5;
           return;
         }
-        video.currentTime = video.duration * seekPositions[0];
+
+        // Recalculate seek times with actual duration if available
+        if (video.duration > 0 && isFinite(video.duration)) {
+          seekTimes[0] = Math.max(0.1, video.duration * 0.1);
+          seekTimes[1] = Math.max(0.5, video.duration * 0.5);
+          seekTimes[2] = Math.max(1, video.duration * 0.9);
+        }
+
+        video.currentTime = seekTimes[0];
       });
 
       video.addEventListener("error", () => {
-        reject(new Error("فشل في تحميل الفيديو"));
+        if (capturedFrames.length > 0) {
+          resolve(capturedFrames);
+        } else {
+          reject(new Error("فشل في تحميل الفيديو"));
+        }
       });
 
       // Timeout after 15 seconds
@@ -380,7 +413,21 @@ export default function VideoToListing({
       const [imageResult, textResult] = await Promise.all([imagePromise, textPromise]);
 
       if (!imageResult.success && !textResult?.success) {
-        throw new Error("فشل التحليل. جرب تاني بصور أوضح أو اتكلم بصوت أعلى");
+        // AI not available — create fallback analysis so user can proceed with captured frames
+        const fallback: ProductAnalysis = {
+          category_id: "",
+          subcategory_id: null,
+          category_fields: {},
+          suggested_title: transcriptText.trim()
+            ? (transcriptText.length > 60 ? transcriptText.substring(0, 60) + "..." : transcriptText)
+            : "منتج جديد",
+          suggested_description: transcriptText.trim() || "منتج معروض للبيع على مكسب",
+          confidence: 0,
+          detected_items: [],
+        };
+        setAnalysis(fallback);
+        setState("done");
+        return;
       }
 
       const imageAnalysis: ProductAnalysis | null = imageResult.success

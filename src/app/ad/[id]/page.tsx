@@ -710,8 +710,8 @@ export default function AdDetailPage({
           />
         )}
 
-        {/* Seller Offers (visible to seller) */}
-        {user?.id === ad.seller.id && (
+        {/* Price Offers (visible to seller and logged-in buyers) */}
+        {currentUserId && (
           <OffersListSection
             adId={ad.id}
             adTitle={ad.title}

@@ -143,6 +143,31 @@ export default function HomePage() {
           </span>
         </a>
 
+        {/* Welcome message with user name */}
+        {user && user.display_name && (
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-base font-bold text-dark">
+              أهلاً يا {user.display_name} 👋
+            </p>
+            <p className="text-xs text-gray-text mt-0.5">
+              عايز تبيع إيه النهاردة؟
+            </p>
+          </div>
+        )}
+        {user && !user.display_name && (
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-base font-bold text-dark">
+              أهلاً بيك في مكسب 👋
+            </p>
+            <p className="text-xs text-gray-text mt-0.5">
+              <Link href="/profile/edit" className="text-brand-green font-semibold hover:underline">
+                أضف اسمك
+              </Link>
+              {" "}عشان نرحب بيك صح
+            </p>
+          </div>
+        )}
+
         {/* Search bar — sticky */}
         <div className="px-3 pt-2 pb-1.5">
           <Link href="/search" className="block">

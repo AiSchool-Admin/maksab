@@ -11,7 +11,7 @@ import {
   toggleCommentLike,
   type AdComment,
 } from "@/lib/social/reactions-service";
-import { getCurrentUser, type UserProfile } from "@/lib/supabase/auth";
+import { useAuth } from "@/components/auth/AuthProvider";
 import EmptyState from "@/components/ui/EmptyState";
 
 interface CommentsSectionProps {
@@ -22,27 +22,25 @@ interface CommentsSectionProps {
 const PAGE_SIZE = 10;
 
 export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProps) {
+  const { user: authUser } = useAuth();
   const [comments, setComments] = useState<AdComment[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+
+  // Map auth user to the shape we need
+  const currentUser = authUser ? {
+    id: authUser.id,
+    display_name: authUser.display_name,
+    avatar_url: authUser.avatar_url,
+  } : null;
 
   // Comment input state
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [inputError, setInputError] = useState<string | null>(null);
-
-  // Load user on mount
-  useEffect(() => {
-    let mounted = true;
-    getCurrentUser().then((user) => {
-      if (mounted) setCurrentUser(user);
-    });
-    return () => { mounted = false; };
-  }, []);
 
   // Load initial comments
   useEffect(() => {

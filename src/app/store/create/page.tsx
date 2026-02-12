@@ -164,22 +164,28 @@ export default function CreateStorePage() {
   const uploadLogo = async (userId: string): Promise<string | null> => {
     if (!logoFile) return null;
     try {
+      // Determine file extension from type
+      const ext = logoFile.type === "image/png" ? ".png" : logoFile.type === "image/webp" ? ".webp" : ".jpg";
       const formData = new FormData();
       formData.append("file", logoFile);
       formData.append("bucket", "store-logos");
-      formData.append("path", `${userId}/${Date.now()}-logo`);
+      formData.append("path", `${userId}/${Date.now()}-logo${ext}`);
 
       const res = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        return data.url || null;
+      const data = await res.json();
+      if (res.ok && data.url) {
+        return data.url;
       }
-    } catch {
-      // Logo upload failed — proceed without logo
+      // Show error to user instead of silently failing
+      console.error("[store/create] Logo upload failed:", data.error);
+      toast.error("فشل رفع شعار المتجر. هنكمل من غيره");
+    } catch (err) {
+      console.error("[store/create] Logo upload error:", err);
+      toast.error("فشل رفع شعار المتجر. هنكمل من غيره");
     }
     return null;
   };

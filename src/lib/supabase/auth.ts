@@ -286,7 +286,7 @@ async function upsertUserProfile(userId: string, contactInfo: string, displayNam
 // ── Update user profile ───────────────────────────────────────────────
 export async function updateUserProfile(
   userId: string,
-  updates: Partial<Pick<UserProfile, "display_name" | "avatar_url" | "governorate" | "city" | "bio">>,
+  updates: Partial<Pick<UserProfile, "display_name" | "avatar_url" | "governorate" | "city" | "bio" | "seller_type">>,
 ): Promise<{ user: UserProfile | null; error: string | null }> {
   const { data, error } = await supabase
     .from("profiles" as never)

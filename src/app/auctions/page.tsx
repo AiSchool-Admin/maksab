@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Gavel, SlidersHorizontal, Home } from "lucide-react";
+import { Gavel, SlidersHorizontal, Home, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -172,10 +172,22 @@ export default function AuctionsPage() {
       <header className="sticky top-0 z-40 bg-white border-b border-gray-light">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="text-lg font-bold text-dark flex items-center gap-2">
-              <Gavel size={22} className="text-brand-gold" />
-              المزادات
-            </h1>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => window.history.back()}
+                className="p-1 -me-1 text-gray-text hover:text-dark transition-colors"
+                aria-label="رجوع"
+              >
+                <ChevronRight size={24} />
+              </button>
+              <Link href="/" className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors" aria-label="الرئيسية">
+                <Home size={18} />
+              </Link>
+              <h1 className="text-lg font-bold text-dark flex items-center gap-2">
+                <Gavel size={22} className="text-brand-gold" />
+                المزادات
+              </h1>
+            </div>
             <div className="flex items-center gap-1">
               <Link
                 href="/"
