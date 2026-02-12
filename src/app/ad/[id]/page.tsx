@@ -468,6 +468,51 @@ export default function AdDetailPage({
       {/* Image Gallery */}
       <ImageGallery images={ad.images} title={ad.title} />
 
+      {/* Video Player */}
+      {ad.videoUrl && (
+        <div className="px-4 pt-4">
+          <div className="rounded-xl overflow-hidden bg-black">
+            <video
+              src={ad.videoUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full max-h-[300px] object-contain"
+            >
+              المتصفح لا يدعم تشغيل الفيديو
+            </video>
+          </div>
+          <p className="text-xs text-gray-text mt-1.5 flex items-center gap-1">
+            🎬 فيديو المنتج
+          </p>
+        </div>
+      )}
+
+      {/* Voice Note Player */}
+      {ad.voiceNoteUrl && (
+        <div className="px-4 pt-3">
+          <div className="bg-gray-light rounded-xl p-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="12" y1="19" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold text-dark mb-1">رسالة صوتية من البائع</p>
+              <audio
+                src={ad.voiceNoteUrl}
+                controls
+                preload="metadata"
+                className="w-full h-8"
+                style={{ minWidth: 0 }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 py-4 space-y-6">
         {/* Price & sale type */}
         <div>

@@ -13,6 +13,8 @@ import {
 } from "@/lib/categories/generate";
 import type { SaleType } from "@/types";
 import type { CompressedImage } from "@/lib/utils/image-compress";
+import type { VideoFile } from "@/lib/utils/video-compress";
+import type { AudioRecording } from "@/lib/utils/audio-recorder";
 import type { PriceData } from "@/components/ad/steps/Step3PricePhotos";
 import type { ProductAnalysis } from "@/lib/ai/ai-service";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
@@ -125,6 +127,8 @@ export default function CreateAdPage() {
   /* ── State ─────────────────────────────────────────── */
   const [draft, setDraft] = useState<DraftData>(getInitialDraft);
   const [images, setImages] = useState<CompressedImage[]>([]);
+  const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
+  const [voiceNote, setVoiceNote] = useState<AudioRecording | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
@@ -443,6 +447,38 @@ export default function CreateAdPage() {
         }
       }
 
+      // Upload video if present
+      let videoUrl: string | null = null;
+      if (videoFile) {
+        try {
+          const vf = new FormData();
+          vf.append("file", videoFile.file);
+          vf.append("bucket", "ad-videos");
+          vf.append("path", `ads/${authedUser.id}/${Date.now()}_video.${videoFile.file.name.split(".").pop() || "mp4"}`);
+          const vRes = await fetch("/api/upload", { method: "POST", body: vf });
+          if (vRes.ok) {
+            const vData = await vRes.json();
+            if (vData.url) videoUrl = vData.url;
+          }
+        } catch { /* skip */ }
+      }
+
+      // Upload voice note if present
+      let voiceNoteUrl: string | null = null;
+      if (voiceNote) {
+        try {
+          const af = new FormData();
+          af.append("file", voiceNote.file);
+          af.append("bucket", "ad-audio");
+          af.append("path", `ads/${authedUser.id}/${Date.now()}_voice.${voiceNote.file.name.split(".").pop() || "webm"}`);
+          const aRes = await fetch("/api/upload", { method: "POST", body: af });
+          if (aRes.ok) {
+            const aData = await aRes.json();
+            if (aData.url) voiceNoteUrl = aData.url;
+          }
+        } catch { /* skip */ }
+      }
+
       // Build ad data for server API
       const adData = {
         category_id: draft.categoryId,
@@ -452,6 +488,8 @@ export default function CreateAdPage() {
         description: draft.description,
         category_fields: {
           ...draft.categoryFields,
+          ...(videoUrl ? { _video_url: videoUrl } : {}),
+          ...(voiceNoteUrl ? { _voice_note_url: voiceNoteUrl } : {}),
           ...(draft.saleType === "live_auction"
             ? { is_live_auction: true, live_scheduled_at: draft.priceData.liveAuctionScheduledAt }
             : {}),
@@ -574,7 +612,7 @@ export default function CreateAdPage() {
     } finally {
       setIsPublishing(false);
     }
-  }, [draft, images, user, requireAuth, validateStep, track]);
+  }, [draft, images, videoFile, voiceNote, user, requireAuth, validateStep, track]);
 
   /* ── Price label for preview ───────────────────────── */
   const getPriceLabel = () => {
@@ -628,6 +666,8 @@ export default function CreateAdPage() {
               onClick={() => {
                 setDraft(getInitialDraft());
                 setImages([]);
+                setVideoFile(null);
+                setVoiceNote(null);
                 setPublished(false);
                 setErrors({});
               }}
@@ -903,12 +943,16 @@ export default function CreateAdPage() {
             saleType={draft.saleType}
             priceData={draft.priceData}
             images={images}
+            videoFile={videoFile}
+            voiceNote={voiceNote}
             onPriceChange={(key, value) =>
               updateDraft({
                 priceData: { ...draft.priceData, [key]: value },
               })
             }
             onImagesChange={setImages}
+            onVideoChange={setVideoFile}
+            onVoiceNoteChange={setVoiceNote}
             errors={errors}
             categoryId={draft.categoryId}
             subcategoryId={draft.subcategoryId}

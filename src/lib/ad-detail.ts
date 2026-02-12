@@ -59,6 +59,9 @@ export interface AdDetail {
   exchangePriceDiff: number | null;
   // Seller
   seller: SellerInfo;
+  // Media
+  videoUrl: string | null;
+  voiceNoteUrl: string | null;
   // Favorite state
   isFavorited: boolean;
 }
@@ -138,6 +141,8 @@ export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
       }
     }
 
+    const catFields = (ad.category_fields as Record<string, unknown>) || {};
+
     return {
       id: ad.id as string,
       title: ad.title as string,
@@ -149,7 +154,7 @@ export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
       images: (ad.images as string[]) || [],
       categoryId: (ad.category_id as string) || "",
       subcategoryId: (ad.subcategory_id as string) || "",
-      categoryFields: (ad.category_fields as Record<string, unknown>) || {},
+      categoryFields: catFields,
       governorate: (ad.governorate as string) || "",
       city: (ad.city as string) || null,
       viewsCount: Number(ad.views_count) || 0,
@@ -174,6 +179,9 @@ export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
       exchangePriceDiff: ad.exchange_price_diff ? Number(ad.exchange_price_diff) : null,
       // Seller
       seller,
+      // Media
+      videoUrl: (catFields._video_url as string) || null,
+      voiceNoteUrl: (catFields._voice_note_url as string) || null,
       // Favorite
       isFavorited: false,
     };

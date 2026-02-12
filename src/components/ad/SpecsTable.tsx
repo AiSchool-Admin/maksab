@@ -23,12 +23,17 @@ export default function SpecsTable({
   const rows: { label: string; value: string }[] = [];
 
   for (const field of effectiveFields) {
+    // Skip internal/media fields (prefixed with _)
+    if (field.id.startsWith("_")) continue;
     const rawValue = categoryFields[field.id];
     const resolved = resolveFieldLabel(field, rawValue);
     if (resolved) {
       rows.push({ label: field.label, value: resolved });
     }
   }
+
+  // Also filter out any raw _-prefixed keys that exist in categoryFields but not in config
+  // (e.g. _video_url, _voice_note_url stored alongside category fields)
 
   if (rows.length === 0) return null;
 

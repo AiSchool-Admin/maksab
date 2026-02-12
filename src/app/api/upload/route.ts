@@ -18,8 +18,15 @@ function getServiceClient() {
   });
 }
 
-// Allowed buckets to prevent abuse
-const ALLOWED_BUCKETS = ["ad-images", "store-logos", "chat-images", "avatars"];
+// Allowed buckets with per-bucket size limits
+const BUCKET_CONFIG: Record<string, { maxSize: number; label: string }> = {
+  "ad-images": { maxSize: 5 * 1024 * 1024, label: "5MB" },
+  "ad-videos": { maxSize: 50 * 1024 * 1024, label: "50MB" },
+  "ad-audio": { maxSize: 10 * 1024 * 1024, label: "10MB" },
+  "store-logos": { maxSize: 5 * 1024 * 1024, label: "5MB" },
+  "chat-images": { maxSize: 5 * 1024 * 1024, label: "5MB" },
+  "avatars": { maxSize: 5 * 1024 * 1024, label: "5MB" },
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,17 +42,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!ALLOWED_BUCKETS.includes(bucket)) {
+    const bucketCfg = BUCKET_CONFIG[bucket];
+    if (!bucketCfg) {
       return NextResponse.json(
         { error: "Invalid bucket" },
         { status: 400 },
       );
     }
 
-    // Max 5MB per file
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > bucketCfg.maxSize) {
       return NextResponse.json(
-        { error: "حجم الملف أكبر من 5MB" },
+        { error: `حجم الملف أكبر من ${bucketCfg.label}` },
         { status: 400 },
       );
     }
@@ -58,7 +65,7 @@ export async function POST(req: NextRequest) {
     if (!bucketExists) {
       await supabase.storage.createBucket(bucket, {
         public: true,
-        fileSizeLimit: 5 * 1024 * 1024,
+        fileSizeLimit: bucketCfg.maxSize,
       });
     }
 
