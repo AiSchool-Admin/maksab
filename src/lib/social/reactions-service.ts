@@ -206,6 +206,7 @@ export async function getReactionSummary(adId: string): Promise<ReactionSummary>
 export async function addComment(
   adId: string,
   content: string,
+  userId?: string,
 ): Promise<{ comment: AdComment | null; error: string | null }> {
   const trimmed = content.trim();
   if (!trimmed) {
@@ -219,7 +220,7 @@ export async function addComment(
     const res = await fetch("/api/ads/comments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ad_id: adId, content: trimmed }),
+      body: JSON.stringify({ ad_id: adId, content: trimmed, user_id: userId }),
     });
 
     const data = await res.json();
@@ -241,6 +242,7 @@ export async function getComments(
   adId: string,
   page: number = 1,
   limit: number = 10,
+  userId?: string,
 ): Promise<CommentsPage> {
   const defaultPage: CommentsPage = {
     comments: [],
@@ -254,6 +256,7 @@ export async function getComments(
       page: String(page),
       limit: String(limit),
     });
+    if (userId) params.set("user_id", userId);
 
     const res = await fetch(`/api/ads/comments?${params}`);
     const data = await res.json();
@@ -275,10 +278,13 @@ export async function getComments(
  */
 export async function deleteComment(
   commentId: string,
+  userId?: string,
 ): Promise<{ success: boolean; error: string | null }> {
   try {
+    const params = new URLSearchParams({ comment_id: commentId });
+    if (userId) params.set("user_id", userId);
     const res = await fetch(
-      `/api/ads/comments?comment_id=${encodeURIComponent(commentId)}`,
+      `/api/ads/comments?${params}`,
       { method: "DELETE" },
     );
 
@@ -299,12 +305,13 @@ export async function deleteComment(
  */
 export async function toggleCommentLike(
   commentId: string,
+  userId?: string,
 ): Promise<{ liked: boolean; error: string | null }> {
   try {
     const res = await fetch("/api/ads/comments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "toggle_like", comment_id: commentId }),
+      body: JSON.stringify({ action: "toggle_like", comment_id: commentId, user_id: userId }),
     });
 
     const data = await res.json();

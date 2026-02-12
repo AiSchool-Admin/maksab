@@ -47,7 +47,7 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
     let mounted = true;
     async function load() {
       setIsLoading(true);
-      const result = await getComments(adId, 1, PAGE_SIZE);
+      const result = await getComments(adId, 1, PAGE_SIZE, authUser?.id);
       if (mounted) {
         setComments(result.comments);
         setTotalCount(result.totalCount);
@@ -58,14 +58,14 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
     }
     load();
     return () => { mounted = false; };
-  }, [adId]);
+  }, [adId, authUser?.id]);
 
   // Load more comments
   const handleLoadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
     setIsLoadingMore(true);
     const nextPage = page + 1;
-    const result = await getComments(adId, nextPage, PAGE_SIZE);
+    const result = await getComments(adId, nextPage, PAGE_SIZE, authUser?.id);
     setComments((prev) => [...prev, ...result.comments]);
     setHasMore(result.hasMore);
     setPage(nextPage);
@@ -94,7 +94,7 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
     setIsSending(true);
     setInputError(null);
 
-    const { comment, error } = await addComment(adId, trimmed);
+    const { comment, error } = await addComment(adId, trimmed, currentUser.id);
 
     if (error) {
       setInputError(error);
@@ -114,7 +114,7 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
 
   // Delete comment
   const handleDelete = useCallback(async (commentId: string) => {
-    const { success } = await deleteComment(commentId);
+    const { success } = await deleteComment(commentId, currentUser?.id);
     if (success) {
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       setTotalCount((prev) => Math.max(0, prev - 1));
@@ -137,7 +137,7 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
       }),
     );
 
-    const { error } = await toggleCommentLike(commentId);
+    const { error } = await toggleCommentLike(commentId, currentUser?.id);
     if (error) {
       // Revert optimistic update
       setComments((prev) =>
