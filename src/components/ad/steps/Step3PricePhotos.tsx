@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef } from "react";
-import { ImagePlus, X, Star } from "lucide-react";
+import { useRef, useState } from "react";
+import { ImagePlus, X, Star, Sparkles } from "lucide-react";
 import Input from "@/components/ui/Input";
 import ExchangeWantedForm from "./ExchangeWantedForm";
 import type { CompressedImage } from "@/lib/utils/image-compress";
 import { compressImage } from "@/lib/utils/image-compress";
 import PriceSuggestionCard from "@/components/price/PriceSuggestionCard";
+import PhotoEnhancer from "@/components/ai/PhotoEnhancer";
 
 const MAX_IMAGES = 5;
 
@@ -57,6 +58,32 @@ export default function Step3PricePhotos({
   categoryFields,
 }: Step3Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
+
+  const handleEnhancedImage = (enhancedDataUrl: string) => {
+    if (enhancingIndex === null) return;
+    // Convert enhanced data URL back to CompressedImage
+    const byteString = atob(enhancedDataUrl.split(",")[1] || "");
+    const mimeString = enhancedDataUrl.split(",")[0]?.split(":")[1]?.split(";")[0] || "image/jpeg";
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let j = 0; j < byteString.length; j++) {
+      ia[j] = byteString.charCodeAt(j);
+    }
+    const blob = new Blob([ab], { type: mimeString });
+    const file = new File([blob], `enhanced-${enhancingIndex}.jpg`, { type: mimeString });
+    const updated = [...images];
+    // Revoke old preview URL
+    if (images[enhancingIndex].preview.startsWith("blob:")) {
+      URL.revokeObjectURL(images[enhancingIndex].preview);
+    }
+    updated[enhancingIndex] = {
+      file,
+      preview: enhancedDataUrl,
+    };
+    onImagesChange(updated);
+    setEnhancingIndex(null);
+  };
 
   const handleAddImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -429,6 +456,15 @@ export default function Step3PricePhotos({
               >
                 <X size={14} />
               </button>
+              {/* Enhance button */}
+              <button
+                type="button"
+                onClick={() => setEnhancingIndex(index)}
+                className="absolute -top-1.5 -end-1.5 w-6 h-6 bg-brand-green text-white rounded-full flex items-center justify-center shadow"
+                aria-label="تحسين الصورة"
+              >
+                <Sparkles size={11} />
+              </button>
               {/* Main image badge */}
               {index === 0 && (
                 <span className="absolute bottom-1 start-1 bg-brand-gold text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
@@ -461,6 +497,19 @@ export default function Step3PricePhotos({
           className="hidden"
         />
       </div>
+
+      {/* Photo Enhancer Modal */}
+      {enhancingIndex !== null && images[enhancingIndex] && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-auto">
+            <PhotoEnhancer
+              imageDataUrl={images[enhancingIndex].preview}
+              onEnhanced={handleEnhancedImage}
+              onCancel={() => setEnhancingIndex(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

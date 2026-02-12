@@ -55,6 +55,7 @@ import PriceBadge from "@/components/price/PriceBadge";
 import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
 import ReportButton from "@/components/report/ReportButton";
 import MarkAsSoldButton from "@/components/ad/MarkAsSoldButton";
+import PriceMeter from "@/components/ai/PriceMeter";
 
 /** Convert AdDetail to AuctionState for the auction component */
 function toAuctionState(ad: AdDetail): AuctionState {
@@ -571,6 +572,17 @@ export default function AdDetailPage({
           categoryId={ad.categoryId}
           categoryFields={ad.categoryFields}
         />
+
+        {/* AI Price Meter — full mode */}
+        {ad.saleType === "cash" && ad.price != null && ad.price > 0 && (
+          <PriceMeter
+            categoryId={ad.categoryId}
+            categoryFields={ad.categoryFields as Record<string, unknown>}
+            title={ad.title}
+            price={ad.price}
+            governorate={ad.governorate || undefined}
+          />
+        )}
 
         {/* Description */}
         <div>
