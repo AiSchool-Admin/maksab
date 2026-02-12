@@ -53,6 +53,8 @@ import AddToCompareButton from "@/components/comparison/AddToCompareButton";
 import ComparisonFab from "@/components/comparison/ComparisonFab";
 import PriceBadge from "@/components/price/PriceBadge";
 import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
+import ReportButton from "@/components/report/ReportButton";
+import MarkAsSoldButton from "@/components/ad/MarkAsSoldButton";
 
 /** Convert AdDetail to AuctionState for the auction component */
 function toAuctionState(ad: AdDetail): AuctionState {
@@ -403,6 +405,7 @@ export default function AdDetailPage({
             </Link>
           </div>
           <div className="flex items-center gap-1">
+            <ReportButton targetType="ad" targetId={id} />
             <button
               onClick={handleShare}
               className="p-2 text-gray-text hover:text-dark rounded-full hover:bg-gray-light transition-colors"
@@ -638,17 +641,33 @@ export default function AdDetailPage({
               </a>
             </div>
 
-            {/* Review button for non-sellers */}
+            {/* Review & Report buttons for non-sellers */}
             {user && user.id !== ad.seller.id && (
-              <button
-                onClick={() => setShowReviewForm(true)}
-                className="text-xs font-semibold text-brand-green hover:text-brand-green-dark transition-colors"
-              >
-                قيّم هذا البائع
-              </button>
+              <div className="flex items-center gap-4 pt-1">
+                <button
+                  onClick={() => setShowReviewForm(true)}
+                  className="text-xs font-semibold text-brand-green hover:text-brand-green-dark transition-colors"
+                >
+                  قيّم هذا البائع
+                </button>
+                <ReportButton targetType="user" targetId={ad.seller.id} variant="text" />
+              </div>
             )}
           </div>
         </div>
+
+        {/* Mark as Sold (visible to seller on active ads) */}
+        {user?.id === ad.seller.id && ad.status !== "sold" && ad.status !== "exchanged" && (
+          <MarkAsSoldButton
+            adId={ad.id}
+            adTitle={ad.title}
+            price={ad.price}
+            userId={user.id}
+            saleType={ad.saleType}
+            onMarkedSold={() => window.location.reload()}
+            variant="card"
+          />
+        )}
 
         {/* Seller Offers (visible to seller) */}
         {user?.id === ad.seller.id && (

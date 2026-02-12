@@ -14,52 +14,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
+import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 
 const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
-
-// ── Rate limiting (in-memory — resets on server restart) ────────────
-const RATE_LIMIT_MAX = 5;           // Max OTP requests per window
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;  // 1 hour window
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(phone: string): { allowed: boolean; retryAfter?: number } {
-  const now = Date.now();
-  const entry = rateLimitMap.get(phone);
-
-  // Clean expired entry
-  if (entry && now > entry.resetAt) {
-    rateLimitMap.delete(phone);
-  }
-
-  const current = rateLimitMap.get(phone);
-  if (!current) {
-    rateLimitMap.set(phone, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true };
-  }
-
-  if (current.count >= RATE_LIMIT_MAX) {
-    const retryAfter = Math.ceil((current.resetAt - now) / 1000);
-    return { allowed: false, retryAfter };
-  }
-
-  current.count++;
-  return { allowed: true };
-}
-
-// Periodic cleanup of stale entries (every 10 minutes)
-if (typeof globalThis !== "undefined") {
-  const CLEANUP_KEY = "__otp_rate_limit_cleanup";
-  if (!(globalThis as Record<string, unknown>)[CLEANUP_KEY]) {
-    (globalThis as Record<string, unknown>)[CLEANUP_KEY] = true;
-    setInterval(() => {
-      const now = Date.now();
-      for (const [key, entry] of rateLimitMap) {
-        if (now > entry.resetAt) rateLimitMap.delete(key);
-      }
-    }, 10 * 60 * 1000);
-  }
-}
 
 function getSecret(): string {
   const secret = process.env.OTP_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -95,17 +53,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Rate limit check ────────────────────────────────────────────
-    const rateCheck = checkRateLimit(phone);
+    // ── Rate limit check (Supabase-based, persistent) ───────────────
+    const rateCheck = await checkRateLimit(phone, "otp_send");
     if (!rateCheck.allowed) {
       return NextResponse.json(
         {
-          error: `عديت الحد المسموح. جرب تاني بعد ${rateCheck.retryAfter} ثانية`,
-          retry_after: rateCheck.retryAfter,
+          error: `عديت الحد المسموح. جرب تاني بعد ${Math.ceil((rateCheck.retryAfterSeconds || 60) / 60)} دقيقة`,
+          retry_after: rateCheck.retryAfterSeconds,
         },
         { status: 429 }
       );
     }
+
+    // Record this OTP request
+    await recordRateLimit(phone, "otp_send");
 
     // Generate OTP
     const code = generateOTP();

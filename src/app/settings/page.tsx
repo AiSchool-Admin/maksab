@@ -12,6 +12,7 @@ import {
   Trash2,
   ChevronLeft,
 } from "lucide-react";
+import Link from "next/link";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -66,6 +67,7 @@ export default function SettingsPage() {
 
   const [cacheCleared, setCacheCleared] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const handleClearCache = () => {
     if (typeof window !== "undefined") {
@@ -86,14 +88,21 @@ export default function SettingsPage() {
   const handleDeleteAccount = async () => {
     setIsDeleting(true);
     try {
-      // Delete user data from database via Supabase
-      const { supabase } = await import("@/lib/supabase/client");
-      if (user?.id) {
-        // Delete user's ads
-        await supabase.from("ads" as never).delete().eq("user_id", user.id);
-        // Delete user profile
-        await supabase.from("profiles" as never).delete().eq("id", user.id);
+      // Soft-delete via API (anonymizes data, deactivates ads)
+      const response = await fetch("/api/users/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user?.id,
+          reason: deleteReason || null,
+        }),
+      });
+
+      if (!response.ok) {
+        setIsDeleting(false);
+        return;
       }
+
       // Clear all local data
       if (typeof window !== "undefined") {
         localStorage.clear();
@@ -210,14 +219,12 @@ export default function SettingsPage() {
             الخصوصية والأمان
           </h2>
           <div className="space-y-1">
-            <SettingItem
-              label="سياسة الخصوصية"
-              onClick={() => {}}
-            />
-            <SettingItem
-              label="شروط الاستخدام"
-              onClick={() => {}}
-            />
+            <Link href="/privacy" className="block">
+              <SettingItem label="سياسة الخصوصية" onClick={() => {}} />
+            </Link>
+            <Link href="/terms" className="block">
+              <SettingItem label="شروط الاستخدام" onClick={() => {}} />
+            </Link>
           </div>
         </section>
 
@@ -239,8 +246,20 @@ export default function SettingsPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-gray-text">
-                    هل أنت متأكد؟ سيتم حذف جميع بياناتك وإعلاناتك نهائياً ولا يمكن التراجع.
+                    هل أنت متأكد؟ سيتم إلغاء تفعيل حسابك ومسح بياناتك الشخصية وإخفاء إعلاناتك.
                   </p>
+                  <select
+                    value={deleteReason}
+                    onChange={(e) => setDeleteReason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-light rounded-lg text-sm text-dark"
+                  >
+                    <option value="">سبب الحذف (اختياري)</option>
+                    <option value="no_need">مش محتاج التطبيق دلوقتي</option>
+                    <option value="privacy">قلقان على خصوصيتي</option>
+                    <option value="bad_experience">تجربة سيئة</option>
+                    <option value="found_alternative">لقيت بديل أحسن</option>
+                    <option value="other">سبب تاني</option>
+                  </select>
                   <div className="flex gap-2">
                     <button
                       onClick={handleDeleteAccount}

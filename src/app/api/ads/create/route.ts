@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,6 +28,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "بيانات ناقصة" },
         { status: 400 },
+      );
+    }
+
+    // Rate limit: max 10 ads per day per user
+    const rateCheck = await checkRateLimit(user_id, "ad_create");
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "وصلت للحد الأقصى من الإعلانات اليومية (10 إعلانات). جرب بكرة" },
+        { status: 429 },
       );
     }
 
@@ -173,6 +183,9 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
+
+    // Record rate limit usage after successful creation
+    await recordRateLimit(user_id, "ad_create");
 
     return NextResponse.json({
       success: true,

@@ -9,6 +9,8 @@ import ChatInput from "@/components/chat/ChatInput";
 import ChatAdLink from "@/components/chat/ChatAdLink";
 import OnlineIndicator from "@/components/chat/OnlineIndicator";
 import TypingIndicator from "@/components/chat/TypingIndicator";
+import BlockUserButton from "@/components/chat/BlockUserButton";
+import ReportButton from "@/components/report/ReportButton";
 import { ChatBubbleSkeleton } from "@/components/ui/SkeletonLoader";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useChatStore } from "@/stores/chat-store";
@@ -328,6 +330,19 @@ export default function ChatPage({
               />
             )}
           </div>
+
+          {/* Block & Report */}
+          {currentUserId && otherUser.id && (
+            <>
+              <BlockUserButton
+                currentUserId={currentUserId}
+                otherUserId={otherUser.id}
+                otherUserName={otherUser.displayName}
+                onBlocked={() => router.push("/chat")}
+              />
+              <ReportButton targetType="user" targetId={otherUser.id} />
+            </>
+          )}
 
           {/* Home button */}
           <Link
