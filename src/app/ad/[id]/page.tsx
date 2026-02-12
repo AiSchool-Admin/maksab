@@ -55,6 +55,7 @@ import PriceBadge from "@/components/price/PriceBadge";
 import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
 import ReportButton from "@/components/report/ReportButton";
 import MarkAsSoldButton from "@/components/ad/MarkAsSoldButton";
+import SmartPriceDrop from "@/components/ad/SmartPriceDrop";
 import PriceMeter from "@/components/ai/PriceMeter";
 
 /** Convert AdDetail to AuctionState for the auction component */
@@ -114,6 +115,7 @@ export default function AdDetailPage({
   const [sellerLoyaltyLevel, setSellerLoyaltyLevel] = useState<"member" | "silver" | "gold" | "diamond">("member");
 
   const [notFound, setNotFound] = useState(false);
+  const [autoDropEnabled, setAutoDropEnabled] = useState(false);
   const currentUserId = user?.id || "";
 
   /* ── Load ad detail ──────────────────────────────────────── */
@@ -678,6 +680,22 @@ export default function AdDetailPage({
             saleType={ad.saleType}
             onMarkedSold={() => window.location.reload()}
             variant="card"
+          />
+        )}
+
+        {/* Smart Price Drop (visible to seller on cash ads) */}
+        {user?.id === ad.seller.id && ad.saleType === "cash" && ad.price != null && ad.status === "active" && (
+          <SmartPriceDrop
+            adId={ad.id}
+            currentPrice={ad.price}
+            viewsCount={ad.viewsCount}
+            favoritesCount={ad.favoritesCount}
+            daysListed={Math.max(1, Math.floor((Date.now() - new Date(ad.createdAt).getTime()) / (1000 * 60 * 60 * 24)))}
+            autoDropEnabled={autoDropEnabled}
+            onToggleAutoDrop={setAutoDropEnabled}
+            onApplyDrop={(newPrice) => {
+              setAd((prev) => prev ? { ...prev, price: newPrice } : prev);
+            }}
           />
         )}
 

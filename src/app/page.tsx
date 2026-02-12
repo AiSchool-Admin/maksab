@@ -19,6 +19,10 @@ const UpgradeToStoreBanner = dynamic(
   () => import("@/components/store/UpgradeToStoreBanner"),
   { ssr: false },
 );
+const ShoppingAssistantFab = dynamic(
+  () => import("@/components/chat/ShoppingAssistantFab"),
+  { ssr: false },
+);
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
@@ -322,6 +326,7 @@ export default function HomePage() {
         </section>
       )}
 
+      <ShoppingAssistantFab />
       <BottomNavWithBadge />
     </main>
   );

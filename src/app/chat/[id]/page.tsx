@@ -11,6 +11,9 @@ import OnlineIndicator from "@/components/chat/OnlineIndicator";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import BlockUserButton from "@/components/chat/BlockUserButton";
 import ReportButton from "@/components/report/ReportButton";
+import SmartQuestionsSection from "@/components/chat/SmartQuestionsSection";
+import NegotiationAssistant from "@/components/chat/NegotiationAssistant";
+import ProductInsightsCard from "@/components/chat/ProductInsightsCard";
 import { ChatBubbleSkeleton } from "@/components/ui/SkeletonLoader";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useChatStore } from "@/stores/chat-store";
@@ -48,6 +51,12 @@ export default function ChatPage({
   );
   const [isLoadingConv, setIsLoadingConv] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [adMeta, setAdMeta] = useState<{
+    categoryId: string;
+    categoryFields: Record<string, unknown>;
+    saleType: string;
+    description?: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -63,6 +72,22 @@ export default function ChatPage({
     fetchConversation(conversationId).then((conv) => {
       setConversation(conv);
       setIsLoadingConv(false);
+
+      // Fetch ad metadata for AI features (non-blocking)
+      if (conv?.adId) {
+        import("@/lib/ad-detail").then(({ fetchAdDetail }) => {
+          fetchAdDetail(conv.adId).then((ad) => {
+            if (ad) {
+              setAdMeta({
+                categoryId: ad.categoryId,
+                categoryFields: ad.categoryFields as Record<string, unknown>,
+                saleType: ad.saleType,
+                description: ad.description,
+              });
+            }
+          });
+        }).catch(() => {});
+      }
     });
   }, [conversationId]);
 
@@ -370,6 +395,21 @@ export default function ChatPage({
           price={conversation.adPrice}
           image={conversation.adImage}
         />
+
+        {/* Product Insights Card — collapsible */}
+        {adMeta && (
+          <div className="px-3 pt-1">
+            <ProductInsightsCard
+              categoryId={adMeta.categoryId}
+              categoryFields={adMeta.categoryFields}
+              title={conversation.adTitle}
+              price={conversation.adPrice}
+              saleType={adMeta.saleType}
+              description={adMeta.description}
+            />
+          </div>
+        )}
+
         <div className="h-2" />
       </header>
 
@@ -378,6 +418,21 @@ export default function ChatPage({
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto px-4 py-4"
       >
+        {/* Smart Questions — show for new conversations */}
+        {adMeta && !isLoadingMessages && (
+          <SmartQuestionsSection
+            adId={conversation.adId}
+            categoryId={adMeta.categoryId}
+            categoryFields={adMeta.categoryFields}
+            title={conversation.adTitle}
+            price={conversation.adPrice}
+            saleType={adMeta.saleType}
+            description={adMeta.description}
+            onSendQuestion={handleSendText}
+            messagesCount={messages.length}
+          />
+        )}
+
         {isLoadingMessages ? (
           <div className="space-y-4">
             <ChatBubbleSkeleton isOwn={false} />
@@ -425,8 +480,32 @@ export default function ChatPage({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ── Input area ──────────────────────────────────────────────── */}
+      {/* ── Negotiation Assistant + Input area ─────────────────────── */}
       <div className="flex-shrink-0">
+        {/* Negotiation assistant — shows when there's a price-related chat */}
+        {adMeta && conversation.adPrice && conversation.adPrice > 0 && messages.length > 0 && (
+          <div className="px-3 py-2 border-t border-gray-light">
+            <NegotiationAssistant
+              categoryId={adMeta.categoryId}
+              title={conversation.adTitle}
+              listingPrice={conversation.adPrice}
+              isBuyer={currentUserId === conversation.buyerId}
+              lastOtherMessage={
+                messages
+                  .filter((m) => m.senderId !== currentUserId && m.content)
+                  .slice(-1)[0]?.content || null
+              }
+              conversationHistory={messages
+                .filter((m) => m.content)
+                .slice(-6)
+                .map((m) => ({
+                  role: m.senderId === currentUserId ? "user" : "assistant",
+                  content: m.content || "",
+                }))}
+              onUseSuggestion={handleSendText}
+            />
+          </div>
+        )}
         <ChatInput
           onSendText={handleSendText}
           onSendImage={handleSendImage}
