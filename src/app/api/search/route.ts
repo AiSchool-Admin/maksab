@@ -115,20 +115,19 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Fallback when RPC is not available */
+/** Build a base fallback query with all filters except text search */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fallbackSearch(
+function buildFallbackQuery(
   supabase: any,
   body: Record<string, unknown>,
-  offset: number,
-  limit: number
+  includeTextSearch: boolean,
 ) {
   let q = supabase
     .from("ads" as never)
     .select("*", { count: "exact" })
     .eq("status", "active");
 
-  if (body.query) {
+  if (includeTextSearch && body.query) {
     // Sanitize query for PostgREST .or() filter — escape special chars
     const sanitized = String(body.query)
       .replace(/[%_\\]/g, "\\$&")   // escape LIKE wildcards
@@ -167,29 +166,68 @@ async function fallbackSearch(
       q = q.order("created_at", { ascending: false });
   }
 
-  q = q.range(offset, offset + limit - 1);
+  return q;
+}
+
+/** Fallback when RPC is not available */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fallbackSearch(
+  supabase: any,
+  body: Record<string, unknown>,
+  offset: number,
+  limit: number
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formatRows = (rows: Record<string, unknown>[]) =>
+    rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      price: row.price ? Number(row.price) : null,
+      saleType: row.sale_type,
+      image: ((row.images as string[]) ?? [])[0] ?? null,
+      governorate: row.governorate,
+      city: row.city,
+      createdAt: row.created_at,
+      isNegotiable: row.is_negotiable ?? false,
+      auctionEndsAt: row.auction_ends_at ?? undefined,
+      exchangeDescription: row.exchange_description ?? undefined,
+      relevanceScore: 0,
+      matchType: "fallback",
+    }));
+
+  // Try with text search first
+  const q = buildFallbackQuery(supabase, body, true)
+    .range(offset, offset + limit - 1);
 
   const { data, error, count } = await q;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const ads = ((data || []) as Record<string, unknown>[]).map((row) => ({
-    id: row.id,
-    title: row.title,
-    price: row.price ? Number(row.price) : null,
-    saleType: row.sale_type,
-    image: ((row.images as string[]) ?? [])[0] ?? null,
-    governorate: row.governorate,
-    city: row.city,
-    createdAt: row.created_at,
-    isNegotiable: row.is_negotiable ?? false,
-    auctionEndsAt: row.auction_ends_at ?? undefined,
-    exchangeDescription: row.exchange_description ?? undefined,
-    relevanceScore: 0,
-    matchType: "fallback",
-  }));
+  const rows = (data || []) as Record<string, unknown>[];
 
+  // If text search returned 0 results but we have category/other filters,
+  // retry without text search to show broader category results
+  if (rows.length === 0 && body.query && (body.category || body.categoryFilters)) {
+    const broaderQ = buildFallbackQuery(supabase, body, false)
+      .range(offset, offset + limit - 1);
+
+    const { data: broaderData, error: broaderError, count: broaderCount } = await broaderQ;
+    if (!broaderError && broaderData && (broaderData as unknown[]).length > 0) {
+      const broaderRows = broaderData as Record<string, unknown>[];
+      const ads = formatRows(broaderRows);
+      const total = broaderCount ?? ads.length;
+      return NextResponse.json({
+        ads,
+        total,
+        hasMore: offset + limit < total,
+        page: Math.floor(offset / limit),
+        searchMethod: "broadened",
+      });
+    }
+  }
+
+  const ads = formatRows(rows);
   const total = count ?? ads.length;
   return NextResponse.json({
     ads,

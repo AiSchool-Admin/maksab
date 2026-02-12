@@ -88,9 +88,18 @@ function SearchPageInner() {
 
   /* ── Build SearchFilters from state ────────────────────────────────── */
   const buildFilters = useCallback((): SearchFilters => {
+    // Use AI-parsed cleanQuery when available — this removes keywords that
+    // were already consumed by entity extraction (category, brand, etc.).
+    // e.g. "شنطة" → category=fashion, cleanQuery="" → no redundant text filter
+    const effectiveQuery =
+      parsedQuery && parsedQuery.confidence >= 0.4
+        ? parsedQuery.cleanQuery || undefined
+        : query || undefined;
+
     return {
-      query: query || undefined,
+      query: effectiveQuery,
       category: filters.category,
+      subcategory: filters.subcategory,
       saleType: filters.saleType,
       priceMin: filters.priceMin,
       priceMax: filters.priceMax,
@@ -99,7 +108,7 @@ function SearchPageInner() {
       sortBy: sortBy as SearchFilters["sortBy"],
       categoryFilters,
     };
-  }, [query, filters, sortBy, categoryFilters]);
+  }, [query, parsedQuery, filters, sortBy, categoryFilters]);
 
   /* ── Execute search (uses advanced full-text + fuzzy API) ──────────── */
   const executeSearch = useCallback(
@@ -268,6 +277,7 @@ function SearchPageInner() {
       // Start with FRESH filters from AI parsing — don't accumulate old ones
       const newFilters: ActiveFilters = {};
       if (parsed.primaryCategory) newFilters.category = parsed.primaryCategory;
+      if (parsed.subcategory) newFilters.subcategory = parsed.subcategory;
       if (parsed.governorate) newFilters.governorate = parsed.governorate;
       if (parsed.saleType) newFilters.saleType = parsed.saleType;
       if (parsed.priceMin != null) newFilters.priceMin = parsed.priceMin;
@@ -356,6 +366,11 @@ function SearchPageInner() {
       setFilters(newFilters);
       if (newFilters.category !== filters.category) {
         setCategoryFilters({});
+      }
+      // When filters are cleared manually, reset parsedQuery so the raw query
+      // is used for text search instead of the (now irrelevant) cleanQuery
+      if (!newFilters.category && !newFilters.governorate && !newFilters.saleType) {
+        setParsedQuery(null);
       }
     },
     [filters.category],
