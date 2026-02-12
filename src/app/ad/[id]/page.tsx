@@ -841,13 +841,15 @@ export default function AdDetailPage({
         )}
       </div>
 
-      {/* Bottom contact bar */}
-      <ContactBar
-        sellerPhone={ad.seller.phone}
-        adTitle={ad.title}
-        adId={ad.id}
-        onChat={handleChat}
-      />
+      {/* Bottom contact bar — only for buyers, not the seller */}
+      {currentUserId !== ad.seller.id && (
+        <ContactBar
+          sellerPhone={ad.seller.phone}
+          adTitle={ad.title}
+          adId={ad.id}
+          onChat={handleChat}
+        />
+      )}
 
       {/* Comparison FAB */}
       <ComparisonFab />
