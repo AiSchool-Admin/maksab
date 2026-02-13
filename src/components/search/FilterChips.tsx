@@ -9,6 +9,7 @@ import { governorates } from "@/lib/data/governorates";
 
 export interface ActiveFilters {
   category?: string;
+  subcategory?: string;
   saleType?: "cash" | "auction" | "exchange";
   priceMin?: number;
   priceMax?: number;

@@ -17,6 +17,8 @@ import Step3PricePhotos from "@/components/ad/steps/Step3PricePhotos";
 import Step4LocationReview from "@/components/ad/steps/Step4LocationReview";
 import type { PriceData } from "@/components/ad/steps/Step3PricePhotos";
 import type { CompressedImage } from "@/lib/utils/image-compress";
+import type { VideoFile } from "@/lib/utils/video-compress";
+import type { AudioRecording } from "@/lib/utils/audio-recorder";
 
 const TOTAL_STEPS = 3;
 const stepTitles = ["تعديل التفاصيل", "السعر والصور", "الموقع والمراجعة"];
@@ -69,6 +71,8 @@ export default function EditAdPage({
   const [currentStep, setCurrentStep] = useState(1);
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const [images, setImages] = useState<CompressedImage[]>([]);
+  const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
+  const [voiceNote, setVoiceNote] = useState<AudioRecording | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -233,10 +237,48 @@ export default function EditAdPage({
         }
       }
 
+      // Upload video if new
+      let videoUrl: string | null = (draft.categoryFields._video_url as string) || null;
+      if (videoFile) {
+        try {
+          const vf = new FormData();
+          vf.append("file", videoFile.file);
+          vf.append("bucket", "ad-videos");
+          vf.append("path", `ads/${authedUser.id}/${Date.now()}_video.${videoFile.file.name.split(".").pop() || "mp4"}`);
+          const vRes = await fetch("/api/upload", { method: "POST", body: vf });
+          if (vRes.ok) {
+            const vData = await vRes.json();
+            if (vData.url) videoUrl = vData.url;
+          }
+        } catch { /* skip */ }
+      }
+
+      // Upload voice note if new
+      let voiceNoteUrl: string | null = (draft.categoryFields._voice_note_url as string) || null;
+      if (voiceNote) {
+        try {
+          const af = new FormData();
+          af.append("file", voiceNote.file);
+          af.append("bucket", "ad-audio");
+          af.append("path", `ads/${authedUser.id}/${Date.now()}_voice.${voiceNote.file.name.split(".").pop() || "webm"}`);
+          const aRes = await fetch("/api/upload", { method: "POST", body: af });
+          if (aRes.ok) {
+            const aData = await aRes.json();
+            if (aData.url) voiceNoteUrl = aData.url;
+          }
+        } catch { /* skip */ }
+      }
+
+      const updatedCategoryFields = {
+        ...draft.categoryFields,
+        ...(videoUrl ? { _video_url: videoUrl } : {}),
+        ...(voiceNoteUrl ? { _voice_note_url: voiceNoteUrl } : {}),
+      };
+
       const updateData: Record<string, unknown> = {
         title: draft.title,
         description: draft.description,
-        category_fields: draft.categoryFields,
+        category_fields: updatedCategoryFields,
         governorate: draft.governorate,
         city: draft.city || null,
         images: uploadedUrls,
@@ -424,12 +466,16 @@ export default function EditAdPage({
             saleType={draft.saleType}
             priceData={draft.priceData}
             images={images}
+            videoFile={videoFile}
+            voiceNote={voiceNote}
             onPriceChange={(key, value) =>
               updateDraft({
                 priceData: { ...draft.priceData, [key]: value },
               })
             }
             onImagesChange={setImages}
+            onVideoChange={setVideoFile}
+            onVoiceNoteChange={setVoiceNote}
             errors={errors}
           />
         )}

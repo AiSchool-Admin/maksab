@@ -2,9 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Store, MessageCircle, User, Plus } from "lucide-react";
+import { Home, Store, MessageCircle, User, Plus, LayoutDashboard } from "lucide-react";
 
-const tabs = [
+interface TabConfig {
+  href: string;
+  icon: typeof Home;
+  label: string;
+  isAdd?: boolean;
+  hasBadge?: boolean;
+}
+
+const defaultTabs: TabConfig[] = [
   { href: "/", icon: Home, label: "الرئيسية" },
   { href: "/stores", icon: Store, label: "المتاجر" },
   { href: "/ad/create", icon: Plus, label: "أضف إعلانك", isAdd: true },
@@ -12,12 +20,22 @@ const tabs = [
   { href: "/profile", icon: User, label: "حسابي" },
 ];
 
+const merchantTabs: TabConfig[] = [
+  { href: "/", icon: Home, label: "الرئيسية" },
+  { href: "/store/dashboard", icon: LayoutDashboard, label: "متجري" },
+  { href: "/store/dashboard/products/quick-add", icon: Plus, label: "أضف منتج", isAdd: true },
+  { href: "/chat", icon: MessageCircle, label: "الرسائل", hasBadge: true },
+  { href: "/profile", icon: User, label: "حسابي" },
+];
+
 interface BottomNavProps {
   unreadMessages?: number;
+  isMerchant?: boolean;
 }
 
-export default function BottomNav({ unreadMessages = 0 }: BottomNavProps) {
+export default function BottomNav({ unreadMessages = 0, isMerchant = false }: BottomNavProps) {
   const pathname = usePathname();
+  const tabs = isMerchant ? merchantTabs : defaultTabs;
 
   return (
     <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-light safe-bottom z-50">
@@ -29,17 +47,20 @@ export default function BottomNav({ unreadMessages = 0 }: BottomNavProps) {
               : pathname.startsWith(tab.href);
           const Icon = tab.icon;
 
-          // Prominent "أضف إعلانك" button — elevated pill
+          // Prominent add button — elevated pill
           if (tab.isAdd) {
+            const addBtnClass = isMerchant
+              ? "relative -top-4 flex items-center gap-1.5 bg-orange-500 text-white px-5 py-2.5 rounded-full shadow-lg shadow-orange-500/30 hover:bg-orange-600 active:scale-95 transition-all"
+              : "relative -top-4 flex items-center gap-1.5 bg-brand-green text-white px-5 py-2.5 rounded-full shadow-lg shadow-brand-green/30 hover:bg-brand-green-dark active:scale-95 transition-all";
             return (
               <Link
                 key={tab.href}
                 href={tab.href}
-                className="relative -top-4 flex items-center gap-1.5 bg-brand-green text-white px-5 py-2.5 rounded-full shadow-lg shadow-brand-green/30 hover:bg-brand-green-dark active:scale-95 transition-all"
+                className={addBtnClass}
                 aria-label={tab.label}
               >
                 <Icon size={18} strokeWidth={2.5} />
-                <span className="text-sm font-bold whitespace-nowrap">أضف إعلانك</span>
+                <span className="text-sm font-bold whitespace-nowrap">{tab.label}</span>
               </Link>
             );
           }

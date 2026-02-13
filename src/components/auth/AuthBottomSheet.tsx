@@ -1,20 +1,24 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Phone, User, RefreshCw, Smartphone } from "lucide-react";
+import { Phone, RefreshCw, Smartphone, Store, User as UserIcon, UserCircle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import {
   sendOTP,
   verifyOTP,
+  verifyOTPViaFirebase,
   type UserProfile,
 } from "@/lib/supabase/auth";
 import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
+import { isFirebaseConfigured } from "@/lib/firebase/config";
+
+export type AccountType = "individual" | "merchant";
 
 interface AuthBottomSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: UserProfile) => void;
+  onSuccess: (user: UserProfile, accountType: AccountType) => void;
 }
 
 type Step = "phone" | "otp";
@@ -27,6 +31,7 @@ export default function AuthBottomSheet({
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [accountType, setAccountType] = useState<AccountType>("individual");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,12 +43,17 @@ export default function AuthBottomSheet({
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Track if auto-fill animation is in progress
+  const autoFillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
+
   // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       setStep("phone");
       setPhone("");
       setDisplayName("");
+      setAccountType("individual");
       setOtp(["", "", "", "", "", ""]);
       setError(null);
       setIsSubmitting(false);
@@ -51,7 +61,11 @@ export default function AuthBottomSheet({
       setOtpChannel(null);
       setOtpToken("");
       setDevCode(null);
-      // Focus phone input when sheet opens
+      setIsAutoFilling(false);
+      if (autoFillTimerRef.current) {
+        clearTimeout(autoFillTimerRef.current);
+        autoFillTimerRef.current = null;
+      }
       setTimeout(() => phoneInputRef.current?.focus(), 400);
     }
   }, [isOpen]);
@@ -65,6 +79,15 @@ export default function AuthBottomSheet({
     return () => clearInterval(interval);
   }, [resendTimer]);
 
+  // ── Cleanup Firebase reCAPTCHA on unmount ──────────────────────
+  useEffect(() => {
+    return () => {
+      import("@/lib/firebase/phone-auth").then(({ cleanupRecaptcha }) => {
+        cleanupRecaptcha();
+      }).catch(() => {});
+    };
+  }, []);
+
   // ── Send OTP ────────────────────────────────────────────────────
   const handlePhoneSubmit = async () => {
     setError(null);
@@ -76,11 +99,38 @@ export default function AuthBottomSheet({
 
     setIsSubmitting(true);
     const otpResult = await sendOTP(phone);
-    setIsSubmitting(false);
 
     if (otpResult.error) {
+      setIsSubmitting(false);
       setError(otpResult.error);
+      // If rate limited, set a longer resend timer
+      if (otpResult.retry_after) {
+        setResendTimer(otpResult.retry_after);
+      }
       return;
+    }
+
+    // Firebase channel: send OTP via Firebase client SDK
+    if (otpResult.channel === "firebase" && isFirebaseConfigured()) {
+      try {
+        const { setupRecaptcha, sendFirebaseOTP } = await import(
+          "@/lib/firebase/phone-auth"
+        );
+        setupRecaptcha("recaptcha-container-sheet");
+        const firebaseResult = await sendFirebaseOTP(phone);
+        setIsSubmitting(false);
+
+        if (!firebaseResult.success) {
+          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
+          return;
+        }
+      } catch {
+        setIsSubmitting(false);
+        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
+        return;
+      }
+    } else {
+      setIsSubmitting(false);
     }
 
     setOtpToken(otpResult.token || "");
@@ -90,8 +140,49 @@ export default function AuthBottomSheet({
     setStep("otp");
     setResendTimer(60);
     setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
-    tryWebOTP();
+
+    // Auto-fill OTP in dev mode with typing animation
+    if (otpResult.dev_code) {
+      autoFillOTP(otpResult.dev_code);
+    } else if (otpResult.channel !== "firebase") {
+      tryWebOTP();
+    }
   };
+
+  // ── Auto-fill OTP with natural typing animation ────────────────
+  const autoFillOTP = useCallback((code: string) => {
+    if (!/^\d{6}$/.test(code)) return;
+
+    const digits = code.split("");
+    setIsAutoFilling(true);
+
+    // Type each digit one by one with a delay
+    digits.forEach((digit, index) => {
+      autoFillTimerRef.current = setTimeout(() => {
+        setOtp((prev) => {
+          const newOtp = [...prev];
+          newOtp[index] = digit;
+          return newOtp;
+        });
+        // Focus the current input to show cursor effect
+        otpInputsRef.current[index]?.focus();
+
+        // After last digit: stop animation, don't auto-submit (let user press button)
+        if (index === 5) {
+          setIsAutoFilling(false);
+        }
+      }, 500 + index * 180); // 500ms initial delay + 180ms per digit
+    });
+  }, []);
+
+  // ── Cleanup auto-fill timer on unmount ─────────────────────────
+  useEffect(() => {
+    return () => {
+      if (autoFillTimerRef.current) {
+        clearTimeout(autoFillTimerRef.current);
+      }
+    };
+  }, []);
 
   // ── WebOTP: Auto-read SMS verification code ─────────────────────
   const tryWebOTP = async () => {
@@ -104,9 +195,7 @@ export default function AuthBottomSheet({
         if (content && "code" in content) {
           const code = (content as { code: string }).code;
           if (code && /^\d{6}$/.test(code)) {
-            const digits = code.split("");
-            setOtp(digits);
-            handleOtpSubmit(code);
+            autoFillOTP(code);
           }
         }
       }
@@ -164,7 +253,37 @@ export default function AuthBottomSheet({
 
       setIsSubmitting(true);
 
-      const response = await verifyOTP(phone, code, otpToken, displayName.trim() || undefined);
+      let response: { user: UserProfile | null; error: string | null };
+
+      // Firebase channel: verify via Firebase, then exchange for our session
+      if (otpChannel === "firebase") {
+        try {
+          const { verifyFirebaseOTP } = await import("@/lib/firebase/phone-auth");
+          const fbResult = await verifyFirebaseOTP(code);
+
+          if (!fbResult.success || !fbResult.idToken) {
+            setIsSubmitting(false);
+            setError(fbResult.error || "الكود غلط. جرب تاني");
+            setOtp(["", "", "", "", "", ""]);
+            otpInputsRef.current[0]?.focus();
+            return;
+          }
+
+          response = await verifyOTPViaFirebase(
+            fbResult.idToken,
+            displayName.trim() || undefined,
+          );
+        } catch {
+          setIsSubmitting(false);
+          setError("حصلت مشكلة في التحقق. جرب تاني");
+          setOtp(["", "", "", "", "", ""]);
+          otpInputsRef.current[0]?.focus();
+          return;
+        }
+      } else {
+        // Standard HMAC verification
+        response = await verifyOTP(phone, code, otpToken, displayName.trim() || undefined);
+      }
 
       setIsSubmitting(false);
 
@@ -185,9 +304,9 @@ export default function AuthBottomSheet({
         }
       });
 
-      onSuccess(response.user);
+      onSuccess(response.user, accountType);
     },
-    [otp, phone, displayName, otpToken, onSuccess],
+    [otp, phone, otpToken, otpChannel, displayName, onSuccess, accountType],
   );
 
   // ── Resend OTP ──────────────────────────────────────────────────
@@ -198,18 +317,49 @@ export default function AuthBottomSheet({
 
     const resendResult = await sendOTP(phone);
 
-    setIsSubmitting(false);
     if (resendResult.error) {
+      setIsSubmitting(false);
       setError(resendResult.error);
+      // If rate limited, set the timer from the server response
+      if (resendResult.retry_after) {
+        setResendTimer(resendResult.retry_after);
+      }
       return;
     }
 
+    // Firebase channel: re-send via Firebase
+    if (resendResult.channel === "firebase" && isFirebaseConfigured()) {
+      try {
+        const { setupRecaptcha, sendFirebaseOTP } = await import(
+          "@/lib/firebase/phone-auth"
+        );
+        setupRecaptcha("recaptcha-container-sheet");
+        const firebaseResult = await sendFirebaseOTP(phone);
+        setIsSubmitting(false);
+
+        if (!firebaseResult.success) {
+          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
+          return;
+        }
+      } catch {
+        setIsSubmitting(false);
+        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
+        return;
+      }
+    } else {
+      setIsSubmitting(false);
+    }
+
     setOtpToken(resendResult.token || "");
+    setOtpChannel(resendResult.channel || null);
     setDevCode(resendResult.dev_code || null);
     setResendTimer(60);
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
-    tryWebOTP();
+
+    if (resendResult.channel !== "firebase") {
+      tryWebOTP();
+    }
   };
 
   // ── Format phone for display ────────────────────────────────────
@@ -225,7 +375,7 @@ export default function AuthBottomSheet({
       onClose={onClose}
       title={step === "otp" ? "كود التأكيد" : "سجّل دخولك"}
     >
-      {/* ── Step 1: Phone + Name ──────────────────────────────────── */}
+      {/* ── Step 1: Phone + Account Type ──────────────────────────── */}
       {step === "phone" && (
         <div className="space-y-4">
           <p className="text-sm text-gray-text">
@@ -266,23 +416,63 @@ export default function AuthBottomSheet({
           {/* Display name (optional) */}
           <div className="w-full">
             <label className="block text-sm font-semibold text-dark mb-1.5">
-              <User size={14} className="inline ml-1 text-brand-green" />
-              اسمك
-              <span className="text-xs text-gray-text font-normal mr-1">(اختياري)</span>
+              <UserCircle size={14} className="inline ml-1 text-brand-green" />
+              الاسم
+              <span className="text-gray-text font-normal text-xs mr-1">(اختياري)</span>
             </label>
             <input
               type="text"
-              dir="rtl"
-              maxLength={50}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && phone.length === 11) handlePhoneSubmit();
-              }}
               placeholder="اسمك اللي هيظهر للناس"
-              className="w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark placeholder:text-gray-text"
+              maxLength={50}
+              className="w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-sm placeholder:text-gray-text"
               autoComplete="name"
             />
+          </div>
+
+          {/* Account type selection */}
+          <div className="w-full">
+            <label className="block text-sm font-semibold text-dark mb-2">
+              أنا...
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAccountType("individual")}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+                  accountType === "individual"
+                    ? "border-brand-green bg-brand-green-light"
+                    : "border-gray-light bg-white hover:border-gray-300"
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  accountType === "individual" ? "bg-brand-green text-white" : "bg-gray-light text-gray-text"
+                }`}>
+                  <UserIcon size={20} />
+                </div>
+                <span className="text-sm font-bold text-dark">فرد</span>
+                <span className="text-[10px] text-gray-text leading-tight">بيع وشراء شخصي</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAccountType("merchant")}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+                  accountType === "merchant"
+                    ? "border-brand-green bg-brand-green-light"
+                    : "border-gray-light bg-white hover:border-gray-300"
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  accountType === "merchant" ? "bg-brand-green text-white" : "bg-gray-light text-gray-text"
+                }`}>
+                  <Store size={20} />
+                </div>
+                <span className="text-sm font-bold text-dark">تاجر</span>
+                <span className="text-[10px] text-gray-text leading-tight">عندي محل / معرض / مكتب</span>
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -313,7 +503,7 @@ export default function AuthBottomSheet({
               <Smartphone size={24} className="text-brand-green" />
             </div>
             <p className="text-sm text-gray-text">
-              {otpChannel === "whatsapp" ? "أدخل الكود اللي وصلك على واتساب" : otpChannel === "dev" ? "كود التأكيد" : "أدخل الكود اللي وصلك على"}{" "}
+              {otpChannel === "whatsapp" ? "أدخل الكود اللي وصلك على واتساب" : otpChannel === "firebase" ? "أدخل الكود اللي وصلك SMS على" : otpChannel === "dev" ? "كود التأكيد" : "أدخل الكود اللي وصلك على"}{" "}
               {otpChannel !== "dev" && (
                 <span className="font-bold text-dark" dir="ltr">
                   {formatPhone(phone)}
@@ -322,11 +512,17 @@ export default function AuthBottomSheet({
             </p>
           </div>
 
-          {/* Dev mode: show OTP code directly */}
+          {/* Dev mode: show status while auto-filling, then show code */}
           {devCode && (
             <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-center">
-              <p className="text-xs text-gray-text mb-1">كود التأكيد (وضع التطوير)</p>
-              <p className="text-2xl font-bold text-dark tracking-[0.3em]" dir="ltr">{devCode}</p>
+              {isAutoFilling ? (
+                <p className="text-xs text-gray-text">جاري إدخال الكود تلقائياً...</p>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-text mb-1">كود التأكيد (وضع التطوير)</p>
+                  <p className="text-2xl font-bold text-dark tracking-[0.3em]" dir="ltr">{devCode}</p>
+                </>
+              )}
             </div>
           )}
 
@@ -342,10 +538,12 @@ export default function AuthBottomSheet({
                 inputMode="numeric"
                 maxLength={1}
                 value={digit}
+                readOnly={isAutoFilling}
                 onChange={(e) => handleOtpChange(i, e.target.value)}
                 onKeyDown={(e) => handleOtpKeyDown(i, e)}
                 onPaste={i === 0 ? handleOtpPaste : undefined}
-                className={`w-11 h-13 text-center text-xl font-bold bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : ""} ${digit ? "text-dark border-brand-green/30" : "text-gray-text"}`}
+                className={`w-11 h-13 text-center text-xl font-bold bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : ""} ${digit ? "text-dark border-brand-green/30 scale-105" : "text-gray-text"}`}
+                style={digit && isAutoFilling ? { transform: "scale(1.08)", transition: "transform 0.2s ease-out" } : undefined}
                 autoComplete={i === 0 ? "one-time-code" : "off"}
               />
             ))}
@@ -400,6 +598,9 @@ export default function AuthBottomSheet({
           </button>
         </div>
       )}
+
+      {/* Invisible reCAPTCHA container for Firebase Phone Auth */}
+      <div id="recaptcha-container-sheet" />
     </Modal>
   );
 }

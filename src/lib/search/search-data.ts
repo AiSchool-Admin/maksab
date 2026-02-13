@@ -4,6 +4,8 @@
  */
 
 import { supabase } from "@/lib/supabase/client";
+import { getCategoryById } from "@/lib/categories/categories-config";
+import { generateAutoTitle } from "@/lib/categories/generate";
 import type { AdSummary } from "@/lib/ad-data";
 
 /* ── Search request / response ──────────────────────────────────────── */
@@ -29,11 +31,24 @@ export interface SearchResult {
 
 const PAGE_SIZE = 12;
 
+/** Resolve title using category config (Arabic labels) */
+function resolveTitle(row: Record<string, unknown>): string {
+  const storedTitle = row.title as string;
+  const categoryId = row.category_id as string | undefined;
+  const subcategoryId = row.subcategory_id as string | undefined;
+  const categoryFields = (row.category_fields as Record<string, unknown>) ?? {};
+  if (!categoryId) return storedTitle;
+  const config = getCategoryById(categoryId);
+  if (!config) return storedTitle;
+  const generated = generateAutoTitle(config, categoryFields, subcategoryId || undefined);
+  return generated || storedTitle;
+}
+
 /** Convert Supabase row to AdSummary */
 function rowToAdSummary(row: Record<string, unknown>): AdSummary {
   return {
     id: row.id as string,
-    title: row.title as string,
+    title: resolveTitle(row),
     price: row.price ? Number(row.price) : null,
     saleType: row.sale_type as AdSummary["saleType"],
     image: ((row.images as string[]) ?? [])[0] ?? null,
@@ -60,12 +75,18 @@ export async function searchAds(
     let query = supabase
       .from("ads" as never)
       .select("*", { count: "exact" })
-      .neq("status", "deleted");
+      .eq("status", "active");
 
     if (filters.query) {
-      query = query.or(
-        `title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`
-      );
+      // Sanitize for PostgREST .or() filter
+      const sanitized = filters.query
+        .replace(/[%_\\]/g, "\\$&")
+        .replace(/[(),."']/g, "");
+      if (sanitized.trim()) {
+        query = query.or(
+          `title.ilike.%${sanitized}%,description.ilike.%${sanitized}%`
+        );
+      }
     }
     if (filters.category) {
       query = query.eq("category_id", filters.category);
@@ -84,6 +105,15 @@ export async function searchAds(
     }
     if (filters.governorate) {
       query = query.eq("governorate", filters.governorate);
+    }
+
+    // Apply category-specific JSONB filters (brand, karat, storage, etc.)
+    if (filters.categoryFilters) {
+      for (const [key, value] of Object.entries(filters.categoryFilters)) {
+        if (key && value && /^[a-z_]+$/i.test(key)) {
+          query = query.eq(`category_fields->>${key}`, value);
+        }
+      }
     }
 
     switch (filters.sortBy) {
@@ -122,23 +152,34 @@ export async function searchAds(
 
 /**
  * Get similar/related ads for the "شبيه اللي بتدور عليه" section.
+ * Falls back to all categories if the filtered category returns nothing.
  */
 export async function getSimilarSearchAds(
   filters: SearchFilters,
 ): Promise<AdSummary[]> {
   try {
-    let query = supabase
+    // First try with category filter
+    if (filters.category) {
+      const { data, error } = await supabase
+        .from("ads" as never)
+        .select("*")
+        .eq("status", "active")
+        .eq("category_id", filters.category)
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (!error && data && (data as unknown[]).length > 0) {
+        return (data as Record<string, unknown>[]).map(rowToAdSummary);
+      }
+    }
+
+    // Fallback: fetch from all categories
+    const { data, error } = await supabase
       .from("ads" as never)
       .select("*")
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(6);
-
-    if (filters.category) {
-      query = query.eq("category_id", filters.category);
-    }
-
-    const { data, error } = await query;
 
     if (error || !data || (data as unknown[]).length === 0) {
       return [];

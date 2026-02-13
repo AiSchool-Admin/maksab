@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, PlusCircle, Home } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlusCircle, Home, Camera, Mic, Video, PenLine, Sparkles } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -13,16 +13,24 @@ import {
 } from "@/lib/categories/generate";
 import type { SaleType } from "@/types";
 import type { CompressedImage } from "@/lib/utils/image-compress";
+import type { VideoFile } from "@/lib/utils/video-compress";
+import type { AudioRecording } from "@/lib/utils/audio-recorder";
 import type { PriceData } from "@/components/ad/steps/Step3PricePhotos";
+import type { ProductAnalysis } from "@/lib/ai/ai-service";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import SellerInsightsCard from "@/components/ad/SellerInsightsCard";
 import Step1CategorySaleType from "@/components/ad/steps/Step1CategorySaleType";
 import Step2CategoryDetails from "@/components/ad/steps/Step2CategoryDetails";
 import Step3PricePhotos from "@/components/ad/steps/Step3PricePhotos";
 import Step4LocationReview from "@/components/ad/steps/Step4LocationReview";
+import SnapAndSell from "@/components/ai/SnapAndSell";
+import VoiceToListing from "@/components/ai/VoiceToListing";
+import VideoToListing from "@/components/ai/VideoToListing";
 
 const STORAGE_KEY = "maksab_ad_draft";
 const TOTAL_STEPS = 4;
+
+type AIMode = "photo" | "voice" | "video" | null;
 
 const stepTitles = [
   "اختار القسم",
@@ -75,8 +83,8 @@ function getInitialDraft(): DraftData {
     saleType: "cash",
     categoryFields: {},
     priceData: getInitialPriceData(),
-    governorate: "القاهرة",
-    city: "مدينة نصر",
+    governorate: "",
+    city: "",
     title: "",
     description: "",
     isTitleDescEdited: false,
@@ -119,15 +127,52 @@ export default function CreateAdPage() {
   /* ── State ─────────────────────────────────────────── */
   const [draft, setDraft] = useState<DraftData>(getInitialDraft);
   const [images, setImages] = useState<CompressedImage[]>([]);
+  const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
+  const [voiceNote, setVoiceNote] = useState<AudioRecording | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [published, setPublished] = useState(false);
+  const [showAISelector, setShowAISelector] = useState(true);
+  const [activeAIMode, setActiveAIMode] = useState<AIMode>(null);
   const initialized = useRef(false);
 
-  // Load draft from localStorage on mount
+  // Load draft from localStorage on mount (+ check for AI scanner prefill)
   useEffect(() => {
     if (!initialized.current) {
+      // Check if coming from PriceScanner with prefill data
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("prefill") === "ai-scanner") {
+        try {
+          const stored = localStorage.getItem("maksab_prefill_ad");
+          if (stored) {
+            const data = JSON.parse(stored);
+            localStorage.removeItem("maksab_prefill_ad");
+            const prefillDraft: DraftData = {
+              ...getInitialDraft(),
+              categoryId: data.category_id || "",
+              subcategoryId: data.subcategory_id || "",
+              saleType: data.sale_type || "cash",
+              categoryFields: data.category_fields || {},
+              title: data.suggested_title || "",
+              description: data.suggested_description || "",
+              priceData: {
+                ...getInitialPriceData(),
+                price: data.suggested_price ? String(data.suggested_price) : "",
+              },
+              governorate: data.governorate || "القاهرة",
+              city: data.city || "",
+              isTitleDescEdited: true,
+              currentStep: 1,
+            };
+            setDraft(prefillDraft);
+            setShowAISelector(false);
+            initialized.current = true;
+            return;
+          }
+        } catch { /* ignore */ }
+      }
+
       setDraft(loadDraft());
       initialized.current = true;
     }
@@ -221,6 +266,72 @@ export default function CreateAdPage() {
     [draft, images],
   );
 
+  /* ── AI Analysis handler ──────────────────────────── */
+  const handleAIAnalysisComplete = useCallback(
+    (analysis: ProductAnalysis, mediaData: string[] | string) => {
+      // Convert AI analysis results into draft data
+      const aiDraft: Partial<DraftData> = {
+        categoryId: analysis.category_id || "",
+        subcategoryId: analysis.subcategory_id || "",
+        saleType: analysis.sale_type || "cash",
+        categoryFields: (analysis.category_fields as Record<string, unknown>) || {},
+        title: analysis.suggested_title || "",
+        description: analysis.suggested_description || "",
+        isTitleDescEdited: true,
+        currentStep: 1,
+      };
+
+      // Set price if suggested
+      if (analysis.suggested_price) {
+        aiDraft.priceData = {
+          ...getInitialPriceData(),
+          price: String(analysis.suggested_price),
+        };
+      }
+
+      // Set location if detected
+      if (analysis.governorate) {
+        aiDraft.governorate = analysis.governorate;
+      }
+      if (analysis.city) {
+        aiDraft.city = analysis.city;
+      }
+
+      setDraft((prev) => ({ ...prev, ...aiDraft }));
+
+      // If image data URLs were provided, convert to CompressedImage format
+      if (Array.isArray(mediaData) && mediaData.length > 0 && mediaData[0].startsWith("data:")) {
+        const aiImages: CompressedImage[] = mediaData.map((dataUrl, i) => {
+          // Convert data URL to File for upload
+          const byteString = atob(dataUrl.split(",")[1] || "");
+          const mimeString = dataUrl.split(",")[0]?.split(":")[1]?.split(";")[0] || "image/jpeg";
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let j = 0; j < byteString.length; j++) {
+            ia[j] = byteString.charCodeAt(j);
+          }
+          const blob = new Blob([ab], { type: mimeString });
+          const file = new File([blob], `ai-photo-${i}.jpg`, { type: mimeString });
+          return { file, preview: dataUrl, width: 0, height: 0, originalSize: blob.size, compressedSize: blob.size };
+        });
+        setImages(aiImages);
+      }
+
+      // Close AI mode and show wizard
+      setActiveAIMode(null);
+      setShowAISelector(false);
+    },
+    [],
+  );
+
+  const handleAIModeCancel = useCallback(() => {
+    setActiveAIMode(null);
+  }, []);
+
+  const handleSkipAI = useCallback(() => {
+    setShowAISelector(false);
+  }, []);
+
   /* ── Navigation ────────────────────────────────────── */
   const goNext = useCallback(() => {
     if (!validateStep(draft.currentStep)) return;
@@ -242,16 +353,53 @@ export default function CreateAdPage() {
     }
   }, [draft.currentStep, updateDraft]);
 
-  /* ── GPS location detection ────────────────────────── */
+  /* ── GPS location detection with reverse geocoding ──── */
   const handleDetectLocation = useCallback(() => {
     if (!navigator.geolocation) return;
     setIsDetectingLocation(true);
     navigator.geolocation.getCurrentPosition(
-      () => {
-        // In a real app, reverse geocode lat/lng to governorate/city
-        // For now, just set a placeholder
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          // Use OpenStreetMap Nominatim for free reverse geocoding
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar&zoom=10`,
+            { headers: { "User-Agent": "Maksab-App" } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const address = data.address || {};
+            // Try to extract governorate and city from the response
+            const state = address.state || address.governorate || address.county || "";
+            const cityName = address.city || address.town || address.suburb || address.village || address.city_district || "";
+
+            // Map OSM state name to our governorate names
+            const { governorates: govList } = await import("@/lib/data/governorates");
+            const matchedGov = govList.find((g: string) =>
+              state.includes(g) || g.includes(state) ||
+              // Handle common aliases
+              (state.includes("القاهرة") && g === "القاهرة") ||
+              (state.includes("الجيزة") && g === "الجيزة") ||
+              (state.includes("الاسكندرية") && g === "الإسكندرية") ||
+              (state.includes("اسكندرية") && g === "الإسكندرية")
+            );
+
+            if (matchedGov) {
+              updateDraft({ governorate: matchedGov, city: cityName || "" });
+            } else if (state) {
+              // Fallback: use the state name directly
+              updateDraft({ governorate: state, city: cityName || "" });
+            } else {
+              updateDraft({ governorate: "القاهرة", city: "" });
+            }
+          } else {
+            updateDraft({ governorate: "القاهرة", city: "" });
+          }
+        } catch {
+          // Reverse geocoding failed — set empty so user picks manually
+          updateDraft({ governorate: "", city: "" });
+        }
         setIsDetectingLocation(false);
-        updateDraft({ governorate: "القاهرة" });
       },
       () => {
         setIsDetectingLocation(false);
@@ -271,16 +419,64 @@ export default function CreateAdPage() {
     setIsPublishing(true);
 
     try {
-      // Convert images to base64 for server upload
-      const imageFiles: string[] = [];
-      for (const img of images) {
+      // Upload images via /api/upload (FormData, not base64 in JSON)
+      const uploadedImageUrls: string[] = [];
+      for (let i = 0; i < images.length; i++) {
         try {
-          const arrayBuffer = await img.file.arrayBuffer();
-          const base64 = Buffer.from(arrayBuffer).toString("base64");
-          imageFiles.push(base64);
+          const formData = new FormData();
+          formData.append("file", images[i].file);
+          formData.append("bucket", "ad-images");
+          formData.append(
+            "path",
+            `ads/${authedUser.id}/${Date.now()}_${i}.jpg`,
+          );
+
+          const uploadRes = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            if (uploadData.url) {
+              uploadedImageUrls.push(uploadData.url);
+            }
+          }
         } catch {
-          // Skip failed conversions
+          // Skip failed image upload
         }
+      }
+
+      // Upload video if present
+      let videoUrl: string | null = null;
+      if (videoFile) {
+        try {
+          const vf = new FormData();
+          vf.append("file", videoFile.file);
+          vf.append("bucket", "ad-videos");
+          vf.append("path", `ads/${authedUser.id}/${Date.now()}_video.${videoFile.file.name.split(".").pop() || "mp4"}`);
+          const vRes = await fetch("/api/upload", { method: "POST", body: vf });
+          if (vRes.ok) {
+            const vData = await vRes.json();
+            if (vData.url) videoUrl = vData.url;
+          }
+        } catch { /* skip */ }
+      }
+
+      // Upload voice note if present
+      let voiceNoteUrl: string | null = null;
+      if (voiceNote) {
+        try {
+          const af = new FormData();
+          af.append("file", voiceNote.file);
+          af.append("bucket", "ad-audio");
+          af.append("path", `ads/${authedUser.id}/${Date.now()}_voice.${voiceNote.file.name.split(".").pop() || "webm"}`);
+          const aRes = await fetch("/api/upload", { method: "POST", body: af });
+          if (aRes.ok) {
+            const aData = await aRes.json();
+            if (aData.url) voiceNoteUrl = aData.url;
+          }
+        } catch { /* skip */ }
       }
 
       // Build ad data for server API
@@ -292,6 +488,8 @@ export default function CreateAdPage() {
         description: draft.description,
         category_fields: {
           ...draft.categoryFields,
+          ...(videoUrl ? { _video_url: videoUrl } : {}),
+          ...(voiceNoteUrl ? { _voice_note_url: voiceNoteUrl } : {}),
           ...(draft.saleType === "live_auction"
             ? { is_live_auction: true, live_scheduled_at: draft.priceData.liveAuctionScheduledAt }
             : {}),
@@ -342,9 +540,13 @@ export default function CreateAdPage() {
           draft.saleType === "exchange" && draft.priceData.exchangePriceDiff
             ? Number(draft.priceData.exchangePriceDiff)
             : null,
-        images: [] as string[],
-        image_files: imageFiles,
+        images: uploadedImageUrls,
       };
+
+      // If user is a merchant with a store, attach store_id to the ad
+      if (authedUser.store_id) {
+        (adData as Record<string, unknown>).store_id = authedUser.store_id;
+      }
 
       // Call server-side API (uses service role key — bypasses RLS)
       const res = await fetch("/api/ads/create", {
@@ -410,7 +612,7 @@ export default function CreateAdPage() {
     } finally {
       setIsPublishing(false);
     }
-  }, [draft, images, user, requireAuth, validateStep, track]);
+  }, [draft, images, videoFile, voiceNote, user, requireAuth, validateStep, track]);
 
   /* ── Price label for preview ───────────────────────── */
   const getPriceLabel = () => {
@@ -464,6 +666,8 @@ export default function CreateAdPage() {
               onClick={() => {
                 setDraft(getInitialDraft());
                 setImages([]);
+                setVideoFile(null);
+                setVoiceNote(null);
                 setPublished(false);
                 setErrors({});
               }}
@@ -471,6 +675,168 @@ export default function CreateAdPage() {
               أضف إعلان تاني
             </Button>
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  /* ── Active AI Mode Screen ─────────────────────────── */
+  if (activeAIMode) {
+    return (
+      <main className="min-h-screen bg-white">
+        <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
+          <div className="flex items-center justify-between px-4 h-14">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleAIModeCancel}
+                className="p-1 -me-1 text-gray-text hover:text-dark transition-colors"
+                aria-label="رجوع"
+              >
+                <ChevronRight size={24} />
+              </button>
+              <Sparkles size={20} className="text-brand-green" />
+              <h1 className="text-lg font-bold text-dark">
+                {activeAIMode === "photo" && "صوّر واِبيع"}
+                {activeAIMode === "voice" && "اتكلم واِبيع"}
+                {activeAIMode === "video" && "فيديو واِبيع"}
+              </h1>
+            </div>
+            <Link
+              href="/"
+              className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+              aria-label="الرئيسية"
+            >
+              <Home size={18} />
+            </Link>
+          </div>
+        </header>
+        <div className="px-4 py-5">
+          {activeAIMode === "photo" && (
+            <SnapAndSell
+              onAnalysisComplete={(analysis, imageDataUrls) => handleAIAnalysisComplete(analysis, imageDataUrls)}
+              onCancel={handleAIModeCancel}
+            />
+          )}
+          {activeAIMode === "voice" && (
+            <VoiceToListing
+              onAnalysisComplete={(analysis, transcript) => handleAIAnalysisComplete(analysis, transcript)}
+              onCancel={handleAIModeCancel}
+            />
+          )}
+          {activeAIMode === "video" && (
+            <VideoToListing
+              onAnalysisComplete={(analysis, imageDataUrls) => handleAIAnalysisComplete(analysis, imageDataUrls)}
+              onCancel={handleAIModeCancel}
+            />
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  /* ── AI Mode Selector Screen ─────────────────────── */
+  if (showAISelector) {
+    return (
+      <main className="min-h-screen bg-white">
+        <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
+          <div className="flex items-center justify-between px-4 h-14">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.back()}
+                className="p-1 -me-1 text-gray-text hover:text-dark transition-colors"
+                aria-label="رجوع"
+              >
+                <ChevronRight size={24} />
+              </button>
+              <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center shadow-sm">
+                <PlusCircle size={22} className="text-white" />
+              </div>
+              <h1 className="text-lg font-bold text-dark">أضف إعلان</h1>
+            </div>
+            <Link
+              href="/"
+              className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
+              aria-label="الرئيسية"
+            >
+              <Home size={18} />
+            </Link>
+          </div>
+        </header>
+
+        <div className="px-4 py-6 max-w-md mx-auto">
+          {/* AI Section */}
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-brand-green-light rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Sparkles size={30} className="text-brand-green" />
+            </div>
+            <h2 className="text-lg font-bold text-dark">إعلانك جاهز في ثواني</h2>
+            <p className="text-sm text-gray-text mt-1">الذكاء الاصطناعي هيملأ كل التفاصيل تلقائياً</p>
+          </div>
+
+          <div className="space-y-3 mb-8">
+            {/* Photo mode */}
+            <button
+              onClick={() => setActiveAIMode("photo")}
+              className="w-full flex items-center gap-4 p-4 bg-brand-green-light border-2 border-brand-green/20 rounded-xl hover:border-brand-green/40 transition-all active:scale-[0.98]"
+            >
+              <div className="w-12 h-12 bg-brand-green rounded-xl flex items-center justify-center flex-shrink-0">
+                <Camera size={24} className="text-white" />
+              </div>
+              <div className="text-start">
+                <h3 className="text-sm font-bold text-dark">صوّر واِبيع</h3>
+                <p className="text-xs text-gray-text mt-0.5">صوّر المنتج والباقي علينا</p>
+              </div>
+            </button>
+
+            {/* Voice mode */}
+            <button
+              onClick={() => setActiveAIMode("voice")}
+              className="w-full flex items-center gap-4 p-4 bg-blue-50 border-2 border-blue-200/50 rounded-xl hover:border-blue-300 transition-all active:scale-[0.98]"
+            >
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Mic size={24} className="text-white" />
+              </div>
+              <div className="text-start">
+                <h3 className="text-sm font-bold text-dark">اتكلم واِبيع</h3>
+                <p className="text-xs text-gray-text mt-0.5">احكي عن المنتج بصوتك</p>
+              </div>
+            </button>
+
+            {/* Video mode */}
+            <button
+              onClick={() => setActiveAIMode("video")}
+              className="w-full flex items-center gap-4 p-4 bg-purple-50 border-2 border-purple-200/50 rounded-xl hover:border-purple-300 transition-all active:scale-[0.98]"
+            >
+              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Video size={24} className="text-white" />
+              </div>
+              <div className="text-start">
+                <h3 className="text-sm font-bold text-dark">فيديو واِبيع</h3>
+                <p className="text-xs text-gray-text mt-0.5">صوّر فيديو واحكي عن المنتج</p>
+              </div>
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-text font-medium">أو</span>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
+
+          {/* Manual mode */}
+          <button
+            onClick={handleSkipAI}
+            className="w-full flex items-center gap-4 p-4 bg-gray-light border-2 border-transparent rounded-xl hover:border-gray-200 transition-all active:scale-[0.98]"
+          >
+            <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center flex-shrink-0">
+              <PenLine size={24} className="text-gray-text" />
+            </div>
+            <div className="text-start">
+              <h3 className="text-sm font-bold text-dark">اعمل الإعلان يدوي</h3>
+              <p className="text-xs text-gray-text mt-0.5">املأ التفاصيل بنفسك خطوة بخطوة</p>
+            </div>
+          </button>
         </div>
       </main>
     );
@@ -577,12 +943,16 @@ export default function CreateAdPage() {
             saleType={draft.saleType}
             priceData={draft.priceData}
             images={images}
+            videoFile={videoFile}
+            voiceNote={voiceNote}
             onPriceChange={(key, value) =>
               updateDraft({
                 priceData: { ...draft.priceData, [key]: value },
               })
             }
             onImagesChange={setImages}
+            onVideoChange={setVideoFile}
+            onVoiceNoteChange={setVoiceNote}
             errors={errors}
             categoryId={draft.categoryId}
             subcategoryId={draft.subcategoryId}

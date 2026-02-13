@@ -170,6 +170,59 @@ const EXTENDED_BRANDS: Record<string, { category: string; value: string; model?:
   "نينتيندو": { category: "hobbies", value: "nintendo" },
 };
 
+/** Keyword → entity mapping: maps common product keywords to subcategory + type fields.
+ *  This makes searches like "شنطة" match the right subcategory and type filter. */
+const KEYWORD_ENTITY_MAP: Record<string, {
+  category: string;
+  subcategory?: string;
+  fields?: Record<string, string>;
+}> = {
+  // Fashion — bags
+  "شنطة": { category: "fashion", subcategory: "bags", fields: { type: "bag" } },
+  "شنط": { category: "fashion", subcategory: "bags", fields: { type: "bag" } },
+  // Fashion — shoes
+  "حذاء": { category: "fashion", subcategory: "shoes", fields: { type: "shoes" } },
+  "جزمة": { category: "fashion", subcategory: "shoes", fields: { type: "shoes" } },
+  // Fashion — types
+  "فستان": { category: "fashion", fields: { type: "dress" } },
+  "قميص": { category: "fashion", fields: { type: "shirt" } },
+  "بنطلون": { category: "fashion", fields: { type: "pants" } },
+  "جاكت": { category: "fashion", fields: { type: "jacket" } },
+  "كوت": { category: "fashion", fields: { type: "jacket" } },
+  "عباية": { category: "fashion", fields: { type: "abaya" } },
+  "بيجامة": { category: "fashion", fields: { type: "pajama" } },
+  // Appliances
+  "غسالة": { category: "appliances", subcategory: "washers", fields: { type: "washer" } },
+  "ثلاجة": { category: "appliances", subcategory: "fridges", fields: { type: "fridge" } },
+  "تلاجة": { category: "appliances", subcategory: "fridges", fields: { type: "fridge" } },
+  "بوتاجاز": { category: "appliances", subcategory: "stoves", fields: { type: "stove" } },
+  "مكيف": { category: "appliances", subcategory: "ac", fields: { type: "ac" } },
+  "تكييف": { category: "appliances", subcategory: "ac", fields: { type: "ac" } },
+  "سخان": { category: "appliances", subcategory: "heaters", fields: { type: "heater" } },
+  // Real estate
+  "شقة": { category: "real_estate", subcategory: "apartments_sale", fields: { property_type: "apartment" } },
+  "شقق": { category: "real_estate", subcategory: "apartments_sale", fields: { property_type: "apartment" } },
+  "فيلا": { category: "real_estate", subcategory: "villas", fields: { property_type: "villa" } },
+  "محل": { category: "real_estate", subcategory: "shops", fields: { property_type: "shop" } },
+  "مكتب": { category: "real_estate", subcategory: "offices", fields: { property_type: "office" } },
+  // Furniture
+  "غرفة نوم": { category: "furniture", subcategory: "bedrooms" },
+  "سفرة": { category: "furniture", subcategory: "dining" },
+  "أنتريه": { category: "furniture", subcategory: "living" },
+  // Gold
+  "خاتم": { category: "gold", fields: { type: "ring" } },
+  "دبلة": { category: "gold", fields: { type: "ring" } },
+  "محبس": { category: "gold", fields: { type: "ring" } },
+  "سلسلة": { category: "gold", fields: { type: "necklace" } },
+  "أسورة": { category: "gold", fields: { type: "bracelet" } },
+  "غوايش": { category: "gold", fields: { type: "bracelet" } },
+  "حلق": { category: "gold", fields: { type: "earring" } },
+  "جنيه ذهب": { category: "gold", fields: { type: "gold_pound" } },
+  "سبيكة": { category: "gold", fields: { type: "bar" } },
+  // Luxury — bags
+  "شنط فاخرة": { category: "luxury", subcategory: "luxury-bags", fields: { type: "bag" } },
+};
+
 /** Extended category keywords (slang, colloquial) */
 const EXTENDED_CATEGORY_KEYWORDS: Record<string, string[]> = {
   cars: ["عربية", "عربيات", "سيارة", "سيارات", "موتوسيكل", "موتور", "تاكسي", "ميكروباص", "نص نقل", "ربع نقل"],
@@ -388,7 +441,27 @@ export function aiParseQuery(query: string): AIParsedQuery {
     }
   }
 
-  // ── 11. Extract Category (longest keyword first) ──
+  // ── 11. Extract Category + Subcategory + Type from keywords ──
+  // First try the entity map (longest keyword first) for subcategory + type detection
+  const sortedEntityKeys = Object.keys(KEYWORD_ENTITY_MAP).sort((a, b) => b.length - a.length);
+  for (const kw of sortedEntityKeys) {
+    if (remaining.includes(kw)) {
+      const entity = KEYWORD_ENTITY_MAP[kw];
+      if (!result.primaryCategory) {
+        result.primaryCategory = entity.category;
+        result.categories = [...new Set([...result.categories, entity.category])];
+      }
+      if (entity.subcategory && !result.subcategory) {
+        result.subcategory = entity.subcategory;
+      }
+      if (entity.fields) {
+        result.extractedFields = { ...result.extractedFields, ...entity.fields };
+      }
+      remaining = remaining.replace(kw, "").trim();
+      break;
+    }
+  }
+  // Fallback: detect category from extended keywords (without entity details)
   if (!result.primaryCategory) {
     outer: for (const [catId, keywords] of Object.entries(EXTENDED_CATEGORY_KEYWORDS)) {
       const sorted = [...keywords].sort((a, b) => b.length - a.length);

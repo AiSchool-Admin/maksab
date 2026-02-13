@@ -73,10 +73,51 @@ function verifyOTPToken(
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const displayName = body.display_name?.trim() || null;
+
+    // ── Firebase ID Token verification path ─────────────────────────
+    if (body.firebase_id_token) {
+      const { verifyFirebaseToken } = await import("@/lib/firebase/admin");
+      const { phone: firebasePhone, error: fbError } = await verifyFirebaseToken(
+        body.firebase_id_token,
+      );
+
+      if (!firebasePhone || fbError) {
+        return NextResponse.json(
+          { error: fbError || "التحقق من Firebase فشل" },
+          { status: 400 },
+        );
+      }
+
+      const supabase = getServiceClient();
+      const profile = await findOrCreateUser(supabase, firebasePhone, displayName);
+
+      if (!profile) {
+        return NextResponse.json(
+          { error: "حصلت مشكلة في إنشاء الحساب. جرب تاني" },
+          { status: 500 },
+        );
+      }
+
+      const virtualEmail = `${firebasePhone}@maksab.auth`;
+      const {
+        data: { properties },
+      } = await supabase.auth.admin.generateLink({
+        type: "magiclink",
+        email: virtualEmail,
+      });
+
+      return NextResponse.json({
+        user: profile,
+        magic_link_token: properties?.hashed_token || null,
+        virtual_email: virtualEmail,
+      });
+    }
+
+    // ── Standard HMAC OTP verification path ─────────────────────────
     const phone = body.phone?.replace(/\D/g, "");
     const code = body.code?.replace(/\D/g, "");
     const token = body.token;
-    const displayName = body.display_name?.trim() || null;
 
     // Validate inputs
     if (!phone || !/^01[0125]\d{8}$/.test(phone)) {

@@ -29,6 +29,7 @@ export interface AdDetail {
   description: string;
   price: number | null;
   saleType: "cash" | "auction" | "exchange";
+  status: "active" | "sold" | "exchanged" | "expired" | "deleted";
   isNegotiable: boolean;
   images: string[];
   categoryId: string;
@@ -58,6 +59,9 @@ export interface AdDetail {
   exchangePriceDiff: number | null;
   // Seller
   seller: SellerInfo;
+  // Media
+  videoUrl: string | null;
+  voiceNoteUrl: string | null;
   // Favorite state
   isFavorited: boolean;
 }
@@ -137,17 +141,20 @@ export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
       }
     }
 
+    const catFields = (ad.category_fields as Record<string, unknown>) || {};
+
     return {
       id: ad.id as string,
       title: ad.title as string,
       description: (ad.description as string) || "",
       price: ad.price ? Number(ad.price) : null,
       saleType: ad.sale_type as "cash" | "auction" | "exchange",
+      status: (ad.status as AdDetail["status"]) || "active",
       isNegotiable: (ad.is_negotiable as boolean) || false,
       images: (ad.images as string[]) || [],
       categoryId: (ad.category_id as string) || "",
       subcategoryId: (ad.subcategory_id as string) || "",
-      categoryFields: (ad.category_fields as Record<string, unknown>) || {},
+      categoryFields: catFields,
       governorate: (ad.governorate as string) || "",
       city: (ad.city as string) || null,
       viewsCount: Number(ad.views_count) || 0,
@@ -172,6 +179,9 @@ export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
       exchangePriceDiff: ad.exchange_price_diff ? Number(ad.exchange_price_diff) : null,
       // Seller
       seller,
+      // Media
+      videoUrl: (catFields._video_url as string) || null,
+      voiceNoteUrl: (catFields._voice_note_url as string) || null,
       // Favorite
       isFavorited: false,
     };

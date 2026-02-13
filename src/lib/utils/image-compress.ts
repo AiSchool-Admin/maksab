@@ -4,6 +4,10 @@ const MAX_DIMENSION = 1600;
 export interface CompressedImage {
   file: File;
   preview: string;
+  width?: number;
+  height?: number;
+  originalSize?: number;
+  compressedSize?: number;
 }
 
 export async function compressImage(file: File): Promise<CompressedImage> {
@@ -12,11 +16,12 @@ export async function compressImage(file: File): Promise<CompressedImage> {
     file.size <= MAX_SIZE &&
     (file.type === "image/jpeg" || file.type === "image/webp")
   ) {
-    return { file, preview: URL.createObjectURL(file) };
+    return { file, preview: URL.createObjectURL(file), originalSize: file.size, compressedSize: file.size };
   }
 
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const originalSize = file.size;
     img.onload = () => {
       const canvas = document.createElement("canvas");
       let { width, height } = img;
@@ -54,6 +59,10 @@ export async function compressImage(file: File): Promise<CompressedImage> {
             resolve({
               file: compressed,
               preview: URL.createObjectURL(compressed),
+              width,
+              height,
+              originalSize,
+              compressedSize: blob.size,
             });
           },
           "image/jpeg",

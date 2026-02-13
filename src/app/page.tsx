@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus, Loader2, MapPin } from "lucide-react";
+import { Search, Plus, Loader2, MapPin, Sparkles } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
@@ -17,6 +17,10 @@ const HorizontalSection = dynamic(
 );
 const UpgradeToStoreBanner = dynamic(
   () => import("@/components/store/UpgradeToStoreBanner"),
+  { ssr: false },
+);
+const ShoppingAssistantFab = dynamic(
+  () => import("@/components/chat/ShoppingAssistantFab"),
   { ssr: false },
 );
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
@@ -49,6 +53,8 @@ export default function HomePage() {
     isLoadingMore,
     hasMore,
     sentinelRef,
+    error: feedError,
+    retry: retryFeed,
   } = useInfiniteScroll<AdSummary>({ fetchFn: fetchFeedAds });
 
   const { requireAuth, user } = useAuth();
@@ -137,6 +143,31 @@ export default function HomePage() {
           </span>
         </a>
 
+        {/* Welcome message with user name */}
+        {user && user.display_name && (
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-base font-bold text-dark">
+              أهلاً يا {user.display_name} 👋
+            </p>
+            <p className="text-xs text-gray-text mt-0.5">
+              عايز تبيع إيه النهاردة؟
+            </p>
+          </div>
+        )}
+        {user && !user.display_name && (
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-base font-bold text-dark">
+              أهلاً بيك في مكسب 👋
+            </p>
+            <p className="text-xs text-gray-text mt-0.5">
+              <Link href="/profile/edit" className="text-brand-green font-semibold hover:underline">
+                أضف اسمك
+              </Link>
+              {" "}عشان نرحب بيك صح
+            </p>
+          </div>
+        )}
+
         {/* Search bar — sticky */}
         <div className="px-3 pt-2 pb-1.5">
           <Link href="/search" className="block">
@@ -144,13 +175,20 @@ export default function HomePage() {
               <div className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
                 <Search size={20} className="text-white" strokeWidth={2.5} />
               </div>
-              <span className="flex-1 text-sm text-gray-text">ابحث عن السيارات، الهواتف وأكتر...</span>
+              <span className="flex-1 text-sm text-gray-text">ابحث في مكسب... سيارات، موبايلات، عقارات</span>
             </div>
           </Link>
         </div>
 
         {/* Quick search chips */}
         <div className="flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide">
+          <Link
+            href="/price-scanner"
+            className="flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 bg-brand-gold-light text-brand-gold text-xs font-semibold rounded-full hover:bg-brand-gold hover:text-white transition-colors"
+          >
+            <Sparkles size={12} />
+            كام سعره؟
+          </Link>
           <Link
             href="/map"
             className="flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 bg-brand-green-light text-brand-green text-xs font-semibold rounded-full hover:bg-brand-green hover:text-white transition-colors"
@@ -238,6 +276,17 @@ export default function HomePage() {
 
         {isLoading ? (
           <AdGridSkeleton count={4} />
+        ) : feedError ? (
+          <div className="py-8 text-center">
+            <p className="text-4xl mb-3">⚠️</p>
+            <p className="text-sm text-gray-text mb-3">حصل مشكلة في تحميل الإعلانات</p>
+            <button
+              onClick={retryFeed}
+              className="text-sm font-bold text-brand-green hover:text-brand-green-dark"
+            >
+              جرب تاني
+            </button>
+          </div>
         ) : feedAds.length > 0 ? (
           <>
             <div className="grid grid-cols-2 gap-3">
@@ -275,8 +324,11 @@ export default function HomePage() {
             <h3 className="text-lg font-bold text-dark mb-2">
               أهلاً بيك في مكسب!
             </h3>
+            <p className="text-sm text-gray-text mb-1">
+              أسهل وأذكى سوق على الإطلاق
+            </p>
             <p className="text-sm text-gray-text mb-4">
-              لسه مفيش إعلانات. كن أول واحد يضيف إعلان!
+              كن أول واحد يضيف إعلان!
             </p>
             <Link href="/ad/create">
               <Button icon={<Plus size={18} />} size="lg">
@@ -287,6 +339,19 @@ export default function HomePage() {
         )}
       </section>
 
+      {/* ─── Merchant: Add Regular Ad (green CTA) ────────────── */}
+      {user?.seller_type === "store" && user?.store_id && (
+        <section className="px-4 pb-6">
+          <Link href="/ad/create" className="block">
+            <div className="flex items-center justify-center gap-2 bg-brand-green hover:bg-brand-green-dark active:scale-[0.98] text-white py-3.5 rounded-xl shadow-md shadow-brand-green/20 transition-all">
+              <Plus size={20} strokeWidth={2.5} />
+              <span className="text-sm font-bold">أضف إعلان</span>
+            </div>
+          </Link>
+        </section>
+      )}
+
+      <ShoppingAssistantFab />
       <BottomNavWithBadge />
     </main>
   );

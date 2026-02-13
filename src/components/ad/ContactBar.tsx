@@ -27,7 +27,7 @@ export default function ContactBar({
   const telUrl = `tel:+2${sellerPhone}`;
 
   return (
-    <div className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-light z-40">
+    <div className="fixed bottom-16 inset-x-0 bg-white border-t border-gray-light z-40">
       <div className="flex gap-2 p-3">
         {/* Chat */}
         <button

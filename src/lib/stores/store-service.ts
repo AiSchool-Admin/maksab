@@ -248,7 +248,6 @@ export async function getStoreProducts(
       .select("*", { count: "exact" })
       .eq("store_id", storeId)
       .eq("status", "active")
-      .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: false })
       .range(from, from + limit - 1);
 
@@ -487,16 +486,36 @@ export async function getStoreByUserId(userId: string): Promise<Store | null> {
 /** Get store products for dashboard (includes all statuses) */
 export async function getStoreProductsForDashboard(storeId: string): Promise<StoreProduct[]> {
   try {
+    // Try with is_pinned first
     const { data, error } = await supabase
       .from("ads" as never)
       .select("id, title, price, images, status, sale_type, is_pinned, views_count, created_at, store_id, governorate, city, is_negotiable, exchange_description")
       .eq("store_id", storeId)
       .neq("status", "deleted")
-      .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) return [];
-    return data as unknown as StoreProduct[];
+    if (!error && data && data.length > 0) {
+      return data as unknown as StoreProduct[];
+    }
+
+    // Fallback: query without is_pinned in case column doesn't exist
+    if (error) {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("ads" as never)
+        .select("id, title, price, images, status, sale_type, views_count, created_at, store_id, governorate, city, is_negotiable, exchange_description")
+        .eq("store_id", storeId)
+        .neq("status", "deleted")
+        .order("created_at", { ascending: false });
+
+      if (!fallbackError && fallbackData && fallbackData.length > 0) {
+        return (fallbackData as unknown as Record<string, unknown>[]).map((d) => ({
+          ...d,
+          is_pinned: false,
+        })) as unknown as StoreProduct[];
+      }
+    }
+
+    return [];
   } catch {
     return [];
   }

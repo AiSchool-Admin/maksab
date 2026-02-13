@@ -1,29 +1,39 @@
 "use client";
 
-import { getCategoryById } from "@/lib/categories/categories-config";
+import { getCategoryById, getEffectiveFields } from "@/lib/categories/categories-config";
 import { resolveFieldLabel } from "@/lib/categories/generate";
 
 interface SpecsTableProps {
   categoryId: string;
+  subcategoryId?: string | null;
   categoryFields: Record<string, unknown>;
 }
 
 export default function SpecsTable({
   categoryId,
+  subcategoryId,
   categoryFields,
 }: SpecsTableProps) {
   const config = getCategoryById(categoryId);
   if (!config) return null;
 
+  // Use effective fields (with subcategory overrides applied)
+  const effectiveFields = getEffectiveFields(config, subcategoryId);
+
   const rows: { label: string; value: string }[] = [];
 
-  for (const field of config.fields) {
+  for (const field of effectiveFields) {
+    // Skip internal/media fields (prefixed with _)
+    if (field.id.startsWith("_")) continue;
     const rawValue = categoryFields[field.id];
     const resolved = resolveFieldLabel(field, rawValue);
     if (resolved) {
       rows.push({ label: field.label, value: resolved });
     }
   }
+
+  // Also filter out any raw _-prefixed keys that exist in categoryFields but not in config
+  // (e.g. _video_url, _voice_note_url stored alongside category fields)
 
   if (rows.length === 0) return null;
 

@@ -12,6 +12,7 @@ import {
   Trash2,
   ChevronLeft,
 } from "lucide-react";
+import Link from "next/link";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -64,30 +65,53 @@ export default function SettingsPage() {
     saveSettings(updated);
   };
 
+  const [cacheCleared, setCacheCleared] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+
   const handleClearCache = () => {
     if (typeof window !== "undefined") {
-      // Clear cached data except auth
-      const authSession = localStorage.getItem("maksab_user_session");
       const keys = Object.keys(localStorage);
       for (const key of keys) {
         if (
-          key !== "maksab_user_session" &&
           key !== SETTINGS_KEY &&
           !key.startsWith("sb-")
         ) {
           localStorage.removeItem(key);
         }
       }
+      setCacheCleared(true);
+      setTimeout(() => setCacheCleared(false), 2000);
     }
   };
 
   const handleDeleteAccount = async () => {
-    // For now, just log out and clear all data
-    if (typeof window !== "undefined") {
-      localStorage.clear();
+    setIsDeleting(true);
+    try {
+      // Soft-delete via API (anonymizes data, deactivates ads)
+      const response = await fetch("/api/users/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user?.id,
+          reason: deleteReason || null,
+        }),
+      });
+
+      if (!response.ok) {
+        setIsDeleting(false);
+        return;
+      }
+
+      // Clear all local data
+      if (typeof window !== "undefined") {
+        localStorage.clear();
+      }
+      await logout();
+      router.push("/");
+    } catch {
+      setIsDeleting(false);
     }
-    await logout();
-    router.push("/");
   };
 
   return (
@@ -181,7 +205,9 @@ export default function SettingsPage() {
               className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-light transition-colors"
             >
               <span className="text-sm text-dark">مسح الكاش</span>
-              <span className="text-xs text-gray-text">تحديث البيانات</span>
+              <span className="text-xs text-gray-text">
+                {cacheCleared ? "تم المسح ✓" : "تحديث البيانات"}
+              </span>
             </button>
           </div>
         </section>
@@ -193,14 +219,12 @@ export default function SettingsPage() {
             الخصوصية والأمان
           </h2>
           <div className="space-y-1">
-            <SettingItem
-              label="سياسة الخصوصية"
-              onClick={() => {}}
-            />
-            <SettingItem
-              label="شروط الاستخدام"
-              onClick={() => {}}
-            />
+            <Link href="/privacy" className="block">
+              <SettingItem label="سياسة الخصوصية" onClick={() => {}} />
+            </Link>
+            <Link href="/terms" className="block">
+              <SettingItem label="شروط الاستخدام" onClick={() => {}} />
+            </Link>
           </div>
         </section>
 
@@ -222,14 +246,27 @@ export default function SettingsPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-gray-text">
-                    هل أنت متأكد؟ سيتم حذف جميع بياناتك وإعلاناتك نهائياً ولا يمكن التراجع.
+                    هل أنت متأكد؟ سيتم إلغاء تفعيل حسابك ومسح بياناتك الشخصية وإخفاء إعلاناتك.
                   </p>
+                  <select
+                    value={deleteReason}
+                    onChange={(e) => setDeleteReason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-light rounded-lg text-sm text-dark"
+                  >
+                    <option value="">سبب الحذف (اختياري)</option>
+                    <option value="no_need">مش محتاج التطبيق دلوقتي</option>
+                    <option value="privacy">قلقان على خصوصيتي</option>
+                    <option value="bad_experience">تجربة سيئة</option>
+                    <option value="found_alternative">لقيت بديل أحسن</option>
+                    <option value="other">سبب تاني</option>
+                  </select>
                   <div className="flex gap-2">
                     <button
                       onClick={handleDeleteAccount}
-                      className="flex-1 py-2 bg-error text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors"
+                      disabled={isDeleting}
+                      className="flex-1 py-2 bg-error text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                     >
-                      نعم، احذف حسابي
+                      {isDeleting ? "جاري الحذف..." : "نعم، احذف حسابي"}
                     </button>
                     <button
                       onClick={() => setShowDeleteConfirm(false)}

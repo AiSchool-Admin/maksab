@@ -69,6 +69,20 @@ export default function PriceOfferButton({
       // Refresh summary
       const updated = await getAdOffersSummary(adId);
       setSummary(updated);
+
+      // Notify seller
+      fetch("/api/notifications/on-offer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "new_offer",
+          ad_id: adId,
+          ad_title: adTitle,
+          recipient_id: sellerId,
+          sender_name: user.display_name || "مشتري",
+          amount: offerAmount,
+        }),
+      }).catch(() => {});
     } else {
       toast.error(result.error || "حصل مشكلة، جرب تاني");
     }

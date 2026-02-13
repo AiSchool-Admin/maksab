@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { User as UserIcon, Store } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import Input from "@/components/ui/Input";
@@ -15,6 +16,7 @@ export default function EditProfilePage() {
   const router = useRouter();
   const { user, setUser } = useAuth();
   const [displayName, setDisplayName] = useState("");
+  const [sellerType, setSellerType] = useState<"individual" | "store">("individual");
   const [governorate, setGovernorate] = useState("");
   const [city, setCity] = useState("");
   const [bio, setBio] = useState("");
@@ -25,6 +27,7 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (user) {
       setDisplayName(user.display_name || "");
+      setSellerType(user.seller_type || "individual");
       setGovernorate(user.governorate || "");
       setCity(user.city || "");
       setBio(user.bio || "");
@@ -43,6 +46,7 @@ export default function EditProfilePage() {
 
     const { user: updated, error: saveError } = await updateUserProfile(user.id, {
       display_name: displayName.trim() || null,
+      seller_type: sellerType,
       governorate: governorate || null,
       city: city.trim() || null,
       bio: bio.trim() || null,
@@ -76,6 +80,39 @@ export default function EditProfilePage() {
           placeholder="اكتب اسمك زي ما عايز يظهر"
           maxLength={100}
         />
+
+        {/* User type selector */}
+        <div className="w-full">
+          <label className="block text-sm font-medium text-dark mb-1.5">
+            نوع الحساب <span className="text-gray-text text-xs">(اختياري)</span>
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setSellerType("individual")}
+              className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 font-bold text-sm transition-all ${
+                sellerType === "individual"
+                  ? "border-brand-green bg-brand-green-light text-brand-green"
+                  : "border-gray-light bg-gray-light text-gray-text hover:border-gray-300"
+              }`}
+            >
+              <UserIcon size={18} />
+              <span>فرد</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSellerType("store")}
+              className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 font-bold text-sm transition-all ${
+                sellerType === "store"
+                  ? "border-brand-green bg-brand-green-light text-brand-green"
+                  : "border-gray-light bg-gray-light text-gray-text hover:border-gray-300"
+              }`}
+            >
+              <Store size={18} />
+              <span>تاجر</span>
+            </button>
+          </div>
+        </div>
 
         <Select
           label="المحافظة"
