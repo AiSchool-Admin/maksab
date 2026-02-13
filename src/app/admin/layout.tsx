@@ -9,6 +9,7 @@ import {
   ShoppingBag,
   TrendingUp,
   MapPin,
+  Settings,
   LogOut,
   Menu,
   X,
@@ -35,6 +36,7 @@ const navItems = [
   { href: "/admin/ads", label: "الإعلانات", icon: ShoppingBag },
   { href: "/admin/analytics", label: "التحليلات", icon: TrendingUp },
   { href: "/admin/locations", label: "المواقع", icon: MapPin },
+  { href: "/admin/settings", label: "الإعدادات", icon: Settings },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

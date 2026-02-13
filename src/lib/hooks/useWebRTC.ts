@@ -10,7 +10,8 @@
  *      for that viewer, adds local tracks, creates offer → sends targeted offer
  *   4. Viewer receives offer → sets remote description, creates answer → sends back
  *   5. ICE candidates are exchanged per-viewer pair
- *   6. Broadcaster periodically re-announces for late joiners
+ *   6. Broadcaster periodically re-announces for late joiners (every 3s)
+ *   7. Viewer retries "viewer-join" every 2s until connected (max 15 attempts)
  *
  * Each signal has a `target` field so messages reach the right peer.
  */
@@ -25,6 +26,13 @@ const ICE_SERVERS: RTCConfiguration = {
     { urls: "stun:stun2.l.google.com:19302" },
   ],
 };
+
+// Viewer retry config
+const VIEWER_JOIN_RETRY_INTERVAL_MS = 2000;
+const VIEWER_JOIN_MAX_RETRIES = 15;
+
+// Broadcaster re-announce interval
+const BROADCASTER_REANNOUNCE_INTERVAL_MS = 3000;
 
 type SignalType =
   | "broadcaster-ready"
@@ -60,6 +68,11 @@ export function useWebRTC({
   const [connectionState, setConnectionState] = useState<string>("new");
   const [broadcasterOnline, setBroadcasterOnline] = useState(false);
 
+  // ── Viewer retry state ────────────────────────────────────
+  const viewerRetryRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const viewerRetryCountRef = useRef(0);
+  const viewerConnectedRef = useRef(false);
+
   // ── Broadcaster state ───────────────────────────────────
   const localStreamRef = useRef<MediaStream | null>(null);
   const viewerPeersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -69,6 +82,14 @@ export function useWebRTC({
   // ── Shared channel ──────────────────────────────────────
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const channelReadyRef = useRef(false);
+
+  // ── Stop viewer retry ─────────────────────────────────────
+  const stopViewerRetry = useCallback(() => {
+    if (viewerRetryRef.current) {
+      clearInterval(viewerRetryRef.current);
+      viewerRetryRef.current = null;
+    }
+  }, []);
 
   // ── Setup signaling channel ─────────────────────────────
   const getChannel = useCallback(() => {
@@ -202,6 +223,10 @@ export function useWebRTC({
   // ═══════════════════════════════════════════════════════════
   const handleOfferFromBroadcaster = useCallback(
     async (broadcasterId: string, offerSdp: string) => {
+      // Stop retry — we got an offer, connection is being established
+      viewerConnectedRef.current = true;
+      stopViewerRetry();
+
       // Close existing connection if any
       if (peerConnectionRef.current) {
         peerConnectionRef.current.close();
@@ -245,7 +270,7 @@ export function useWebRTC({
         console.error("Failed to handle offer from broadcaster", err);
       }
     },
-    [sendSignal],
+    [sendSignal, stopViewerRetry],
   );
 
   // Viewer: handle ICE candidate from broadcaster
@@ -262,6 +287,39 @@ export function useWebRTC({
     },
     [],
   );
+
+  // ═══════════════════════════════════════════════════════════
+  // VIEWER: Start retry loop for joining
+  // ═══════════════════════════════════════════════════════════
+  const startViewerRetry = useCallback(() => {
+    // Don't start if already connected or already retrying
+    if (viewerConnectedRef.current || viewerRetryRef.current) return;
+
+    viewerRetryCountRef.current = 0;
+
+    // Send first join immediately
+    sendSignal("viewer-join", "");
+
+    // Then retry every 2 seconds
+    viewerRetryRef.current = setInterval(() => {
+      viewerRetryCountRef.current += 1;
+
+      // Stop retrying after max attempts
+      if (viewerRetryCountRef.current >= VIEWER_JOIN_MAX_RETRIES) {
+        stopViewerRetry();
+        return;
+      }
+
+      // Stop if already connected
+      if (viewerConnectedRef.current) {
+        stopViewerRetry();
+        return;
+      }
+
+      // Send another viewer-join
+      sendSignal("viewer-join", "");
+    }, VIEWER_JOIN_RETRY_INTERVAL_MS);
+  }, [sendSignal, stopViewerRetry]);
 
   // ═══════════════════════════════════════════════════════════
   // BROADCASTER public API
@@ -332,7 +390,9 @@ export function useWebRTC({
           switch (type) {
             case "broadcaster-ready":
               setBroadcasterOnline(true);
-              // Request connection by sending viewer-join
+              // Stop retry and send a fresh viewer-join targeted to this broadcaster
+              viewerConnectedRef.current = false;
+              stopViewerRetry();
               sendSignal("viewer-join", "", from);
               break;
             case "offer":
@@ -345,6 +405,7 @@ export function useWebRTC({
             case "broadcaster-ended":
               setBroadcasterOnline(false);
               setRemoteStream(null);
+              viewerConnectedRef.current = false;
               if (peerConnectionRef.current) {
                 peerConnectionRef.current.close();
                 peerConnectionRef.current = null;
@@ -359,18 +420,17 @@ export function useWebRTC({
       if (status === "SUBSCRIBED") {
         channelReadyRef.current = true;
 
-        // If viewer, announce presence so broadcaster knows to send offer
+        // If viewer, start retry loop to announce presence
+        // This handles the case where broadcaster started before viewer connected
         if (!isBroadcaster) {
-          // Small delay to ensure broadcaster's listener is set up
-          setTimeout(() => {
-            sendSignal("viewer-join", "");
-          }, 500);
+          startViewerRetry();
         }
       }
     });
 
     return () => {
       channelReadyRef.current = false;
+      stopViewerRetry();
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
@@ -386,7 +446,7 @@ export function useWebRTC({
       if (isBroadcastingRef.current && channelReadyRef.current) {
         sendSignal("broadcaster-ready", "");
       }
-    }, 5000); // every 5 seconds
+    }, BROADCASTER_REANNOUNCE_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [isBroadcaster, isBroadcasting, sendSignal]);
@@ -394,6 +454,8 @@ export function useWebRTC({
   // ── Cleanup on unmount ──────────────────────────────────
   useEffect(() => {
     return () => {
+      // Stop viewer retry
+      stopViewerRetry();
       // Viewer cleanup
       if (peerConnectionRef.current) {
         peerConnectionRef.current.close();
@@ -407,7 +469,7 @@ export function useWebRTC({
         localStreamRef.current = null;
       }
     };
-  }, []);
+  }, [stopViewerRetry]);
 
   return {
     remoteStream,

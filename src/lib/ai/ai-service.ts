@@ -28,7 +28,17 @@ export async function callAI(
   messages: AIMessage[],
   options: AIOptions = {},
 ): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  // Check env var first, then DB-stored setting
+  let apiKey: string | undefined = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    try {
+      const { getOpenAIKey } = await import("@/lib/admin/settings-service");
+      const dbKey = await getOpenAIKey();
+      if (dbKey) apiKey = dbKey;
+    } catch {
+      // settings-service not available
+    }
+  }
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY not configured");
   }

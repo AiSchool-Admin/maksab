@@ -3,15 +3,23 @@
  *
  * Handles:
  * 1. New ad → notify buyers who searched for similar items
- * 2. Chat message → notify recipient
- * 3. Auction bid → notify seller + outbid bidders
+ * 2. Chat message → notify recipient (push + WhatsApp)
+ * 3. Auction bid → notify seller + outbid bidders (push + WhatsApp)
  * 4. Price drop → notify users who favorited the ad
  * 5. Seller interest → aggregate buyer interest on seller's ads
+ * 6. Price offers → notify seller/buyer (push + WhatsApp)
  *
  * Uses service role key (server-side only).
+ * WhatsApp notifications are sent alongside push for critical events.
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import {
+  sendWhatsAppChatNotification,
+  sendWhatsAppAuctionNotification,
+  sendWhatsAppOfferNotification,
+  sendWhatsAppMatchNotification,
+} from "./whatsapp-notifications";
 
 function getServiceClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -104,6 +112,23 @@ async function sendPushToUser(
     }
   } catch {
     // Push notification is best-effort
+  }
+}
+
+/** Get user's phone number for WhatsApp notification */
+async function getUserPhone(
+  client: SupabaseClient,
+  userId: string,
+): Promise<string | null> {
+  try {
+    const { data } = await client
+      .from("profiles")
+      .select("phone")
+      .eq("id", userId)
+      .maybeSingle();
+    return (data?.phone as string) || null;
+  } catch {
+    return null;
   }
 }
 
@@ -313,6 +338,27 @@ export async function notifyChatMessage(params: {
       preview || "📷 صورة",
       `/chat/${params.conversationId}`,
     );
+
+    // WhatsApp notification (best effort — fire and forget)
+    const recipientPhone = await getUserPhone(client, params.recipientId);
+    if (recipientPhone) {
+      // Get ad title for context
+      let adTitle: string | undefined;
+      if (params.adId) {
+        const { data: ad } = await client
+          .from("ads")
+          .select("title")
+          .eq("id", params.adId)
+          .maybeSingle();
+        adTitle = (ad?.title as string) || undefined;
+      }
+      sendWhatsAppChatNotification(
+        recipientPhone,
+        params.senderName,
+        preview || "صورة",
+        adTitle,
+      ).catch(() => {}); // fire and forget
+    }
   } catch (err) {
     console.error("notifyChatMessage error:", err);
   }
@@ -356,6 +402,18 @@ export async function notifyAuctionBid(params: {
         `${params.bidderName} زايد بـ ${formattedAmount} جنيه`,
         `/ad/${params.adId}`,
       );
+
+      // WhatsApp notification to seller
+      const sellerPhone = await getUserPhone(client, params.sellerId);
+      if (sellerPhone) {
+        sendWhatsAppAuctionNotification(
+          sellerPhone,
+          "new_bid",
+          params.adTitle,
+          params.bidAmount,
+          params.bidderName,
+        ).catch(() => {});
+      }
     }
 
     // Notify previous highest bidder they've been outbid
@@ -387,6 +445,17 @@ export async function notifyAuctionBid(params: {
           `المبلغ الجديد: ${formattedAmount} جنيه — زايد تاني!`,
           `/ad/${params.adId}`,
         );
+
+        // WhatsApp notification to outbid user
+        const outbidPhone = await getUserPhone(client, params.previousHighBidderId);
+        if (outbidPhone) {
+          sendWhatsAppAuctionNotification(
+            outbidPhone,
+            "outbid",
+            params.adTitle,
+            params.bidAmount,
+          ).catch(() => {});
+        }
       }
     }
   } catch (err) {
@@ -429,6 +498,18 @@ export async function notifyBuyNow(params: {
       `${params.buyerName} اشترى إعلانك بـ ${formattedPrice} جنيه`,
       `/ad/${params.adId}`,
     );
+
+    // WhatsApp notification to seller
+    const sellerPhone = await getUserPhone(client, params.sellerId);
+    if (sellerPhone) {
+      sendWhatsAppAuctionNotification(
+        sellerPhone,
+        "buy_now",
+        params.adTitle,
+        params.buyNowPrice,
+        params.buyerName,
+      ).catch(() => {});
+    }
 
     // Notify all other bidders that auction ended
     const { data: bidders } = await client
@@ -582,6 +663,19 @@ export async function notifyPriceOffer(params: {
       body,
       `/ad/${params.adId}`,
     );
+
+    // WhatsApp notification
+    const recipientPhone = await getUserPhone(client, params.recipientId);
+    if (recipientPhone) {
+      sendWhatsAppOfferNotification(
+        recipientPhone,
+        params.type,
+        params.adTitle,
+        params.amount,
+        params.senderName,
+        params.counterAmount,
+      ).catch(() => {});
+    }
   } catch (err) {
     console.error("notifyPriceOffer error:", err);
   }
