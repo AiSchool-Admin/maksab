@@ -43,6 +43,10 @@ export default function AuthBottomSheet({
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Track if auto-fill animation is in progress
+  const autoFillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
+
   // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
@@ -57,6 +61,11 @@ export default function AuthBottomSheet({
       setOtpChannel(null);
       setOtpToken("");
       setDevCode(null);
+      setIsAutoFilling(false);
+      if (autoFillTimerRef.current) {
+        clearTimeout(autoFillTimerRef.current);
+        autoFillTimerRef.current = null;
+      }
       setTimeout(() => phoneInputRef.current?.focus(), 400);
     }
   }, [isOpen]);
@@ -132,10 +141,48 @@ export default function AuthBottomSheet({
     setResendTimer(60);
     setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
 
-    if (otpResult.channel !== "firebase") {
+    // Auto-fill OTP in dev mode with typing animation
+    if (otpResult.dev_code) {
+      autoFillOTP(otpResult.dev_code);
+    } else if (otpResult.channel !== "firebase") {
       tryWebOTP();
     }
   };
+
+  // ── Auto-fill OTP with natural typing animation ────────────────
+  const autoFillOTP = useCallback((code: string) => {
+    if (!/^\d{6}$/.test(code)) return;
+
+    const digits = code.split("");
+    setIsAutoFilling(true);
+
+    // Type each digit one by one with a delay
+    digits.forEach((digit, index) => {
+      autoFillTimerRef.current = setTimeout(() => {
+        setOtp((prev) => {
+          const newOtp = [...prev];
+          newOtp[index] = digit;
+          return newOtp;
+        });
+        // Focus the current input to show cursor effect
+        otpInputsRef.current[index]?.focus();
+
+        // After last digit: stop animation, don't auto-submit (let user press button)
+        if (index === 5) {
+          setIsAutoFilling(false);
+        }
+      }, 500 + index * 180); // 500ms initial delay + 180ms per digit
+    });
+  }, []);
+
+  // ── Cleanup auto-fill timer on unmount ─────────────────────────
+  useEffect(() => {
+    return () => {
+      if (autoFillTimerRef.current) {
+        clearTimeout(autoFillTimerRef.current);
+      }
+    };
+  }, []);
 
   // ── WebOTP: Auto-read SMS verification code ─────────────────────
   const tryWebOTP = async () => {
@@ -148,9 +195,7 @@ export default function AuthBottomSheet({
         if (content && "code" in content) {
           const code = (content as { code: string }).code;
           if (code && /^\d{6}$/.test(code)) {
-            const digits = code.split("");
-            setOtp(digits);
-            handleOtpSubmit(code);
+            autoFillOTP(code);
           }
         }
       }
@@ -467,11 +512,17 @@ export default function AuthBottomSheet({
             </p>
           </div>
 
-          {/* Dev mode: show OTP code directly */}
+          {/* Dev mode: show status while auto-filling, then show code */}
           {devCode && (
             <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-center">
-              <p className="text-xs text-gray-text mb-1">كود التأكيد (وضع التطوير)</p>
-              <p className="text-2xl font-bold text-dark tracking-[0.3em]" dir="ltr">{devCode}</p>
+              {isAutoFilling ? (
+                <p className="text-xs text-gray-text">جاري إدخال الكود تلقائياً...</p>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-text mb-1">كود التأكيد (وضع التطوير)</p>
+                  <p className="text-2xl font-bold text-dark tracking-[0.3em]" dir="ltr">{devCode}</p>
+                </>
+              )}
             </div>
           )}
 
@@ -487,10 +538,12 @@ export default function AuthBottomSheet({
                 inputMode="numeric"
                 maxLength={1}
                 value={digit}
+                readOnly={isAutoFilling}
                 onChange={(e) => handleOtpChange(i, e.target.value)}
                 onKeyDown={(e) => handleOtpKeyDown(i, e)}
                 onPaste={i === 0 ? handleOtpPaste : undefined}
-                className={`w-11 h-13 text-center text-xl font-bold bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : ""} ${digit ? "text-dark border-brand-green/30" : "text-gray-text"}`}
+                className={`w-11 h-13 text-center text-xl font-bold bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : ""} ${digit ? "text-dark border-brand-green/30 scale-105" : "text-gray-text"}`}
+                style={digit && isAutoFilling ? { transform: "scale(1.08)", transition: "transform 0.2s ease-out" } : undefined}
                 autoComplete={i === 0 ? "one-time-code" : "off"}
               />
             ))}

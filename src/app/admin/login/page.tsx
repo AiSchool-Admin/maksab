@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Shield, Phone, Mail, ArrowLeft } from "lucide-react";
 
@@ -20,11 +20,45 @@ export default function AdminLoginPage() {
   // Phone mode
   const [phone, setPhone] = useState("");
   const [otpToken, setOtpToken] = useState("");
-  const [otpCode, setOtpCode] = useState("");
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [devCode, setDevCode] = useState("");
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const autoFillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (autoFillTimerRef.current) clearTimeout(autoFillTimerRef.current);
+    };
+  }, []);
+
+  // ── Auto-fill OTP with natural typing animation ────────────────
+  const autoFillOTP = useCallback((code: string) => {
+    if (!/^\d{6}$/.test(code)) return;
+
+    const digits = code.split("");
+    setIsAutoFilling(true);
+
+    digits.forEach((digit, index) => {
+      autoFillTimerRef.current = setTimeout(() => {
+        setOtp((prev) => {
+          const newOtp = [...prev];
+          newOtp[index] = digit;
+          return newOtp;
+        });
+        otpInputsRef.current[index]?.focus();
+
+        if (index === 5) {
+          setIsAutoFilling(false);
+        }
+      }, 500 + index * 180);
+    });
+  }, []);
 
   const verifyAdminAndLogin = async (userId: string, displayName: string, identifier: string) => {
     const checkRes = await fetch("/api/admin/stats?type=overview", {
@@ -97,8 +131,14 @@ export default function AdminLoginPage() {
       }
 
       setOtpToken(result.token || "");
-      if (result.dev_code) setDevCode(result.dev_code);
+      setOtp(["", "", "", "", "", ""]);
       setMode("otp");
+
+      // Auto-fill in dev mode
+      if (result.dev_code) {
+        setDevCode(result.dev_code);
+        setTimeout(() => autoFillOTP(result.dev_code!), 300);
+      }
     } catch {
       setError("حصلت مشكلة في إرسال الكود");
     } finally {
@@ -106,11 +146,39 @@ export default function AdminLoginPage() {
     }
   };
 
+  // ── OTP input handling ──────────────────────────────────────────
+  const handleOtpChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const newOtp = [...otp];
+    newOtp[index] = digit;
+    setOtp(newOtp);
+    setError("");
+
+    if (digit && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpInputsRef.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted.length === 6) {
+      autoFillOTP(pasted);
+    }
+  };
+
   // ── Phone OTP: Verify code ────────────────
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpCode || otpCode.length < 4) {
-      setError("ادخل كود التحقق");
+    const otpCode = otp.join("");
+    if (otpCode.length < 6) {
+      setError("ادخل كود التحقق كامل");
       return;
     }
 
@@ -217,7 +285,7 @@ export default function AdminLoginPage() {
         {/* ── OTP Verification ── */}
         {mode === "otp" && (
           <form onSubmit={handleVerifyOTP} className="bg-white rounded-2xl p-6 shadow-2xl space-y-4">
-            <button type="button" onClick={() => setMode("phone")} className="flex items-center gap-1 text-xs text-gray-text hover:text-dark">
+            <button type="button" onClick={() => { setMode("phone"); setOtp(["", "", "", "", "", ""]); }} className="flex items-center gap-1 text-xs text-gray-text hover:text-dark">
               <ArrowLeft size={14} />
               تغيير الرقم
             </button>
@@ -227,32 +295,46 @@ export default function AdminLoginPage() {
               <p className="text-sm font-bold text-dark mt-1" dir="ltr">{phone}</p>
             </div>
 
+            {/* Dev mode status */}
             {devCode && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
-                <p className="text-xs text-amber-700">كود التطوير:</p>
-                <p className="text-xl font-bold text-amber-800 tracking-[0.3em] mt-1">{devCode}</p>
+                {isAutoFilling ? (
+                  <p className="text-xs text-amber-700">جاري إدخال الكود تلقائياً...</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-amber-700">كود التطوير:</p>
+                    <p className="text-xl font-bold text-amber-800 tracking-[0.3em] mt-1">{devCode}</p>
+                  </>
+                )}
               </div>
             )}
 
-            <div>
-              <input
-                type="text"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="ادخل الكود"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green text-center tracking-[0.4em]"
-                dir="ltr"
-                inputMode="numeric"
-                autoFocus
-                maxLength={6}
-              />
+            {/* OTP 6-digit inputs */}
+            <div className="flex gap-2 justify-center" dir="ltr">
+              {otp.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { otpInputsRef.current[i] = el; }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  readOnly={isAutoFilling}
+                  onChange={(e) => handleOtpChange(i, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                  onPaste={i === 0 ? handleOtpPaste : undefined}
+                  className={`w-11 h-13 text-center text-xl font-bold bg-gray-50 rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-red-300 bg-red-50" : ""} ${digit ? "text-dark border-brand-green/30" : "text-gray-400"}`}
+                  style={digit && isAutoFilling ? { transform: "scale(1.08)", transition: "transform 0.2s ease-out" } : undefined}
+                  autoComplete={i === 0 ? "one-time-code" : "off"}
+                />
+              ))}
             </div>
 
             {error && <p className="text-sm text-error bg-error/5 rounded-xl p-3 text-center">{error}</p>}
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || otp.join("").length < 6}
               className="w-full py-3 bg-brand-green text-white rounded-xl font-bold text-sm hover:bg-brand-green-dark transition-colors disabled:opacity-50"
             >
               {isLoading ? "جاري التحقق..." : "تأكيد الدخول"}
