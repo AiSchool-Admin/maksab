@@ -347,12 +347,44 @@ export async function getDailyGrowth(days = 30): Promise<DailyGrowth[]> {
 // ── Verify admin ────────────────────────────────────────────────
 
 export async function verifyAdmin(userId: string): Promise<boolean> {
-  const sb = getServiceClient();
-  const { data } = await sb
-    .from("profiles")
-    .select("is_admin")
-    .eq("id", userId)
-    .maybeSingle();
+  // 1. Check env-based admin list (always works, no migration needed)
+  //    Set ADMIN_USER_IDS=id1,id2 or ADMIN_PHONES=01012345678,01098765432
+  const envAdminIds = process.env.ADMIN_USER_IDS || "";
+  if (envAdminIds && envAdminIds.split(",").map((s) => s.trim()).includes(userId)) {
+    return true;
+  }
 
-  return Boolean((data as Record<string, unknown>)?.is_admin);
+  // Check by phone in env
+  const envAdminPhones = process.env.ADMIN_PHONES || "";
+  if (envAdminPhones) {
+    const sb = getServiceClient();
+    const { data: profile } = await sb
+      .from("profiles")
+      .select("phone")
+      .eq("id", userId)
+      .maybeSingle();
+    const phone = (profile as Record<string, unknown>)?.phone as string;
+    if (phone && envAdminPhones.split(",").map((s) => s.trim()).includes(phone)) {
+      return true;
+    }
+  }
+
+  // 2. Check is_admin column in DB (requires migration 00016)
+  try {
+    const sb = getServiceClient();
+    const { data, error } = await sb
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      // Column doesn't exist yet — fall back to env only
+      return false;
+    }
+
+    return Boolean((data as Record<string, unknown>)?.is_admin);
+  } catch {
+    return false;
+  }
 }

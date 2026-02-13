@@ -2,19 +2,51 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Shield } from "lucide-react";
+import { Eye, EyeOff, Shield, Phone, Mail, ArrowLeft } from "lucide-react";
 
 const ADMIN_SESSION_KEY = "maksab_admin_session";
 
+type LoginMode = "select" | "email" | "phone" | "otp";
+
 export default function AdminLoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<LoginMode>("select");
+
+  // Email mode
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Phone mode
+  const [phone, setPhone] = useState("");
+  const [otpToken, setOtpToken] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [devCode, setDevCode] = useState("");
+
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const verifyAdminAndLogin = async (userId: string, displayName: string, identifier: string) => {
+    const checkRes = await fetch("/api/admin/stats?type=overview", {
+      headers: { "x-admin-id": userId },
+    });
+
+    if (!checkRes.ok) {
+      setError("هذا الحساب ليس لديه صلاحيات الأدمن");
+      setIsLoading(false);
+      return;
+    }
+
+    localStorage.setItem(
+      ADMIN_SESSION_KEY,
+      JSON.stringify({ id: userId, email: identifier, name: displayName || identifier }),
+    );
+
+    router.push("/admin");
+  };
+
+  // ── Email + Password Login ────────────────
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError("ادخل الإيميل وكلمة السر");
@@ -25,7 +57,6 @@ export default function AdminLoginPage() {
     setError("");
 
     try {
-      // Use the existing adminLogin function
       const { adminLogin } = await import("@/lib/supabase/auth");
       const result = await adminLogin(email, password);
 
@@ -35,26 +66,70 @@ export default function AdminLoginPage() {
         return;
       }
 
-      // Verify admin role via API
-      const checkRes = await fetch(`/api/admin/stats?type=overview`, {
-        headers: { "x-admin-id": result.user.id },
-      });
+      await verifyAdminAndLogin(result.user.id, result.user.display_name || "", email);
+    } catch {
+      setError("حصلت مشكلة في الاتصال. جرب تاني");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      if (!checkRes.ok) {
-        setError("هذا الحساب ليس لديه صلاحيات الأدمن");
+  // ── Phone OTP: Send code ────────────────
+  const handleSendOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPhone = phone.trim();
+    if (!cleanPhone || cleanPhone.length !== 11 || !cleanPhone.match(/^01[0125]/)) {
+      setError("ادخل رقم موبايل مصري صحيح (11 رقم)");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const { sendOTP } = await import("@/lib/supabase/auth");
+      const result = await sendOTP(cleanPhone);
+
+      if (result.error) {
+        setError(result.error);
         setIsLoading(false);
         return;
       }
 
-      // Save admin session
-      localStorage.setItem(
-        ADMIN_SESSION_KEY,
-        JSON.stringify({ id: result.user.id, email, name: result.user.display_name || email }),
-      );
-
-      router.push("/admin");
+      setOtpToken(result.token || "");
+      if (result.dev_code) setDevCode(result.dev_code);
+      setMode("otp");
     } catch {
-      setError("حصلت مشكلة في الاتصال. جرب تاني");
+      setError("حصلت مشكلة في إرسال الكود");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Phone OTP: Verify code ────────────────
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode || otpCode.length < 4) {
+      setError("ادخل كود التحقق");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const { verifyOTP } = await import("@/lib/supabase/auth");
+      const result = await verifyOTP(phone, otpCode, otpToken);
+
+      if (result.error || !result.user) {
+        setError(result.error || "الكود غلط أو انتهت صلاحيته");
+        setIsLoading(false);
+        return;
+      }
+
+      await verifyAdminAndLogin(result.user.id, result.user.display_name || "", phone);
+    } catch {
+      setError("حصلت مشكلة في التحقق");
     } finally {
       setIsLoading(false);
     }
@@ -72,55 +147,173 @@ export default function AdminLoginPage() {
           <p className="text-sm text-white/60 mt-1">دخول الأدمن</p>
         </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleLogin} className="bg-white rounded-2xl p-6 shadow-2xl space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-dark mb-1.5">البريد الإلكتروني</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@maksab.app"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
-              dir="ltr"
-              autoComplete="email"
-            />
-          </div>
+        {/* ── Mode Selector ── */}
+        {mode === "select" && (
+          <div className="bg-white rounded-2xl p-6 shadow-2xl space-y-3">
+            <p className="text-sm font-medium text-dark text-center mb-4">اختار طريقة الدخول</p>
 
-          <div>
-            <label className="block text-sm font-medium text-dark mb-1.5">كلمة السر</label>
-            <div className="relative">
+            <button
+              onClick={() => { setMode("phone"); setError(""); }}
+              className="w-full flex items-center gap-3 p-4 bg-brand-green-light border-2 border-brand-green/20 rounded-xl hover:border-brand-green/40 transition-all"
+            >
+              <div className="w-10 h-10 bg-brand-green rounded-xl flex items-center justify-center flex-shrink-0">
+                <Phone size={20} className="text-white" />
+              </div>
+              <div className="text-start">
+                <h3 className="text-sm font-bold text-dark">رقم الموبايل + كود</h3>
+                <p className="text-xs text-gray-text">ادخل برقم موبايلك المسجّل</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { setMode("email"); setError(""); }}
+              className="w-full flex items-center gap-3 p-4 bg-gray-50 border-2 border-transparent rounded-xl hover:border-gray-200 transition-all"
+            >
+              <div className="w-10 h-10 bg-gray-200 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Mail size={20} className="text-gray-500" />
+              </div>
+              <div className="text-start">
+                <h3 className="text-sm font-bold text-dark">إيميل + كلمة سر</h3>
+                <p className="text-xs text-gray-text">للحسابات اللي ليها إيميل</p>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* ── Phone Login ── */}
+        {mode === "phone" && (
+          <form onSubmit={handleSendOTP} className="bg-white rounded-2xl p-6 shadow-2xl space-y-4">
+            <button type="button" onClick={() => setMode("select")} className="flex items-center gap-1 text-xs text-gray-text hover:text-dark">
+              <ArrowLeft size={14} />
+              رجوع
+            </button>
+
+            <div>
+              <label className="block text-sm font-medium text-dark mb-1.5">رقم الموبايل</label>
               <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green pe-11"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                placeholder="01012345678"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green text-center tracking-widest"
                 dir="ltr"
-                autoComplete="current-password"
+                inputMode="numeric"
+                autoFocus
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
             </div>
-          </div>
 
-          {error && (
-            <p className="text-sm text-error bg-error/5 rounded-xl p-3 text-center">{error}</p>
-          )}
+            {error && <p className="text-sm text-error bg-error/5 rounded-xl p-3 text-center">{error}</p>}
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-3 bg-brand-green text-white rounded-xl font-bold text-sm hover:bg-brand-green-dark transition-colors disabled:opacity-50"
-          >
-            {isLoading ? "جاري تسجيل الدخول..." : "دخول"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 bg-brand-green text-white rounded-xl font-bold text-sm hover:bg-brand-green-dark transition-colors disabled:opacity-50"
+            >
+              {isLoading ? "جاري الإرسال..." : "إرسال كود التحقق"}
+            </button>
+          </form>
+        )}
+
+        {/* ── OTP Verification ── */}
+        {mode === "otp" && (
+          <form onSubmit={handleVerifyOTP} className="bg-white rounded-2xl p-6 shadow-2xl space-y-4">
+            <button type="button" onClick={() => setMode("phone")} className="flex items-center gap-1 text-xs text-gray-text hover:text-dark">
+              <ArrowLeft size={14} />
+              تغيير الرقم
+            </button>
+
+            <div className="text-center">
+              <p className="text-sm text-gray-text">تم إرسال كود التحقق إلى</p>
+              <p className="text-sm font-bold text-dark mt-1" dir="ltr">{phone}</p>
+            </div>
+
+            {devCode && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+                <p className="text-xs text-amber-700">كود التطوير:</p>
+                <p className="text-xl font-bold text-amber-800 tracking-[0.3em] mt-1">{devCode}</p>
+              </div>
+            )}
+
+            <div>
+              <input
+                type="text"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="ادخل الكود"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green text-center tracking-[0.4em]"
+                dir="ltr"
+                inputMode="numeric"
+                autoFocus
+                maxLength={6}
+              />
+            </div>
+
+            {error && <p className="text-sm text-error bg-error/5 rounded-xl p-3 text-center">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 bg-brand-green text-white rounded-xl font-bold text-sm hover:bg-brand-green-dark transition-colors disabled:opacity-50"
+            >
+              {isLoading ? "جاري التحقق..." : "تأكيد الدخول"}
+            </button>
+          </form>
+        )}
+
+        {/* ── Email Login ── */}
+        {mode === "email" && (
+          <form onSubmit={handleEmailLogin} className="bg-white rounded-2xl p-6 shadow-2xl space-y-4">
+            <button type="button" onClick={() => setMode("select")} className="flex items-center gap-1 text-xs text-gray-text hover:text-dark">
+              <ArrowLeft size={14} />
+              رجوع
+            </button>
+
+            <div>
+              <label className="block text-sm font-medium text-dark mb-1.5">البريد الإلكتروني</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@maksab.app"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
+                dir="ltr"
+                autoComplete="email"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark mb-1.5">كلمة السر</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green pe-11"
+                  dir="ltr"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {error && <p className="text-sm text-error bg-error/5 rounded-xl p-3 text-center">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 bg-brand-green text-white rounded-xl font-bold text-sm hover:bg-brand-green-dark transition-colors disabled:opacity-50"
+            >
+              {isLoading ? "جاري تسجيل الدخول..." : "دخول"}
+            </button>
+          </form>
+        )}
 
         <p className="text-center text-xs text-white/40 mt-6">
           مكسب — لوحة التحكم الإدارية
