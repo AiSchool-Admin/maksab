@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, SlidersHorizontal, Plus, Store } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, Store, ChevronRight, Home } from "lucide-react";
 import StoreCard from "@/components/store/StoreCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { StoresGridSkeleton } from "@/components/store/StoreSkeleton";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { getStores } from "@/lib/stores/store-service";
 import { categoriesConfig } from "@/lib/categories/categories-config";
 import { governorates } from "@/lib/data/governorates";
@@ -71,7 +72,19 @@ export default function StoresDirectoryPage() {
       {/* Header */}
       <header className="bg-white border-b border-gray-light px-4 py-3 sticky top-0 z-40">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="text-lg font-bold text-dark">🏪 المتاجر</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.back()}
+              className="p-1 -me-1 text-gray-text hover:text-dark transition-colors"
+              aria-label="رجوع"
+            >
+              <ChevronRight size={24} />
+            </button>
+            <Link href="/" className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors" aria-label="الرئيسية">
+              <Home size={18} />
+            </Link>
+            <h1 className="text-lg font-bold text-dark">🏪 المتاجر</h1>
+          </div>
           {isStoreOwner ? (
             <Link
               href="/store/dashboard"
@@ -268,6 +281,8 @@ export default function StoresDirectoryPage() {
           <Store size={24} />
         </Link>
       )}
+
+      <BottomNavWithBadge />
     </div>
   );
 }

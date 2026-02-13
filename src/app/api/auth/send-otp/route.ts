@@ -5,14 +5,16 @@
  * Uses HMAC-signed tokens — completely stateless, NO database table needed.
  *
  * Flow:
- * 1. Generate 6-digit code
- * 2. Create HMAC signature: HMAC(phone:code:expiry, SECRET)
- * 3. Return signed token to client
- * 4. Client sends token + code to /api/auth/verify-otp
+ * 1. Validate phone + check rate limit
+ * 2. Generate 6-digit code
+ * 3. Create HMAC signature: HMAC(phone:code:expiry, SECRET)
+ * 4. Send via WhatsApp (primary) → Firebase (fallback) → Dev mode
+ * 5. Return signed token to client
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
+import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 
 const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
@@ -51,6 +53,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── Rate limit check (Supabase-based, persistent) ───────────────
+    const rateCheck = await checkRateLimit(phone, "otp_send");
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: `عديت الحد المسموح. جرب تاني بعد ${Math.ceil((rateCheck.retryAfterSeconds || 60) / 60)} دقيقة`,
+          retry_after: rateCheck.retryAfterSeconds,
+        },
+        { status: 429 }
+      );
+    }
+
+    // Record this OTP request
+    await recordRateLimit(phone, "otp_send");
+
     // Generate OTP
     const code = generateOTP();
     const expiresAt = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
@@ -63,10 +80,10 @@ export async function POST(req: NextRequest) {
 
     // ── Send OTP via configured channel ─────────────────────────────
 
-    // Channel 1: WhatsApp Cloud API
+    // Channel 1: WhatsApp Cloud API (1,000 free service conversations/month)
     if (WHATSAPP_BOT_NUMBER) {
-      const sent = await sendViaWhatsApp(phone, code);
-      if (sent) {
+      const whatsappResult = await sendViaWhatsApp(phone, code);
+      if (whatsappResult.success) {
         return NextResponse.json({
           success: true,
           token,
@@ -74,9 +91,26 @@ export async function POST(req: NextRequest) {
           expires_at: expiresAt,
         });
       }
+      // Log failure but continue to fallback
+      console.warn("[send-otp] WhatsApp failed, trying fallback:", whatsappResult.error);
     }
 
-    // Channel 2: SMS (if configured)
+    // Channel 2: Firebase Phone Auth (10,000 free/month)
+    const firebaseConfigured = !!(
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    );
+    if (firebaseConfigured) {
+      // Firebase sends SMS client-side — server just needs to tell client to use Firebase
+      return NextResponse.json({
+        success: true,
+        token, // Still provide HMAC token as fallback identifier
+        channel: "firebase",
+        expires_at: expiresAt,
+      });
+    }
+
+    // Channel 3: SMS (if configured)
     const smsEnabled = process.env.NEXT_PUBLIC_PHONE_AUTH_ENABLED === "true";
     if (smsEnabled) {
       return NextResponse.json({
@@ -108,18 +142,24 @@ export async function POST(req: NextRequest) {
 
 /**
  * Send OTP via WhatsApp Cloud API (Meta Business)
- * First 1000 service conversations per month are FREE.
+ * Uses v21.0 of the Graph API.
+ * First 1,000 service conversations per month are FREE.
  */
-async function sendViaWhatsApp(phone: string, code: string): Promise<boolean> {
+async function sendViaWhatsApp(
+  phone: string,
+  code: string
+): Promise<{ success: boolean; error?: string }> {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
   const templateName = process.env.WHATSAPP_OTP_TEMPLATE || "otp_code";
 
-  if (!phoneNumberId || !accessToken) return false;
+  if (!phoneNumberId || !accessToken) {
+    return { success: false, error: "Missing WhatsApp credentials" };
+  }
 
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
       {
         method: "POST",
         headers: {
@@ -150,13 +190,24 @@ async function sendViaWhatsApp(phone: string, code: string): Promise<boolean> {
       }
     );
 
-    if (response.ok) return true;
+    if (response.ok) {
+      const data = await response.json().catch(() => ({}));
+      console.log("[WhatsApp] OTP sent successfully to", `2${phone}`, data?.messages?.[0]?.id || "");
+      return { success: true };
+    }
 
     const errorData = await response.json().catch(() => ({}));
-    console.error("[WhatsApp] Send failed:", errorData);
-    return false;
+    const errorMsg = errorData?.error?.message || `HTTP ${response.status}`;
+    console.error("[WhatsApp] Send failed:", errorMsg, errorData);
+
+    // Token expired — log specific message
+    if (response.status === 401) {
+      console.error("[WhatsApp] Access token expired! Renew at developers.facebook.com");
+    }
+
+    return { success: false, error: errorMsg };
   } catch (err) {
-    console.error("[WhatsApp] Error:", err);
-    return false;
+    console.error("[WhatsApp] Network error:", err);
+    return { success: false, error: "Network error" };
   }
 }

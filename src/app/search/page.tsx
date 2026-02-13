@@ -88,9 +88,18 @@ function SearchPageInner() {
 
   /* ── Build SearchFilters from state ────────────────────────────────── */
   const buildFilters = useCallback((): SearchFilters => {
+    // Use AI-parsed cleanQuery when available — this removes keywords that
+    // were already consumed by entity extraction (category, brand, etc.).
+    // e.g. "شنطة" → category=fashion, cleanQuery="" → no redundant text filter
+    const effectiveQuery =
+      parsedQuery && parsedQuery.confidence >= 0.4
+        ? parsedQuery.cleanQuery || undefined
+        : query || undefined;
+
     return {
-      query: query || undefined,
+      query: effectiveQuery,
       category: filters.category,
+      subcategory: filters.subcategory,
       saleType: filters.saleType,
       priceMin: filters.priceMin,
       priceMax: filters.priceMax,
@@ -99,7 +108,7 @@ function SearchPageInner() {
       sortBy: sortBy as SearchFilters["sortBy"],
       categoryFilters,
     };
-  }, [query, filters, sortBy, categoryFilters]);
+  }, [query, parsedQuery, filters, sortBy, categoryFilters]);
 
   /* ── Execute search (uses advanced full-text + fuzzy API) ──────────── */
   const executeSearch = useCallback(
@@ -265,26 +274,45 @@ function SearchPageInner() {
       setShowInterpretation(parsed.confidence > 0.5);
       saveRecentSearch(q);
 
-      // Apply AI-extracted filters
-      const newFilters: ActiveFilters = { ...filters };
-      if (parsed.primaryCategory && !filters.category) {
-        newFilters.category = parsed.primaryCategory;
-      }
-      if (parsed.governorate && !filters.governorate) {
-        newFilters.governorate = parsed.governorate;
-      }
-      if (parsed.saleType) {
-        newFilters.saleType = parsed.saleType;
-      }
-      if (parsed.priceMin != null || parsed.priceMax != null) {
-        if (parsed.priceMin != null) newFilters.priceMin = parsed.priceMin;
-        if (parsed.priceMax != null) newFilters.priceMax = parsed.priceMax;
-      }
+      // Start with FRESH filters from AI parsing — don't accumulate old ones
+      const newFilters: ActiveFilters = {};
+      if (parsed.primaryCategory) newFilters.category = parsed.primaryCategory;
+      if (parsed.subcategory) newFilters.subcategory = parsed.subcategory;
+      if (parsed.governorate) newFilters.governorate = parsed.governorate;
+      if (parsed.saleType) newFilters.saleType = parsed.saleType;
+      if (parsed.priceMin != null) newFilters.priceMin = parsed.priceMin;
+      if (parsed.priceMax != null) newFilters.priceMax = parsed.priceMax;
+      // Map condition hint to condition filter
+      if (parsed.conditionHint === "new") newFilters.condition = "new";
+      else if (parsed.conditionHint !== "any") newFilters.condition = "used";
 
       setFilters(newFilters);
 
+      // Map AI-extracted fields (brand, karat, storage, etc.) to category filters
+      const newCategoryFilters: Record<string, string> = {};
+      if (parsed.extractedFields && parsed.primaryCategory) {
+        const catConfig = getCategoryById(parsed.primaryCategory);
+        if (catConfig) {
+          // Only map to select fields that exist in the category config
+          const selectFieldIds = new Set(
+            catConfig.fields
+              .filter((f) => f.type === "select" && f.options && f.options.length > 0)
+              .map((f) => f.id),
+          );
+          for (const [key, value] of Object.entries(parsed.extractedFields)) {
+            if (value && selectFieldIds.has(key)) {
+              newCategoryFilters[key] = value;
+            }
+          }
+        }
+      }
+      setCategoryFilters(newCategoryFilters);
+
       // Generate refinements
       setRefinements(generateRefinements(parsed));
+
+      // Force search re-execution even if filters didn't change
+      setSearchTrigger((n) => n + 1);
 
       // Update URL
       const params = new URLSearchParams();
@@ -292,7 +320,7 @@ function SearchPageInner() {
       if (newFilters.category) params.set("category", newFilters.category);
       router.replace(`/search?${params.toString()}`, { scroll: false });
     },
-    [filters, router],
+    [router],
   );
 
   /* ── Handle saving a wish ("دوّر لي") ─────────────────────────────── */
@@ -327,6 +355,7 @@ function SearchPageInner() {
       };
       setFilters(newFilters);
       setRefinements(generateRefinements(parsed));
+      setSearchTrigger((n) => n + 1);
     },
     [],
   );
@@ -337,6 +366,11 @@ function SearchPageInner() {
       setFilters(newFilters);
       if (newFilters.category !== filters.category) {
         setCategoryFilters({});
+      }
+      // When filters are cleared manually, reset parsedQuery so the raw query
+      // is used for text search instead of the (now irrelevant) cleanQuery
+      if (!newFilters.category && !newFilters.governorate && !newFilters.saleType) {
+        setParsedQuery(null);
       }
     },
     [filters.category],
@@ -386,13 +420,28 @@ function SearchPageInner() {
     [filters],
   );
 
-  /* ── Auto-execute search when filters/sort change ──────────────────── */
+  /* ── Search trigger counter — increments to force re-execution ────── */
+  const [searchTrigger, setSearchTrigger] = useState(0);
+
+  /* ── Auto-execute search when filters/sort/query change ────────────── */
+  const isInitialMount = useRef(true);
   useEffect(() => {
+    // Skip the very first render — the initial search is handled by the
+    // mount effect below (which also sets filters via handleAISearch)
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      // Only execute immediately if there's no initialQuery
+      // (otherwise handleAISearch below will trigger this effect)
+      if (!initialQuery) {
+        executeSearch(true);
+      }
+      return;
+    }
     executeSearch(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, sortBy, categoryFilters]);
+  }, [filters, sortBy, categoryFilters, searchTrigger]);
 
-  /* ── Initial search on mount (if query or category from URL) ───────── */
+  /* ── Initial search on mount (if query from URL) ────────────────────── */
   useEffect(() => {
     if (initialQuery) {
       const parsed = aiParseQuery(initialQuery);
@@ -605,51 +654,63 @@ function SearchPageInner() {
         )}
 
         {/* ── Smart Empty State ── */}
-        {!isLoading && hasSearched && results.length === 0 && (
-          <div className="py-8 text-center">
-            <SearchX size={48} className="text-gray-text mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-dark mb-2">مفيش نتائج</h3>
-            <p className="text-sm text-gray-text mb-4">
-              {query
-                ? `مفيش إعلانات تطابق "${query}" دلوقتي`
-                : "جرّب تغيير الفلاتر أو البحث بكلمات مختلفة"}
-            </p>
-
-            {/* AI Suggestions for empty state */}
-            {emptySuggestions.length > 0 && (
-              <div className="space-y-2 max-w-sm mx-auto text-start">
-                <p className="text-xs font-bold text-gray-text text-center mb-3">
-                  💡 جرّب واحدة من دول:
+        {!isLoading && hasSearched && results.length === 0 && imageSearchResults.length === 0 && (
+          <>
+            {/* Full empty state only when no similar ads either */}
+            {similarAds.length === 0 ? (
+              <div className="py-8 text-center">
+                <SearchX size={48} className="text-gray-text mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-dark mb-2">مفيش نتائج</h3>
+                <p className="text-sm text-gray-text mb-4">
+                  {query
+                    ? `مفيش إعلانات تطابق "${query}" دلوقتي`
+                    : "جرّب تغيير الفلاتر أو البحث بكلمات مختلفة"}
                 </p>
-                {emptySuggestions.map((sug, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => {
-                      if (sug.query === "__SAVE_WISH__") {
-                        if (parsedQuery) handleSaveWish(query, parsedQuery);
-                      } else {
-                        const parsed = aiParseQuery(sug.query);
-                        handleAISearch(sug.query, parsed);
-                      }
-                    }}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-start ${
-                      sug.query === "__SAVE_WISH__"
-                        ? "bg-blue-50 border-blue-200 hover:bg-blue-100"
-                        : "bg-white border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
-                    <span className="text-lg">{sug.icon}</span>
-                    <span className={`text-sm ${
-                      sug.query === "__SAVE_WISH__" ? "text-blue-700 font-bold" : "text-dark"
-                    }`}>
-                      {sug.text}
-                    </span>
-                  </button>
-                ))}
+
+                {/* AI Suggestions for empty state */}
+                {emptySuggestions.length > 0 && (
+                  <div className="space-y-2 max-w-sm mx-auto text-start">
+                    <p className="text-xs font-bold text-gray-text text-center mb-3">
+                      💡 جرّب واحدة من دول:
+                    </p>
+                    {emptySuggestions.map((sug, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          if (sug.query === "__SAVE_WISH__") {
+                            if (parsedQuery) handleSaveWish(query, parsedQuery);
+                          } else {
+                            const parsed = aiParseQuery(sug.query);
+                            handleAISearch(sug.query, parsed);
+                          }
+                        }}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-start ${
+                          sug.query === "__SAVE_WISH__"
+                            ? "bg-blue-50 border-blue-200 hover:bg-blue-100"
+                            : "bg-white border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="text-lg">{sug.icon}</span>
+                        <span className={`text-sm ${
+                          sug.query === "__SAVE_WISH__" ? "text-blue-700 font-bold" : "text-dark"
+                        }`}>
+                          {sug.text}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+            ) : (
+              /* Softer message when similar ads exist */
+              <p className="text-xs text-gray-text text-center py-2">
+                {query
+                  ? `مفيش نتيجة مطابقة لـ "${query}" — بس لقينالك إعلانات شبيهة 👇`
+                  : "مفيش نتائج مطابقة — بس ممكن تلاقي حاجة شبيهة 👇"}
+              </p>
             )}
-          </div>
+          </>
         )}
 
         {/* Similar ads section — "شبيه اللي بتدور عليه" */}

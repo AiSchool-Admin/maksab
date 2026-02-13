@@ -1,12 +1,30 @@
 "use client";
 
-import { useRef } from "react";
-import { Camera, X, Star } from "lucide-react";
+import { useRef, useState, useEffect, useCallback } from "react";
+import {
+  ImagePlus,
+  X,
+  Star,
+  Sparkles,
+  Video,
+  Mic,
+  StopCircle,
+  Play,
+  Pause,
+  Trash2,
+  Upload,
+  Loader2,
+} from "lucide-react";
 import Input from "@/components/ui/Input";
 import ExchangeWantedForm from "./ExchangeWantedForm";
 import type { CompressedImage } from "@/lib/utils/image-compress";
 import { compressImage } from "@/lib/utils/image-compress";
+import type { VideoFile } from "@/lib/utils/video-compress";
+import { processVideo, MAX_VIDEO_DURATION } from "@/lib/utils/video-compress";
+import type { AudioRecording } from "@/lib/utils/audio-recorder";
+import { VoiceRecorder, MAX_AUDIO_DURATION } from "@/lib/utils/audio-recorder";
 import PriceSuggestionCard from "@/components/price/PriceSuggestionCard";
+import PhotoEnhancer from "@/components/ai/PhotoEnhancer";
 
 const MAX_IMAGES = 5;
 
@@ -37,8 +55,12 @@ interface Step3Props {
   saleType: string;
   priceData: PriceData;
   images: CompressedImage[];
+  videoFile: VideoFile | null;
+  voiceNote: AudioRecording | null;
   onPriceChange: <K extends keyof PriceData>(key: K, value: PriceData[K]) => void;
   onImagesChange: (images: CompressedImage[]) => void;
+  onVideoChange: (video: VideoFile | null) => void;
+  onVoiceNoteChange: (audio: AudioRecording | null) => void;
   errors: Record<string, string>;
   categoryId?: string;
   subcategoryId?: string;
@@ -49,22 +71,48 @@ export default function Step3PricePhotos({
   saleType,
   priceData,
   images,
+  videoFile,
+  voiceNote,
   onPriceChange,
   onImagesChange,
+  onVideoChange,
+  onVoiceNoteChange,
   errors,
   categoryId,
   subcategoryId,
   categoryFields,
 }: Step3Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
+  const [isProcessingVideo, setIsProcessingVideo] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
+  const handleEnhancedImage = (enhancedDataUrl: string) => {
+    if (enhancingIndex === null) return;
+    const byteString = atob(enhancedDataUrl.split(",")[1] || "");
+    const mimeString = enhancedDataUrl.split(",")[0]?.split(":")[1]?.split(";")[0] || "image/jpeg";
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let j = 0; j < byteString.length; j++) {
+      ia[j] = byteString.charCodeAt(j);
+    }
+    const blob = new Blob([ab], { type: mimeString });
+    const file = new File([blob], `enhanced-${enhancingIndex}.jpg`, { type: mimeString });
+    const updated = [...images];
+    if (images[enhancingIndex].preview.startsWith("blob:")) {
+      URL.revokeObjectURL(images[enhancingIndex].preview);
+    }
+    updated[enhancingIndex] = { file, preview: enhancedDataUrl };
+    onImagesChange(updated);
+    setEnhancingIndex(null);
+  };
 
   const handleAddImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-
     const remaining = MAX_IMAGES - images.length;
     const toAdd = Array.from(files).slice(0, remaining);
-
     const compressed: CompressedImage[] = [];
     for (const file of toAdd) {
       try {
@@ -74,15 +122,41 @@ export default function Step3PricePhotos({
         // Skip failed images
       }
     }
-
     onImagesChange([...images, ...compressed]);
-    // Reset input
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleRemoveImage = (index: number) => {
-    URL.revokeObjectURL(images[index].preview);
+    if (images[index].preview.startsWith("blob:")) {
+      URL.revokeObjectURL(images[index].preview);
+    }
     onImagesChange(images.filter((_, i) => i !== index));
+  };
+
+  // ── Video handling ──────────────────────────────────────
+
+  const handleAddVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingVideo(true);
+    setVideoError(null);
+    try {
+      const processed = await processVideo(file);
+      onVideoChange(processed);
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "فشل تجهيز الفيديو");
+    } finally {
+      setIsProcessingVideo(false);
+      if (videoInputRef.current) videoInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveVideo = () => {
+    if (videoFile?.preview.startsWith("blob:")) {
+      URL.revokeObjectURL(videoFile.preview);
+    }
+    onVideoChange(null);
+    setVideoError(null);
   };
 
   return (
@@ -107,41 +181,23 @@ export default function Step3PricePhotos({
             />
             <button
               type="button"
-              onClick={() =>
-                onPriceChange("isNegotiable", !priceData.isNegotiable)
-              }
+              onClick={() => onPriceChange("isNegotiable", !priceData.isNegotiable)}
               className="flex items-center gap-2 text-sm"
             >
               <span
                 className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                  priceData.isNegotiable
-                    ? "bg-brand-green border-brand-green"
-                    : "border-gray-300"
+                  priceData.isNegotiable ? "bg-brand-green border-brand-green" : "border-gray-300"
                 }`}
               >
                 {priceData.isNegotiable && (
-                  <svg
-                    width="12"
-                    height="10"
-                    viewBox="0 0 12 10"
-                    fill="none"
-                  >
-                    <path
-                      d="M1 5L4.5 8.5L11 1.5"
-                      stroke="white"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                  <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                    <path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
               </span>
-              <span className="text-dark font-medium">
-                السعر قابل للتفاوض
-              </span>
+              <span className="text-dark font-medium">السعر قابل للتفاوض</span>
             </button>
 
-            {/* Smart Price Suggestion */}
             {categoryId && (
               <PriceSuggestionCard
                 categoryId={categoryId}
@@ -163,9 +219,7 @@ export default function Step3PricePhotos({
               type="number"
               inputMode="numeric"
               value={priceData.auctionStartPrice}
-              onChange={(e) =>
-                onPriceChange("auctionStartPrice", e.target.value)
-              }
+              onChange={(e) => onPriceChange("auctionStartPrice", e.target.value)}
               unit="جنيه"
               placeholder="0"
               error={errors.auctionStartPrice}
@@ -177,14 +231,11 @@ export default function Step3PricePhotos({
               type="number"
               inputMode="numeric"
               value={priceData.auctionBuyNowPrice}
-              onChange={(e) =>
-                onPriceChange("auctionBuyNowPrice", e.target.value)
-              }
+              onChange={(e) => onPriceChange("auctionBuyNowPrice", e.target.value)}
               unit="جنيه"
               placeholder="0"
               hint="لو حد دفع المبلغ ده المزاد بينتهي فوراً"
             />
-
             <div>
               <label className="block text-sm font-medium text-dark mb-2">
                 مدة المزاد <span className="text-error">*</span>
@@ -205,22 +256,15 @@ export default function Step3PricePhotos({
                   </button>
                 ))}
               </div>
-              {errors.auctionDuration && (
-                <p className="mt-1 text-xs text-error">
-                  {errors.auctionDuration}
-                </p>
-              )}
+              {errors.auctionDuration && <p className="mt-1 text-xs text-error">{errors.auctionDuration}</p>}
             </div>
-
             <Input
               label="الحد الأدنى للمزايدة"
               name="auctionMinIncrement"
               type="number"
               inputMode="numeric"
               value={priceData.auctionMinIncrement}
-              onChange={(e) =>
-                onPriceChange("auctionMinIncrement", e.target.value)
-              }
+              onChange={(e) => onPriceChange("auctionMinIncrement", e.target.value)}
               unit="جنيه"
               placeholder="50"
               hint="أقل مبلغ يزود بيه المزايد"
@@ -230,13 +274,10 @@ export default function Step3PricePhotos({
 
         {saleType === "live_auction" && (
           <div className="space-y-4">
-            {/* Live auction fee notice */}
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-lg">📡</span>
-                <span className="text-sm font-bold text-orange-700">
-                  مزاد مباشر على الهواء
-                </span>
+                <span className="text-sm font-bold text-orange-700">مزاد مباشر على الهواء</span>
               </div>
               <p className="text-xs text-orange-600 leading-relaxed">
                 المزاد المباشر يتم بثه على الهواء للمشاهدين. يتم تطبيق رسوم إضافية على هذه الخدمة:
@@ -257,16 +298,13 @@ export default function Step3PricePhotos({
                 </div>
               </div>
             </div>
-
             <Input
               label="سعر الافتتاح"
               name="auctionStartPrice"
               type="number"
               inputMode="numeric"
               value={priceData.auctionStartPrice}
-              onChange={(e) =>
-                onPriceChange("auctionStartPrice", e.target.value)
-              }
+              onChange={(e) => onPriceChange("auctionStartPrice", e.target.value)}
               unit="جنيه"
               placeholder="0"
               error={errors.auctionStartPrice}
@@ -278,15 +316,11 @@ export default function Step3PricePhotos({
               type="number"
               inputMode="numeric"
               value={priceData.auctionBuyNowPrice}
-              onChange={(e) =>
-                onPriceChange("auctionBuyNowPrice", e.target.value)
-              }
+              onChange={(e) => onPriceChange("auctionBuyNowPrice", e.target.value)}
               unit="جنيه"
               placeholder="0"
               hint="لو حد دفع المبلغ ده المزاد بينتهي فوراً"
             />
-
-            {/* Schedule live auction */}
             <div>
               <label className="block text-sm font-medium text-dark mb-1.5">
                 موعد البث المباشر <span className="text-error">*</span>
@@ -294,25 +328,16 @@ export default function Step3PricePhotos({
               <input
                 type="datetime-local"
                 value={priceData.liveAuctionScheduledAt}
-                onChange={(e) =>
-                  onPriceChange("liveAuctionScheduledAt", e.target.value)
-                }
+                onChange={(e) => onPriceChange("liveAuctionScheduledAt", e.target.value)}
                 min={new Date(Date.now() + 3600000).toISOString().slice(0, 16)}
                 className={`w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark ${
                   errors.liveAuctionScheduledAt ? "border-error bg-error/5" : ""
                 }`}
                 dir="ltr"
               />
-              {errors.liveAuctionScheduledAt && (
-                <p className="mt-1 text-xs text-error">
-                  {errors.liveAuctionScheduledAt}
-                </p>
-              )}
-              <p className="mt-1 text-[11px] text-gray-text">
-                حدد موعد البث بعد ساعة على الأقل من الآن
-              </p>
+              {errors.liveAuctionScheduledAt && <p className="mt-1 text-xs text-error">{errors.liveAuctionScheduledAt}</p>}
+              <p className="mt-1 text-[11px] text-gray-text">حدد موعد البث بعد ساعة على الأقل من الآن</p>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-dark mb-2">
                 مدة المزاد <span className="text-error">*</span>
@@ -334,22 +359,17 @@ export default function Step3PricePhotos({
                 ))}
               </div>
             </div>
-
             <Input
               label="الحد الأدنى للمزايدة"
               name="auctionMinIncrement"
               type="number"
               inputMode="numeric"
               value={priceData.auctionMinIncrement}
-              onChange={(e) =>
-                onPriceChange("auctionMinIncrement", e.target.value)
-              }
+              onChange={(e) => onPriceChange("auctionMinIncrement", e.target.value)}
               unit="جنيه"
               placeholder="50"
               hint="أقل مبلغ يزود بيه المزايد"
             />
-
-            {/* Agreement */}
             <div className="bg-gray-light rounded-xl p-3 flex items-start gap-2">
               <span className="text-sm mt-0.5">💡</span>
               <p className="text-[11px] text-gray-text leading-relaxed">
@@ -376,52 +396,32 @@ export default function Step3PricePhotos({
               onPriceChange("exchangeWantedFields", {});
               onPriceChange("exchangeWantedTitle", "");
             }}
-            onSubcategoryChange={(id) =>
-              onPriceChange("exchangeWantedSubcategoryId", id)
-            }
+            onSubcategoryChange={(id) => onPriceChange("exchangeWantedSubcategoryId", id)}
             onFieldChange={(fieldId, value) =>
-              onPriceChange("exchangeWantedFields", {
-                ...priceData.exchangeWantedFields,
-                [fieldId]: value,
-              })
+              onPriceChange("exchangeWantedFields", { ...priceData.exchangeWantedFields, [fieldId]: value })
             }
             onTitleChange={(title) => {
               onPriceChange("exchangeWantedTitle", title);
-              // Auto-sync to exchangeDescription for backward compatibility
               onPriceChange("exchangeDescription", title);
             }}
             onNotesChange={(n) => onPriceChange("exchangeNotes", n)}
-            onAcceptsPriceDiffChange={(v) =>
-              onPriceChange("exchangeAcceptsPriceDiff", v)
-            }
+            onAcceptsPriceDiffChange={(v) => onPriceChange("exchangeAcceptsPriceDiff", v)}
             onPriceDiffChange={(v) => onPriceChange("exchangePriceDiff", v)}
           />
         )}
       </div>
 
-      {/* Images section */}
+      {/* ── Images section ───────────────────────────────── */}
       <div>
-        <h3 className="text-sm font-bold text-dark mb-2">
-          الصور (حتى {MAX_IMAGES})
-        </h3>
-        <p className="text-xs text-gray-text mb-3">
-          الصورة الأولى هي الصورة الرئيسية للإعلان
-        </p>
+        <h3 className="text-sm font-bold text-dark mb-2">الصور (حتى {MAX_IMAGES})</h3>
+        <p className="text-xs text-gray-text mb-3">الصورة الأولى هي الصورة الرئيسية للإعلان</p>
 
-        {errors.images && (
-          <p className="mb-2 text-xs text-error">{errors.images}</p>
-        )}
+        {errors.images && <p className="mb-2 text-xs text-error">{errors.images}</p>}
 
         <div className="grid grid-cols-4 gap-3">
-          {/* Existing images */}
           {images.map((img, index) => (
             <div key={index} className="relative aspect-square">
-              <img
-                src={img.preview}
-                alt={`صورة ${index + 1}`}
-                className="w-full h-full object-cover rounded-xl"
-              />
-              {/* Remove button */}
+              <img src={img.preview} alt={`صورة ${index + 1}`} className="w-full h-full object-cover rounded-xl" />
               <button
                 type="button"
                 onClick={() => handleRemoveImage(index)}
@@ -429,7 +429,14 @@ export default function Step3PricePhotos({
               >
                 <X size={14} />
               </button>
-              {/* Main image badge */}
+              <button
+                type="button"
+                onClick={() => setEnhancingIndex(index)}
+                className="absolute -top-1.5 -end-1.5 w-6 h-6 bg-brand-green text-white rounded-full flex items-center justify-center shadow"
+                aria-label="تحسين الصورة"
+              >
+                <Sparkles size={11} />
+              </button>
               {index === 0 && (
                 <span className="absolute bottom-1 start-1 bg-brand-gold text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
                   <Star size={8} fill="white" />
@@ -439,28 +446,295 @@ export default function Step3PricePhotos({
             </div>
           ))}
 
-          {/* Add button */}
           {images.length < MAX_IMAGES && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="aspect-square rounded-xl border-2 border-dashed border-gray-300 hover:border-brand-green flex flex-col items-center justify-center gap-1 text-gray-text hover:text-brand-green transition-colors"
             >
-              <Camera size={24} />
-              <span className="text-[10px] font-medium">إضافة صورة</span>
+              <ImagePlus size={24} />
+              <span className="text-[10px] font-medium">أضف صورة</span>
             </button>
           )}
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={handleAddImages}
-          className="hidden"
-        />
+        <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleAddImages} className="hidden" />
       </div>
+
+      {/* ── Video section ────────────────────────────────── */}
+      <div>
+        <h3 className="text-sm font-bold text-dark mb-2">فيديو المنتج (اختياري)</h3>
+        <p className="text-xs text-gray-text mb-3">
+          أضف فيديو قصير (حتى {MAX_VIDEO_DURATION} ثانية) يوضح المنتج للمشتري
+        </p>
+
+        {videoFile ? (
+          <div className="space-y-2">
+            <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
+              <video
+                src={videoFile.preview}
+                controls
+                playsInline
+                className="w-full h-full object-contain"
+                poster={videoFile.thumbnail || undefined}
+              />
+              <button
+                type="button"
+                onClick={handleRemoveVideo}
+                className="absolute top-2 end-2 w-8 h-8 bg-error/90 text-white rounded-full flex items-center justify-center shadow-lg"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-text text-center">
+              {Math.round(videoFile.duration)} ثانية — {(videoFile.file.size / (1024 * 1024)).toFixed(1)}MB
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (videoInputRef.current) {
+                    videoInputRef.current.setAttribute("capture", "environment");
+                    videoInputRef.current.click();
+                  }
+                }}
+                disabled={isProcessingVideo}
+                className="flex-1 flex items-center justify-center gap-2 py-3 bg-purple-50 border-2 border-purple-200/60 rounded-xl text-purple-700 font-medium text-sm hover:border-purple-300 transition-colors disabled:opacity-50"
+              >
+                {isProcessingVideo ? <Loader2 size={18} className="animate-spin" /> : <Video size={18} />}
+                <span>صوّر فيديو</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (videoInputRef.current) {
+                    videoInputRef.current.removeAttribute("capture");
+                    videoInputRef.current.click();
+                  }
+                }}
+                disabled={isProcessingVideo}
+                className="flex-1 flex items-center justify-center gap-2 py-3 bg-gray-light border-2 border-transparent rounded-xl text-dark font-medium text-sm hover:border-gray-200 transition-colors disabled:opacity-50"
+              >
+                <Upload size={18} />
+                <span>اختار فيديو</span>
+              </button>
+            </div>
+
+            {videoError && <p className="text-xs text-error text-center">{videoError}</p>}
+          </div>
+        )}
+
+        <input ref={videoInputRef} type="file" accept="video/*" onChange={handleAddVideo} className="hidden" />
+      </div>
+
+      {/* ── Voice note section ───────────────────────────── */}
+      <div>
+        <h3 className="text-sm font-bold text-dark mb-2">تسجيل صوتي (اختياري)</h3>
+        <p className="text-xs text-gray-text mb-3">
+          سجّل وصف صوتي للمنتج (حتى {MAX_AUDIO_DURATION} ثانية) — المشتري يسمعك وأنت بتوصف
+        </p>
+        <VoiceNoteRecorder voiceNote={voiceNote} onVoiceNoteChange={onVoiceNoteChange} />
+      </div>
+
+      {/* Photo Enhancer Modal */}
+      {enhancingIndex !== null && images[enhancingIndex] && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-auto">
+            <PhotoEnhancer
+              imageDataUrl={images[enhancingIndex].preview}
+              onEnhanced={handleEnhancedImage}
+              onCancel={() => setEnhancingIndex(null)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Voice Note Recorder sub-component ──────────────────────
+
+function VoiceNoteRecorder({
+  voiceNote,
+  onVoiceNoteChange,
+}: {
+  voiceNote: AudioRecording | null;
+  onVoiceNoteChange: (audio: AudioRecording | null) => void;
+}) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const recorderRef = useRef<VoiceRecorder | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      recorderRef.current?.cancel();
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  const startRecording = async () => {
+    setError(null);
+    try {
+      const recorder = new VoiceRecorder();
+      recorderRef.current = recorder;
+      await recorder.start();
+      setIsRecording(true);
+      setElapsed(0);
+
+      const startTime = Date.now();
+      timerRef.current = setInterval(() => {
+        const sec = Math.round((Date.now() - startTime) / 1000);
+        setElapsed(sec);
+        if (sec >= MAX_AUDIO_DURATION) {
+          stopRecording();
+        }
+      }, 250);
+    } catch (err) {
+      setError(
+        err instanceof Error && err.name === "NotAllowedError"
+          ? "محتاجين إذن الميكروفون. اسمح بالوصول وجرب تاني"
+          : "مش قادرين نفتح الميكروفون. تأكد من الإذن وجرب تاني",
+      );
+    }
+  };
+
+  const stopRecording = useCallback(async () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsRecording(false);
+
+    try {
+      const recorder = recorderRef.current;
+      if (!recorder) return;
+      const recording = await recorder.stop();
+      onVoiceNoteChange(recording);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "فشل في حفظ التسجيل");
+    }
+    recorderRef.current = null;
+  }, [onVoiceNoteChange]);
+
+  const handleRemove = () => {
+    if (voiceNote?.preview.startsWith("blob:")) {
+      URL.revokeObjectURL(voiceNote.preview);
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsPlaying(false);
+    onVoiceNoteChange(null);
+  };
+
+  const togglePlay = () => {
+    if (!voiceNote) return;
+    if (isPlaying && audioRef.current) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+      return;
+    }
+    const audio = new Audio(voiceNote.preview);
+    audioRef.current = audio;
+    audio.onended = () => setIsPlaying(false);
+    audio.play();
+    setIsPlaying(true);
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  if (voiceNote) {
+    return (
+      <div className="flex items-center gap-3 bg-blue-50 border border-blue-200/60 rounded-xl px-4 py-3">
+        <button
+          type="button"
+          onClick={togglePlay}
+          className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm active:scale-95 transition-transform"
+        >
+          {isPlaying ? <Pause size={18} /> : <Play size={18} className="ms-0.5" />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <Mic size={14} className="text-blue-500 flex-shrink-0" />
+            <span className="text-sm font-bold text-dark">تسجيل صوتي</span>
+          </div>
+          <span className="text-[11px] text-gray-text">
+            {formatTime(voiceNote.duration)} — {(voiceNote.file.size / 1024).toFixed(0)}KB
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={handleRemove}
+          className="w-8 h-8 rounded-full bg-error/10 text-error flex items-center justify-center flex-shrink-0 hover:bg-error/20 transition-colors"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  if (isRecording) {
+    return (
+      <div className="space-y-3">
+        <div className="bg-blue-50 border border-blue-200/60 rounded-xl p-4 text-center space-y-3">
+          <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-blue-500/10 animate-ping" />
+            <div className="absolute inset-1 rounded-full bg-blue-500/20 animate-pulse" />
+            <div className="relative w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+              <Mic size={22} className="text-white" />
+            </div>
+          </div>
+          <div>
+            <span className="text-lg font-bold text-dark font-mono">{formatTime(elapsed)}</span>
+            <span className="text-xs text-gray-text mx-2">/ {formatTime(MAX_AUDIO_DURATION)}</span>
+          </div>
+          <div className="h-1.5 bg-blue-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${(elapsed / MAX_AUDIO_DURATION) * 100}%` }}
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={stopRecording}
+          className="w-full py-3 bg-error/10 text-error font-bold rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+        >
+          <StopCircle size={18} />
+          وقّف التسجيل
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={startRecording}
+        className="w-full flex items-center justify-center gap-2 py-3 bg-blue-50 border-2 border-blue-200/60 rounded-xl text-blue-600 font-medium text-sm hover:border-blue-300 transition-colors active:scale-[0.98]"
+      >
+        <Mic size={18} />
+        <span>ابدأ التسجيل الصوتي</span>
+      </button>
+      {error && <p className="text-xs text-error text-center">{error}</p>}
     </div>
   );
 }

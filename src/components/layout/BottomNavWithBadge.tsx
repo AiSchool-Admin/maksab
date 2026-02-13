@@ -47,5 +47,7 @@ export default function BottomNavWithBadge() {
     };
   }, [user, refreshUnreadCount]);
 
-  return <BottomNav unreadMessages={unreadCount} />;
+  const isMerchant = !!(user?.seller_type === "store" && user?.store_id);
+
+  return <BottomNav unreadMessages={unreadCount} isMerchant={isMerchant} />;
 }

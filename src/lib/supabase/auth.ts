@@ -6,10 +6,10 @@ import { supabase } from "./client";
  * This system uses our own API routes (/api/auth/send-otp, /api/auth/verify-otp)
  * instead of Supabase's built-in phone auth (which requires paid Twilio SMS).
  *
- * OTP delivery channels (configured via env vars):
- * - WhatsApp Cloud API: First 1000/month free
- * - SMS via Twilio: Paid fallback
- * - Manual: User receives code via configured channel
+ * OTP delivery channels (priority order):
+ * 1. WhatsApp Cloud API: First 1000/month free
+ * 2. Firebase Phone Auth: 10,000 free SMS/month
+ * 3. Dev mode: Code shown in UI (development only)
  */
 
 const SESSION_KEY = "maksab_user_session";
@@ -35,9 +35,10 @@ export type UserProfile = {
 export type SendOtpResult = {
   error: string | null;
   token?: string; // HMAC-signed token to send back with verify
-  channel?: "whatsapp" | "sms" | "dev";
+  channel?: "whatsapp" | "sms" | "firebase" | "dev";
   whatsapp_link?: string | null;
   dev_code?: string; // OTP code shown in UI when no real delivery channel is configured
+  retry_after?: number; // Seconds until rate limit resets (when 429)
 };
 
 // ── Session persistence (localStorage) ──────────────────────────────
@@ -76,7 +77,10 @@ export async function sendOTP(phone: string): Promise<SendOtpResult> {
     const data = await res.json();
 
     if (!res.ok) {
-      return { error: data.error || "حصلت مشكلة في إرسال الكود. جرب تاني" };
+      return {
+        error: data.error || "حصلت مشكلة في إرسال الكود. جرب تاني",
+        retry_after: data.retry_after,
+      };
     }
 
     return {
@@ -130,6 +134,54 @@ export async function verifyOTP(
       } catch {
         // Session creation failed — user profile still works via localStorage
         // Ad creation uses server-side API with service role key as fallback
+      }
+    }
+
+    return { user: userProfile, error: null };
+  } catch {
+    return { user: null, error: "حصلت مشكلة في الاتصال. تأكد من الإنترنت وجرب تاني" };
+  }
+}
+
+// ── Verify OTP via Firebase (ID Token → Server) ─────────────────────
+export async function verifyOTPViaFirebase(
+  firebaseIdToken: string,
+  displayName?: string,
+): Promise<{ user: UserProfile | null; error: string | null }> {
+  try {
+    const res = await fetch("/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firebase_id_token: firebaseIdToken,
+        display_name: displayName,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return { user: null, error: data.error || "التحقق فشل. جرب تاني" };
+    }
+
+    if (!data.user) {
+      return { user: null, error: "حصلت مشكلة. جرب تاني" };
+    }
+
+    const userProfile = data.user as UserProfile;
+
+    // Save session to localStorage for persistence
+    saveSession(userProfile);
+
+    // Try to establish a Supabase auth session (for RLS queries)
+    if (data.magic_link_token) {
+      try {
+        await supabase.auth.verifyOtp({
+          token_hash: data.magic_link_token,
+          type: "magiclink",
+        });
+      } catch {
+        // Session creation failed — user profile still works via localStorage
       }
     }
 
@@ -234,7 +286,7 @@ async function upsertUserProfile(userId: string, contactInfo: string, displayNam
 // ── Update user profile ───────────────────────────────────────────────
 export async function updateUserProfile(
   userId: string,
-  updates: Partial<Pick<UserProfile, "display_name" | "avatar_url" | "governorate" | "city" | "bio">>,
+  updates: Partial<Pick<UserProfile, "display_name" | "avatar_url" | "governorate" | "city" | "bio" | "seller_type">>,
 ): Promise<{ user: UserProfile | null; error: string | null }> {
   const { data, error } = await supabase
     .from("profiles" as never)
@@ -279,6 +331,54 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
   } catch {
     return null;
   }
+}
+
+/** Refresh user profile from database, bypassing localStorage cache */
+export async function refreshCurrentUser(): Promise<UserProfile | null> {
+  // Try fetching from localStorage to get the user ID
+  const savedUser = loadSession();
+  const userId = savedUser?.id;
+
+  if (userId) {
+    // Fetch fresh profile directly from DB using the known user ID
+    try {
+      const { data } = await supabase
+        .from("profiles" as never)
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (data) {
+        const profile = data as unknown as UserProfile;
+        saveSession(profile); // Update cache
+        return profile;
+      }
+    } catch {
+      // Fall through to Supabase auth check
+    }
+  }
+
+  // Fallback: check Supabase auth session
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return savedUser || null;
+
+    const { data } = await supabase
+      .from("profiles" as never)
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (data) {
+      const profile = data as unknown as UserProfile;
+      saveSession(profile);
+      return profile;
+    }
+  } catch {
+    // Return cached user if DB query fails
+  }
+
+  return savedUser || null;
 }
 
 // ── Logout ────────────────────────────────────────────────────────────

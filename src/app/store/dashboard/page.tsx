@@ -15,6 +15,7 @@ import {
   Plus,
   ExternalLink,
   Crown,
+  Zap,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -231,13 +232,20 @@ export default function StoreDashboardPage() {
       </div>
 
       {/* Quick actions */}
-      <div className="px-4 mt-4">
+      <div className="px-4 mt-4 space-y-2">
         <Link
-          href="/ad/create"
+          href="/store/dashboard/products/quick-add"
           className="flex items-center justify-center gap-2 bg-brand-green text-white text-sm font-bold py-3 rounded-xl hover:bg-brand-green-dark transition-colors w-full"
         >
+          <Zap size={18} />
+          إضافة سريعة للمنتجات
+        </Link>
+        <Link
+          href="/ad/create"
+          className="flex items-center justify-center gap-2 bg-white text-brand-green text-sm font-bold py-3 rounded-xl border-2 border-brand-green hover:bg-brand-green-light transition-colors w-full"
+        >
           <Plus size={18} />
-          أضف منتج جديد
+          أضف إعلان كامل
         </Link>
       </div>
 

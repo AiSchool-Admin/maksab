@@ -26,6 +26,8 @@ import ExchangeMatchSection from "@/components/ad/ExchangeMatchSection";
 import ContactBar from "@/components/ad/ContactBar";
 import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
+import { getCategoryById, getEffectiveFields } from "@/lib/categories/categories-config";
+import { generateAutoTitle, generateAutoDescription } from "@/lib/categories/generate";
 import { fetchAdDetail, getSimilarAds } from "@/lib/ad-detail";
 import type { AdDetail } from "@/lib/ad-detail";
 import type { AdSummary } from "@/lib/ad-data";
@@ -53,6 +55,16 @@ import AddToCompareButton from "@/components/comparison/AddToCompareButton";
 import ComparisonFab from "@/components/comparison/ComparisonFab";
 import PriceBadge from "@/components/price/PriceBadge";
 import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
+import ReportButton from "@/components/report/ReportButton";
+import MarkAsSoldButton from "@/components/ad/MarkAsSoldButton";
+import SmartPriceDrop from "@/components/ad/SmartPriceDrop";
+import PriceMeter from "@/components/ai/PriceMeter";
+import dynamic from "next/dynamic";
+
+const ReactionsBar = dynamic(() => import("@/components/social/ReactionsBar"), { ssr: false });
+const CommentsSection = dynamic(() => import("@/components/social/CommentsSection"), { ssr: false });
+const SellerRankBadge = dynamic(() => import("@/components/social/SellerRankBadge"), { ssr: false });
+const AddToCollectionButton = dynamic(() => import("@/components/collections/AddToCollectionButton"), { ssr: false });
 
 /** Convert AdDetail to AuctionState for the auction component */
 function toAuctionState(ad: AdDetail): AuctionState {
@@ -110,48 +122,62 @@ export default function AdDetailPage({
   const [reviewsKey, setReviewsKey] = useState(0); // force refresh reviews
   const [sellerLoyaltyLevel, setSellerLoyaltyLevel] = useState<"member" | "silver" | "gold" | "diamond">("member");
 
+  const [notFound, setNotFound] = useState(false);
+  const [autoDropEnabled, setAutoDropEnabled] = useState(false);
   const currentUserId = user?.id || "";
 
   /* ── Load ad detail ──────────────────────────────────────── */
   useEffect(() => {
     setIsLoading(true);
+    setNotFound(false);
     fetchAdDetail(id).then(async (data) => {
       if (!data) {
+        setNotFound(true);
         setIsLoading(false);
         return;
       }
       setAd(data);
       setIsFavorited(data.isFavorited);
-      const similar = await getSimilarAds(id, data.categoryId);
-      setSimilarAds(similar);
-      setIsLoading(false);
 
       // Initialize auction state
       if (data.saleType === "auction" && data.auctionStartPrice) {
         const state = toAuctionState(data);
         setAuctionState(state);
       }
+
+      // Load similar ads in parallel (non-blocking)
+      getSimilarAds(id, data.categoryId).then(setSimilarAds).catch(() => {});
+
+      setIsLoading(false);
+    }).catch(() => {
+      setNotFound(true);
+      setIsLoading(false);
     });
   }, [id]);
 
-  /* ── Load seller verification data ──────────────────────── */
+  /* ── Load seller verification data (parallel) ───────────── */
   useEffect(() => {
     if (!ad?.seller?.id) return;
-    import("@/lib/verification/verification-service").then(({ getUserVerificationProfile }) => {
-      getUserVerificationProfile(ad.seller.id).then((profile) => {
-        setSellerVerificationLevel(profile.level);
-        setSellerIsIdVerified(profile.isIdVerified);
-      });
-    });
-    import("@/lib/reviews/reviews-service").then(({ getSellerRatingSummary }) => {
-      getSellerRatingSummary(ad.seller.id).then((summary) => {
-        setSellerIsTrusted(summary.isTrustedSeller);
-      });
-    });
-    import("@/lib/loyalty/loyalty-service").then(({ getUserLoyaltyProfile }) => {
-      const loyaltyProfile = getUserLoyaltyProfile(ad.seller.id);
-      setSellerLoyaltyLevel(loyaltyProfile.currentLevel);
-    });
+    const sellerId = ad.seller.id;
+
+    // Load all seller metadata in parallel
+    Promise.allSettled([
+      import("@/lib/verification/verification-service").then(({ getUserVerificationProfile }) =>
+        getUserVerificationProfile(sellerId).then((profile) => {
+          setSellerVerificationLevel(profile.level);
+          setSellerIsIdVerified(profile.isIdVerified);
+        })
+      ),
+      import("@/lib/reviews/reviews-service").then(({ getSellerRatingSummary }) =>
+        getSellerRatingSummary(sellerId).then((summary) => {
+          setSellerIsTrusted(summary.isTrustedSeller);
+        })
+      ),
+      import("@/lib/loyalty/loyalty-service").then(({ getUserLoyaltyProfile }) => {
+        const loyaltyProfile = getUserLoyaltyProfile(sellerId);
+        setSellerLoyaltyLevel(loyaltyProfile.currentLevel);
+      }),
+    ]).catch(() => {});
   }, [ad?.seller?.id]);
 
   /* ── Track view signal after 3 seconds ──────────────────── */
@@ -304,6 +330,38 @@ export default function AdDetailPage({
     }
   }, [id, requireAuth]);
 
+  /* ── Not found state ──────────────────────────────────── */
+  if (notFound && !isLoading) {
+    return (
+      <main className="min-h-screen bg-white pb-20">
+        <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
+          <div className="flex items-center px-4 h-14 gap-2">
+            <button onClick={() => router.back()} className="p-1 text-gray-text" aria-label="رجوع">
+              <ChevronRight size={24} />
+            </button>
+            <Link href="/" className="p-1.5 text-brand-green rounded-full" aria-label="الرئيسية">
+              <Home size={18} />
+            </Link>
+          </div>
+        </header>
+        <div className="flex flex-col items-center justify-center px-4 py-20 text-center">
+          <div className="text-6xl mb-4">🔍</div>
+          <h2 className="text-xl font-bold text-dark mb-2">الإعلان مش موجود</h2>
+          <p className="text-sm text-gray-text mb-6">
+            الإعلان ده ممكن يكون اتحذف أو مش متاح حالياً
+          </p>
+          <Link
+            href="/"
+            className="bg-brand-green text-white font-bold py-3 px-8 rounded-xl hover:bg-brand-green-dark transition-colors"
+          >
+            تصفح إعلانات تانية
+          </Link>
+        </div>
+        <BottomNavWithBadge />
+      </main>
+    );
+  }
+
   /* ── Loading skeleton ──────────────────────────────────── */
   if (isLoading || !ad) {
     return (
@@ -325,6 +383,26 @@ export default function AdDetailPage({
     );
   }
 
+  /* ── Resolve title/description using Arabic labels ──── */
+  const resolvedTitle = (() => {
+    const config = getCategoryById(ad.categoryId);
+    if (!config) return ad.title;
+    const fields = ad.categoryFields as Record<string, unknown>;
+    // Regenerate the title from the template using proper subcategory-aware fields
+    const generated = generateAutoTitle(config, fields, ad.subcategoryId || undefined);
+    // Use regenerated title if it's non-empty and different from a raw-values title
+    return generated || ad.title;
+  })();
+
+  const resolvedDescription = (() => {
+    const config = getCategoryById(ad.categoryId);
+    if (!config) return ad.description;
+    const fields = ad.categoryFields as Record<string, unknown>;
+    const generated = generateAutoDescription(config, fields, ad.subcategoryId || undefined);
+    // Use regenerated description if available, fall back to stored
+    return generated || ad.description;
+  })();
+
   /* ── Sale type label ───────────────────────────────── */
   const saleLabel =
     ad.saleType === "cash"
@@ -337,7 +415,7 @@ export default function AdDetailPage({
   const memberYear = new Date(ad.seller.memberSince).getFullYear();
 
   return (
-    <main className="min-h-screen bg-white pb-24">
+    <main className="min-h-screen bg-white pb-40">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-light">
         <div className="flex items-center justify-between px-4 h-14">
@@ -358,6 +436,7 @@ export default function AdDetailPage({
             </Link>
           </div>
           <div className="flex items-center gap-1">
+            <ReportButton targetType="ad" targetId={id} />
             <button
               onClick={handleShare}
               className="p-2 text-gray-text hover:text-dark rounded-full hover:bg-gray-light transition-colors"
@@ -365,6 +444,7 @@ export default function AdDetailPage({
             >
               <Share2 size={20} />
             </button>
+            <AddToCollectionButton adId={id} variant="icon" />
             <button
               onClick={handleToggleFavorite}
               className={`p-2 rounded-full transition-colors ${
@@ -387,6 +467,51 @@ export default function AdDetailPage({
 
       {/* Image Gallery */}
       <ImageGallery images={ad.images} title={ad.title} />
+
+      {/* Video Player */}
+      {ad.videoUrl && (
+        <div className="px-4 pt-4">
+          <div className="rounded-xl overflow-hidden bg-black">
+            <video
+              src={ad.videoUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full max-h-[300px] object-contain"
+            >
+              المتصفح لا يدعم تشغيل الفيديو
+            </video>
+          </div>
+          <p className="text-xs text-gray-text mt-1.5 flex items-center gap-1">
+            🎬 فيديو المنتج
+          </p>
+        </div>
+      )}
+
+      {/* Voice Note Player */}
+      {ad.voiceNoteUrl && (
+        <div className="px-4 pt-3">
+          <div className="bg-gray-light rounded-xl p-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="12" y1="19" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold text-dark mb-1">رسالة صوتية من البائع</p>
+              <audio
+                src={ad.voiceNoteUrl}
+                controls
+                preload="metadata"
+                className="w-full h-8"
+                style={{ minWidth: 0 }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="px-4 py-4 space-y-6">
         {/* Price & sale type */}
@@ -417,9 +542,12 @@ export default function AdDetailPage({
           />
         )}
 
+        {/* Reactions Bar */}
+        <ReactionsBar adId={ad.id} />
+
         {/* Title */}
         <h1 className="text-lg font-bold text-dark leading-relaxed">
-          {ad.title}
+          {resolvedTitle}
         </h1>
 
         {/* Auction section */}
@@ -521,14 +649,26 @@ export default function AdDetailPage({
         {/* Specs table */}
         <SpecsTable
           categoryId={ad.categoryId}
+          subcategoryId={ad.subcategoryId}
           categoryFields={ad.categoryFields}
         />
+
+        {/* AI Price Meter — full mode */}
+        {ad.saleType === "cash" && ad.price != null && ad.price > 0 && (
+          <PriceMeter
+            categoryId={ad.categoryId}
+            categoryFields={ad.categoryFields as Record<string, unknown>}
+            title={ad.title}
+            price={ad.price}
+            governorate={ad.governorate || undefined}
+          />
+        )}
 
         {/* Description */}
         <div>
           <h3 className="text-sm font-bold text-dark mb-2">الوصف</h3>
           <p className="text-sm text-gray-text leading-relaxed whitespace-pre-line">
-            {ad.description}
+            {resolvedDescription}
           </p>
         </div>
 
@@ -562,9 +702,10 @@ export default function AdDetailPage({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="font-bold text-dark text-sm">
+                  <Link href={`/user/${ad.seller.id}`} className="font-bold text-dark text-sm hover:text-brand-green transition-colors">
                     {ad.seller.displayName}
-                  </p>
+                  </Link>
+                  <SellerRankBadge rank="beginner" size="sm" />
                   <VerificationBadge level={sellerVerificationLevel} />
                   <LoyaltyBadge level={sellerLoyaltyLevel} size="sm" />
                   {sellerIsTrusted && <TrustedSellerBadge />}
@@ -593,22 +734,55 @@ export default function AdDetailPage({
               </a>
             </div>
 
-            {/* Review button for non-sellers */}
+            {/* Review & Report buttons for non-sellers */}
             {user && user.id !== ad.seller.id && (
-              <button
-                onClick={() => setShowReviewForm(true)}
-                className="text-xs font-semibold text-brand-green hover:text-brand-green-dark transition-colors"
-              >
-                قيّم هذا البائع
-              </button>
+              <div className="flex items-center gap-4 pt-1">
+                <button
+                  onClick={() => setShowReviewForm(true)}
+                  className="text-xs font-semibold text-brand-green hover:text-brand-green-dark transition-colors"
+                >
+                  قيّم هذا البائع
+                </button>
+                <ReportButton targetType="user" targetId={ad.seller.id} variant="text" />
+              </div>
             )}
           </div>
         </div>
 
-        {/* Seller Offers (visible to seller) */}
-        {user?.id === ad.seller.id && (
+        {/* Mark as Sold (visible to seller on active ads) */}
+        {user?.id === ad.seller.id && ad.status !== "sold" && ad.status !== "exchanged" && (
+          <MarkAsSoldButton
+            adId={ad.id}
+            adTitle={ad.title}
+            price={ad.price}
+            userId={user.id}
+            saleType={ad.saleType}
+            onMarkedSold={() => window.location.reload()}
+            variant="card"
+          />
+        )}
+
+        {/* Smart Price Drop (visible to seller on cash ads) */}
+        {user?.id === ad.seller.id && ad.saleType === "cash" && ad.price != null && ad.status === "active" && (
+          <SmartPriceDrop
+            adId={ad.id}
+            currentPrice={ad.price}
+            viewsCount={ad.viewsCount}
+            favoritesCount={ad.favoritesCount}
+            daysListed={Math.max(1, Math.floor((Date.now() - new Date(ad.createdAt).getTime()) / (1000 * 60 * 60 * 24)))}
+            autoDropEnabled={autoDropEnabled}
+            onToggleAutoDrop={setAutoDropEnabled}
+            onApplyDrop={(newPrice) => {
+              setAd((prev) => prev ? { ...prev, price: newPrice } : prev);
+            }}
+          />
+        )}
+
+        {/* Price Offers (visible to seller and logged-in buyers) */}
+        {currentUserId && (
           <OffersListSection
             adId={ad.id}
+            adTitle={ad.title}
             sellerId={ad.seller.id}
             currentUserId={currentUserId}
           />
@@ -632,6 +806,9 @@ export default function AdDetailPage({
             {ad.favoritesCount} مفضلة
           </span>
         </div>
+
+        {/* Comments Section */}
+        <CommentsSection adId={ad.id} adOwnerId={ad.seller.id} />
 
         {/* Similar ads section */}
         {similarAds.length > 0 && (
@@ -664,13 +841,15 @@ export default function AdDetailPage({
         )}
       </div>
 
-      {/* Bottom contact bar */}
-      <ContactBar
-        sellerPhone={ad.seller.phone}
-        adTitle={ad.title}
-        adId={ad.id}
-        onChat={handleChat}
-      />
+      {/* Bottom contact bar — only for buyers, not the seller */}
+      {currentUserId !== ad.seller.id && (
+        <ContactBar
+          sellerPhone={ad.seller.phone}
+          adTitle={ad.title}
+          adId={ad.id}
+          onChat={handleChat}
+        />
+      )}
 
       {/* Comparison FAB */}
       <ComparisonFab />

@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCategoryById } from "@/lib/categories/categories-config";
+import { generateAutoTitle } from "@/lib/categories/generate";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -62,9 +64,22 @@ export async function POST(request: NextRequest) {
     const rows = (data || []) as Record<string, unknown>[];
     const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
 
-    const ads = rows.map((row) => ({
+    const ads = rows.map((row) => {
+      // Resolve title using Arabic labels from category config
+      let title = row.title as string;
+      const catId = row.category_id as string | undefined;
+      const subId = row.subcategory_id as string | undefined;
+      const catFields = (row.category_fields as Record<string, unknown>) ?? {};
+      if (catId) {
+        const catConfig = getCategoryById(catId);
+        if (catConfig) {
+          const resolved = generateAutoTitle(catConfig, catFields, subId || undefined);
+          if (resolved) title = resolved;
+        }
+      }
+      return {
       id: row.id,
-      title: row.title,
+      title,
       price: row.price ? Number(row.price) : null,
       saleType: row.sale_type,
       image: ((row.images as string[]) ?? [])[0] ?? null,
@@ -85,7 +100,8 @@ export async function POST(request: NextRequest) {
       favoritesCount: row.favorites_count ?? 0,
       relevanceScore: row.relevance_score ? Number(row.relevance_score) : 0,
       matchType: row.match_type ?? "none",
-    }));
+    };
+    });
 
     // Log search query for trending (fire and forget)
     if (query) {
@@ -115,23 +131,28 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Fallback when RPC is not available */
+/** Build a base fallback query with all filters except text search */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fallbackSearch(
+function buildFallbackQuery(
   supabase: any,
   body: Record<string, unknown>,
-  offset: number,
-  limit: number
+  includeTextSearch: boolean,
 ) {
   let q = supabase
     .from("ads" as never)
     .select("*", { count: "exact" })
-    .neq("status", "deleted");
+    .eq("status", "active");
 
-  if (body.query) {
-    q = q.or(
-      `title.ilike.%${body.query}%,description.ilike.%${body.query}%`
-    );
+  if (includeTextSearch && body.query) {
+    // Sanitize query for PostgREST .or() filter — escape special chars
+    const sanitized = String(body.query)
+      .replace(/[%_\\]/g, "\\$&")   // escape LIKE wildcards
+      .replace(/[(),."']/g, "");     // remove PostgREST control chars
+    if (sanitized.trim()) {
+      q = q.or(
+        `title.ilike.%${sanitized}%,description.ilike.%${sanitized}%`
+      );
+    }
   }
   if (body.category) q = q.eq("category_id", body.category);
   if (body.subcategory) q = q.eq("subcategory_id", body.subcategory);
@@ -139,6 +160,16 @@ async function fallbackSearch(
   if (body.priceMin != null) q = q.gte("price", body.priceMin);
   if (body.priceMax != null) q = q.lte("price", body.priceMax);
   if (body.governorate) q = q.eq("governorate", body.governorate);
+
+  // Apply category-specific JSONB filters (brand, karat, storage, etc.)
+  if (body.categoryFilters && typeof body.categoryFilters === "object") {
+    const cf = body.categoryFilters as Record<string, string>;
+    for (const [key, value] of Object.entries(cf)) {
+      if (key && value && typeof value === "string" && /^[a-z_]+$/i.test(key)) {
+        q = q.eq(`category_fields->>${key}`, value);
+      }
+    }
+  }
 
   switch (body.sortBy) {
     case "price_asc":
@@ -151,29 +182,81 @@ async function fallbackSearch(
       q = q.order("created_at", { ascending: false });
   }
 
-  q = q.range(offset, offset + limit - 1);
+  return q;
+}
+
+/** Fallback when RPC is not available */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fallbackSearch(
+  supabase: any,
+  body: Record<string, unknown>,
+  offset: number,
+  limit: number
+) {
+  const formatRows = (rows: Record<string, unknown>[]) =>
+    rows.map((row) => {
+      // Resolve title using Arabic labels
+      let title = row.title as string;
+      const catId = row.category_id as string | undefined;
+      const subId = row.subcategory_id as string | undefined;
+      const catFields = (row.category_fields as Record<string, unknown>) ?? {};
+      if (catId) {
+        const catConfig = getCategoryById(catId);
+        if (catConfig) {
+          const resolved = generateAutoTitle(catConfig, catFields, subId || undefined);
+          if (resolved) title = resolved;
+        }
+      }
+      return {
+      id: row.id,
+      title,
+      price: row.price ? Number(row.price) : null,
+      saleType: row.sale_type,
+      image: ((row.images as string[]) ?? [])[0] ?? null,
+      governorate: row.governorate,
+      city: row.city,
+      createdAt: row.created_at,
+      isNegotiable: row.is_negotiable ?? false,
+      auctionEndsAt: row.auction_ends_at ?? undefined,
+      exchangeDescription: row.exchange_description ?? undefined,
+      relevanceScore: 0,
+      matchType: "fallback",
+    };
+    });
+
+  // Try with text search first
+  const q = buildFallbackQuery(supabase, body, true)
+    .range(offset, offset + limit - 1);
 
   const { data, error, count } = await q;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const ads = ((data || []) as Record<string, unknown>[]).map((row) => ({
-    id: row.id,
-    title: row.title,
-    price: row.price ? Number(row.price) : null,
-    saleType: row.sale_type,
-    image: ((row.images as string[]) ?? [])[0] ?? null,
-    governorate: row.governorate,
-    city: row.city,
-    createdAt: row.created_at,
-    isNegotiable: row.is_negotiable ?? false,
-    auctionEndsAt: row.auction_ends_at ?? undefined,
-    exchangeDescription: row.exchange_description ?? undefined,
-    relevanceScore: 0,
-    matchType: "fallback",
-  }));
+  const rows = (data || []) as Record<string, unknown>[];
 
+  // If text search returned 0 results but we have category/other filters,
+  // retry without text search to show broader category results
+  if (rows.length === 0 && body.query && (body.category || body.categoryFilters)) {
+    const broaderQ = buildFallbackQuery(supabase, body, false)
+      .range(offset, offset + limit - 1);
+
+    const { data: broaderData, error: broaderError, count: broaderCount } = await broaderQ;
+    if (!broaderError && broaderData && (broaderData as unknown[]).length > 0) {
+      const broaderRows = broaderData as Record<string, unknown>[];
+      const ads = formatRows(broaderRows);
+      const total = broaderCount ?? ads.length;
+      return NextResponse.json({
+        ads,
+        total,
+        hasMore: offset + limit < total,
+        page: Math.floor(offset / limit),
+        searchMethod: "broadened",
+      });
+    }
+  }
+
+  const ads = formatRows(rows);
   const total = count ?? ads.length;
   return NextResponse.json({
     ads,

@@ -12,6 +12,7 @@ export async function POST(request: Request) {
       name,
       description,
       main_category,
+      business_type,
       theme,
       layout,
       primary_color,
@@ -20,6 +21,9 @@ export async function POST(request: Request) {
       location_area,
       phone,
       logo_url,
+      working_hours_text,
+      business_data,
+      address_detail,
     } = body;
 
     // ── Validation ──────────────────────────────────────────────
@@ -48,7 +52,7 @@ export async function POST(request: Request) {
       auth: { persistSession: false },
     });
 
-    // ── Check user exists and is individual ─────────────────────
+    // ── Check user exists ───────────────────────────────────────
     const { data: profile } = await adminClient
       .from("profiles")
       .select("id, seller_type, store_id")
@@ -59,13 +63,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "المستخدم غير موجود" },
         { status: 404 },
-      );
-    }
-
-    if (profile.store_id) {
-      return NextResponse.json(
-        { error: "عندك متجر بالفعل. المستخدم يقدر ينشئ متجر واحد بس" },
-        { status: 409 },
       );
     }
 
@@ -90,35 +87,88 @@ export async function POST(request: Request) {
     );
     const slug = (slugData as string) || `store-${Date.now()}`;
 
-    // ── Create store (single transaction) ───────────────────────
-    const { data: store, error: storeError } = await adminClient
+    // ── Validate business_type ──────────────────────────────────
+    const validBusinessTypes = [
+      "shop", "showroom", "office", "workshop",
+      "restaurant", "freelancer", "wholesaler", "online",
+    ];
+    const finalBusinessType = validBusinessTypes.includes(business_type)
+      ? business_type
+      : "shop";
+
+    // ── Build settings object to store business data ─────────────
+    // Store business_type and extra fields in the existing `settings`
+    // JSONB column for compatibility (works even before migration 00014)
+    const settings: Record<string, unknown> = {
+      business_type: finalBusinessType,
+    };
+    if (working_hours_text) settings.working_hours_text = working_hours_text;
+    if (address_detail) settings.address_detail = address_detail;
+    if (business_data && Object.keys(business_data).length > 0) {
+      settings.business_data = business_data;
+    }
+
+    // ── Create store ────────────────────────────────────────────
+    // Use only columns that exist in the original migration (00012)
+    const insertData: Record<string, unknown> = {
+      user_id,
+      name: name.trim(),
+      slug,
+      description: description || null,
+      logo_url: logo_url || null,
+      main_category,
+      theme: theme || "classic",
+      layout: layout || "grid",
+      primary_color: primary_color || "#1B7A3D",
+      secondary_color: secondary_color || null,
+      location_gov: location_gov || null,
+      location_area: location_area || null,
+      phone: phone || null,
+      settings,
+    };
+
+    // Try with new columns first (if migration 00014 was applied)
+    let store: { id: string; slug: string } | null = null;
+    let storeError: { message: string } | null = null;
+
+    const fullInsert = {
+      ...insertData,
+      business_type: finalBusinessType,
+      working_hours_text: working_hours_text || null,
+      address_detail: address_detail || null,
+      business_data: business_data || {},
+    };
+
+    const result1 = await adminClient
       .from("stores")
-      .insert({
-        user_id,
-        name: name.trim(),
-        slug,
-        description: description || null,
-        logo_url: logo_url || null,
-        main_category,
-        theme: theme || "classic",
-        layout: layout || "grid",
-        primary_color: primary_color || "#1B7A3D",
-        secondary_color: secondary_color || null,
-        location_gov: location_gov || null,
-        location_area: location_area || null,
-        phone: phone || null,
-      })
+      .insert(fullInsert)
       .select("id, slug")
       .single();
 
-    if (storeError) {
+    if (result1.error) {
+      // Fallback: insert without the new columns (migration not yet applied)
+      const result2 = await adminClient
+        .from("stores")
+        .insert(insertData)
+        .select("id, slug")
+        .single();
+
+      store = result2.data;
+      storeError = result2.error;
+    } else {
+      store = result1.data;
+      storeError = result1.error;
+    }
+
+    if (storeError || !store) {
       return NextResponse.json(
-        { error: "فشل إنشاء المتجر: " + storeError.message },
+        { error: "فشل إنشاء المتجر: " + (storeError?.message || "unknown") },
         { status: 500 },
       );
     }
 
-    // ── Update profile: seller_type → store, link store_id ──────
+    // ── Update profile: seller_type → store, link store_id (latest) ─
+    // store_id always points to the most recently created store
     await adminClient
       .from("profiles")
       .update({
@@ -127,19 +177,20 @@ export async function POST(request: Request) {
       })
       .eq("id", user_id);
 
-    // ── Migrate existing products to store ──────────────────────
-    // First count how many ads to migrate
+    // ── Migrate unassigned products to new store ─────────────────
+    // Only migrate ads that don't already belong to another store
     const { count: migratedCount } = await adminClient
       .from("ads")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user_id)
+      .is("store_id", null)
       .neq("status", "deleted");
 
-    // Then update them all
     await adminClient
       .from("ads")
       .update({ store_id: store.id } as never)
       .eq("user_id", user_id)
+      .is("store_id", null)
       .neq("status", "deleted");
 
     // ── Auto-create FREE subscription ───────────────────────────

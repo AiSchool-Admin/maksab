@@ -1,4 +1,5 @@
 import type { CategoryConfig, CategoryField } from "@/types";
+import { getEffectiveFields } from "./categories-config";
 
 /**
  * Resolve a field value to its display label.
@@ -53,11 +54,8 @@ function resolveTemplate(
   values: Record<string, unknown>,
   subcategoryId?: string,
 ): string {
-  const allFields = [...config.fields];
-  if (subcategoryId) {
-    const extra = config.subcategoryOverrides?.[subcategoryId]?.extraFields;
-    if (extra) allFields.push(...extra);
-  }
+  // Use effective fields (with subcategory overrides applied) for proper label resolution
+  const allFields = getEffectiveFields(config, subcategoryId);
   const fieldsMap = new Map(allFields.map((f) => [f.id, f]));
 
   const resolved = template.replace(/\$\{(\w+)\}/g, (_, fieldId) => {
@@ -113,14 +111,8 @@ export function generateAutoDescription(
     return "";
   });
 
-  // Build full list of visible fields including extra fields from subcategory override
-  const allFields = config.fields.filter(
-    (f) => !subcategoryId || !f.hiddenForSubcategories?.includes(subcategoryId),
-  );
-  if (subcategoryId) {
-    const extra = config.subcategoryOverrides?.[subcategoryId]?.extraFields;
-    if (extra) allFields.push(...extra);
-  }
+  // Use effective fields (with subcategory overrides applied)
+  const allFields = getEffectiveFields(config, subcategoryId);
 
   const extras: string[] = [];
   for (const field of allFields) {

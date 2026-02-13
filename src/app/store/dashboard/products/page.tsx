@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,6 +11,11 @@ import {
   MoreVertical,
   Trash2,
   Edit,
+  CheckCircle,
+  RotateCcw,
+  Eye,
+  X,
+  Zap,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { getStoreByUserId, getStoreProductsForDashboard } from "@/lib/stores/store-service";
@@ -19,6 +24,8 @@ import { formatPrice, formatTimeAgo } from "@/lib/utils/format";
 import EmptyState from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import type { Store } from "@/types";
+
+type StatusFilter = "all" | "active" | "sold" | "expired";
 
 interface Product {
   id: string;
@@ -39,6 +46,8 @@ export default function DashboardProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -62,7 +71,18 @@ export default function DashboardProductsPage() {
     load();
   }, [user, router]);
 
-  const handleTogglePin = async (productId: string, currentlyPinned: boolean) => {
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!activeMenu) return;
+    const handleClick = () => setActiveMenu(null);
+    const timer = setTimeout(() => document.addEventListener("click", handleClick), 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("click", handleClick);
+    };
+  }, [activeMenu]);
+
+  const handleTogglePin = useCallback(async (productId: string, currentlyPinned: boolean) => {
     await supabase
       .from("ads" as never)
       .update({ is_pinned: !currentlyPinned } as never)
@@ -74,9 +94,37 @@ export default function DashboardProductsPage() {
       ),
     );
     setActiveMenu(null);
-  };
+  }, []);
 
-  const handleDelete = async (productId: string) => {
+  const handleMarkSold = useCallback(async (productId: string) => {
+    await supabase
+      .from("ads" as never)
+      .update({ status: "sold" } as never)
+      .eq("id", productId);
+
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === productId ? { ...p, status: "sold" } : p,
+      ),
+    );
+    setActiveMenu(null);
+  }, []);
+
+  const handleReactivate = useCallback(async (productId: string) => {
+    await supabase
+      .from("ads" as never)
+      .update({ status: "active" } as never)
+      .eq("id", productId);
+
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === productId ? { ...p, status: "active" } : p,
+      ),
+    );
+    setActiveMenu(null);
+  }, []);
+
+  const handleDelete = useCallback(async (productId: string) => {
     await supabase
       .from("ads" as never)
       .update({ status: "deleted" } as never)
@@ -84,7 +132,8 @@ export default function DashboardProductsPage() {
 
     setProducts((prev) => prev.filter((p) => p.id !== productId));
     setActiveMenu(null);
-  };
+    setDeleteConfirm(null);
+  }, []);
 
   const saleTypeLabel: Record<string, string> = {
     cash: "💵 نقدي",
@@ -98,6 +147,24 @@ export default function DashboardProductsPage() {
     expired: { label: "منتهي", color: "bg-gray-100 text-gray-500" },
   };
 
+  const filteredProducts = statusFilter === "all"
+    ? products
+    : products.filter((p) => p.status === statusFilter);
+
+  const counts = {
+    all: products.length,
+    active: products.filter((p) => p.status === "active").length,
+    sold: products.filter((p) => p.status === "sold").length,
+    expired: products.filter((p) => p.status === "expired").length,
+  };
+
+  const statusTabs: { key: StatusFilter; label: string }[] = [
+    { key: "all", label: `الكل (${counts.all})` },
+    { key: "active", label: `نشط (${counts.active})` },
+    { key: "sold", label: `مباع (${counts.sold})` },
+    { key: "expired", label: `منتهي (${counts.expired})` },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
@@ -108,14 +175,43 @@ export default function DashboardProductsPage() {
           </button>
           <h1 className="text-base font-bold text-dark">المنتجات</h1>
         </div>
-        <Link
-          href="/ad/create"
-          className="flex items-center gap-1 bg-brand-green text-white text-xs font-bold px-3 py-2 rounded-xl"
-        >
-          <Plus size={14} />
-          إضافة
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/store/dashboard/products/quick-add"
+            className="flex items-center gap-1 bg-brand-green text-white text-xs font-bold px-3 py-2 rounded-xl"
+          >
+            <Zap size={14} />
+            إضافة سريعة
+          </Link>
+          <Link
+            href="/ad/create"
+            className="flex items-center gap-1 bg-white text-brand-green text-xs font-bold px-2.5 py-2 rounded-xl border border-brand-green"
+          >
+            <Plus size={14} />
+          </Link>
+        </div>
       </header>
+
+      {/* Status filter tabs */}
+      {!isLoading && products.length > 0 && (
+        <div className="px-4 mt-3">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            {statusTabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  statusFilter === tab.key
+                    ? "bg-brand-green text-white"
+                    : "bg-white text-gray-text border border-gray-light"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Products list */}
       <div className="px-4 mt-3 space-y-2">
@@ -123,16 +219,18 @@ export default function DashboardProductsPage() {
           Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-20 w-full" />
           ))
-        ) : products.length > 0 ? (
-          products.map((product) => {
+        ) : filteredProducts.length > 0 ? (
+          filteredProducts.map((product) => {
             const status = statusLabel[product.status] || statusLabel.active;
             return (
               <div
                 key={product.id}
-                className="bg-white rounded-xl border border-gray-light p-3 flex gap-3 relative"
+                className={`bg-white rounded-xl border border-gray-light p-3 flex gap-3 relative ${
+                  product.status === "sold" ? "opacity-75" : ""
+                }`}
               >
                 {/* Image */}
-                <div className="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                <Link href={`/ad/${product.id}`} className="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                   {product.images?.[0] ? (
                     <img
                       src={product.images[0]}
@@ -144,26 +242,29 @@ export default function DashboardProductsPage() {
                       📷
                     </div>
                   )}
-                </div>
+                </Link>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between">
-                    <h3 className="text-sm font-semibold text-dark line-clamp-1">
-                      {product.is_pinned && (
-                        <Pin
-                          size={11}
-                          className="inline text-brand-gold ml-1"
-                        />
-                      )}
-                      {product.title}
-                    </h3>
+                    <Link href={`/ad/${product.id}`} className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-dark line-clamp-1">
+                        {product.is_pinned && (
+                          <Pin
+                            size={11}
+                            className="inline text-brand-gold ml-1"
+                          />
+                        )}
+                        {product.title}
+                      </h3>
+                    </Link>
                     <button
-                      onClick={() =>
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setActiveMenu(
                           activeMenu === product.id ? null : product.id,
-                        )
-                      }
+                        );
+                      }}
                       className="p-1 text-gray-text"
                     >
                       <MoreVertical size={16} />
@@ -187,14 +288,24 @@ export default function DashboardProductsPage() {
                   </div>
 
                   <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-text">
-                    <span>👁 {product.views_count}</span>
+                    <span className="flex items-center gap-0.5">
+                      <Eye size={10} />
+                      {product.views_count}
+                    </span>
                     <span>{formatTimeAgo(product.created_at)}</span>
                   </div>
                 </div>
 
                 {/* Dropdown menu */}
                 {activeMenu === product.id && (
-                  <div className="absolute top-10 left-3 bg-white border border-gray-light rounded-xl shadow-lg z-10 overflow-hidden">
+                  <div className="absolute top-10 left-3 bg-white border border-gray-light rounded-xl shadow-lg z-10 overflow-hidden min-w-[160px]">
+                    <Link
+                      href={`/ad/${product.id}`}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-dark hover:bg-gray-50"
+                    >
+                      <Eye size={14} />
+                      عرض
+                    </Link>
                     <Link
                       href={`/ad/${product.id}/edit`}
                       className="flex items-center gap-2 px-4 py-2.5 text-sm text-dark hover:bg-gray-50"
@@ -203,16 +314,48 @@ export default function DashboardProductsPage() {
                       تعديل
                     </Link>
                     <button
-                      onClick={() =>
-                        handleTogglePin(product.id, product.is_pinned)
-                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTogglePin(product.id, product.is_pinned);
+                      }}
                       className="flex items-center gap-2 px-4 py-2.5 text-sm text-dark hover:bg-gray-50 w-full"
                     >
                       <Pin size={14} />
                       {product.is_pinned ? "إلغاء التثبيت" : "تثبيت"}
                     </button>
+
+                    {product.status === "active" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkSold(product.id);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2.5 text-sm text-blue-600 hover:bg-blue-50 w-full"
+                      >
+                        <CheckCircle size={14} />
+                        تم البيع
+                      </button>
+                    )}
+
+                    {(product.status === "sold" || product.status === "expired") && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReactivate(product.id);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2.5 text-sm text-brand-green hover:bg-green-50 w-full"
+                      >
+                        <RotateCcw size={14} />
+                        إعادة النشر
+                      </button>
+                    )}
+
                     <button
-                      onClick={() => handleDelete(product.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirm(product.id);
+                        setActiveMenu(null);
+                      }}
                       className="flex items-center gap-2 px-4 py-2.5 text-sm text-error hover:bg-red-50 w-full"
                     >
                       <Trash2 size={14} />
@@ -223,6 +366,14 @@ export default function DashboardProductsPage() {
               </div>
             );
           })
+        ) : products.length > 0 ? (
+          /* Has products but none match filter */
+          <div className="text-center py-8">
+            <Package size={32} className="mx-auto text-gray-300 mb-2" />
+            <p className="text-sm text-gray-text">
+              مفيش منتجات {statusFilter === "active" ? "نشطة" : statusFilter === "sold" ? "مباعة" : "منتهية"}
+            </p>
+          </div>
         ) : (
           <EmptyState
             icon="📦"
@@ -233,6 +384,37 @@ export default function DashboardProductsPage() {
           />
         )}
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl p-5 max-w-sm w-full space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-dark">تأكيد الحذف</h3>
+              <button onClick={() => setDeleteConfirm(null)} className="p-1 text-gray-text">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-text">
+              متأكد إنك عايز تحذف المنتج ده؟ الحذف مش هيتشال نهائياً ويمكن استرجاعه لاحقاً.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-gray-light text-sm font-semibold text-dark hover:bg-gray-50 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-error text-white text-sm font-semibold hover:bg-red-700 transition-colors"
+              >
+                حذف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

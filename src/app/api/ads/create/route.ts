@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,6 +28,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "بيانات ناقصة" },
         { status: 400 },
+      );
+    }
+
+    // Rate limit: max 10 ads per day per user
+    const rateCheck = await checkRateLimit(user_id, "ad_create");
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "وصلت للحد الأقصى من الإعلانات اليومية (10 إعلانات). جرب بكرة" },
+        { status: 429 },
       );
     }
 
@@ -109,6 +119,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // If store_id provided, verify ownership
+    let storeId: string | null = null;
+    if (ad_data.store_id) {
+      const { data: storeCheck } = await supabase
+        .from("stores")
+        .select("id")
+        .eq("id", ad_data.store_id)
+        .eq("user_id", user_id)
+        .maybeSingle();
+
+      if (storeCheck) {
+        storeId = ad_data.store_id;
+      }
+    }
+
     // Build the ad record
     const adRecord: Record<string, unknown> = {
       user_id,
@@ -135,6 +160,8 @@ export async function POST(req: NextRequest) {
       exchange_description: ad_data.exchange_description ?? null,
       exchange_accepts_price_diff: ad_data.exchange_accepts_price_diff ?? false,
       exchange_price_diff: ad_data.exchange_price_diff ?? null,
+      // Store (merchant)
+      store_id: storeId,
     };
 
     // Insert ad
@@ -156,6 +183,9 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
+
+    // Record rate limit usage after successful creation
+    await recordRateLimit(user_id, "ad_create");
 
     return NextResponse.json({
       success: true,
