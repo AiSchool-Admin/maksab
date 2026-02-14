@@ -200,10 +200,11 @@ const KEYWORD_ENTITY_MAP: Record<string, {
   "تكييف": { category: "appliances", subcategory: "ac", fields: { type: "ac" } },
   "سخان": { category: "appliances", subcategory: "heaters", fields: { type: "heater" } },
   // Real estate
-  "شقة": { category: "real_estate", subcategory: "apartments_sale", fields: { property_type: "apartment" } },
-  "شقق": { category: "real_estate", subcategory: "apartments_sale", fields: { property_type: "apartment" } },
+  "شقة": { category: "real_estate", subcategory: "apartments-sale", fields: { property_type: "apartment" } },
+  "شقق": { category: "real_estate", subcategory: "apartments-sale", fields: { property_type: "apartment" } },
+  "شقة للإيجار": { category: "real_estate", subcategory: "apartments-rent", fields: { property_type: "apartment" } },
   "فيلا": { category: "real_estate", subcategory: "villas", fields: { property_type: "villa" } },
-  "محل": { category: "real_estate", subcategory: "shops", fields: { property_type: "shop" } },
+  "محل": { category: "real_estate", subcategory: "commercial", fields: { property_type: "shop" } },
   "مكتب": { category: "real_estate", subcategory: "offices", fields: { property_type: "office" } },
   // Furniture
   "غرفة نوم": { category: "furniture", subcategory: "bedrooms" },

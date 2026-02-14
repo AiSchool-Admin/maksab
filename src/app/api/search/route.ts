@@ -160,6 +160,7 @@ function buildFallbackQuery(
   if (body.priceMin != null) q = q.gte("price", body.priceMin);
   if (body.priceMax != null) q = q.lte("price", body.priceMax);
   if (body.governorate) q = q.eq("governorate", body.governorate);
+  if (body.city) q = q.eq("city", body.city);
 
   // Apply category-specific JSONB filters (brand, karat, storage, etc.)
   if (body.categoryFilters && typeof body.categoryFilters === "object") {

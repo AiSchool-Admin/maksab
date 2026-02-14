@@ -18,6 +18,7 @@ export interface SearchFilters {
   priceMin?: number;
   priceMax?: number;
   governorate?: string;
+  city?: string;
   condition?: string;
   sortBy?: "newest" | "price_asc" | "price_desc";
   categoryFilters?: Record<string, string>;
@@ -105,6 +106,9 @@ export async function searchAds(
     }
     if (filters.governorate) {
       query = query.eq("governorate", filters.governorate);
+    }
+    if (filters.city) {
+      query = query.eq("city", filters.city);
     }
 
     // Apply category-specific JSONB filters (brand, karat, storage, etc.)

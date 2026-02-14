@@ -189,7 +189,7 @@ export default function AISearchBar({
     <div ref={containerRef} className="relative">
       {/* Search input */}
       <form onSubmit={handleSubmit}>
-        <div className="flex items-center gap-2 bg-gray-light rounded-xl px-3 py-2.5 ring-2 ring-transparent focus-within:ring-brand-green/30 transition-all">
+        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border-2 border-gray-300 shadow-sm focus-within:border-brand-green focus-within:shadow-md transition-all">
           {showAiPreview && aiPreview ? (
             <Brain size={18} className="text-brand-green flex-shrink-0 animate-pulse" />
           ) : (

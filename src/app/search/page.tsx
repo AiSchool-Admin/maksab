@@ -104,6 +104,7 @@ function SearchPageInner() {
       priceMin: filters.priceMin,
       priceMax: filters.priceMax,
       governorate: filters.governorate,
+      city: filters.city,
       condition: filters.condition,
       sortBy: sortBy as SearchFilters["sortBy"],
       categoryFilters,
@@ -148,6 +149,7 @@ function SearchPageInner() {
           priceMin: searchFilters.priceMin,
           priceMax: searchFilters.priceMax,
           governorate: searchFilters.governorate,
+          city: searchFilters.city,
           condition: searchFilters.condition,
           sortBy: (searchFilters.sortBy || "relevance") as "relevance" | "newest" | "price_asc" | "price_desc",
           categoryFilters: searchFilters.categoryFilters,
@@ -193,18 +195,20 @@ function SearchPageInner() {
     fetchingRef.current = true;
     setIsLoadingMore(true);
 
+    const sf = buildFilters();
     const result = await advancedSearch(
       {
-        query: buildFilters().query,
-        category: buildFilters().category,
-        subcategory: buildFilters().subcategory,
-        saleType: buildFilters().saleType,
-        priceMin: buildFilters().priceMin,
-        priceMax: buildFilters().priceMax,
-        governorate: buildFilters().governorate,
-        condition: buildFilters().condition,
-        sortBy: (buildFilters().sortBy || "relevance") as "relevance" | "newest" | "price_asc" | "price_desc",
-        categoryFilters: buildFilters().categoryFilters,
+        query: sf.query,
+        category: sf.category,
+        subcategory: sf.subcategory,
+        saleType: sf.saleType,
+        priceMin: sf.priceMin,
+        priceMax: sf.priceMax,
+        governorate: sf.governorate,
+        city: sf.city,
+        condition: sf.condition,
+        sortBy: (sf.sortBy || "relevance") as "relevance" | "newest" | "price_asc" | "price_desc",
+        categoryFilters: sf.categoryFilters,
       },
       page,
     );
@@ -279,6 +283,7 @@ function SearchPageInner() {
       if (parsed.primaryCategory) newFilters.category = parsed.primaryCategory;
       if (parsed.subcategory) newFilters.subcategory = parsed.subcategory;
       if (parsed.governorate) newFilters.governorate = parsed.governorate;
+      if (parsed.city) newFilters.city = parsed.city;
       if (parsed.saleType) newFilters.saleType = parsed.saleType;
       if (parsed.priceMin != null) newFilters.priceMin = parsed.priceMin;
       if (parsed.priceMax != null) newFilters.priceMax = parsed.priceMax;

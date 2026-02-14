@@ -192,7 +192,7 @@ export default function HomePage() {
         {/* Search bar — sticky */}
         <div className="px-3 pt-2 pb-1.5">
           <Link href="/search" className="block">
-            <div className="flex items-center gap-3 bg-gray-light rounded-full pe-4 ps-1.5 py-1.5 hover:bg-gray-200/80 transition-colors">
+            <div className="flex items-center gap-3 bg-white rounded-full pe-4 ps-1.5 py-1.5 border-2 border-gray-300 shadow-sm hover:border-brand-green/50 hover:shadow-md transition-all">
               <div className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
                 <Search size={20} className="text-white" strokeWidth={2.5} />
               </div>

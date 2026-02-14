@@ -14,6 +14,7 @@ export interface ActiveFilters {
   priceMin?: number;
   priceMax?: number;
   governorate?: string;
+  city?: string;
   condition?: string;
 }
 
