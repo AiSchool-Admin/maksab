@@ -248,9 +248,32 @@ export async function POST(req: NextRequest) {
     // Record rate limit usage after successful creation
     await recordRateLimit(user_id, "ad_create");
 
+    // Fire-and-forget: notify matching buyers and exchange matches
+    const adId = (insertedAd as Record<string, unknown>)?.id as string | null;
+    if (adId) {
+      const adNotifData = {
+        id: adId,
+        title: ad_data.title,
+        category_id: ad_data.category_id,
+        subcategory_id: ad_data.subcategory_id || null,
+        sale_type: ad_data.sale_type,
+        price: ad_data.price ?? null,
+        governorate: ad_data.governorate || null,
+        user_id,
+        category_fields: ad_data.category_fields || {},
+      };
+
+      import("@/lib/notifications/smart-notifications").then(({ notifyMatchingBuyers, notifyExchangeMatch }) => {
+        notifyMatchingBuyers(adNotifData).catch(() => {});
+        if (ad_data.sale_type === "exchange") {
+          notifyExchangeMatch(adNotifData).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+
     return NextResponse.json({
       success: true,
-      ad_id: (insertedAd as Record<string, unknown>)?.id || null,
+      ad_id: adId,
     });
   } catch (err) {
     console.error("[ads/create] Error:", err);

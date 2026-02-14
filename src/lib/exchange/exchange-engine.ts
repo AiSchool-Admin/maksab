@@ -228,6 +228,24 @@ export async function findSmartExchangeMatches(params: {
       ...textMatches,
     ];
 
+    // Batch-fetch seller display names
+    const userIds = new Set<string>();
+    for (const ad of allCandidates) {
+      if (ad.user_id) userIds.add(ad.user_id as string);
+    }
+    const sellerNames = new Map<string, string>();
+    if (userIds.size > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles" as never)
+        .select("id, display_name")
+        .in("id", Array.from(userIds));
+      if (profiles) {
+        for (const p of profiles as Record<string, unknown>[]) {
+          sellerNames.set(p.id as string, (p.display_name as string) || "مستخدم");
+        }
+      }
+    }
+
     for (const ad of allCandidates) {
       const adId = ad.id as string;
       if (seenIds.has(adId)) continue;
@@ -245,6 +263,7 @@ export async function findSmartExchangeMatches(params: {
 
       const adCatId = ad.category_id as string;
       const adConfig = getCategoryById(adCatId);
+      const userId = (ad.user_id as string) || null;
 
       results.push({
         adId,
@@ -262,6 +281,8 @@ export async function findSmartExchangeMatches(params: {
         matchScore: score,
         matchReasons: reasons,
         categoryIcon: adConfig?.icon || "📦",
+        sellerId: userId,
+        sellerName: userId ? (sellerNames.get(userId) || "مستخدم") : null,
       });
     }
 

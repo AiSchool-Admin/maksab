@@ -29,6 +29,8 @@ export interface ExchangeMatchResult {
   matchScore: number;           // 0-100
   matchReasons: string[];       // Arabic explanations
   categoryIcon: string;         // e.g., "📱"
+  sellerId: string | null;      // Ad owner's user ID
+  sellerName: string | null;    // Ad owner's display name
 }
 
 /* ── Chain exchange (3-way trade) ────────────────────────────────────── */

@@ -53,8 +53,66 @@ function getClient(): SupabaseClient | null {
 }
 
 /**
+ * Send push notification to a user (if they have a push subscription).
+ * Best-effort — failures are silently caught.
+ */
+async function sendPushToUser(
+  client: SupabaseClient,
+  userId: string,
+  title: string,
+  body: string,
+  url?: string,
+): Promise<void> {
+  try {
+    const { data: subs } = await client
+      .from("push_subscriptions")
+      .select("endpoint, keys_p256dh, keys_auth")
+      .eq("user_id", userId);
+
+    if (!subs || subs.length === 0) return;
+
+    const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+    if (!vapidPublic || !vapidPrivate) return;
+
+    const webpush = await import("web-push");
+    webpush.setVapidDetails(
+      process.env.VAPID_EMAIL || "mailto:support@maksab.app",
+      vapidPublic,
+      vapidPrivate,
+    );
+
+    const payload = JSON.stringify({
+      title,
+      body,
+      icon: "/icons/icon-192x192.png",
+      badge: "/icons/badge-72x72.png",
+      data: { url: url || "/" },
+    });
+
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } },
+          payload,
+        );
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "statusCode" in err) {
+          const code = (err as { statusCode: number }).statusCode;
+          if (code === 404 || code === 410) {
+            await client.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+          }
+        }
+      }
+    }
+  } catch {
+    // Push is best-effort
+  }
+}
+
+/**
  * Finalize expired auctions directly via DB queries.
- * Sets auction_status to 'ended' and picks winner (highest bidder).
+ * Sets auction_status to 'ended_winner' or 'ended_no_bids' and picks winner (highest bidder).
  */
 async function finalizeExpiredAuctions(): Promise<void> {
   const client = getClient();
@@ -93,13 +151,13 @@ async function finalizeExpiredAuctions(): Promise<void> {
         await client
           .from("ads")
           .update({
-            auction_status: "ended",
+            auction_status: "ended_winner",
             auction_winner_id: topBid.bidder_id,
             status: "sold",
           })
           .eq("id", auction.id);
 
-        // Notify winner
+        // Notify winner (DB + push)
         await client.from("notifications").insert({
           user_id: topBid.bidder_id,
           type: "auction_won",
@@ -107,23 +165,25 @@ async function finalizeExpiredAuctions(): Promise<void> {
           body: `فزت بمزاد "${auction.title}" بمبلغ ${topBid.amount.toLocaleString()} جنيه`,
           data: { ad_id: auction.id },
         });
+        await sendPushToUser(client, topBid.bidder_id, "مبروك! كسبت المزاد 🎉", `فزت بمزاد "${auction.title}" بمبلغ ${topBid.amount.toLocaleString()} جنيه`, `/ad/${auction.id}`).catch(() => {});
 
-        // Notify seller
+        // Notify seller (DB + push)
         await client.from("notifications").insert({
           user_id: auction.user_id,
           type: "auction_ended",
-          title: "المزاد انتهى! 🔨",
+          title: "المزاد انتهى — تم البيع! 💰",
           body: `مزاد "${auction.title}" انتهى. الفائز زايد بـ ${topBid.amount.toLocaleString()} جنيه`,
           data: { ad_id: auction.id, winner_id: topBid.bidder_id },
         });
+        await sendPushToUser(client, auction.user_id, "المزاد انتهى — تم البيع! 💰", `مزاد "${auction.title}" انتهى وتم البيع بمبلغ ${topBid.amount.toLocaleString()} جنيه`, `/ad/${auction.id}`).catch(() => {});
       } else {
         // Auction ended with no bids
         await client
           .from("ads")
-          .update({ auction_status: "ended" })
+          .update({ auction_status: "ended_no_bids" })
           .eq("id", auction.id);
 
-        // Notify seller
+        // Notify seller (DB + push)
         await client.from("notifications").insert({
           user_id: auction.user_id,
           type: "auction_ended_no_bids",
@@ -131,6 +191,7 @@ async function finalizeExpiredAuctions(): Promise<void> {
           body: `مزاد "${auction.title}" انتهى ومحدش زايد. ممكن تعيد نشره.`,
           data: { ad_id: auction.id },
         });
+        await sendPushToUser(client, auction.user_id, "المزاد انتهى بدون مزايدات", `مزاد "${auction.title}" انتهى ومحدش زايد. ممكن تنزل إعلان جديد.`, `/ad/${auction.id}`).catch(() => {});
       }
 
       console.log(

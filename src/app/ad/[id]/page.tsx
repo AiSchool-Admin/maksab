@@ -121,6 +121,7 @@ export default function AdDetailPage({
   const [sellerIsIdVerified, setSellerIsIdVerified] = useState(false);
   const [reviewsKey, setReviewsKey] = useState(0); // force refresh reviews
   const [sellerLoyaltyLevel, setSellerLoyaltyLevel] = useState<"member" | "silver" | "gold" | "diamond">("member");
+  const [sellerRank, setSellerRank] = useState<"beginner" | "good" | "pro" | "elite">("beginner");
 
   const [notFound, setNotFound] = useState(false);
   const [autoDropEnabled, setAutoDropEnabled] = useState(false);
@@ -188,6 +189,11 @@ export default function AdDetailPage({
         const loyaltyProfile = getUserLoyaltyProfile(sellerId);
         setSellerLoyaltyLevel(loyaltyProfile.currentLevel);
       }),
+      import("@/lib/social/seller-rank-service").then(({ calculateSellerScore }) =>
+        calculateSellerScore(sellerId).then((breakdown) => {
+          setSellerRank(breakdown.rank);
+        })
+      ),
     ]).catch(() => {});
   }, [ad?.seller?.id]);
 
@@ -727,7 +733,7 @@ export default function AdDetailPage({
                   <Link href={`/user/${ad.seller.id}`} className="font-bold text-dark text-sm hover:text-brand-green transition-colors">
                     {ad.seller.displayName}
                   </Link>
-                  <SellerRankBadge rank="beginner" size="sm" />
+                  <SellerRankBadge rank={sellerRank} size="sm" />
                   <VerificationBadge level={sellerVerificationLevel} />
                   <LoyaltyBadge level={sellerLoyaltyLevel} size="sm" />
                   {sellerIsTrusted && <TrustedSellerBadge />}

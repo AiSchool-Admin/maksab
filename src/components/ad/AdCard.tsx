@@ -3,7 +3,7 @@
 import { useState, useEffect, memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Heart, MapPin, Clock } from "lucide-react";
+import { Heart, MapPin, Clock, TrendingDown } from "lucide-react";
 import { formatPrice, formatTimeAgo, formatCountdown } from "@/lib/utils/format";
 
 interface AdCardProps {
@@ -27,6 +27,8 @@ interface AdCardProps {
   // Interaction
   isFavorited?: boolean;
   onToggleFavorite?: (id: string) => void;
+  // Price drop indicator (percentage, e.g. 15 means 15% drop)
+  priceDropPercent?: number;
 }
 
 const saleTypeBadge = {
@@ -84,6 +86,7 @@ function AdCard({
   exchangeDescription,
   isFavorited = false,
   onToggleFavorite,
+  priceDropPercent,
 }: AdCardProps) {
   const badgeKey = isLiveAuction && saleType === "auction" ? "live_auction" : saleType;
   const badge = saleTypeBadge[badgeKey];
@@ -121,6 +124,14 @@ function AdCard({
             )}
             {badge.icon} {badge.label}
           </span>
+
+          {/* Price drop badge */}
+          {priceDropPercent != null && priceDropPercent > 0 && (
+            <span className="absolute bottom-2 start-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-error/90 text-white backdrop-blur-sm flex items-center gap-0.5 shadow-sm">
+              <TrendingDown size={10} />
+              نزل {priceDropPercent}%
+            </span>
+          )}
 
           {/* Favorite button */}
           <button

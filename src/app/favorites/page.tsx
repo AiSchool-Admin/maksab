@@ -8,31 +8,15 @@ import AdCard from "@/components/ad/AdCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { supabase } from "@/lib/supabase/client";
+import { getFavoriteIds as getLocalFavorites, clearFavorites, getFavoritePrices, saveFavoritePrice } from "@/lib/favorites/favorites-service";
+import { toggleFavorite } from "@/lib/favorites/favorites-service";
 import type { AdSummary } from "@/lib/ad-data";
-
-const FAVORITES_KEY = "maksab_favorites";
-
-/** Get favorites from localStorage */
-function getLocalFavorites(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(FAVORITES_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalFavorites(ids: string[]) {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids));
-  }
-}
 
 export default function FavoritesPage() {
   const { user, isLoading: authLoading, requireAuth } = useAuth();
   const [favorites, setFavorites] = useState<AdSummary[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [priceDrops, setPriceDrops] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   // Load favorites
@@ -47,6 +31,7 @@ export default function FavoritesPage() {
     if (localIds.length === 0) {
       setFavorites([]);
       setFavoriteIds(new Set());
+      setPriceDrops({});
       setIsLoading(false);
       return;
     }
@@ -64,24 +49,46 @@ export default function FavoritesPage() {
         return;
       }
 
-      const ads = (data as Record<string, unknown>[]).map((row): AdSummary => ({
-        id: row.id as string,
-        title: row.title as string,
-        price: row.price ? Number(row.price) : null,
-        saleType: row.sale_type as AdSummary["saleType"],
-        image: ((row.images as string[]) ?? [])[0] ?? null,
-        governorate: (row.governorate as string) ?? null,
-        city: (row.city as string) ?? null,
-        createdAt: row.created_at as string,
-        isNegotiable: (row.is_negotiable as boolean) ?? false,
-        auctionHighestBid: row.auction_start_price ? Number(row.auction_start_price) : undefined,
-        auctionEndsAt: (row.auction_ends_at as string) ?? undefined,
-        exchangeDescription: (row.exchange_description as string) ?? undefined,
-        isFavorited: true,
-      }));
+      const savedPrices = getFavoritePrices();
+      const drops: Record<string, number> = {};
+
+      const ads = (data as Record<string, unknown>[]).map((row): AdSummary => {
+        const adId = row.id as string;
+        const currentPrice = row.price ? Number(row.price) : null;
+
+        // Compute price drop from saved snapshot
+        if (currentPrice != null && savedPrices[adId] != null) {
+          const originalPrice = savedPrices[adId];
+          if (currentPrice < originalPrice) {
+            drops[adId] = Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
+          }
+        }
+
+        // Save current price as snapshot for future comparisons (if not stored yet)
+        if (currentPrice != null) {
+          saveFavoritePrice(adId, currentPrice);
+        }
+
+        return {
+          id: adId,
+          title: row.title as string,
+          price: currentPrice,
+          saleType: row.sale_type as AdSummary["saleType"],
+          image: ((row.images as string[]) ?? [])[0] ?? null,
+          governorate: (row.governorate as string) ?? null,
+          city: (row.city as string) ?? null,
+          createdAt: row.created_at as string,
+          isNegotiable: (row.is_negotiable as boolean) ?? false,
+          auctionHighestBid: row.auction_start_price ? Number(row.auction_start_price) : undefined,
+          auctionEndsAt: (row.auction_ends_at as string) ?? undefined,
+          exchangeDescription: (row.exchange_description as string) ?? undefined,
+          isFavorited: true,
+        };
+      });
 
       setFavorites(ads);
       setFavoriteIds(new Set(ads.map((a) => a.id)));
+      setPriceDrops(drops);
     } catch {
       setFavorites([]);
     } finally {
@@ -91,14 +98,17 @@ export default function FavoritesPage() {
 
   const handleToggleFavorite = useCallback(
     (adId: string) => {
-      const currentIds = getLocalFavorites();
-      const newIds = currentIds.filter((id) => id !== adId);
-      saveLocalFavorites(newIds);
+      toggleFavorite(adId); // removes from localStorage + price snapshot
 
       setFavorites((prev) => prev.filter((a) => a.id !== adId));
       setFavoriteIds((prev) => {
         const next = new Set(prev);
         next.delete(adId);
+        return next;
+      });
+      setPriceDrops((prev) => {
+        const next = { ...prev };
+        delete next[adId];
         return next;
       });
     },
@@ -114,9 +124,10 @@ export default function FavoritesPage() {
         <div className="flex justify-end px-4 py-2">
           <button
             onClick={() => {
-              saveLocalFavorites([]);
+              clearFavorites();
               setFavorites([]);
               setFavoriteIds(new Set());
+              setPriceDrops({});
             }}
             className="flex items-center gap-1.5 text-xs text-error hover:text-red-700 transition-colors"
           >
@@ -154,6 +165,7 @@ export default function FavoritesPage() {
                   {...ad}
                   isFavorited={true}
                   onToggleFavorite={handleToggleFavorite}
+                  priceDropPercent={priceDrops[ad.id]}
                 />
               ))}
             </div>

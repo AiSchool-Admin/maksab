@@ -9,6 +9,7 @@ export type NotificationType =
   | "favorite_price_drop"
   | "recommendation"
   | "new_match"
+  | "exchange_match"
   | "seller_interest"
   | "system";
 
@@ -37,6 +38,7 @@ export const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   favorite_price_drop: "💰",
   recommendation: "🔥",
   new_match: "🎯",
+  exchange_match: "🔄",
   seller_interest: "👥",
   system: "📢",
 };
