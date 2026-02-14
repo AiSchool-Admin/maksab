@@ -16,6 +16,7 @@ interface UseInfiniteScrollReturn<T> {
   hasMore: boolean;
   error: boolean;
   retry: () => void;
+  refresh: () => Promise<void>;
   sentinelRef: (node: HTMLDivElement | null) => void;
 }
 
@@ -97,5 +98,17 @@ export function useInfiniteScroll<T>({
     [hasMore, loadMore],
   );
 
-  return { items, isLoading, isLoadingMore, hasMore, error, retry: fetchInitial, sentinelRef };
+  // Refresh: silently reload first page (no loading indicator)
+  const refresh = useCallback(async () => {
+    try {
+      const { ads, hasMore: more } = await fetchFn(initialPage);
+      setItems(ads);
+      setHasMore(more);
+      setPage(initialPage + 1);
+    } catch {
+      // Silent fail on refresh
+    }
+  }, [fetchFn, initialPage]);
+
+  return { items, isLoading, isLoadingMore, hasMore, error, retry: fetchInitial, refresh, sentinelRef };
 }

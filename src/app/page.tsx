@@ -10,6 +10,7 @@ import AdCard from "@/components/ad/AdCard";
 import Button from "@/components/ui/Button";
 import CategoryIcon from "@/components/ui/CategoryIcon";
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 
 const HorizontalSection = dynamic(
   () => import("@/components/home/HorizontalSection"),
@@ -55,6 +56,7 @@ export default function HomePage() {
     sentinelRef,
     error: feedError,
     retry: retryFeed,
+    refresh: refreshFeed,
   } = useInfiniteScroll<AdSummary>({ fetchFn: fetchFeedAds });
 
   const { requireAuth, user } = useAuth();
@@ -122,6 +124,17 @@ export default function HomePage() {
     },
     [requireAuth, personalizedAds, matchingAuctions, feedAds, track],
   );
+
+  const handlePullRefresh = useCallback(async () => {
+    const userId = user?.id || "";
+    const [, recResult] = await Promise.all([
+      refreshFeed(),
+      getRecommendations(userId, user?.governorate ?? undefined),
+    ]);
+    if (recResult.personalizedAds.length > 0) setPersonalizedAds(recResult.personalizedAds);
+    if (recResult.matchingAuctions.length > 0) setMatchingAuctions(recResult.matchingAuctions);
+    setFavoriteIds(new Set(getFavoriteIds()));
+  }, [refreshFeed, user]);
 
   return (
     <main className="bg-white">
@@ -208,6 +221,7 @@ export default function HomePage() {
         </div>
       </div>
 
+      <PullToRefresh onRefresh={handlePullRefresh}>
       {/* ─── 2. Categories Grid ────────────────────────────────── */}
       <section className="px-4 pb-5">
         <h2 className="text-sm font-bold text-dark mb-3">الأقسام</h2>
@@ -350,6 +364,8 @@ export default function HomePage() {
           </Link>
         </section>
       )}
+
+      </PullToRefresh>
 
       <ShoppingAssistantFab />
       <BottomNavWithBadge />

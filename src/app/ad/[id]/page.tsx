@@ -242,15 +242,26 @@ export default function AdDetailPage({
   };
 
   const handleShare = async () => {
-    if (navigator.share && ad) {
+    if (!ad) return;
+    const shareData = {
+      title: ad.title,
+      text: `${ad.title} على مكسب`,
+      url: window.location.href,
+    };
+    if (navigator.share) {
       try {
-        await navigator.share({
-          title: ad.title,
-          text: `${ad.title} على مكسب`,
-          url: window.location.href,
-        });
+        await navigator.share(shareData);
       } catch {
-        // User cancelled
+        // User cancelled or share failed
+      }
+    } else {
+      // Fallback: copy link to clipboard
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        const { default: toast } = await import("react-hot-toast");
+        toast.success("تم نسخ رابط الإعلان");
+      } catch {
+        // Clipboard not available
       }
     }
   };

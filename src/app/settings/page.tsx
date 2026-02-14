@@ -16,6 +16,7 @@ import Link from "next/link";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useThemeStore } from "@/stores/theme-store";
 
 const SETTINGS_KEY = "maksab_settings";
 
@@ -52,6 +53,7 @@ function saveSettings(settings: AppSettings) {
 export default function SettingsPage() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { theme, toggle: toggleTheme } = useThemeStore();
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -144,10 +146,9 @@ export default function SettingsPage() {
           <div className="space-y-1">
             <SettingToggle
               label="الوضع الليلي"
-              description="قريباً — سيتم تفعيله في التحديث القادم"
-              checked={settings.darkMode}
-              onChange={(v) => updateSetting("darkMode", v)}
-              disabled
+              description="تفعيل الوضع الداكن لراحة العين"
+              checked={theme === "dark"}
+              onChange={() => toggleTheme()}
             />
           </div>
         </section>
