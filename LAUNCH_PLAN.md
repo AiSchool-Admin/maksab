@@ -1,8 +1,8 @@
 # خطة إطلاق مكسب MVP — الخطة التقنية التفصيلية
 
 > آخر تحديث: 2026-02-14
-> الحالة الحالية: **92% جاهز للإطلاق** (المراحل 1-4 مكتملة)
-> المتبقي: إعداد بيئات الإنتاج فقط (Supabase + Vercel + Railway)
+> الحالة الحالية: **95% جاهز للإطلاق** (المراحل 1-4 مكتملة + مراجعة المرحلة 5 وإصلاح الثغرات)
+> المتبقي: إعداد بيئات الإنتاج فقط (Supabase + Vercel + Railway) — انظر `DEPLOYMENT_CHECKLIST.md`
 
 ---
 
@@ -24,8 +24,8 @@
 | البنية الأساسية (Next.js + Supabase) | ✅ مكتمل | App Router, TypeScript, Tailwind RTL |
 | PWA (manifest + service worker + offline) | ✅ مكتمل | sw.js + offline.html + manifest.json |
 | المصادقة (OTP + session tokens) | ✅ مكتمل | Firebase + HMAC session tokens |
-| قاعدة البيانات (18 migration + seeds) | ✅ مكتمل | RLS + indexes + triggers |
-| الأمان (auth + rate limit + validation) | ✅ مكتمل | 12 إصلاح أمني في آخر commit |
+| قاعدة البيانات (19 migration + seeds) | ✅ مكتمل | RLS + indexes + triggers + security hardening |
+| الأمان (auth + rate limit + validation) | ✅ مكتمل | 12 إصلاح أمني + M019 RLS hardening |
 | الـ APIs (53 endpoint) | ✅ مكتمل | ads, auctions, chat, search, stores |
 | صفحات الأخطاء (error.tsx, not-found) | ✅ مكتمل | error.tsx + global-error.tsx + not-found.tsx + 7 loading.tsx |
 | الاختبارات (Jest) | ✅ مكتمل | 91 test, 4 suites (session-token, ad-validation, env-check, smoke) |
@@ -504,7 +504,7 @@ Sitemap: https://maksab.app/sitemap.xml
 | # | الخطوة | التفاصيل | الحالة |
 |---|--------|----------|--------|
 | 1 | إنشاء مشروع Supabase جديد | منطقة Frankfurt أو أقرب لمصر | [ ] |
-| 2 | تشغيل الـ migrations | الـ 18 migration بالترتيب | [ ] |
+| 2 | تشغيل الـ migrations | الـ 19 migration بالترتيب | [ ] |
 | 3 | تشغيل seed-production.sql | البيانات الأساسية (أقسام + محافظات + مدن) | [ ] |
 | 4 | تفعيل RLS | التأكد من كل الجداول محمية | [ ] |
 | 5 | إعداد Storage | bucket لـ ad-images + avatars | [ ] |
@@ -512,11 +512,12 @@ Sitemap: https://maksab.app/sitemap.xml
 | 7 | نسخ الـ API keys | URL + anon key + service role key | [ ] |
 | 8 | تفعيل backups تلقائية | يومياً — Supabase يعملها تلقائي في Pro | [ ] |
 
-**دور Claude Code:**
+**دور Claude Code:** ✅ تم
 ```
-أتحقق إن كل الـ migrations متسلسلة صح.
-أتحقق إن الـ seed data كامل ومتوافق.
-أراجع إن RLS policies كافية لكل الجداول.
+✅ تم التحقق من الـ 19 migration متسلسلة صح.
+✅ تم التحقق من الـ seed data كامل ومتوافق.
+✅ تم مراجعة RLS policies + إصلاح 4 ثغرات في M019.
+✅ تم إصلاح store_reviews.transaction_id (كان NOT NULL بدون جدول مرجعي).
 ```
 
 ---
@@ -562,11 +563,11 @@ FIREBASE_ADMIN_CLIENT_EMAIL=
 FIREBASE_ADMIN_PRIVATE_KEY=
 ```
 
-**دور Claude Code:**
+**دور Claude Code:** ✅ تم
 ```
-أتحقق إن vercel.json كامل ومظبوط.
-أتحقق إن كل المتغيرات موثقة في .env.local.example.
-أنشئ deployment checklist نهائية.
+✅ vercel.json كامل (security headers + CSP + caching + region).
+✅ كل المتغيرات موثقة في .env.local.example (15 متغير مع شرح).
+✅ تم إنشاء DEPLOYMENT_CHECKLIST.md — قائمة فحص نهائية بالعربي.
 ```
 
 ---
@@ -592,11 +593,12 @@ FIREBASE_ADMIN_PRIVATE_KEY=
 كل 24 ساعة:   تنظيف signals قديمة (60+ يوم)
 ```
 
-**دور Claude Code:**
+**دور Claude Code:** ✅ تم
 ```
-أراجع الـ worker code وأتأكد إنه production-ready.
-أتأكد من null checks و error handling.
-أتأكد إن الـ environment variables موثقة.
+✅ تم مراجعة الـ worker code بالكامل (749 سطر).
+✅ تم إضافة: web-push dependency, graceful shutdown (SIGTERM/SIGINT),
+   DB health check عند البدء, حماية من race conditions في المزادات.
+✅ كل الـ environment variables موثقة في DEPLOYMENT_CHECKLIST.md.
 ```
 
 ---

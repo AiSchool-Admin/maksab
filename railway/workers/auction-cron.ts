@@ -147,15 +147,20 @@ async function finalizeExpiredAuctions(): Promise<void> {
         .maybeSingle();
 
       if (topBid) {
-        // Auction ended with winner
-        await client
+        // Auction ended with winner — guard against race condition
+        const { data: updated } = await client
           .from("ads")
           .update({
             auction_status: "ended_winner",
             auction_winner_id: topBid.bidder_id,
             status: "sold",
           })
-          .eq("id", auction.id);
+          .eq("id", auction.id)
+          .eq("auction_status", "active")
+          .select("id");
+
+        // Skip if another worker already processed this auction
+        if (!updated || updated.length === 0) continue;
 
         // Notify winner (DB + push)
         await client.from("notifications").insert({
@@ -177,11 +182,15 @@ async function finalizeExpiredAuctions(): Promise<void> {
         });
         await sendPushToUser(client, auction.user_id, "المزاد انتهى — تم البيع! 💰", `مزاد "${auction.title}" انتهى وتم البيع بمبلغ ${topBid.amount.toLocaleString()} جنيه`, `/ad/${auction.id}`).catch(() => {});
       } else {
-        // Auction ended with no bids
-        await client
+        // Auction ended with no bids — guard against race condition
+        const { data: updated } = await client
           .from("ads")
           .update({ auction_status: "ended_no_bids" })
-          .eq("id", auction.id);
+          .eq("id", auction.id)
+          .eq("auction_status", "active")
+          .select("id");
+
+        if (!updated || updated.length === 0) continue;
 
         // Notify seller (DB + push)
         await client.from("notifications").insert({
@@ -728,15 +737,52 @@ console.log(`  - Ad expiry check: every 60 minutes`);
 console.log(`  - Seller interest notifications: every 6 hours`);
 console.log(`  - Signal cleanup: every 24 hours`);
 
-if (getClient()) {
-  console.log(`  - Supabase: connected ✓`);
-} else {
-  console.log(`  - Supabase: waiting for env vars...`);
+// ─── Startup: DB Health Check ────────────────────────────────
+async function healthCheck(): Promise<boolean> {
+  const client = getClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client
+      .from("categories")
+      .select("id", { count: "exact", head: true });
+
+    if (error) {
+      console.error(`[${new Date().toISOString()}] ❌ DB health check failed:`, error.message);
+      return false;
+    }
+    console.log(`[${new Date().toISOString()}] ✅ DB health check passed`);
+    return true;
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] ❌ DB health check error:`, err);
+    return false;
+  }
 }
 
-// Run immediately, then on interval
-tick();
-setInterval(tick, INTERVAL_MS);
+// ─── Graceful Shutdown ──────────────────────────────────────
+let intervalId: ReturnType<typeof setInterval> | null = null;
+let isShuttingDown = false;
+
+async function shutdown(signal: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log(`\n[${new Date().toISOString()}] 🛑 Received ${signal}, shutting down gracefully...`);
+
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+
+  // Allow in-flight operations 5 seconds to complete
+  setTimeout(() => {
+    console.log(`[${new Date().toISOString()}] 👋 Worker stopped`);
+    process.exit(0);
+  }, 5000);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 // Keep process alive — prevent Railway from thinking it crashed
 process.on("uncaughtException", (err) => {
@@ -746,3 +792,14 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   console.error(`[${new Date().toISOString()}] Unhandled rejection:`, reason);
 });
+
+// ─── Start ──────────────────────────────────────────────────
+(async () => {
+  if (getClient()) {
+    await healthCheck();
+  }
+
+  // Run immediately, then on interval
+  tick();
+  intervalId = setInterval(tick, INTERVAL_MS);
+})();
