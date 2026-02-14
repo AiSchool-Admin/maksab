@@ -117,6 +117,19 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Auto-subscribe to push notifications when user logs in
+  // If permission is already granted, ensure subscription is saved to server
+  // The PushPromptBanner handles the initial permission prompt
+  useEffect(() => {
+    if (!user?.id) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "granted") {
+      import("@/lib/notifications/notification-service").then(({ setupPushNotifications }) => {
+        setupPushNotifications(user.id).catch(() => {});
+      });
+    }
+  }, [user?.id]);
+
   // Track online presence when user is logged in
   useEffect(() => {
     if (user?.id) {

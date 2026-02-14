@@ -6,7 +6,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { setupPushNotifications } from "@/lib/notifications/notification-service";
 
 const PUSH_PROMPT_KEY = "maksab_push_prompt_dismissed";
-const PUSH_PROMPT_MIN_VISITS = 3;
+const PUSH_PROMPT_MIN_VISITS = 2;
 const PUSH_VISIT_KEY = "maksab_visit_count";
 
 export default function PushPromptBanner() {

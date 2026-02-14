@@ -161,11 +161,11 @@ export default function FilterChips({ filters, onChange }: FilterChipsProps) {
         <ChipDropdown
           label={
             filters.saleType === "cash"
-              ? "💵 نقدي"
+              ? "💰 للبيع"
               : filters.saleType === "auction"
-                ? "🔨 مزاد"
+                ? "🔥 مزاد"
                 : filters.saleType === "exchange"
-                  ? "🔄 تبديل"
+                  ? "🔄 للتبديل"
                   : "نوع البيع"
           }
           isActive={!!filters.saleType}
@@ -176,17 +176,17 @@ export default function FilterChips({ filters, onChange }: FilterChipsProps) {
             onClick={() => onChange({ ...filters, saleType: undefined })}
           />
           <OptionButton
-            label="💵 نقدي"
+            label="💰 للبيع"
             selected={filters.saleType === "cash"}
             onClick={() => onChange({ ...filters, saleType: "cash" })}
           />
           <OptionButton
-            label="🔨 مزاد"
+            label="🔥 مزاد"
             selected={filters.saleType === "auction"}
             onClick={() => onChange({ ...filters, saleType: "auction" })}
           />
           <OptionButton
-            label="🔄 تبديل"
+            label="🔄 للتبديل"
             selected={filters.saleType === "exchange"}
             onClick={() => onChange({ ...filters, saleType: "exchange" })}
           />

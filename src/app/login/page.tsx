@@ -12,7 +12,7 @@ import {
   verifyOTPViaFirebase,
   type UserProfile,
 } from "@/lib/supabase/auth";
-import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
+import { egyptianPhoneSchema, normalizeEgyptianPhone, otpSchema } from "@/lib/utils/validators";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
 
 type Step = "phone" | "otp";
@@ -32,16 +32,12 @@ export default function LoginPage() {
   );
 }
 
-/** Normalize any phone format to 11-digit Egyptian number */
+/** Normalize any phone format to 11-digit Egyptian number.
+ * Re-uses the shared normalizeEgyptianPhone for validation,
+ * but this version is used only for browser autofill normalization.
+ */
 function normalizePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  // +20XXXXXXXXXX or 20XXXXXXXXXX
-  if (digits.startsWith("20") && digits.length === 12) return digits.slice(1);
-  // 0020XXXXXXXXXX
-  if (digits.startsWith("0020") && digits.length === 14) return digits.slice(3);
-  // Already 01XXXXXXXXX
-  if (digits.startsWith("01") && digits.length === 11) return digits;
-  return digits;
+  return normalizeEgyptianPhone(raw);
 }
 
 function LoginPageContent() {
@@ -121,8 +117,12 @@ function LoginPageContent() {
       return;
     }
 
+    // Normalize phone (handles 10-digit input without leading 0)
+    const normalizedPhone = normalizeEgyptianPhone(phone);
+    setPhone(normalizedPhone);
+
     setIsSubmitting(true);
-    const otpResult = await sendOTP(phone);
+    const otpResult = await sendOTP(normalizedPhone);
 
     if (otpResult.error) {
       setIsSubmitting(false);
@@ -420,7 +420,7 @@ function LoginPageContent() {
             className="space-y-5 pt-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (phone.length >= 11) handlePhoneSubmit();
+              if (phone.length >= 10) handlePhoneSubmit();
             }}
             autoComplete="on"
           >
@@ -456,9 +456,9 @@ function LoginPageContent() {
                   value={phone}
                   onChange={handlePhoneChange}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && phone.length === 11) handlePhoneSubmit();
+                    if (e.key === "Enter" && phone.length >= 10) handlePhoneSubmit();
                   }}
-                  placeholder="01XXXXXXXXX"
+                  placeholder="1XXXXXXXXX"
                   className={`w-full ps-14 pe-4 py-3.5 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-lg tracking-wider placeholder:text-gray-text placeholder:tracking-normal ${error ? "border-error bg-error/5" : ""}`}
                   autoComplete="tel-national"
                 />
@@ -525,7 +525,7 @@ function LoginPageContent() {
               size="lg"
               isLoading={isSubmitting}
               onClick={handlePhoneSubmit}
-              disabled={phone.length < 11}
+              disabled={phone.length < 10}
             >
               <Smartphone size={18} className="ml-2" />
               إرسال كود التأكيد

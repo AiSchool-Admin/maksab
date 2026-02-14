@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Gavel, SlidersHorizontal, Home, ChevronRight } from "lucide-react";
+import { Flame, SlidersHorizontal, Home, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -13,15 +13,15 @@ type SortOption = "ending_soon" | "newest" | "most_bids" | "price_asc" | "price_
 type StatusFilter = "active" | "ended" | "all";
 
 const sortOptions: { value: SortOption; label: string }[] = [
-  { value: "ending_soon", label: "ينتهي قريباً" },
+  { value: "ending_soon", label: "🔥 الأقرب للنهاية" },
   { value: "newest", label: "الأحدث" },
-  { value: "price_asc", label: "الأقل سعراً" },
-  { value: "price_desc", label: "الأعلى سعراً" },
+  { value: "price_asc", label: "الأرخص" },
+  { value: "price_desc", label: "الأغلى" },
 ];
 
 const statusFilters: { value: StatusFilter; label: string }[] = [
-  { value: "active", label: "نشطة" },
-  { value: "ended", label: "منتهية" },
+  { value: "active", label: "🔥 شغالة" },
+  { value: "ended", label: "خلصت" },
   { value: "all", label: "الكل" },
 ];
 
@@ -184,8 +184,8 @@ export default function AuctionsPage() {
                 <Home size={18} />
               </Link>
               <h1 className="text-lg font-bold text-dark flex items-center gap-2">
-                <Gavel size={22} className="text-brand-gold" />
-                المزادات
+                <Flame size={22} className="text-orange-500" />
+                شوف المزادات 🔥
               </h1>
             </div>
             <div className="flex items-center gap-1">
@@ -212,10 +212,10 @@ export default function AuctionsPage() {
           {/* Stats bar */}
           <div className="flex items-center gap-4 text-xs text-gray-text">
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-brand-green animate-pulse" />
-              {activeCount} مزاد نشط
+              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+              {activeCount} مزاد شغال دلوقتي
             </span>
-            <span>{auctions.length} مزاد إجمالي</span>
+            <span>{auctions.length} مزاد</span>
           </div>
         </div>
 
@@ -286,14 +286,14 @@ export default function AuctionsPage() {
         {/* Empty state */}
         {!isLoading && auctions.length === 0 && (
           <div className="text-center py-16">
-            <div className="text-6xl mb-4">🔨</div>
+            <div className="text-6xl mb-4">🔥</div>
             <h2 className="text-lg font-bold text-dark mb-2">
               مفيش مزادات{" "}
-              {statusFilter === "active" ? "نشطة" : ""}
+              {statusFilter === "active" ? "شغالة" : ""}
               {" "}دلوقتي
             </h2>
             <p className="text-sm text-gray-text mb-6">
-              جرب تنشر إعلان مزاد جديد أو ارجع بعدين
+              انشر مزاد جديد أو ارجع بعدين — المزادات بتولع هنا كل شوية 🔥
             </p>
           </div>
         )}

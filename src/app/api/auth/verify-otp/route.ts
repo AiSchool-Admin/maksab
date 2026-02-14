@@ -115,9 +115,14 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Standard HMAC OTP verification path ─────────────────────────
-    const phone = body.phone?.replace(/\D/g, "");
+    let phone = body.phone?.replace(/\D/g, "") || "";
     const code = body.code?.replace(/\D/g, "");
     const token = body.token;
+
+    // Normalize phone: accept 10 digits without leading 0
+    if (/^1[0125]\d{8}$/.test(phone)) phone = `0${phone}`;
+    if (phone.startsWith("20") && phone.length === 12) phone = phone.slice(1);
+    if (phone.startsWith("0020") && phone.length === 14) phone = phone.slice(3);
 
     // Validate inputs
     if (!phone || !/^01[0125]\d{8}$/.test(phone)) {

@@ -281,8 +281,8 @@ export default function HomePage() {
 
       {/* ─── 3. Recommended Ads (horizontal scroll) ────────────── */}
       <HorizontalSection
-        title="عروض مقترحة ليك"
-        subtitle={hasSignals ? "بناءً على بحثاتك ومفضلاتك" : "إعلانات جديدة ممكن تعجبك"}
+        title="ليك عروض تحفة"
+        subtitle={hasSignals ? "على حسب بحثاتك ومفضلاتك" : "إعلانات جديدة ممكن تعجبك"}
         icon="🔥"
         ads={personalizedAds}
         onToggleFavorite={handleToggleFavorite}
@@ -290,9 +290,9 @@ export default function HomePage() {
 
       {/* ─── 4. Matching Auctions (horizontal scroll) ──────────── */}
       <HorizontalSection
-        title="مزادات تناسبك"
-        subtitle={hasSignals ? "بناءً على اهتماماتك" : undefined}
-        icon="🔨"
+        title="شوف المزادات دي"
+        subtitle={hasSignals ? "على حسب اهتماماتك" : "زايد واكسب!"}
+        icon="🔥"
         ads={matchingAuctions}
         href="/auctions"
         onToggleFavorite={handleToggleFavorite}
@@ -300,19 +300,19 @@ export default function HomePage() {
 
       {/* ─── 5. New Ads Feed (infinite scroll grid) ────────────── */}
       <section className="px-4 pb-6">
-        <h2 className="text-sm font-bold text-dark mb-3">إعلانات جديدة</h2>
+        <h2 className="text-sm font-bold text-dark mb-3">جديد على مكسب</h2>
 
         {isLoading ? (
           <AdGridSkeleton count={4} />
         ) : feedError ? (
           <div className="py-8 text-center">
             <p className="text-4xl mb-3">⚠️</p>
-            <p className="text-sm text-gray-text mb-3">حصل مشكلة في تحميل الإعلانات</p>
+            <p className="text-sm text-gray-text mb-3">حصلت مشكلة في التحميل — معلش!</p>
             <button
               onClick={retryFeed}
               className="text-sm font-bold text-brand-green hover:text-brand-green-dark"
             >
-              جرب تاني
+              جرّب تاني
             </button>
           </div>
         ) : feedAds.length > 0 ? (
@@ -341,7 +341,7 @@ export default function HomePage() {
             {/* End of feed */}
             {!hasMore && (
               <p className="text-center text-xs text-gray-text py-6">
-                وصلت للآخر — مفيش إعلانات تانية دلوقتي
+                خلاص كده — مفيش إعلانات تانية دلوقتي 👋
               </p>
             )}
           </>
@@ -353,10 +353,10 @@ export default function HomePage() {
               أهلاً بيك في مكسب!
             </h3>
             <p className="text-sm text-gray-text mb-1">
-              أسهل وأذكى سوق على الإطلاق
+              بيع واشتري وبدّل بسهولة
             </p>
             <p className="text-sm text-gray-text mb-4">
-              كن أول واحد يضيف إعلان!
+              كن أول واحد يضيف إعلان هنا!
             </p>
             <Link href="/ad/create">
               <Button icon={<Plus size={18} />} size="lg">

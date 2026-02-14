@@ -428,10 +428,10 @@ export default function AdDetailPage({
   /* ── Sale type label ───────────────────────────────── */
   const saleLabel =
     ad.saleType === "cash"
-      ? `💵 بيع نقدي${ad.isNegotiable ? " — قابل للتفاوض" : ""}`
+      ? `💰 للبيع${ad.isNegotiable ? " — الكلام فيه" : ""}`
       : ad.saleType === "auction"
-        ? "🔨 مزاد"
-        : "🔄 تبديل";
+        ? "🔥 مزاد"
+        : "🔄 للتبديل";
 
   /* ── Member since ──────────────────────────────────── */
   const memberYear = new Date(ad.seller.memberSince).getFullYear();
@@ -475,7 +475,7 @@ export default function AdDetailPage({
                   : "text-gray-text hover:text-error hover:bg-gray-light"
               }`}
               aria-label={
-                isFavorited ? "إزالة من المفضلة" : "إضافة للمفضلة"
+                isFavorited ? "شيل من المفضلة" : "حفظ في المفضلة"
               }
             >
               <Heart
@@ -544,8 +544,8 @@ export default function AdDetailPage({
             </p>
           )}
           {ad.saleType === "exchange" && (
-            <p className="text-xl font-bold text-blue-700 mb-1">
-              🔄 للتبديل
+            <p className="text-xl font-bold text-purple-700 mb-1">
+              🔄 تبدّل معايا؟
             </p>
           )}
           <span className="text-sm text-gray-text">{saleLabel}</span>
@@ -613,11 +613,11 @@ export default function AdDetailPage({
 
         {/* Exchange details — structured display */}
         {ad.saleType === "exchange" && Boolean(ad.exchangeDescription || (ad.categoryFields as Record<string, unknown>)?.exchange_wanted) && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+          <div className="bg-gradient-to-l from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-4 space-y-2">
             <h3 className="text-sm font-bold text-dark flex items-center gap-1.5">
-              🔄 عايز يبدل بـ:
+              🔄 عايز يبدّل بـ:
             </h3>
-            <p className="text-base font-bold text-blue-700">
+            <p className="text-base font-bold text-purple-700">
               {ad.exchangeDescription}
             </p>
             {ad.exchangeAcceptsPriceDiff && ad.exchangePriceDiff && (
@@ -836,7 +836,7 @@ export default function AdDetailPage({
         {similarAds.length > 0 && (
           <div>
             <h3 className="text-sm font-bold text-dark mb-3">
-              🎯 شبيه اللي بتدور عليه
+              🎯 إعلانات شبه دي — يمكن تعجبك
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {similarAds.map((simAd) => (
