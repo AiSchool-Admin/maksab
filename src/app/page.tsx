@@ -28,6 +28,10 @@ const RecentlyViewed = dynamic(
   () => import("@/components/home/RecentlyViewed"),
   { ssr: false },
 );
+const PushPromptBanner = dynamic(
+  () => import("@/components/notifications/PushPromptBanner"),
+  { ssr: false },
+);
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
@@ -268,6 +272,9 @@ export default function HomePage() {
           <span className="text-gray-text text-lg">←</span>
         </Link>
       </section>
+
+      {/* ─── Push Notification Prompt ────────────────────────── */}
+      <PushPromptBanner />
 
       {/* ─── Recently Viewed ─────────────────────────────────── */}
       <RecentlyViewed />

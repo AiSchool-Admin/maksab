@@ -6,23 +6,28 @@
  * The build script auto-updates this value.
  */
 
-const APP_VERSION = "2026.02.14.0520";
+const APP_VERSION = "2026.02.14.1430";
 const CACHE_NAME = `maksab-pages-${APP_VERSION}`;
 const STATIC_CACHE = `maksab-static-${APP_VERSION}`;
 const API_CACHE = `maksab-api-${APP_VERSION}`;
+const IMAGE_CACHE = `maksab-images-${APP_VERSION}`;
 
 // All valid cache names for this version
-const CURRENT_CACHES = [CACHE_NAME, STATIC_CACHE, API_CACHE];
+const CURRENT_CACHES = [CACHE_NAME, STATIC_CACHE, API_CACHE, IMAGE_CACHE];
 
 // Static assets to pre-cache on install
 const PRECACHE_URLS = [
   "/",
   "/search",
+  "/offline.html",
   "/manifest.json",
 ];
 
 // API cache TTL: 5 minutes max
 const API_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+
+// Image cache: max 100 images
+const IMAGE_CACHE_MAX_ITEMS = 100;
 
 // Install: pre-cache core assets, skip waiting to activate immediately
 self.addEventListener("install", (event) => {
@@ -61,14 +66,65 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Helper: serve offline fallback page
+function serveOfflineFallback() {
+  return caches.match("/offline.html").then((cached) => {
+    return cached || new Response(
+      "<html dir='rtl'><body style='font-family:sans-serif;text-align:center;padding:60px 20px'><h1>📡 مفيش إنترنت</h1><p>جرّب تاني لما الإنترنت يرجع</p><button onclick='location.reload()' style='margin-top:16px;padding:12px 24px;background:#1B7A3D;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer'>🔄 جرّب تاني</button></body></html>",
+      { headers: { "Content-Type": "text/html; charset=utf-8" } }
+    );
+  });
+}
+
+// Helper: trim cache to max items (FIFO)
+async function trimCache(cacheName, maxItems) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length > maxItems) {
+    for (let i = 0; i < keys.length - maxItems; i++) {
+      await cache.delete(keys[i]);
+    }
+  }
+}
+
 // Fetch: network-first for API & HTML, cache-first for static assets
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET and cross-origin (except Supabase)
+  // Skip non-GET and cross-origin (except Supabase and image CDNs)
   if (request.method !== "GET") return;
-  if (url.origin !== self.location.origin && !url.hostname.includes("supabase")) return;
+  if (
+    url.origin !== self.location.origin &&
+    !url.hostname.includes("supabase") &&
+    !url.hostname.includes("storage.googleapis.com")
+  ) return;
+
+  // Image requests: cache-first with background refresh
+  if (
+    url.pathname.match(/\.(png|jpg|jpeg|webp|avif|gif)$/) ||
+    url.hostname.includes("storage.googleapis.com") ||
+    (url.hostname.includes("supabase") && url.pathname.includes("/storage/"))
+  ) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(IMAGE_CACHE).then((cache) => {
+              cache.put(request, clone);
+              trimCache(IMAGE_CACHE, IMAGE_CACHE_MAX_ITEMS);
+            });
+          }
+          return response;
+        }).catch(() => null);
+
+        // Return cached immediately, refresh in background
+        return cached || fetchPromise || new Response("", { status: 404 });
+      })
+    );
+    return;
+  }
 
   // API requests: network-first with short-lived cache fallback
   if (url.pathname.startsWith("/api/") || url.hostname.includes("supabase")) {
@@ -89,7 +145,6 @@ self.addEventListener("fetch", (event) => {
             if (dateHeader) {
               const age = Date.now() - new Date(dateHeader).getTime();
               if (age > API_CACHE_MAX_AGE_MS) {
-                // Stale, but return anyway as offline fallback
                 console.log("[SW] Serving stale API cache (offline)");
               }
             }
@@ -117,8 +172,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Other static assets (images, fonts, CSS): network-first to get fresh versions
-  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|webp|avif|svg|woff|woff2|ttf)$/)) {
+  // Other static assets (js, css, fonts, svg): network-first
+  if (url.pathname.match(/\.(js|css|svg|woff|woff2|ttf)$/)) {
     event.respondWith(
       fetch(request)
         .then((response) => {
@@ -133,7 +188,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // HTML pages: network-first with cache fallback
+  // HTML pages: network-first with cache fallback and offline page
   event.respondWith(
     fetch(request)
       .then((response) => {
@@ -145,7 +200,11 @@ self.addEventListener("fetch", (event) => {
       })
       .catch(() => {
         return caches.match(request).then((cached) => {
-          return cached || caches.match("/");
+          if (cached) return cached;
+          // Try serving the home page cache as a SPA fallback
+          return caches.match("/").then((homeCached) => {
+            return homeCached || serveOfflineFallback();
+          });
         });
       })
   );
@@ -157,12 +216,10 @@ self.addEventListener("message", (event) => {
 
   switch (event.data.type) {
     case "SKIP_WAITING":
-      // App is requesting immediate activation of new SW
       self.skipWaiting();
       break;
 
     case "GET_VERSION":
-      // App is requesting current SW version
       event.source.postMessage({
         type: "SW_VERSION",
         version: APP_VERSION,
@@ -170,7 +227,6 @@ self.addEventListener("message", (event) => {
       break;
 
     case "CLEAR_CACHES":
-      // App is requesting full cache clear
       event.waitUntil(
         caches.keys().then((keys) => {
           return Promise.all(keys.map((key) => caches.delete(key)));
@@ -178,6 +234,17 @@ self.addEventListener("message", (event) => {
           event.source.postMessage({ type: "CACHES_CLEARED" });
         })
       );
+      break;
+
+    case "CACHE_AD":
+      // Pre-cache a specific ad page for offline viewing
+      if (event.data.url) {
+        event.waitUntil(
+          caches.open(CACHE_NAME).then((cache) => {
+            return cache.add(event.data.url).catch(() => {});
+          })
+        );
+      }
       break;
 
     case "SHOW_NOTIFICATION":
@@ -212,6 +279,9 @@ self.addEventListener("push", (event) => {
     data: {
       url: (data.data && data.data.url) || data.url || "/",
     },
+    actions: data.actions || [],
+    tag: data.tag || undefined,
+    renotify: !!data.tag,
   };
 
   event.waitUntil(self.registration.showNotification(title, options));

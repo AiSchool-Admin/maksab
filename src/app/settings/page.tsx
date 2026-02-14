@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
-  Globe,
+  BellRing,
   Moon,
   Smartphone,
   MapPin,
@@ -13,15 +13,21 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useThemeStore } from "@/stores/theme-store";
+import { setupPushNotifications } from "@/lib/notifications/notification-service";
 
 const SETTINGS_KEY = "maksab_settings";
 
 interface AppSettings {
   notifications: boolean;
+  notifChat: boolean;
+  notifAuctions: boolean;
+  notifPriceDrops: boolean;
+  notifRecommendations: boolean;
   darkMode: boolean;
   locationAccess: boolean;
   autoDetectLocation: boolean;
@@ -29,6 +35,10 @@ interface AppSettings {
 
 const defaultSettings: AppSettings = {
   notifications: true,
+  notifChat: true,
+  notifAuctions: true,
+  notifPriceDrops: true,
+  notifRecommendations: true,
   darkMode: false,
   locationAccess: false,
   autoDetectLocation: false,
@@ -134,6 +144,37 @@ export default function SettingsPage() {
               checked={settings.notifications}
               onChange={(v) => updateSetting("notifications", v)}
             />
+            {settings.notifications && (
+              <>
+                <div className="ps-4 space-y-1 border-s-2 border-brand-green-light ms-4">
+                  <SettingToggle
+                    label="رسائل الشات"
+                    description="لما حد يبعتلك رسالة جديدة"
+                    checked={settings.notifChat}
+                    onChange={(v) => updateSetting("notifChat", v)}
+                  />
+                  <SettingToggle
+                    label="المزادات"
+                    description="مزايدات جديدة وتنبيهات انتهاء المزاد"
+                    checked={settings.notifAuctions}
+                    onChange={(v) => updateSetting("notifAuctions", v)}
+                  />
+                  <SettingToggle
+                    label="تخفيض الأسعار"
+                    description="لما سعر إعلان حفظته ينزل"
+                    checked={settings.notifPriceDrops}
+                    onChange={(v) => updateSetting("notifPriceDrops", v)}
+                  />
+                  <SettingToggle
+                    label="التوصيات"
+                    description="إعلانات مقترحة ليك بناءً على اهتماماتك"
+                    checked={settings.notifRecommendations}
+                    onChange={(v) => updateSetting("notifRecommendations", v)}
+                  />
+                </div>
+                {user && <PushNotificationToggle userId={user.id} />}
+              </>
+            )}
           </div>
         </section>
 
@@ -285,6 +326,70 @@ export default function SettingsPage() {
 
       <BottomNavWithBadge />
     </main>
+  );
+}
+
+function PushNotificationToggle({ userId }: { userId: string }) {
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [isRequesting, setIsRequesting] = useState(false);
+
+  useEffect(() => {
+    if ("Notification" in window) {
+      setPushEnabled(Notification.permission === "granted");
+    }
+  }, []);
+
+  const handleToggle = async (enable: boolean) => {
+    if (!enable) {
+      toast("لإيقاف الإشعارات، غيّر الإعدادات من إعدادات المتصفح", {
+        icon: "ℹ️",
+      });
+      return;
+    }
+
+    setIsRequesting(true);
+    const success = await setupPushNotifications(userId);
+    setIsRequesting(false);
+
+    if (success) {
+      setPushEnabled(true);
+      toast.success("تم تفعيل الإشعارات الفورية");
+    } else {
+      toast.error("مش قادرين نفعّل الإشعارات. اتأكد من إعدادات المتصفح");
+    }
+  };
+
+  if (!("Notification" in (typeof window !== "undefined" ? window : {}))) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-light transition-colors">
+      <div className="flex-1 min-w-0 me-3">
+        <p className="text-sm font-semibold text-dark flex items-center gap-1.5">
+          <BellRing size={14} className="text-brand-green" />
+          إشعارات فورية (Push)
+        </p>
+        <p className="text-xs text-gray-text mt-0.5">
+          {pushEnabled ? "مفعّلة — هتوصلك إشعارات حتى لو التطبيق مقفول" : "تقدر تستلم إشعارات حتى لو التطبيق مقفول"}
+        </p>
+      </div>
+      <button
+        onClick={() => handleToggle(!pushEnabled)}
+        disabled={isRequesting}
+        className={`relative w-11 h-6 rounded-full transition-colors ${
+          pushEnabled ? "bg-brand-green" : "bg-gray-300"
+        } ${isRequesting ? "opacity-50" : ""}`}
+        role="switch"
+        aria-checked={pushEnabled}
+      >
+        <span
+          className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+            pushEnabled ? "start-[22px]" : "start-0.5"
+          }`}
+        />
+      </button>
+    </div>
   );
 }
 
