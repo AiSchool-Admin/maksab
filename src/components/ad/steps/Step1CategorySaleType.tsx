@@ -35,20 +35,20 @@ export default function Step1CategorySaleType({
       {/* Category grid */}
       <div>
         <h3 className="text-sm font-bold text-dark mb-3">اختار القسم</h3>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-y-4 gap-x-2">
           {categoriesConfig.map((cat) => (
             <button
               key={cat.id}
               type="button"
               onClick={() => onCategoryChange(cat.id)}
-              className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all ${
+              className={`flex flex-col items-center gap-2 p-2 rounded-2xl transition-all ${
                 categoryId === cat.id
-                  ? "border-brand-green bg-brand-green-light"
-                  : "border-transparent bg-gray-light hover:bg-gray-200"
+                  ? "bg-brand-green-light ring-2 ring-brand-green"
+                  : "hover:bg-gray-light/60"
               }`}
             >
               <CategoryIcon slug={cat.slug} size="sm" />
-              <span className="text-xs font-semibold text-dark leading-tight text-center">
+              <span className="text-[11px] font-semibold text-dark leading-tight text-center line-clamp-1 max-w-[72px]">
                 {cat.name}
               </span>
             </button>

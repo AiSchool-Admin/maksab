@@ -46,7 +46,7 @@ const categories = [
   { name: "موبايلات", slug: "phones" },
   { name: "موضة", slug: "fashion" },
   { name: "خردة", slug: "scrap" },
-  { name: "ذهب", slug: "gold" },
+  { name: "ذهب وفضة", slug: "gold" },
   { name: "فاخرة", slug: "luxury" },
   { name: "أجهزة", slug: "appliances" },
   { name: "أثاث", slug: "furniture" },
@@ -217,7 +217,7 @@ export default function HomePage() {
             <MapPin size={12} />
             خريطة
           </Link>
-          {["سيارات", "موبايلات", "عقارات", "ذهب", "أثاث", "خردة"].map((term) => (
+          {["سيارات", "موبايلات", "عقارات", "ذهب وفضة", "أثاث", "خردة"].map((term) => (
             <Link
               key={term}
               href={`/search?q=${encodeURIComponent(term)}`}
@@ -231,17 +231,17 @@ export default function HomePage() {
 
       <PullToRefresh onRefresh={handlePullRefresh}>
       {/* ─── 2. Categories Grid ────────────────────────────────── */}
-      <section className="px-4 pb-5">
-        <h2 className="text-sm font-bold text-dark mb-3">الأقسام</h2>
-        <div className="grid grid-cols-3 gap-3">
+      <section className="px-4 pb-6">
+        <h2 className="text-sm font-bold text-dark mb-4">الأقسام</h2>
+        <div className="grid grid-cols-4 gap-y-5 gap-x-2">
           {categories.map((cat) => (
             <Link
               key={cat.slug}
               href={`/search?category=${cat.slug}`}
-              className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-gray-light/60 active:scale-[0.97] transition-all"
+              className="flex flex-col items-center gap-2 group"
             >
               <CategoryIcon slug={cat.slug} size="md" />
-              <span className="text-xs font-bold text-dark leading-tight text-center">
+              <span className="text-[11px] font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1 max-w-[76px]">
                 {cat.name}
               </span>
             </Link>

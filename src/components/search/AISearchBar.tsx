@@ -540,7 +540,7 @@ function getCategoryIcon(id: string): string {
 function getCategoryName(id: string): string {
   const names: Record<string, string> = {
     cars: "سيارات", real_estate: "عقارات", phones: "موبايلات", fashion: "موضة",
-    scrap: "خردة", gold: "ذهب", luxury: "فاخرة", appliances: "أجهزة",
+    scrap: "خردة", gold: "ذهب وفضة", luxury: "فاخرة", appliances: "أجهزة",
     furniture: "أثاث", hobbies: "هوايات", tools: "عدد", services: "خدمات",
   };
   return names[id] || id;
