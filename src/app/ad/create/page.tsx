@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, PlusCircle, Home, Camera, Mic, Video, PenLin
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { getSessionToken } from "@/lib/supabase/auth";
 import { getCategoryById } from "@/lib/categories/categories-config";
 import {
   generateAutoTitle,
@@ -552,7 +553,7 @@ export default function CreateAdPage() {
       const res = await fetch("/api/ads/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: authedUser.id, ad_data: adData }),
+        body: JSON.stringify({ user_id: authedUser.id, session_token: getSessionToken(), ad_data: adData }),
       });
 
       const result = await res.json();

@@ -3,10 +3,10 @@
  *
  * Applies admin schema changes (adds is_admin column).
  * Safe to call multiple times (idempotent).
- * Requires SUPABASE_SERVICE_ROLE_KEY.
+ * Requires SUPABASE_SERVICE_ROLE_KEY + ADMIN_SETUP_SECRET header.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 function getServiceClient() {
@@ -18,8 +18,22 @@ function getServiceClient() {
   });
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // Require either ADMIN_SETUP_SECRET header or that the request comes from localhost
+    const setupSecret = process.env.ADMIN_SETUP_SECRET;
+    const providedSecret = req.headers.get("x-setup-secret");
+    const isLocalhost = req.headers.get("host")?.startsWith("localhost");
+
+    if (!isLocalhost) {
+      if (!setupSecret || !providedSecret || setupSecret !== providedSecret) {
+        return NextResponse.json(
+          { error: "غير مصرح. الـ endpoint ده محمي." },
+          { status: 403 },
+        );
+      }
+    }
+
     const sb = getServiceClient();
 
     // Add is_admin column (IF NOT EXISTS handled by catching error)

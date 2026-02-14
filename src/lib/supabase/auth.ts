@@ -13,6 +13,7 @@ import { supabase } from "./client";
  */
 
 const SESSION_KEY = "maksab_user_session";
+const SESSION_TOKEN_KEY = "maksab_session_token";
 
 export type UserProfile = {
   id: string;
@@ -59,10 +60,23 @@ function loadSession(): UserProfile | null {
   }
 }
 
+function saveSessionToken(token: string): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(SESSION_TOKEN_KEY, token);
+  }
+}
+
 function clearSession(): void {
   if (typeof window !== "undefined") {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_TOKEN_KEY);
   }
+}
+
+/** Get the server-signed session token for authenticated API requests */
+export function getSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(SESSION_TOKEN_KEY);
 }
 
 // ── Send OTP (Custom API — Free) ────────────────────────────────────
@@ -124,6 +138,11 @@ export async function verifyOTP(
     // Save session to localStorage for persistence
     saveSession(userProfile);
 
+    // Save server-signed session token for authenticated API requests
+    if (data.session_token) {
+      saveSessionToken(data.session_token);
+    }
+
     // Try to establish a Supabase auth session (for RLS queries)
     if (data.magic_link_token) {
       try {
@@ -133,7 +152,6 @@ export async function verifyOTP(
         });
       } catch {
         // Session creation failed — user profile still works via localStorage
-        // Ad creation uses server-side API with service role key as fallback
       }
     }
 
@@ -172,6 +190,11 @@ export async function verifyOTPViaFirebase(
 
     // Save session to localStorage for persistence
     saveSession(userProfile);
+
+    // Save server-signed session token for authenticated API requests
+    if (data.session_token) {
+      saveSessionToken(data.session_token);
+    }
 
     // Try to establish a Supabase auth session (for RLS queries)
     if (data.magic_link_token) {

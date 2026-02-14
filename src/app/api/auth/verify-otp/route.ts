@@ -14,11 +14,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "crypto";
+import { generateSessionToken } from "@/lib/auth/session-token";
 
 function getSecret(): string {
-  const secret = process.env.OTP_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.OTP_SECRET;
   if (!secret) {
-    throw new Error("Missing OTP_SECRET or SUPABASE_SERVICE_ROLE_KEY");
+    if (process.env.NODE_ENV === "development") {
+      return "maksab-dev-otp-secret-not-for-production";
+    }
+    throw new Error("Missing OTP_SECRET environment variable. Set it in production.");
   }
   return secret;
 }
@@ -107,8 +111,11 @@ export async function POST(req: NextRequest) {
         email: virtualEmail,
       });
 
+      const firebaseSessionToken = generateSessionToken(profile.id);
+
       return NextResponse.json({
         user: profile,
+        session_token: firebaseSessionToken,
         magic_link_token: properties?.hashed_token || null,
         virtual_email: virtualEmail,
       });
@@ -175,8 +182,11 @@ export async function POST(req: NextRequest) {
       email: virtualEmail,
     });
 
+    const sessionToken = generateSessionToken(profile.id);
+
     return NextResponse.json({
       user: profile,
+      session_token: sessionToken,
       magic_link_token: properties?.hashed_token || null,
       virtual_email: virtualEmail,
     });

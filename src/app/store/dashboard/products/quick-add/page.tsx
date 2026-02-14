@@ -19,6 +19,7 @@ import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import DynamicCategoryForm from "@/components/ad/DynamicCategoryForm";
 import { useAuthStore } from "@/stores/auth-store";
+import { getSessionToken } from "@/lib/supabase/auth";
 import { getStoreByUserId } from "@/lib/stores/store-service";
 import {
   getCategoryById,
@@ -293,7 +294,7 @@ export default function QuickAddProductPage() {
         const res = await fetch("/api/ads/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: user.id, ad_data: adData }),
+          body: JSON.stringify({ user_id: user.id, session_token: getSessionToken(), ad_data: adData }),
         });
 
         const result = await res.json();

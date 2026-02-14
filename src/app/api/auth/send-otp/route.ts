@@ -20,9 +20,14 @@ const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
 
 function getSecret(): string {
-  const secret = process.env.OTP_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.OTP_SECRET;
   if (!secret) {
-    throw new Error("Missing OTP_SECRET or SUPABASE_SERVICE_ROLE_KEY");
+    // SECURITY: Do not fall back to SUPABASE_SERVICE_ROLE_KEY — it's a separate secret.
+    // In development, use a hardcoded dev-only secret.
+    if (process.env.NODE_ENV === "development") {
+      return "maksab-dev-otp-secret-not-for-production";
+    }
+    throw new Error("Missing OTP_SECRET environment variable. Set it in production.");
   }
   return secret;
 }

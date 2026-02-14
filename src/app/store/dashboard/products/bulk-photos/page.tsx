@@ -15,6 +15,7 @@ import {
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import { useAuthStore } from "@/stores/auth-store";
+import { getSessionToken } from "@/lib/supabase/auth";
 import { getStoreByUserId } from "@/lib/stores/store-service";
 import {
   getCategoryById,
@@ -183,6 +184,7 @@ export default function BulkPhotosPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             user_id: user.id,
+            session_token: getSessionToken(),
             ad_data: {
               category_id: categoryId,
               subcategory_id: subcategoryId || null,
