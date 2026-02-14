@@ -42,6 +42,20 @@ export const metadata: Metadata = {
       "سوق إلكتروني مصري لبيع وشراء وتبديل السلع الجديدة والمستعملة",
     locale: "ar_EG",
     type: "website",
+    siteName: "مكسب",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "مكسب — كل صفقة مكسب",
+    description:
+      "سوق إلكتروني مصري لبيع وشراء وتبديل السلع الجديدة والمستعملة",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: process.env.NEXT_PUBLIC_SITE_URL || "https://maksab.app",
   },
 };
 
