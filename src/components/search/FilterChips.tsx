@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, X } from "lucide-react";
-import { categoriesConfig } from "@/lib/categories/categories-config";
+import { categoriesConfig, getCategoryById } from "@/lib/categories/categories-config";
 import { governorates, citiesByGovernorate } from "@/lib/data/governorates";
 
 /* ── Types ──────────────────────────────────────────────────────────── */
@@ -21,6 +21,9 @@ export interface ActiveFilters {
 interface FilterChipsProps {
   filters: ActiveFilters;
   onChange: (filters: ActiveFilters) => void;
+  /** Category-specific JSONB field filters (brand, rooms, etc.) */
+  categoryFilters?: Record<string, string>;
+  onCategoryFilterChange?: (fieldId: string, value: string | undefined) => void;
 }
 
 /* ── Filter chip dropdown component ─────────────────────────────────── */
@@ -110,7 +113,13 @@ const priceRanges = [
 
 /* ── Main component ─────────────────────────────────────────────────── */
 
-export default function FilterChips({ filters, onChange }: FilterChipsProps) {
+export default function FilterChips({
+  filters,
+  onChange,
+  categoryFilters = {},
+  onCategoryFilterChange,
+}: FilterChipsProps) {
+  const activeCategoryFilterCount = Object.keys(categoryFilters).length;
   const activeCount = [
     filters.category,
     filters.saleType,
@@ -118,7 +127,7 @@ export default function FilterChips({ filters, onChange }: FilterChipsProps) {
     filters.governorate,
     filters.city,
     filters.condition,
-  ].filter(Boolean).length;
+  ].filter(Boolean).length + activeCategoryFilterCount;
 
   const selectedCat = filters.category
     ? categoriesConfig.find((c) => c.slug === filters.category || c.id === filters.category)
@@ -129,181 +138,225 @@ export default function FilterChips({ filters, onChange }: FilterChipsProps) {
     ? citiesByGovernorate[filters.governorate] || []
     : [];
 
+  // Get category-specific filterable fields
+  const catConfig = filters.category ? getCategoryById(filters.category) : null;
+  const filterableFields = catConfig
+    ? catConfig.fields.filter(
+        (f) => f.type === "select" && f.options && f.options.length > 0,
+      )
+    : [];
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-        {/* Clear all filters */}
-        {activeCount > 0 && (
-          <button
-            type="button"
-            onClick={() => onChange({})}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-error/10 text-error whitespace-nowrap flex-shrink-0"
-          >
-            <X size={12} />
-            مسح الكل
-          </button>
-        )}
-
-        {/* Category filter */}
-        <ChipDropdown
-          label={selectedCat ? `${selectedCat.icon} ${selectedCat.name}` : "القسم"}
-          isActive={!!filters.category}
+    <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
+      {/* Clear all filters */}
+      {activeCount > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            onChange({});
+            // Clear category-specific filters too
+            if (onCategoryFilterChange) {
+              Object.keys(categoryFilters).forEach((key) =>
+                onCategoryFilterChange(key, undefined),
+              );
+            }
+          }}
+          className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-error/10 text-error whitespace-nowrap flex-shrink-0"
         >
-          <OptionButton
-            label="الكل"
-            selected={!filters.category}
-            onClick={() => onChange({ ...filters, category: undefined, subcategory: undefined, condition: undefined })}
-          />
-          {categoriesConfig.map((cat) => (
-            <OptionButton
-              key={cat.id}
-              label={`${cat.icon} ${cat.name}`}
-              selected={filters.category === cat.id || filters.category === cat.slug}
-              onClick={() => onChange({ ...filters, category: cat.id, subcategory: undefined })}
-            />
-          ))}
-        </ChipDropdown>
+          <X size={12} />
+          مسح ({activeCount})
+        </button>
+      )}
 
-        {/* Sale type filter */}
-        <ChipDropdown
-          label={
-            filters.saleType === "cash"
-              ? "💰 للبيع"
-              : filters.saleType === "auction"
-                ? "🔥 مزاد"
-                : filters.saleType === "exchange"
-                  ? "🔄 للتبديل"
-                  : "نوع البيع"
+      {/* Category filter */}
+      <ChipDropdown
+        label={selectedCat ? `${selectedCat.icon} ${selectedCat.name}` : "القسم"}
+        isActive={!!filters.category}
+      >
+        <OptionButton
+          label="الكل"
+          selected={!filters.category}
+          onClick={() => onChange({ ...filters, category: undefined, subcategory: undefined, condition: undefined })}
+        />
+        {categoriesConfig.map((cat) => (
+          <OptionButton
+            key={cat.id}
+            label={`${cat.icon} ${cat.name}`}
+            selected={filters.category === cat.id || filters.category === cat.slug}
+            onClick={() => onChange({ ...filters, category: cat.id, subcategory: undefined })}
+          />
+        ))}
+      </ChipDropdown>
+
+      {/* Sale type filter */}
+      <ChipDropdown
+        label={
+          filters.saleType === "cash"
+            ? "💰 للبيع"
+            : filters.saleType === "auction"
+              ? "🔥 مزاد"
+              : filters.saleType === "exchange"
+                ? "🔄 للتبديل"
+                : "نوع البيع"
+        }
+        isActive={!!filters.saleType}
+      >
+        <OptionButton
+          label="الكل"
+          selected={!filters.saleType}
+          onClick={() => onChange({ ...filters, saleType: undefined })}
+        />
+        <OptionButton
+          label="💰 للبيع"
+          selected={filters.saleType === "cash"}
+          onClick={() => onChange({ ...filters, saleType: "cash" })}
+        />
+        <OptionButton
+          label="🔥 مزاد"
+          selected={filters.saleType === "auction"}
+          onClick={() => onChange({ ...filters, saleType: "auction" })}
+        />
+        <OptionButton
+          label="🔄 للتبديل"
+          selected={filters.saleType === "exchange"}
+          onClick={() => onChange({ ...filters, saleType: "exchange" })}
+        />
+      </ChipDropdown>
+
+      {/* Price range filter */}
+      <ChipDropdown
+        label={
+          filters.priceMin != null || filters.priceMax != null
+            ? "السعر ✓"
+            : "السعر"
+        }
+        isActive={filters.priceMin != null || filters.priceMax != null}
+      >
+        <OptionButton
+          label="الكل"
+          selected={filters.priceMin == null && filters.priceMax == null}
+          onClick={() =>
+            onChange({ ...filters, priceMin: undefined, priceMax: undefined })
           }
-          isActive={!!filters.saleType}
-        >
+        />
+        {priceRanges.map((range) => (
           <OptionButton
-            label="الكل"
-            selected={!filters.saleType}
-            onClick={() => onChange({ ...filters, saleType: undefined })}
-          />
-          <OptionButton
-            label="💰 للبيع"
-            selected={filters.saleType === "cash"}
-            onClick={() => onChange({ ...filters, saleType: "cash" })}
-          />
-          <OptionButton
-            label="🔥 مزاد"
-            selected={filters.saleType === "auction"}
-            onClick={() => onChange({ ...filters, saleType: "auction" })}
-          />
-          <OptionButton
-            label="🔄 للتبديل"
-            selected={filters.saleType === "exchange"}
-            onClick={() => onChange({ ...filters, saleType: "exchange" })}
-          />
-        </ChipDropdown>
-
-        {/* Price range filter */}
-        <ChipDropdown
-          label={
-            filters.priceMin != null || filters.priceMax != null
-              ? "💰 السعر ✓"
-              : "السعر"
-          }
-          isActive={filters.priceMin != null || filters.priceMax != null}
-        >
-          <OptionButton
-            label="الكل"
-            selected={filters.priceMin == null && filters.priceMax == null}
+            key={range.label}
+            label={range.label}
+            selected={
+              filters.priceMin === range.min &&
+              (range.max ? filters.priceMax === range.max : !filters.priceMax)
+            }
             onClick={() =>
-              onChange({ ...filters, priceMin: undefined, priceMax: undefined })
+              onChange({
+                ...filters,
+                priceMin: range.min || undefined,
+                priceMax: range.max,
+              })
             }
           />
-          {priceRanges.map((range) => (
-            <OptionButton
-              key={range.label}
-              label={range.label}
-              selected={
-                filters.priceMin === range.min &&
-                (range.max ? filters.priceMax === range.max : !filters.priceMax)
-              }
-              onClick={() =>
-                onChange({
-                  ...filters,
-                  priceMin: range.min || undefined,
-                  priceMax: range.max,
-                })
-              }
-            />
-          ))}
-        </ChipDropdown>
+        ))}
+      </ChipDropdown>
 
-        {/* Governorate filter */}
+      {/* Governorate filter */}
+      <ChipDropdown
+        label={filters.governorate || "المحافظة"}
+        isActive={!!filters.governorate}
+      >
+        <OptionButton
+          label="كل المحافظات"
+          selected={!filters.governorate}
+          onClick={() => onChange({ ...filters, governorate: undefined, city: undefined })}
+        />
+        {governorates.map((gov) => (
+          <OptionButton
+            key={gov}
+            label={gov}
+            selected={filters.governorate === gov}
+            onClick={() => onChange({ ...filters, governorate: gov, city: undefined })}
+          />
+        ))}
+      </ChipDropdown>
+
+      {/* City filter — only visible when governorate is selected */}
+      {filters.governorate && availableCities.length > 0 && (
         <ChipDropdown
-          label={filters.governorate || "المحافظة"}
-          isActive={!!filters.governorate}
+          label={filters.city || "المدينة"}
+          isActive={!!filters.city}
         >
           <OptionButton
-            label="كل المحافظات"
-            selected={!filters.governorate}
-            onClick={() => onChange({ ...filters, governorate: undefined, city: undefined })}
+            label={`كل ${filters.governorate}`}
+            selected={!filters.city}
+            onClick={() => onChange({ ...filters, city: undefined })}
           />
-          {governorates.map((gov) => (
+          {availableCities.map((city) => (
             <OptionButton
-              key={gov}
-              label={gov}
-              selected={filters.governorate === gov}
-              onClick={() => onChange({ ...filters, governorate: gov, city: undefined })}
+              key={city}
+              label={city}
+              selected={filters.city === city}
+              onClick={() => onChange({ ...filters, city })}
             />
           ))}
         </ChipDropdown>
+      )}
 
-        {/* City filter — only visible when governorate is selected */}
-        {filters.governorate && availableCities.length > 0 && (
+      {/* Condition filter */}
+      <ChipDropdown
+        label={
+          filters.condition === "new"
+            ? "جديد"
+            : filters.condition === "used"
+              ? "مستعمل"
+              : "الحالة"
+        }
+        isActive={!!filters.condition}
+      >
+        <OptionButton
+          label="الكل"
+          selected={!filters.condition}
+          onClick={() => onChange({ ...filters, condition: undefined })}
+        />
+        <OptionButton
+          label="جديد"
+          selected={filters.condition === "new"}
+          onClick={() => onChange({ ...filters, condition: "new" })}
+        />
+        <OptionButton
+          label="مستعمل"
+          selected={filters.condition === "used"}
+          onClick={() => onChange({ ...filters, condition: "used" })}
+        />
+      </ChipDropdown>
+
+      {/* ── Category-specific filters (inline, same row) ── */}
+      {onCategoryFilterChange && filterableFields.map((field) => {
+        const activeValue = categoryFilters[field.id];
+        const activeOption = activeValue
+          ? field.options?.find((o) => o.value === activeValue)
+          : null;
+
+        return (
           <ChipDropdown
-            label={filters.city || "المدينة"}
-            isActive={!!filters.city}
+            key={field.id}
+            label={activeOption ? activeOption.label : field.label}
+            isActive={!!activeValue}
           >
             <OptionButton
-              label={`كل ${filters.governorate}`}
-              selected={!filters.city}
-              onClick={() => onChange({ ...filters, city: undefined })}
+              label={`كل ${field.label}`}
+              selected={!activeValue}
+              onClick={() => onCategoryFilterChange(field.id, undefined)}
             />
-            {availableCities.map((city) => (
+            {field.options?.map((opt) => (
               <OptionButton
-                key={city}
-                label={city}
-                selected={filters.city === city}
-                onClick={() => onChange({ ...filters, city })}
+                key={opt.value}
+                label={opt.label}
+                selected={activeValue === opt.value}
+                onClick={() => onCategoryFilterChange(field.id, opt.value)}
               />
             ))}
           </ChipDropdown>
-        )}
-
-        {/* Condition filter */}
-        <ChipDropdown
-          label={
-            filters.condition === "new"
-              ? "جديد"
-              : filters.condition === "used"
-                ? "مستعمل"
-                : "الحالة"
-          }
-          isActive={!!filters.condition}
-        >
-          <OptionButton
-            label="الكل"
-            selected={!filters.condition}
-            onClick={() => onChange({ ...filters, condition: undefined })}
-          />
-          <OptionButton
-            label="جديد"
-            selected={filters.condition === "new"}
-            onClick={() => onChange({ ...filters, condition: "new" })}
-          />
-          <OptionButton
-            label="مستعمل"
-            selected={filters.condition === "used"}
-            onClick={() => onChange({ ...filters, condition: "used" })}
-          />
-        </ChipDropdown>
-      </div>
+        );
+      })}
     </div>
   );
 }

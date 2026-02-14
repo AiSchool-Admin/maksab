@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, Loader2, SearchX, Sparkles, Brain } from "lucide-react";
+import { ChevronRight, Loader2, SearchX, Brain } from "lucide-react";
 import AISearchBar from "@/components/search/AISearchBar";
 import FilterChips, {
   type ActiveFilters,
 } from "@/components/search/FilterChips";
-import CategoryFilters from "@/components/search/CategoryFilters";
 import SortOptions from "@/components/search/SortOptions";
 import AdCard from "@/components/ad/AdCard";
 import WishList from "@/components/search/WishList";
@@ -16,7 +15,7 @@ import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import { saveRecentSearch } from "@/lib/search/recent-searches";
-import { aiParseQuery, generateRefinements, generateEmptySuggestions } from "@/lib/search/ai-query-engine";
+import { aiParseQuery, generateEmptySuggestions } from "@/lib/search/ai-query-engine";
 import { createWish } from "@/lib/search/wish-store";
 import {
   searchAds,
@@ -34,7 +33,7 @@ import {
   getCategoryBySlug,
 } from "@/lib/categories/categories-config";
 import type { AdSummary } from "@/lib/ad-data";
-import type { AIParsedQuery, SearchRefinement, EmptySuggestion, SearchWish } from "@/lib/search/ai-search-types";
+import type { AIParsedQuery, EmptySuggestion, SearchWish } from "@/lib/search/ai-search-types";
 
 /** Resolve a category param (could be id or slug) to an id */
 function resolveCategoryId(param: string): string {
@@ -78,7 +77,6 @@ function SearchPageInner() {
 
   // AI state
   const [parsedQuery, setParsedQuery] = useState<AIParsedQuery | null>(null);
-  const [refinements, setRefinements] = useState<SearchRefinement[]>([]);
   const [emptySuggestions, setEmptySuggestions] = useState<EmptySuggestion[]>([]);
   const [wishRefreshTrigger, setWishRefreshTrigger] = useState(0);
   const [showInterpretation, setShowInterpretation] = useState(false);
@@ -313,9 +311,6 @@ function SearchPageInner() {
       }
       setCategoryFilters(newCategoryFilters);
 
-      // Generate refinements
-      setRefinements(generateRefinements(parsed));
-
       // Force search re-execution even if filters didn't change
       setSearchTrigger((n) => n + 1);
 
@@ -359,7 +354,6 @@ function SearchPageInner() {
         governorate: wish.filters.governorate,
       };
       setFilters(newFilters);
-      setRefinements(generateRefinements(parsed));
       setSearchTrigger((n) => n + 1);
     },
     [],
@@ -400,35 +394,6 @@ function SearchPageInner() {
       });
     },
     [],
-  );
-
-  /* ── Handle refinement click ───────────────────────────────────────── */
-  const handleRefinementClick = useCallback(
-    (ref: SearchRefinement) => {
-      const newFilters = { ...filters };
-      switch (ref.type) {
-        case "category":
-          newFilters.category = ref.value;
-          break;
-        case "location":
-          newFilters.governorate = ref.value;
-          break;
-        case "price": {
-          const [min, max] = ref.value.split("-").map(Number);
-          newFilters.priceMin = min;
-          newFilters.priceMax = max;
-          break;
-        }
-        case "saleType":
-          newFilters.saleType = ref.value as ActiveFilters["saleType"];
-          break;
-        case "condition":
-          newFilters.condition = ref.value;
-          break;
-      }
-      setFilters(newFilters);
-    },
-    [filters],
   );
 
   /* ── Search trigger counter — increments to force re-execution ────── */
@@ -526,18 +491,14 @@ function SearchPageInner() {
           </div>
         )}
 
-        {/* Filter chips */}
-        <div className="px-4 pb-3 space-y-2">
-          <FilterChips filters={filters} onChange={handleFilterChange} />
-
-          {/* Category-specific filters */}
-          {filters.category && (
-            <CategoryFilters
-              categoryId={filters.category}
-              activeFilters={categoryFilters}
-              onChange={handleCategoryFilterChange}
-            />
-          )}
+        {/* Unified filter bar — all filters in one scrollable row */}
+        <div className="px-4 pb-3">
+          <FilterChips
+            filters={filters}
+            onChange={handleFilterChange}
+            categoryFilters={categoryFilters}
+            onCategoryFilterChange={handleCategoryFilterChange}
+          />
         </div>
       </header>
 
@@ -546,29 +507,6 @@ function SearchPageInner() {
 
         {/* "دوّر لي" Wish List */}
         <WishList onSearchWish={handleSearchWish} refreshTrigger={wishRefreshTrigger} />
-
-        {/* AI Refinement chips (when results shown) */}
-        {!isLoading && hasSearched && refinements.length > 0 && (
-          <div>
-            <div className="flex items-center gap-1 mb-2">
-              <Sparkles size={12} className="text-brand-green" />
-              <span className="text-[10px] font-bold text-gray-text">حدّد بحثك أكتر</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {refinements.map((ref, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => handleRefinementClick(ref)}
-                  className="text-[10px] bg-white border border-gray-200 px-2.5 py-1.5 rounded-full hover:bg-brand-green-light hover:border-brand-green hover:text-brand-green transition-colors flex items-center gap-1"
-                >
-                  <span>{ref.icon}</span>
-                  <span>{ref.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Results header: count + sort + search method */}
         {hasSearched && !isLoading && !isImageSearching && (
