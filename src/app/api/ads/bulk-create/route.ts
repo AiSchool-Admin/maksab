@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -35,13 +36,29 @@ interface BulkAdItem {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { user_id, ads, store_id } = body as {
-      user_id: string;
+    const { user_id: bodyUserId, session_token, ads, store_id } = body as {
+      user_id?: string;
+      session_token?: string;
       ads: BulkAdItem[];
       store_id?: string;
     };
 
-    if (!user_id || !ads || !Array.isArray(ads) || ads.length === 0) {
+    // ── Authenticate via session token ──
+    let user_id: string;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      user_id = tokenResult.userId;
+      if (bodyUserId && bodyUserId !== user_id) {
+        return NextResponse.json({ error: "بيانات المصادقة مش متطابقة" }, { status: 403 });
+      }
+    } else {
+      return NextResponse.json({ error: "مطلوب توكن الجلسة. سجل خروج وادخل تاني" }, { status: 401 });
+    }
+
+    if (!ads || !Array.isArray(ads) || ads.length === 0) {
       return NextResponse.json(
         { error: "بيانات ناقصة" },
         { status: 400 },

@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 const MAX_COMMENT_LENGTH = 500;
 const RATE_LIMIT_MAX = 5;
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleAddComment(body: Record<string, unknown>) {
-  const { ad_id, content, user_id } = body;
+  const { ad_id, content, user_id, session_token } = body;
 
   if (!ad_id || !content) {
     return NextResponse.json(
@@ -52,7 +53,18 @@ async function handleAddComment(body: Record<string, unknown>) {
     );
   }
 
-  const resolvedUserId = (user_id as string) || null;
+  // Authenticate via session token
+  let resolvedUserId: string | null = null;
+  if (session_token && typeof session_token === "string") {
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    resolvedUserId = tokenResult.userId;
+  } else if (user_id && typeof user_id === "string") {
+    resolvedUserId = user_id;
+  }
+
   if (!resolvedUserId) {
     return NextResponse.json(
       { error: "لازم تسجل دخول الأول" },
@@ -60,7 +72,15 @@ async function handleAddComment(body: Record<string, unknown>) {
     );
   }
 
-  const trimmed = (content as string).trim();
+  // Sanitize content: strip HTML tags to prevent XSS
+  const sanitized = (content as string)
+    .replace(/<[^>]*>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .trim();
+
+  const trimmed = sanitized;
   if (!trimmed) {
     return NextResponse.json(
       { error: "اكتب تعليق الأول" },
@@ -160,7 +180,7 @@ async function handleAddComment(body: Record<string, unknown>) {
 }
 
 async function handleToggleLike(body: Record<string, unknown>) {
-  const { comment_id, user_id } = body;
+  const { comment_id, user_id, session_token } = body;
 
   if (!comment_id) {
     return NextResponse.json(
@@ -169,7 +189,18 @@ async function handleToggleLike(body: Record<string, unknown>) {
     );
   }
 
-  const resolvedUserId = (user_id as string) || null;
+  // Authenticate via session token
+  let resolvedUserId: string | null = null;
+  if (session_token && typeof session_token === "string") {
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    resolvedUserId = tokenResult.userId;
+  } else if (user_id && typeof user_id === "string") {
+    resolvedUserId = user_id;
+  }
+
   if (!resolvedUserId) {
     return NextResponse.json(
       { error: "لازم تسجل دخول الأول" },

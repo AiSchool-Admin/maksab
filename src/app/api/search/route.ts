@@ -176,10 +176,22 @@ function buildFallbackQuery(
   }
 
   // Apply category-specific JSONB filters (brand, karat, storage, etc.)
+  // Whitelist of allowed category field names to prevent JSONB injection
+  const ALLOWED_CATEGORY_FIELDS = new Set([
+    "brand", "model", "year", "mileage", "color", "fuel", "transmission",
+    "engine_cc", "condition", "licensed", "type", "area", "rooms", "floor",
+    "bathrooms", "finishing", "elevator", "garage", "garden", "facing",
+    "furnished", "storage", "ram", "battery_health", "with_box", "with_warranty",
+    "size", "material", "karat", "weight", "ring_size", "has_gemstone",
+    "certificate", "authentic", "purchase_year", "with_receipt", "capacity",
+    "pieces", "dimensions", "power", "quantity", "service_type", "pricing",
+    "experience", "service_area", "working_days", "working_hours",
+  ]);
+
   if (body.categoryFilters && typeof body.categoryFilters === "object") {
     const cf = body.categoryFilters as Record<string, string>;
     for (const [key, value] of Object.entries(cf)) {
-      if (key && value && typeof value === "string" && /^[a-z_]+$/i.test(key)) {
+      if (key && value && typeof value === "string" && ALLOWED_CATEGORY_FIELDS.has(key)) {
         q = q.eq(`category_fields->>${key}`, value);
       }
     }

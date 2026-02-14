@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,9 +19,25 @@ function getServiceClient() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { user_id, ad_id } = await req.json();
+    const body = await req.json();
+    const { user_id: bodyUserId, session_token, ad_id } = body;
 
-    if (!user_id || !ad_id) {
+    // ── Authenticate via session token ──
+    let user_id: string;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      user_id = tokenResult.userId;
+      if (bodyUserId && bodyUserId !== user_id) {
+        return NextResponse.json({ error: "بيانات المصادقة مش متطابقة" }, { status: 403 });
+      }
+    } else {
+      return NextResponse.json({ error: "مطلوب توكن الجلسة. سجل خروج وادخل تاني" }, { status: 401 });
+    }
+
+    if (!ad_id) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
 

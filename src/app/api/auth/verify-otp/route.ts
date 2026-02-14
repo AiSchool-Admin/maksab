@@ -93,6 +93,15 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Validate phone format after Firebase verification
+      const phoneClean = firebasePhone.replace(/^\+2/, "").replace(/\D/g, "");
+      if (!/^01[0125]\d{8}$/.test(phoneClean)) {
+        return NextResponse.json(
+          { error: "رقم الموبايل من Firebase مش صالح" },
+          { status: 400 },
+        );
+      }
+
       const supabase = getServiceClient();
       const profile = await findOrCreateUser(supabase, firebasePhone, displayName);
 

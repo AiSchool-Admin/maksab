@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       .from("ads")
       .select("*")
       .eq("id", ad_id)
-      .single();
+      .maybeSingle();
 
     if (adError || !adData) {
       return NextResponse.json(
@@ -127,19 +127,39 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert bid
-    const { error: bidError } = await client
+    const { data: insertedBid, error: bidError } = await client
       .from("auction_bids")
       .insert({
         ad_id,
         bidder_id,
         amount: bidAmount,
-      });
+      })
+      .select("id")
+      .maybeSingle();
 
-    if (bidError) {
+    if (bidError || !insertedBid) {
       console.error("Bid insert error:", bidError);
       return NextResponse.json(
         { error: "حصل مشكلة في المزايدة. جرب تاني" },
         { status: 500 },
+      );
+    }
+
+    // Optimistic lock: verify our bid is still valid (race condition check)
+    const { data: verifyBid } = await client
+      .from("auction_bids")
+      .select("id, amount")
+      .eq("ad_id", ad_id)
+      .gt("amount", bidAmount)
+      .limit(1)
+      .maybeSingle();
+
+    if (verifyBid) {
+      // Someone placed a higher bid between our check and insert — remove ours
+      await client.from("auction_bids").delete().eq("id", (insertedBid as Record<string, unknown>).id);
+      return NextResponse.json(
+        { error: `حد زايد أكتر منك. الحد الأدنى دلوقتي ${(Number((verifyBid as Record<string, unknown>).amount) + minIncrement).toLocaleString("en-US")} جنيه`, min_next_bid: Number((verifyBid as Record<string, unknown>).amount) + minIncrement },
+        { status: 409 },
       );
     }
 
@@ -212,7 +232,7 @@ export async function POST(request: NextRequest) {
       .from("ads")
       .select("auction_ends_at")
       .eq("id", ad_id)
-      .single();
+      .maybeSingle();
 
     return NextResponse.json({
       success: true,

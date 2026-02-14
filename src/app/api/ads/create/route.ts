@@ -215,8 +215,12 @@ export async function POST(req: NextRequest) {
       auction_buy_now_price: ad_data.auction_buy_now_price ?? null,
       auction_duration_hours: ad_data.auction_duration_hours ?? null,
       auction_min_increment: ad_data.auction_min_increment ?? null,
-      auction_ends_at: ad_data.auction_ends_at ?? null,
-      auction_status: ad_data.auction_status ?? null,
+      auction_ends_at:
+        ad_data.auction_ends_at ??
+        (ad_data.sale_type === "auction" && ad_data.auction_duration_hours
+          ? new Date(Date.now() + ad_data.auction_duration_hours * 3600_000).toISOString()
+          : null),
+      auction_status: ad_data.sale_type === "auction" ? "active" : null,
       // Exchange
       exchange_description: ad_data.exchange_description ?? null,
       exchange_accepts_price_diff: ad_data.exchange_accepts_price_diff ?? false,

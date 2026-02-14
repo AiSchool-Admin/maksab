@@ -459,7 +459,8 @@ async function matchNewAdsToBuyers(): Promise<void> {
 
       for (const signal of signals) {
         const userId = signal.user_id as string;
-        const data = (signal.signal_data || {}) as Record<string, unknown>;
+        if (!userId) continue;
+        const data = (signal.signal_data ?? {}) as Record<string, unknown>;
         const existing = userScores.get(userId) || { score: 0, reason: "" };
 
         let matchScore = signal.weight as number;
@@ -587,9 +588,8 @@ async function checkPriceDrops(): Promise<void> {
 
       if (!oldSignals || oldSignals.length === 0) continue;
 
-      const oldPrice = Number(
-        (oldSignals[0].signal_data as Record<string, unknown>)?.price,
-      );
+      const signalData = oldSignals[0]?.signal_data as Record<string, unknown> | null;
+      const oldPrice = Number(signalData?.price);
       const newPrice = Number(ad.price);
 
       // Only notify if price actually dropped by at least 5%

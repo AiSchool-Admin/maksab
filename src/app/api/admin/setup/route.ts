@@ -20,18 +20,15 @@ function getServiceClient() {
 
 export async function GET(req: NextRequest) {
   try {
-    // Require either ADMIN_SETUP_SECRET header or that the request comes from localhost
+    // Always require ADMIN_SETUP_SECRET — host header can be spoofed
     const setupSecret = process.env.ADMIN_SETUP_SECRET;
     const providedSecret = req.headers.get("x-setup-secret");
-    const isLocalhost = req.headers.get("host")?.startsWith("localhost");
 
-    if (!isLocalhost) {
-      if (!setupSecret || !providedSecret || setupSecret !== providedSecret) {
-        return NextResponse.json(
-          { error: "غير مصرح. الـ endpoint ده محمي." },
-          { status: 403 },
-        );
-      }
+    if (!setupSecret || !providedSecret || setupSecret !== providedSecret) {
+      return NextResponse.json(
+        { error: "غير مصرح. الـ endpoint ده محمي." },
+        { status: 403 },
+      );
     }
 
     const sb = getServiceClient();
