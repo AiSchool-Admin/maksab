@@ -155,6 +155,8 @@ export interface CategoryConfig {
   name: string;
   icon: string;
   slug: string;
+  /** Default placeholder image emoji for ads without photos */
+  placeholderImage?: string;
   subcategories: Subcategory[];
   fields: CategoryField[];
   requiredFields: string[];

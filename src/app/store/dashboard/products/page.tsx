@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   Camera,
   Loader2,
+  Rocket,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { getStoreByUserId, getStoreProductsForDashboard } from "@/lib/stores/store-service";
@@ -214,11 +215,11 @@ export default function DashboardProductsPage() {
         </div>
         <div className="flex items-center gap-1.5">
           <Link
-            href="/store/dashboard/products/quick-add"
+            href="/store/dashboard/products/rapid-entry"
             className="flex items-center gap-1 bg-brand-green text-white text-xs font-bold px-2.5 py-2 rounded-xl"
           >
-            <Zap size={13} />
-            سريعة
+            <Rocket size={13} />
+            إدخال سريع
           </Link>
           <Link
             href="/store/dashboard/products/bulk-photos"

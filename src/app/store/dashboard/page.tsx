@@ -18,6 +18,7 @@ import {
   Zap,
   Camera,
   FileSpreadsheet,
+  Rocket,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -236,11 +237,18 @@ export default function StoreDashboardPage() {
       {/* Quick actions */}
       <div className="px-4 mt-4 space-y-2">
         <Link
+          href="/store/dashboard/products/rapid-entry"
+          className="flex items-center justify-center gap-2 bg-brand-green text-white text-sm font-bold py-3.5 rounded-xl hover:bg-brand-green-dark transition-colors w-full shadow-lg shadow-brand-green/20"
+        >
+          <Rocket size={18} />
+          إدخال سريع — 60 ثانية
+        </Link>
+        <Link
           href="/store/dashboard/products/quick-add"
-          className="flex items-center justify-center gap-2 bg-brand-green text-white text-sm font-bold py-3 rounded-xl hover:bg-brand-green-dark transition-colors w-full"
+          className="flex items-center justify-center gap-2 bg-white text-brand-green text-sm font-bold py-3 rounded-xl border-2 border-brand-green hover:bg-brand-green-light transition-colors w-full"
         >
           <Zap size={18} />
-          إضافة سريعة للمنتجات
+          إضافة منتج واحد
         </Link>
         <div className="grid grid-cols-2 gap-2">
           <Link
