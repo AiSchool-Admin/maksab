@@ -139,6 +139,17 @@ export default function AdDetailPage({
       setAd(data);
       setIsFavorited(data.isFavorited);
 
+      // Track recently viewed
+      import("@/lib/hooks/useRecentlyViewed").then(({ addToRecentlyViewed }) => {
+        addToRecentlyViewed({
+          id: data.id,
+          title: data.title,
+          image: data.images?.[0] ?? null,
+          price: data.price,
+          saleType: data.saleType as "cash" | "auction" | "exchange",
+        });
+      });
+
       // Initialize auction state
       if (data.saleType === "auction" && data.auctionStartPrice) {
         const state = toAuctionState(data);

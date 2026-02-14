@@ -24,6 +24,10 @@ const ShoppingAssistantFab = dynamic(
   () => import("@/components/chat/ShoppingAssistantFab"),
   { ssr: false },
 );
+const RecentlyViewed = dynamic(
+  () => import("@/components/home/RecentlyViewed"),
+  { ssr: false },
+);
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
@@ -264,6 +268,9 @@ export default function HomePage() {
           <span className="text-gray-text text-lg">←</span>
         </Link>
       </section>
+
+      {/* ─── Recently Viewed ─────────────────────────────────── */}
+      <RecentlyViewed />
 
       {/* ─── 3. Recommended Ads (horizontal scroll) ────────────── */}
       <HorizontalSection

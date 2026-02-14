@@ -16,6 +16,7 @@ export interface MyAd {
   favoritesCount: number;
   messagesCount: number;
   createdAt: string;
+  expiresAt: string | null;
   governorate: string | null;
   city: string | null;
 }
@@ -49,6 +50,7 @@ export async function fetchMyAds(): Promise<MyAd[]> {
       createdAt: row.created_at as string,
       governorate: (row.governorate as string) ?? null,
       city: (row.city as string) ?? null,
+      expiresAt: (row.expires_at as string) ?? null,
     }));
   } catch {
     return [];
