@@ -680,13 +680,13 @@ FIREBASE_ADMIN_PRIVATE_KEY=
 ## Checklist نهائية قبل الضغط على زرار الإطلاق
 
 ```
-المرحلة 1 - حرجة:
-[ ] صفحات error.tsx + not-found.tsx + global-error.tsx
-[ ] Loading states (7 ملفات loading.tsx)
-[ ] Sentry مُعَد ومُختَبَر
-[ ] Security headers (CSP + HSTS + Permissions-Policy)
-[ ] env-check.ts يعمل عند الـ startup
-[ ] .env.local.example محدث بكل المتغيرات
+المرحلة 1 - حرجة: ✅ مكتملة
+[x] صفحات error.tsx + not-found.tsx + global-error.tsx
+[x] Loading states (7 ملفات loading.tsx)
+[x] Sentry مُعَد ومُختَبَر
+[x] Security headers (CSP + HSTS + Permissions-Policy)
+[x] env-check.ts يعمل عند الـ startup
+[x] .env.local.example محدث بكل المتغيرات
 
 المرحلة 2 - جودة:
 [ ] Jest مُعَد مع mocks
