@@ -1,10 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import AuthProvider from "@/components/auth/AuthProvider";
+import ThemeProvider from "@/components/theme/ThemeProvider";
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration";
 import UpdateBanner from "@/components/pwa/UpdateBanner";
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget";
+import { validateEnv } from "@/lib/env-check";
 import "./globals.css";
+
+// Validate environment variables at startup (server-side only)
+validateEnv();
 
 const cairo = localFont({
   src: "../fonts/Cairo-Variable.ttf",
@@ -37,6 +42,20 @@ export const metadata: Metadata = {
       "سوق إلكتروني مصري لبيع وشراء وتبديل السلع الجديدة والمستعملة",
     locale: "ar_EG",
     type: "website",
+    siteName: "مكسب",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "مكسب — كل صفقة مكسب",
+    description:
+      "سوق إلكتروني مصري لبيع وشراء وتبديل السلع الجديدة والمستعملة",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: process.env.NEXT_PUBLIC_SITE_URL || "https://maksab.app",
   },
 };
 
@@ -65,11 +84,13 @@ export default function RootLayout({
       <body className="font-cairo antialiased bg-white">
         <ServiceWorkerRegistration />
         <UpdateBanner />
-        <AuthProvider>
-          {/* Main content with bottom padding to avoid BottomNav overlap */}
-          <div className="min-h-screen pb-20">{children}</div>
-          <ChatbotWidget />
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            {/* Main content with bottom padding to avoid BottomNav overlap */}
+            <div className="min-h-screen pb-20">{children}</div>
+            <ChatbotWidget />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

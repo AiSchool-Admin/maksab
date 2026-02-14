@@ -12,7 +12,7 @@ import {
   verifyOTPViaFirebase,
   type UserProfile,
 } from "@/lib/supabase/auth";
-import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
+import { egyptianPhoneSchema, normalizeEgyptianPhone, otpSchema } from "@/lib/utils/validators";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
 
 type Step = "phone" | "otp";
@@ -32,16 +32,12 @@ export default function LoginPage() {
   );
 }
 
-/** Normalize any phone format to 11-digit Egyptian number */
+/** Normalize any phone format to 11-digit Egyptian number.
+ * Re-uses the shared normalizeEgyptianPhone for validation,
+ * but this version is used only for browser autofill normalization.
+ */
 function normalizePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  // +20XXXXXXXXXX or 20XXXXXXXXXX
-  if (digits.startsWith("20") && digits.length === 12) return digits.slice(1);
-  // 0020XXXXXXXXXX
-  if (digits.startsWith("0020") && digits.length === 14) return digits.slice(3);
-  // Already 01XXXXXXXXX
-  if (digits.startsWith("01") && digits.length === 11) return digits;
-  return digits;
+  return normalizeEgyptianPhone(raw);
 }
 
 function LoginPageContent() {
@@ -63,6 +59,10 @@ function LoginPageContent() {
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Track auto-fill animation
+  const autoFillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
 
   // If already logged in, redirect
   useEffect(() => {
@@ -117,8 +117,12 @@ function LoginPageContent() {
       return;
     }
 
+    // Normalize phone (handles 10-digit input without leading 0)
+    const normalizedPhone = normalizeEgyptianPhone(phone);
+    setPhone(normalizedPhone);
+
     setIsSubmitting(true);
-    const otpResult = await sendOTP(phone);
+    const otpResult = await sendOTP(normalizedPhone);
 
     if (otpResult.error) {
       setIsSubmitting(false);
@@ -157,10 +161,45 @@ function LoginPageContent() {
     setResendTimer(60);
     setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
 
-    if (otpResult.channel !== "firebase") {
+    // Auto-fill OTP in dev mode with typing animation
+    if (otpResult.dev_code) {
+      autoFillOTP(otpResult.dev_code);
+    } else if (otpResult.channel !== "firebase") {
       tryWebOTP();
     }
   };
+
+  // ── Auto-fill OTP with natural typing animation ────────────────
+  const autoFillOTP = useCallback((code: string) => {
+    if (!/^\d{6}$/.test(code)) return;
+
+    const digits = code.split("");
+    setIsAutoFilling(true);
+
+    digits.forEach((digit, index) => {
+      autoFillTimerRef.current = setTimeout(() => {
+        setOtp((prev) => {
+          const newOtp = [...prev];
+          newOtp[index] = digit;
+          return newOtp;
+        });
+        otpInputsRef.current[index]?.focus();
+
+        if (index === 5) {
+          setIsAutoFilling(false);
+        }
+      }, 500 + index * 180);
+    });
+  }, []);
+
+  // Cleanup auto-fill timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoFillTimerRef.current) {
+        clearTimeout(autoFillTimerRef.current);
+      }
+    };
+  }, []);
 
   // ── WebOTP: Auto-read SMS verification code ───────────────────────
   const tryWebOTP = async () => {
@@ -175,9 +214,7 @@ function LoginPageContent() {
         if (content && "code" in content) {
           const code = (content as { code: string }).code;
           if (code && /^\d{6}$/.test(code)) {
-            const digits = code.split("");
-            setOtp(digits);
-            handleOtpSubmit(code);
+            autoFillOTP(code);
           }
         }
       }
@@ -383,7 +420,7 @@ function LoginPageContent() {
             className="space-y-5 pt-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (phone.length >= 11) handlePhoneSubmit();
+              if (phone.length >= 10) handlePhoneSubmit();
             }}
             autoComplete="on"
           >
@@ -419,9 +456,9 @@ function LoginPageContent() {
                   value={phone}
                   onChange={handlePhoneChange}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && phone.length === 11) handlePhoneSubmit();
+                    if (e.key === "Enter" && phone.length >= 10) handlePhoneSubmit();
                   }}
-                  placeholder="01XXXXXXXXX"
+                  placeholder="1XXXXXXXXX"
                   className={`w-full ps-14 pe-4 py-3.5 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-lg tracking-wider placeholder:text-gray-text placeholder:tracking-normal ${error ? "border-error bg-error/5" : ""}`}
                   autoComplete="tel-national"
                 />
@@ -488,7 +525,7 @@ function LoginPageContent() {
               size="lg"
               isLoading={isSubmitting}
               onClick={handlePhoneSubmit}
-              disabled={phone.length < 11}
+              disabled={phone.length < 10}
             >
               <Smartphone size={18} className="ml-2" />
               إرسال كود التأكيد
@@ -527,8 +564,14 @@ function LoginPageContent() {
             {/* Dev mode: show OTP code directly */}
             {devCode && (
               <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-center">
-                <p className="text-xs text-gray-text mb-1">كود التأكيد (وضع التطوير)</p>
-                <p className="text-2xl font-bold text-dark tracking-[0.3em]" dir="ltr">{devCode}</p>
+                {isAutoFilling ? (
+                  <p className="text-xs text-gray-text">جاري إدخال الكود تلقائياً...</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-text mb-1">كود التأكيد (وضع التطوير)</p>
+                    <p className="text-2xl font-bold text-dark tracking-[0.3em]" dir="ltr">{devCode}</p>
+                  </>
+                )}
               </div>
             )}
 
@@ -544,10 +587,12 @@ function LoginPageContent() {
                   inputMode="numeric"
                   maxLength={1}
                   value={digit}
+                  readOnly={isAutoFilling}
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
                   onPaste={i === 0 ? handleOtpPaste : undefined}
-                  className={`w-12 h-14 text-center text-2xl font-bold bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : ""} ${digit ? "text-dark border-brand-green/30" : "text-gray-text"}`}
+                  className={`w-12 h-14 text-center text-2xl font-bold bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : ""} ${digit ? "text-dark border-brand-green/30 scale-105" : "text-gray-text"}`}
+                  style={digit && isAutoFilling ? { transform: "scale(1.08)", transition: "transform 0.2s ease-out" } : undefined}
                   autoComplete={i === 0 ? "one-time-code" : "off"}
                 />
               ))}

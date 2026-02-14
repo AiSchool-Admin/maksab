@@ -14,11 +14,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "crypto";
+import { generateSessionToken } from "@/lib/auth/session-token";
 
 function getSecret(): string {
-  const secret = process.env.OTP_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.OTP_SECRET;
   if (!secret) {
-    throw new Error("Missing OTP_SECRET or SUPABASE_SERVICE_ROLE_KEY");
+    if (process.env.NODE_ENV === "development") {
+      return "maksab-dev-otp-secret-not-for-production";
+    }
+    throw new Error("Missing OTP_SECRET environment variable. Set it in production.");
   }
   return secret;
 }
@@ -89,6 +93,15 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Validate phone format after Firebase verification
+      const phoneClean = firebasePhone.replace(/^\+2/, "").replace(/\D/g, "");
+      if (!/^01[0125]\d{8}$/.test(phoneClean)) {
+        return NextResponse.json(
+          { error: "رقم الموبايل من Firebase مش صالح" },
+          { status: 400 },
+        );
+      }
+
       const supabase = getServiceClient();
       const profile = await findOrCreateUser(supabase, firebasePhone, displayName);
 
@@ -107,17 +120,25 @@ export async function POST(req: NextRequest) {
         email: virtualEmail,
       });
 
+      const firebaseSessionToken = generateSessionToken(profile.id);
+
       return NextResponse.json({
         user: profile,
+        session_token: firebaseSessionToken,
         magic_link_token: properties?.hashed_token || null,
         virtual_email: virtualEmail,
       });
     }
 
     // ── Standard HMAC OTP verification path ─────────────────────────
-    const phone = body.phone?.replace(/\D/g, "");
+    let phone = body.phone?.replace(/\D/g, "") || "";
     const code = body.code?.replace(/\D/g, "");
     const token = body.token;
+
+    // Normalize phone: accept 10 digits without leading 0
+    if (/^1[0125]\d{8}$/.test(phone)) phone = `0${phone}`;
+    if (phone.startsWith("20") && phone.length === 12) phone = phone.slice(1);
+    if (phone.startsWith("0020") && phone.length === 14) phone = phone.slice(3);
 
     // Validate inputs
     if (!phone || !/^01[0125]\d{8}$/.test(phone)) {
@@ -170,8 +191,11 @@ export async function POST(req: NextRequest) {
       email: virtualEmail,
     });
 
+    const sessionToken = generateSessionToken(profile.id);
+
     return NextResponse.json({
       user: profile,
+      session_token: sessionToken,
       magic_link_token: properties?.hashed_token || null,
       virtual_email: virtualEmail,
     });

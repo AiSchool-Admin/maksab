@@ -251,19 +251,19 @@ export async function notifyMatchingBuyers(ad: NewAdData): Promise<number> {
 
       const saleTypeLabel =
         ad.sale_type === "auction"
-          ? "🔨 مزاد"
+          ? "🔥 مزاد"
           : ad.sale_type === "exchange"
-            ? "🔄 تبديل"
-            : "💵 نقدي";
+            ? "🔄 للتبديل"
+            : "💰 للبيع";
 
       const bodyText = reason
-        ? `${ad.title} — ${saleTypeLabel}\nبناءً على بحثك عن "${reason}"`
+        ? `${ad.title} — ${saleTypeLabel}\nعشان أنت دورت على "${reason}"`
         : `${ad.title} — ${saleTypeLabel}`;
 
       notifications.push({
         user_id: userId,
         type: "new_match",
-        title: "إعلان جديد يطابق بحثك! 🎯",
+        title: "فيه إعلان جديد يناسبك! 🎯",
         body: bodyText,
         ad_id: ad.id,
         data: { ad_id: ad.id, sale_type: ad.sale_type },
@@ -288,6 +288,93 @@ export async function notifyMatchingBuyers(ad: NewAdData): Promise<number> {
     return notifications.length;
   } catch (err) {
     console.error("notifyMatchingBuyers error:", err);
+    return 0;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 1b. NEW EXCHANGE AD → NOTIFY OWNERS OF MATCHING EXCHANGE ADS
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * When a new exchange ad is created, find existing exchange ads that match
+ * bidirectionally and notify their owners about a potential exchange.
+ */
+export async function notifyExchangeMatch(ad: NewAdData): Promise<number> {
+  const client = getServiceClient();
+  if (!client) return 0;
+
+  try {
+    const categoryFields = ad.category_fields || {};
+    const exchangeWanted = categoryFields.exchange_wanted as Record<string, unknown> | undefined;
+    if (!exchangeWanted?.category_id) return 0;
+
+    const wantedCategoryId = exchangeWanted.category_id as string;
+
+    // Find exchange ads in the wanted category whose owners might want our category
+    const { data: candidates } = await client
+      .from("ads")
+      .select("id, title, user_id, category_id, category_fields, exchange_description")
+      .eq("status", "active")
+      .eq("sale_type", "exchange")
+      .eq("category_id", wantedCategoryId)
+      .neq("user_id", ad.user_id)
+      .limit(30);
+
+    if (!candidates || candidates.length === 0) return 0;
+
+    const notifications = [];
+
+    for (const candidate of candidates) {
+      const cFields = (candidate.category_fields as Record<string, unknown>) || {};
+      const cWanted = cFields.exchange_wanted as Record<string, unknown> | undefined;
+
+      // Check bidirectional match: does the other person want our category?
+      const isBidirectional = cWanted?.category_id === ad.category_id;
+      if (!isBidirectional) continue;
+
+      // Dedup check
+      const dup = await isDuplicate(
+        client,
+        candidate.user_id as string,
+        "exchange_match",
+        ad.id,
+        48,
+      );
+      if (dup) continue;
+
+      notifications.push({
+        user_id: candidate.user_id,
+        type: "exchange_match",
+        title: "فيه حد عايز يبدّل معاك! 🔄",
+        body: `"${ad.title}" — ممكن يتبدل بإعلانك "${candidate.title}"`,
+        ad_id: ad.id,
+        data: {
+          ad_id: ad.id,
+          matching_ad_id: candidate.id,
+          sale_type: "exchange",
+        },
+      });
+    }
+
+    if (notifications.length > 0) {
+      await client.from("notifications").insert(notifications);
+
+      // Push to first 10
+      for (const notif of notifications.slice(0, 10)) {
+        sendPushToUser(
+          client,
+          notif.user_id as string,
+          notif.title,
+          notif.body,
+          `/ad/${ad.id}`,
+        );
+      }
+    }
+
+    return notifications.length;
+  } catch (err) {
+    console.error("notifyExchangeMatch error:", err);
     return 0;
   }
 }
@@ -389,7 +476,7 @@ export async function notifyAuctionBid(params: {
       await client.from("notifications").insert({
         user_id: params.sellerId,
         type: "auction_bid",
-        title: "مزايدة جديدة! 🔨",
+        title: "مزايدة جديدة! 🔥",
         body: `${params.bidderName} زايد بـ ${formattedAmount} جنيه على "${params.adTitle}"`,
         ad_id: params.adId,
         data: { bidder_id: params.bidderId, amount: params.bidAmount },
@@ -398,7 +485,7 @@ export async function notifyAuctionBid(params: {
       await sendPushToUser(
         client,
         params.sellerId,
-        "مزايدة جديدة! 🔨",
+        "مزايدة جديدة! 🔥",
         `${params.bidderName} زايد بـ ${formattedAmount} جنيه`,
         `/ad/${params.adId}`,
       );

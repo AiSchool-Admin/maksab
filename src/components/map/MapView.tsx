@@ -106,7 +106,7 @@ export default function MapView({
       if (!ad.latitude || !ad.longitude) return;
 
       const isSelected = ad.id === selectedAdId;
-      const saleIcon = ad.saleType === "auction" ? "🔨" : ad.saleType === "exchange" ? "🔄" : "💵";
+      const saleIcon = ad.saleType === "auction" ? "🔥" : ad.saleType === "exchange" ? "🔄" : "💰";
       const priceText = ad.price ? formatPrice(ad.price) : ad.saleType === "exchange" ? "تبديل" : "";
       const distanceText = userLocation
         ? formatDistance(haversineDistance(userLocation.lat, userLocation.lng, ad.latitude, ad.longitude))

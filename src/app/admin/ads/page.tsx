@@ -24,9 +24,9 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 };
 
 const saleTypeLabels: Record<string, string> = {
-  cash: "💵 نقدي",
-  auction: "🔨 مزاد",
-  exchange: "🔄 تبديل",
+  cash: "💰 للبيع",
+  auction: "🔥 مزاد",
+  exchange: "🔄 للتبديل",
 };
 
 export default function AdminAdsPage() {

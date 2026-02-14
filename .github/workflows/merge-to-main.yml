@@ -3,7 +3,7 @@ name: Merge feature branch to main
 on:
   push:
     branches:
-      - 'claude/setup-nextjs-arabic-rtl-6r2mK'
+      - 'claude/continue-maksab-development-8qEYu'
 
 permissions:
   contents: write
@@ -23,5 +23,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout main
-          git merge origin/claude/setup-nextjs-arabic-rtl-6r2mK --no-edit
+          git merge origin/claude/continue-maksab-development-8qEYu --no-edit
           git push origin main

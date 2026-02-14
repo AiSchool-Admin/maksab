@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 import { notifyBuyNow } from "@/lib/notifications/smart-notifications";
 
 function getServiceClient() {
@@ -17,9 +18,26 @@ function getServiceClient() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ad_id, buyer_id, buyer_name } = body;
+    const { ad_id, buyer_id: bodyBuyerId, buyer_name, session_token } = body;
 
-    if (!ad_id || !buyer_id) {
+    // Authenticate via session token
+    let buyer_id: string;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      buyer_id = tokenResult.userId;
+      if (bodyBuyerId && bodyBuyerId !== buyer_id) {
+        return NextResponse.json({ error: "بيانات المصادقة مش متطابقة" }, { status: 403 });
+      }
+    } else if (bodyBuyerId) {
+      buyer_id = bodyBuyerId;
+    } else {
+      return NextResponse.json({ error: "مطلوب توكن الجلسة" }, { status: 401 });
+    }
+
+    if (!ad_id) {
       return NextResponse.json(
         { error: "بيانات ناقصة" },
         { status: 400 },
@@ -108,11 +126,27 @@ export async function POST(request: NextRequest) {
       .order("amount", { ascending: false })
       .limit(20);
 
-    const bids = ((bidsData as Record<string, unknown>[]) || []).map((b) => ({
+    // Batch-fetch bidder names from profiles
+    const bidRows = (bidsData as Record<string, unknown>[]) || [];
+    const bidderIds = [...new Set(bidRows.map((b) => b.bidder_id as string))];
+    const bidderNames = new Map<string, string>();
+    if (bidderIds.length > 0) {
+      const { data: profiles } = await client
+        .from("profiles")
+        .select("id, display_name")
+        .in("id", bidderIds);
+      if (profiles) {
+        for (const p of profiles as Record<string, unknown>[]) {
+          bidderNames.set(p.id as string, (p.display_name as string) || "مزايد");
+        }
+      }
+    }
+
+    const bids = bidRows.map((b) => ({
       id: b.id as string,
       adId: b.ad_id as string,
       bidderId: b.bidder_id as string,
-      bidderName: "مزايد",
+      bidderName: bidderNames.get(b.bidder_id as string) || "مزايد",
       amount: Number(b.amount),
       createdAt: b.created_at as string,
     }));

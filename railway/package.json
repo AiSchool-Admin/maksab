@@ -9,6 +9,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
-    "tsx": "^4.7.0"
+    "tsx": "^4.7.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/web-push": "^3.6.4"
   }
 }

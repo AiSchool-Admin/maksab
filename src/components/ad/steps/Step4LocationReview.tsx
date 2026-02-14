@@ -49,10 +49,12 @@ export default function Step4LocationReview({
 
   const saleTypeBadge =
     saleType === "cash"
-      ? "💵 بيع نقدي"
+      ? "💰 للبيع"
       : saleType === "auction"
-        ? "🔨 مزاد"
-        : "🔄 تبديل";
+        ? "🔥 مزاد"
+        : saleType === "live_auction"
+          ? "📡 مزاد لايف"
+          : "🔄 للتبديل";
 
   return (
     <div className="space-y-6">
@@ -101,7 +103,7 @@ export default function Step4LocationReview({
 
       {/* Ad Preview / Review */}
       <div>
-        <h3 className="text-sm font-bold text-dark mb-3">مراجعة الإعلان</h3>
+        <h3 className="text-sm font-bold text-dark mb-3">راجع إعلانك قبل النشر</h3>
 
         <div className="bg-gray-light rounded-2xl p-4 space-y-3">
           {/* Image preview */}

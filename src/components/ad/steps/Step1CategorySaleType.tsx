@@ -13,11 +13,11 @@ interface Step1Props {
   onSaleTypeChange: (type: SaleType) => void;
 }
 
-const saleTypes: { value: SaleType; label: string; icon: string; badge?: string }[] = [
-  { value: "cash", label: "بيع نقدي", icon: "💵" },
-  { value: "auction", label: "مزاد", icon: "🔨" },
-  { value: "live_auction", label: "مزاد مباشر (بث حي)", icon: "📡", badge: "رسوم إضافية" },
-  { value: "exchange", label: "تبديل", icon: "🔄" },
+const saleTypes: { value: SaleType; label: string; icon: string; description: string; badge?: string }[] = [
+  { value: "cash", label: "بيع نقدي", icon: "💰", description: "حدد سعرك وبيع" },
+  { value: "auction", label: "مزاد 🔥", icon: "🔥", description: "خلّي الناس تزايد — والأعلى يكسب!" },
+  { value: "live_auction", label: "مزاد لايف", icon: "📡", description: "بث مباشر + مزايدة حية", badge: "رسوم إضافية" },
+  { value: "exchange", label: "تبدّل", icon: "🔄", description: "عندك حاجة وعايز حاجة تانية؟" },
 ];
 
 export default function Step1CategorySaleType({
@@ -35,20 +35,20 @@ export default function Step1CategorySaleType({
       {/* Category grid */}
       <div>
         <h3 className="text-sm font-bold text-dark mb-3">اختار القسم</h3>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-y-4 gap-x-2">
           {categoriesConfig.map((cat) => (
             <button
               key={cat.id}
               type="button"
               onClick={() => onCategoryChange(cat.id)}
-              className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all ${
+              className={`flex flex-col items-center gap-2 p-2 rounded-2xl transition-all ${
                 categoryId === cat.id
-                  ? "border-brand-green bg-brand-green-light"
-                  : "border-transparent bg-gray-light hover:bg-gray-200"
+                  ? "bg-brand-green-light ring-2 ring-brand-green"
+                  : "hover:bg-gray-light/60"
               }`}
             >
               <CategoryIcon slug={cat.slug} size="sm" />
-              <span className="text-xs font-semibold text-dark leading-tight text-center">
+              <span className="text-[11px] font-semibold text-dark leading-tight text-center line-clamp-1 max-w-[72px]">
                 {cat.name}
               </span>
             </button>
@@ -84,7 +84,7 @@ export default function Step1CategorySaleType({
       {/* Sale type */}
       {categoryId && (
         <div>
-          <h3 className="text-sm font-bold text-dark mb-3">نوع البيع</h3>
+          <h3 className="text-sm font-bold text-dark mb-3">عايز تبيع إزاي؟</h3>
           <div className="space-y-2">
             {saleTypes.map((st) => (
               <button
@@ -109,7 +109,10 @@ export default function Step1CategorySaleType({
                   )}
                 </span>
                 <span className="text-lg">{st.icon}</span>
-                <span className="font-semibold text-dark">{st.label}</span>
+                <div className="flex-1 text-start">
+                  <span className="font-semibold text-dark block">{st.label}</span>
+                  <span className="text-[11px] text-gray-text">{st.description}</span>
+                </div>
                 {st.badge && (
                   <span className="ms-auto text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
                     {st.badge}

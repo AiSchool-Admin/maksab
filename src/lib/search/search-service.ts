@@ -14,6 +14,8 @@ import type { AdSummary } from "@/lib/ad-data";
 
 export interface AdvancedSearchFilters {
   query?: string;
+  /** Original user-typed query before AI cleaning — used for ILIKE fallback */
+  originalQuery?: string;
   category?: string;
   subcategory?: string;
   saleType?: "cash" | "auction" | "exchange";
@@ -72,7 +74,18 @@ export async function advancedSearch(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...filters,
+        query: filters.query,
+        originalQuery: filters.originalQuery,
+        category: filters.category,
+        subcategory: filters.subcategory,
+        saleType: filters.saleType,
+        priceMin: filters.priceMin,
+        priceMax: filters.priceMax,
+        governorate: filters.governorate,
+        city: filters.city,
+        condition: filters.condition,
+        sortBy: filters.sortBy,
+        categoryFilters: filters.categoryFilters,
         page,
         limit: PAGE_SIZE,
       }),

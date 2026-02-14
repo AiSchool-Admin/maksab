@@ -11,8 +11,8 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  Loader2,
 } from "lucide-react";
+import Image from "next/image";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import {
@@ -56,6 +56,7 @@ export default function VerificationSection({ userId }: VerificationSectionProps
   const [isLoading, setIsLoading] = useState(true);
   const [showIdModal, setShowIdModal] = useState(false);
   const [nationalId, setNationalId] = useState("");
+  const [idPhotoPreview, setIdPhotoPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -252,6 +253,55 @@ export default function VerificationSection({ userId }: VerificationSectionProps
             <p className="text-[11px] text-gray-text mt-1">
               {nationalId.length}/14 رقم
             </p>
+          </div>
+
+          {/* ID Photo upload (optional) */}
+          <div>
+            <label className="text-sm font-semibold text-dark block mb-2">
+              صورة البطاقة (اختياري)
+            </label>
+            <p className="text-[11px] text-gray-text mb-2">
+              إرفاق صورة يساعد في تسريع المراجعة
+            </p>
+            {idPhotoPreview ? (
+              <div className="relative w-full aspect-[16/10] rounded-xl overflow-hidden bg-gray-light border border-gray-200">
+                <Image
+                  src={idPhotoPreview}
+                  alt="صورة البطاقة"
+                  fill
+                  className="object-contain"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIdPhotoPreview(null)}
+                  className="absolute top-2 end-2 bg-error text-white p-1 rounded-full btn-icon-sm"
+                >
+                  <XCircle size={16} />
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-brand-green hover:bg-brand-green-light/30 transition-colors">
+                <CreditCard size={24} className="text-gray-text mb-1" />
+                <span className="text-xs text-gray-text">اضغط لالتقاط أو اختيار صورة</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const { compressImage } = await import("@/lib/utils/image-compress");
+                      const result = await compressImage(file);
+                      setIdPhotoPreview(result.preview);
+                    } catch {
+                      toast.error("حصل مشكلة في تحميل الصورة");
+                    }
+                  }}
+                />
+              </label>
+            )}
           </div>
 
           <Button

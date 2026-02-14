@@ -7,7 +7,7 @@ import {
   Trophy,
   Ban,
   ShoppingCart,
-  Gavel,
+  Flame,
   Timer,
   Plus,
   Minus,
@@ -157,7 +157,7 @@ export default function AuctionSection({
             </span>
           </div>
           <div className="text-xs text-gray-text">
-            عدد المزايدات: {bidsCount}
+            {bidsCount} مزايدة
           </div>
         </div>
         <BidHistory bids={bids} />
@@ -176,7 +176,7 @@ export default function AuctionSection({
             </span>
           </div>
           <p className="text-sm text-gray-text">
-            انتهى المزاد بدون ما حد يزايد. سعر الافتتاح كان{" "}
+            خلص المزاد ومحدش زايد — سعر الافتتاح كان{" "}
             {formatPrice(startPrice)}.
           </p>
         </div>
@@ -223,7 +223,7 @@ export default function AuctionSection({
             </span>
           </div>
           <p className="text-sm text-gray-text">
-            تم إلغاء المزاد من قبل البائع.
+            البائع لغى المزاد ده.
           </p>
         </div>
       </div>
@@ -242,7 +242,7 @@ export default function AuctionSection({
             <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
           </span>
           <Radio size={16} className="text-red-500" />
-          <span className="text-sm font-bold text-red-600">مزاد مباشر على الهواء</span>
+          <span className="text-sm font-bold text-red-600">مزاد لايف — على الهوا دلوقتي! 📡</span>
         </div>
       )}
 
@@ -250,7 +250,7 @@ export default function AuctionSection({
       <div className="bg-brand-gold-light rounded-xl p-4 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm font-bold text-dark">
-            {remaining <= 0 ? "جاري إنهاء المزاد..." : "ينتهي خلال"}
+            {remaining <= 0 ? "المزاد خلص..." : "⏰ فاضل"}
           </span>
           <div
             className={`flex items-center gap-1.5 text-lg font-bold ${
@@ -281,7 +281,7 @@ export default function AuctionSection({
         {wasExtended && (
           <div className="flex items-center gap-1.5 text-xs text-brand-gold">
             <Timer size={12} />
-            <span>تم تمديد المزاد (حماية من المزايدة المتأخرة)</span>
+            <span>المزاد اتمدد — حماية من المزايدة في الآخر</span>
           </div>
         )}
       </div>
@@ -289,7 +289,7 @@ export default function AuctionSection({
       {/* Current highest bid */}
       <div className="bg-gray-light rounded-xl p-4 space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-text">أعلى مزايدة</span>
+          <span className="text-sm text-gray-text">🔥 أعلى مزايدة</span>
           <span className="text-lg font-bold text-brand-green">
             {formatPrice(currentPrice)}
           </span>
@@ -297,7 +297,7 @@ export default function AuctionSection({
         <div className="flex items-center justify-between text-sm text-gray-text">
           <span className="flex items-center gap-1">
             <TrendingUp size={14} />
-            عدد المزايدات: {bidsCount}
+            {bidsCount} مزايدة
           </span>
           {highestBidderName && (
             <span className={isCurrentUserHighest ? "text-brand-green font-bold" : ""}>
@@ -307,7 +307,7 @@ export default function AuctionSection({
         </div>
         {isCurrentUserHighest && (
           <p className="text-xs text-brand-green font-medium">
-            أنت صاحب أعلى مزايدة حالياً
+            أنت الأول دلوقتي — كمّل كده 🏆
           </p>
         )}
       </div>
@@ -320,7 +320,7 @@ export default function AuctionSection({
         <div className="space-y-3">
           {/* Next bid label */}
           <div className="text-center">
-            <span className="text-xs text-gray-text">المزايدة القادمة</span>
+            <span className="text-xs text-gray-text">زايد بكام؟</span>
           </div>
 
           {/* Stepper control */}
@@ -400,8 +400,8 @@ export default function AuctionSection({
             isLoading={isBidding}
             variant="secondary"
           >
-            <Gavel size={18} />
-            زايد بـ {formatPrice(bidAmount)}
+            <Flame size={18} />
+            🔥 زايد بـ {formatPrice(bidAmount)}
           </Button>
 
           {isLastMinutes && (

@@ -289,6 +289,10 @@ export default function CommissionPrompt({
   }
 
   // ── Main prompt ──
+  const rawPercentage = Math.round(transactionAmount * 0.01);
+  const wasCapped = rawPercentage > 200;
+  const wasFloored = rawPercentage < 10;
+
   return (
     <div className="bg-white rounded-2xl p-6 space-y-5 max-w-sm mx-auto">
       {/* Header */}
@@ -301,17 +305,37 @@ export default function CommissionPrompt({
         </p>
       </div>
 
-      {/* Commission message */}
-      <div className="bg-brand-green-light rounded-xl p-4 text-center">
-        <p className="text-sm text-dark leading-relaxed">
-          مكسب تطبيق مجاني بالكامل. لو الصفقة عجبتك، ساهم بعمولة بسيطة
-          تساعدنا نكبر ونخدمك أحسن 🙏
+      {/* Commission explanation — clear & professional */}
+      <div className="bg-brand-green-light rounded-xl p-4 space-y-3">
+        <p className="text-sm text-dark leading-relaxed text-center">
+          مكسب بياخد عمولة بسيطة <span className="font-bold text-brand-green">1%</span> من
+          قيمة كل إعلان عشان نقدر نكبر ونخدمك أحسن 💚
         </p>
-        <p className="text-sm font-bold text-brand-green mt-2">
-          العمولة المقترحة: {suggested} جنيه
-        </p>
-        <p className="text-[11px] text-gray-text mt-1">
-          (1% من قيمة الصفقة)
+
+        {/* Commission breakdown */}
+        <div className="bg-white rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-text">قيمة الصفقة</span>
+            <span className="font-bold text-dark">{transactionAmount.toLocaleString("en-US")} جنيه</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-text">العمولة (1%)</span>
+            <span className="font-bold text-brand-green">{suggested} جنيه</span>
+          </div>
+          {wasCapped && (
+            <p className="text-[11px] text-gray-text text-center">
+              الحد الأقصى للعمولة 200 جنيه بس
+            </p>
+          )}
+          {wasFloored && (
+            <p className="text-[11px] text-gray-text text-center">
+              الحد الأدنى للعمولة 10 جنيه
+            </p>
+          )}
+        </div>
+
+        <p className="text-[11px] text-gray-text text-center leading-relaxed">
+          العمولة من 10 لـ 200 جنيه بس — مهما كانت قيمة الصفقة
         </p>
       </div>
 

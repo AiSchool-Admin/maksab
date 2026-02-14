@@ -195,7 +195,7 @@ export default function Step3PricePhotos({
                   </svg>
                 )}
               </span>
-              <span className="text-dark font-medium">السعر قابل للتفاوض</span>
+              <span className="text-dark font-medium">السعر فيه كلام</span>
             </button>
 
             {categoryId && (
@@ -277,10 +277,10 @@ export default function Step3PricePhotos({
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-lg">📡</span>
-                <span className="text-sm font-bold text-orange-700">مزاد مباشر على الهواء</span>
+                <span className="text-sm font-bold text-orange-700">مزاد لايف — على الهوا 📡</span>
               </div>
               <p className="text-xs text-orange-600 leading-relaxed">
-                المزاد المباشر يتم بثه على الهواء للمشاهدين. يتم تطبيق رسوم إضافية على هذه الخدمة:
+                المزاد اللايف بيتبث على الهوا والناس بتتفرج وتزايد. فيه رسوم إضافية على الخدمة دي:
               </p>
               <div className="bg-white rounded-lg p-3 space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
@@ -293,7 +293,7 @@ export default function Step3PricePhotos({
                 </div>
                 <div className="border-t border-gray-100 pt-1.5 mt-1.5">
                   <p className="text-[10px] text-gray-text">
-                    * رسوم البث غير قابلة للاسترداد. العمولة تُخصم من سعر البيع النهائي.
+                    * رسوم البث مش بترجع. العمولة بتتخصم من سعر البيع النهائي.
                   </p>
                 </div>
               </div>
@@ -373,8 +373,8 @@ export default function Step3PricePhotos({
             <div className="bg-gray-light rounded-xl p-3 flex items-start gap-2">
               <span className="text-sm mt-0.5">💡</span>
               <p className="text-[11px] text-gray-text leading-relaxed">
-                بنشر المزاد المباشر أنت موافق على دفع رسوم البث (50 جنيه) وعمولة 2% على سعر البيع النهائي.
-                سيتم إرسال رابط البث قبل الموعد بـ 15 دقيقة.
+                لما تنشر المزاد اللايف أنت موافق على رسوم البث (50 جنيه) وعمولة 2% على سعر البيع النهائي.
+                هنبعتلك رابط البث قبل الموعد بـ 15 دقيقة.
               </p>
             </div>
           </div>
@@ -414,7 +414,7 @@ export default function Step3PricePhotos({
       {/* ── Images section ───────────────────────────────── */}
       <div>
         <h3 className="text-sm font-bold text-dark mb-2">الصور (حتى {MAX_IMAGES})</h3>
-        <p className="text-xs text-gray-text mb-3">الصورة الأولى هي الصورة الرئيسية للإعلان</p>
+        <p className="text-xs text-gray-text mb-3">أول صورة هي الصورة الرئيسية للإعلان</p>
 
         {errors.images && <p className="mb-2 text-xs text-error">{errors.images}</p>}
 

@@ -53,8 +53,66 @@ function getClient(): SupabaseClient | null {
 }
 
 /**
+ * Send push notification to a user (if they have a push subscription).
+ * Best-effort — failures are silently caught.
+ */
+async function sendPushToUser(
+  client: SupabaseClient,
+  userId: string,
+  title: string,
+  body: string,
+  url?: string,
+): Promise<void> {
+  try {
+    const { data: subs } = await client
+      .from("push_subscriptions")
+      .select("endpoint, keys_p256dh, keys_auth")
+      .eq("user_id", userId);
+
+    if (!subs || subs.length === 0) return;
+
+    const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+    if (!vapidPublic || !vapidPrivate) return;
+
+    const webpush = await import("web-push");
+    webpush.setVapidDetails(
+      process.env.VAPID_EMAIL || "mailto:support@maksab.app",
+      vapidPublic,
+      vapidPrivate,
+    );
+
+    const payload = JSON.stringify({
+      title,
+      body,
+      icon: "/icons/icon-192x192.png",
+      badge: "/icons/badge-72x72.png",
+      data: { url: url || "/" },
+    });
+
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } },
+          payload,
+        );
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "statusCode" in err) {
+          const code = (err as { statusCode: number }).statusCode;
+          if (code === 404 || code === 410) {
+            await client.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+          }
+        }
+      }
+    }
+  } catch {
+    // Push is best-effort
+  }
+}
+
+/**
  * Finalize expired auctions directly via DB queries.
- * Sets auction_status to 'ended' and picks winner (highest bidder).
+ * Sets auction_status to 'ended_winner' or 'ended_no_bids' and picks winner (highest bidder).
  */
 async function finalizeExpiredAuctions(): Promise<void> {
   const client = getClient();
@@ -89,17 +147,22 @@ async function finalizeExpiredAuctions(): Promise<void> {
         .maybeSingle();
 
       if (topBid) {
-        // Auction ended with winner
-        await client
+        // Auction ended with winner — guard against race condition
+        const { data: updated } = await client
           .from("ads")
           .update({
-            auction_status: "ended",
+            auction_status: "ended_winner",
             auction_winner_id: topBid.bidder_id,
             status: "sold",
           })
-          .eq("id", auction.id);
+          .eq("id", auction.id)
+          .eq("auction_status", "active")
+          .select("id");
 
-        // Notify winner
+        // Skip if another worker already processed this auction
+        if (!updated || updated.length === 0) continue;
+
+        // Notify winner (DB + push)
         await client.from("notifications").insert({
           user_id: topBid.bidder_id,
           type: "auction_won",
@@ -107,23 +170,29 @@ async function finalizeExpiredAuctions(): Promise<void> {
           body: `فزت بمزاد "${auction.title}" بمبلغ ${topBid.amount.toLocaleString()} جنيه`,
           data: { ad_id: auction.id },
         });
+        await sendPushToUser(client, topBid.bidder_id, "مبروك! كسبت المزاد 🎉", `فزت بمزاد "${auction.title}" بمبلغ ${topBid.amount.toLocaleString()} جنيه`, `/ad/${auction.id}`).catch(() => {});
 
-        // Notify seller
+        // Notify seller (DB + push)
         await client.from("notifications").insert({
           user_id: auction.user_id,
           type: "auction_ended",
-          title: "المزاد انتهى! 🔨",
+          title: "المزاد انتهى — تم البيع! 💰",
           body: `مزاد "${auction.title}" انتهى. الفائز زايد بـ ${topBid.amount.toLocaleString()} جنيه`,
           data: { ad_id: auction.id, winner_id: topBid.bidder_id },
         });
+        await sendPushToUser(client, auction.user_id, "المزاد انتهى — تم البيع! 💰", `مزاد "${auction.title}" انتهى وتم البيع بمبلغ ${topBid.amount.toLocaleString()} جنيه`, `/ad/${auction.id}`).catch(() => {});
       } else {
-        // Auction ended with no bids
-        await client
+        // Auction ended with no bids — guard against race condition
+        const { data: updated } = await client
           .from("ads")
-          .update({ auction_status: "ended" })
-          .eq("id", auction.id);
+          .update({ auction_status: "ended_no_bids" })
+          .eq("id", auction.id)
+          .eq("auction_status", "active")
+          .select("id");
 
-        // Notify seller
+        if (!updated || updated.length === 0) continue;
+
+        // Notify seller (DB + push)
         await client.from("notifications").insert({
           user_id: auction.user_id,
           type: "auction_ended_no_bids",
@@ -131,6 +200,7 @@ async function finalizeExpiredAuctions(): Promise<void> {
           body: `مزاد "${auction.title}" انتهى ومحدش زايد. ممكن تعيد نشره.`,
           data: { ad_id: auction.id },
         });
+        await sendPushToUser(client, auction.user_id, "المزاد انتهى بدون مزايدات", `مزاد "${auction.title}" انتهى ومحدش زايد. ممكن تنزل إعلان جديد.`, `/ad/${auction.id}`).catch(() => {});
       }
 
       console.log(
@@ -398,7 +468,8 @@ async function matchNewAdsToBuyers(): Promise<void> {
 
       for (const signal of signals) {
         const userId = signal.user_id as string;
-        const data = (signal.signal_data || {}) as Record<string, unknown>;
+        if (!userId) continue;
+        const data = (signal.signal_data ?? {}) as Record<string, unknown>;
         const existing = userScores.get(userId) || { score: 0, reason: "" };
 
         let matchScore = signal.weight as number;
@@ -526,9 +597,8 @@ async function checkPriceDrops(): Promise<void> {
 
       if (!oldSignals || oldSignals.length === 0) continue;
 
-      const oldPrice = Number(
-        (oldSignals[0].signal_data as Record<string, unknown>)?.price,
-      );
+      const signalData = oldSignals[0]?.signal_data as Record<string, unknown> | null;
+      const oldPrice = Number(signalData?.price);
       const newPrice = Number(ad.price);
 
       // Only notify if price actually dropped by at least 5%
@@ -667,15 +737,52 @@ console.log(`  - Ad expiry check: every 60 minutes`);
 console.log(`  - Seller interest notifications: every 6 hours`);
 console.log(`  - Signal cleanup: every 24 hours`);
 
-if (getClient()) {
-  console.log(`  - Supabase: connected ✓`);
-} else {
-  console.log(`  - Supabase: waiting for env vars...`);
+// ─── Startup: DB Health Check ────────────────────────────────
+async function healthCheck(): Promise<boolean> {
+  const client = getClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client
+      .from("categories")
+      .select("id", { count: "exact", head: true });
+
+    if (error) {
+      console.error(`[${new Date().toISOString()}] ❌ DB health check failed:`, error.message);
+      return false;
+    }
+    console.log(`[${new Date().toISOString()}] ✅ DB health check passed`);
+    return true;
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] ❌ DB health check error:`, err);
+    return false;
+  }
 }
 
-// Run immediately, then on interval
-tick();
-setInterval(tick, INTERVAL_MS);
+// ─── Graceful Shutdown ──────────────────────────────────────
+let intervalId: ReturnType<typeof setInterval> | null = null;
+let isShuttingDown = false;
+
+async function shutdown(signal: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log(`\n[${new Date().toISOString()}] 🛑 Received ${signal}, shutting down gracefully...`);
+
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+
+  // Allow in-flight operations 5 seconds to complete
+  setTimeout(() => {
+    console.log(`[${new Date().toISOString()}] 👋 Worker stopped`);
+    process.exit(0);
+  }, 5000);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 // Keep process alive — prevent Railway from thinking it crashed
 process.on("uncaughtException", (err) => {
@@ -685,3 +792,14 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   console.error(`[${new Date().toISOString()}] Unhandled rejection:`, reason);
 });
+
+// ─── Start ──────────────────────────────────────────────────
+(async () => {
+  if (getClient()) {
+    await healthCheck();
+  }
+
+  // Run immediately, then on interval
+  tick();
+  intervalId = setInterval(tick, INTERVAL_MS);
+})();

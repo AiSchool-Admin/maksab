@@ -10,7 +10,7 @@ import {
   verifyOTPViaFirebase,
   type UserProfile,
 } from "@/lib/supabase/auth";
-import { egyptianPhoneSchema, otpSchema } from "@/lib/utils/validators";
+import { egyptianPhoneSchema, normalizeEgyptianPhone, otpSchema } from "@/lib/utils/validators";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
 
 export type AccountType = "individual" | "merchant";
@@ -97,8 +97,12 @@ export default function AuthBottomSheet({
       return;
     }
 
+    // Normalize phone (handles 10-digit input without leading 0)
+    const normalizedPhone = normalizeEgyptianPhone(phone);
+    setPhone(normalizedPhone);
+
     setIsSubmitting(true);
-    const otpResult = await sendOTP(phone);
+    const otpResult = await sendOTP(normalizedPhone);
 
     if (otpResult.error) {
       setIsSubmitting(false);
@@ -404,9 +408,9 @@ export default function AuthBottomSheet({
                   setError(null);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && phone.length === 11) handlePhoneSubmit();
+                  if (e.key === "Enter" && phone.length >= 10) handlePhoneSubmit();
                 }}
-                placeholder="01XXXXXXXXX"
+                placeholder="1XXXXXXXXX"
                 className={`w-full ps-14 pe-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark text-lg tracking-wider placeholder:text-gray-text placeholder:tracking-normal ${error ? "border-error bg-error/5" : ""}`}
                 autoComplete="tel"
               />
@@ -486,7 +490,7 @@ export default function AuthBottomSheet({
             size="lg"
             isLoading={isSubmitting}
             onClick={handlePhoneSubmit}
-            disabled={phone.length < 11}
+            disabled={phone.length < 10}
           >
             <Smartphone size={18} className="ml-2" />
             إرسال كود التأكيد

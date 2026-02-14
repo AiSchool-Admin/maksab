@@ -11,7 +11,10 @@ import {
   Trash2,
   RefreshCw,
   Edit3,
+  AlertTriangle,
+  Copy,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -29,11 +32,28 @@ import type { AdStatus } from "@/types";
 
 type TabFilter = "all" | "active" | "sold" | "expired";
 
+/** Calculate days until expiry; returns null if no expiry date or already expired */
+function getDaysUntilExpiry(expiresAt: string | null): number | null {
+  if (!expiresAt) return null;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return 0;
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+/** Expiry warning text and color */
+function getExpiryWarning(daysLeft: number | null): { text: string; color: string } | null {
+  if (daysLeft === null) return null;
+  if (daysLeft === 0) return { text: "ينتهي النهاردة!", color: "text-error" };
+  if (daysLeft <= 3) return { text: `ينتهي خلال ${daysLeft} ${daysLeft === 1 ? "يوم" : "أيام"}`, color: "text-error" };
+  if (daysLeft <= 7) return { text: `ينتهي خلال ${daysLeft} أيام`, color: "text-warning" };
+  return null;
+}
+
 const tabs: { id: TabFilter; label: string }[] = [
   { id: "all", label: "الكل" },
-  { id: "active", label: "نشط" },
-  { id: "sold", label: "تم البيع" },
-  { id: "expired", label: "منتهي" },
+  { id: "active", label: "شغال" },
+  { id: "sold", label: "اتباع" },
+  { id: "expired", label: "خلص" },
 ];
 
 export default function MyAdsPage() {
@@ -117,6 +137,31 @@ export default function MyAdsPage() {
     [user, requireAuth],
   );
 
+  const handleDuplicate = useCallback(
+    async (adId: string) => {
+      const authedUser = user || (await requireAuth());
+      if (!authedUser) return;
+      try {
+        const response = await fetch("/api/ads/duplicate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ad_id: adId, user_id: authedUser.id }),
+        });
+        const result = await response.json();
+        if (result.success) {
+          toast.success("تم نسخ الإعلان — بيتم فتحه دلوقتي");
+          router.push(`/ad/${result.newAdId}/edit`);
+        } else {
+          toast.error(result.error || "حصل مشكلة");
+        }
+      } catch {
+        toast.error("حصل مشكلة، جرب تاني");
+      }
+      setActionMenuId(null);
+    },
+    [user, requireAuth, router],
+  );
+
   return (
     <main className="min-h-screen bg-white pb-20">
       <Header title="إعلاناتي" showBack />
@@ -174,9 +219,9 @@ export default function MyAdsPage() {
             icon={activeTab === "sold" ? "🎉" : activeTab === "expired" ? "⏰" : "📦"}
             title={
               activeTab === "sold"
-                ? "مفيش إعلانات مباعة"
+                ? "لسه مبعتش حاجة"
                 : activeTab === "expired"
-                  ? "مفيش إعلانات منتهية"
+                  ? "مفيش إعلانات خلصت"
                   : "مفيش إعلانات"
             }
             description={
@@ -215,7 +260,7 @@ export default function MyAdsPage() {
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-2xl">
                         {ad.saleType === "auction"
-                          ? "🔨"
+                          ? "🔥"
                           : ad.saleType === "exchange"
                             ? "🔄"
                             : "📷"}
@@ -258,7 +303,7 @@ export default function MyAdsPage() {
                                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-blue-600 hover:bg-gray-light transition-colors"
                                 >
                                   <CheckCircle size={14} />
-                                  تم البيع
+                                  خلاص اتباع
                                 </button>
                               </>
                             )}
@@ -268,9 +313,16 @@ export default function MyAdsPage() {
                                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-brand-green hover:bg-gray-light transition-colors"
                               >
                                 <RefreshCw size={14} />
-                                تجديد
+                                جدّد
                               </button>
                             )}
+                            <button
+                              onClick={() => handleDuplicate(ad.id)}
+                              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-text hover:bg-gray-light transition-colors"
+                            >
+                              <Copy size={14} />
+                              نسخ الإعلان
+                            </button>
                             <button
                               onClick={() => handleDelete(ad.id)}
                               className="flex items-center gap-2 w-full px-3 py-2 text-sm text-error hover:bg-gray-light transition-colors"
@@ -295,8 +347,8 @@ export default function MyAdsPage() {
                       </p>
                     )}
 
-                    {/* Status + date */}
-                    <div className="flex items-center gap-2 mt-1.5">
+                    {/* Status + date + expiry warning */}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <span
                         className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusColor}`}
                       >
@@ -305,6 +357,17 @@ export default function MyAdsPage() {
                       <span className="text-[10px] text-gray-text">
                         {formatTimeAgo(ad.createdAt)}
                       </span>
+                      {ad.status === "active" && (() => {
+                        const daysLeft = getDaysUntilExpiry(ad.expiresAt);
+                        const warning = getExpiryWarning(daysLeft);
+                        if (!warning) return null;
+                        return (
+                          <span className={`flex items-center gap-0.5 text-[10px] font-bold ${warning.color}`}>
+                            <AlertTriangle size={10} />
+                            {warning.text}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

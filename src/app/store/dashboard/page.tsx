@@ -16,6 +16,9 @@ import {
   ExternalLink,
   Crown,
   Zap,
+  Camera,
+  FileSpreadsheet,
+  Rocket,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -234,17 +237,40 @@ export default function StoreDashboardPage() {
       {/* Quick actions */}
       <div className="px-4 mt-4 space-y-2">
         <Link
-          href="/store/dashboard/products/quick-add"
-          className="flex items-center justify-center gap-2 bg-brand-green text-white text-sm font-bold py-3 rounded-xl hover:bg-brand-green-dark transition-colors w-full"
+          href="/store/dashboard/products/rapid-entry"
+          className="flex items-center justify-center gap-2 bg-brand-green text-white text-sm font-bold py-3.5 rounded-xl hover:bg-brand-green-dark transition-colors w-full shadow-lg shadow-brand-green/20"
         >
-          <Zap size={18} />
-          إضافة سريعة للمنتجات
+          <Rocket size={18} />
+          إدخال سريع — 60 ثانية
         </Link>
         <Link
-          href="/ad/create"
+          href="/store/dashboard/products/quick-add"
           className="flex items-center justify-center gap-2 bg-white text-brand-green text-sm font-bold py-3 rounded-xl border-2 border-brand-green hover:bg-brand-green-light transition-colors w-full"
         >
-          <Plus size={18} />
+          <Zap size={18} />
+          إضافة منتج واحد
+        </Link>
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href="/store/dashboard/products/bulk-photos"
+            className="flex items-center justify-center gap-2 bg-white text-brand-green text-sm font-bold py-3 rounded-xl border-2 border-brand-green hover:bg-brand-green-light transition-colors"
+          >
+            <Camera size={16} />
+            رفع صور بالجملة
+          </Link>
+          <Link
+            href="/store/dashboard/products/bulk-import"
+            className="flex items-center justify-center gap-2 bg-white text-brand-green text-sm font-bold py-3 rounded-xl border-2 border-brand-green hover:bg-brand-green-light transition-colors"
+          >
+            <FileSpreadsheet size={16} />
+            استيراد من Excel
+          </Link>
+        </div>
+        <Link
+          href="/ad/create"
+          className="flex items-center justify-center gap-2 bg-white text-gray-text text-sm font-semibold py-2.5 rounded-xl border border-gray-light hover:bg-gray-50 transition-colors w-full"
+        >
+          <Plus size={16} />
           أضف إعلان كامل
         </Link>
       </div>

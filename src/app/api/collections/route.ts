@@ -9,6 +9,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { randomBytes } from "crypto";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -20,13 +22,14 @@ function getServiceClient() {
 }
 
 /**
- * Generate a random 8-character alphanumeric share code.
+ * Generate a cryptographically secure 8-character alphanumeric share code.
  */
 function generateShareCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = randomBytes(8);
   let code = "";
   for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(bytes[i] % chars.length);
   }
   return code;
 }
@@ -109,8 +112,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Authenticated: fetch all user collections
+    // Authenticated: fetch all user collections (verify via session token)
     if (userId) {
+      const sessionToken = request.nextUrl.searchParams.get("session_token");
+      if (sessionToken) {
+        const tokenResult = verifySessionToken(sessionToken);
+        if (!tokenResult.valid || tokenResult.userId !== userId) {
+          return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+        }
+      }
       const { data: collections, error } = await supabase
         .from("collections")
         .select("*")
@@ -193,9 +203,23 @@ export async function GET(request: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { user_id, action } = body;
+    const { user_id: bodyUserId, session_token, action } = body;
 
-    if (!user_id) {
+    // ── Authenticate via session token ──
+    let user_id: string;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      user_id = tokenResult.userId;
+      if (bodyUserId && bodyUserId !== user_id) {
+        return NextResponse.json({ error: "بيانات المصادقة مش متطابقة" }, { status: 403 });
+      }
+    } else if (bodyUserId) {
+      // Fallback for backwards compatibility — but user_id is unverified
+      user_id = bodyUserId;
+    } else {
       return NextResponse.json(
         { error: "لازم تسجل دخول الأول" },
         { status: 401 },

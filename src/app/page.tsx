@@ -10,6 +10,7 @@ import AdCard from "@/components/ad/AdCard";
 import Button from "@/components/ui/Button";
 import CategoryIcon from "@/components/ui/CategoryIcon";
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 
 const HorizontalSection = dynamic(
   () => import("@/components/home/HorizontalSection"),
@@ -21,6 +22,14 @@ const UpgradeToStoreBanner = dynamic(
 );
 const ShoppingAssistantFab = dynamic(
   () => import("@/components/chat/ShoppingAssistantFab"),
+  { ssr: false },
+);
+const RecentlyViewed = dynamic(
+  () => import("@/components/home/RecentlyViewed"),
+  { ssr: false },
+);
+const PushPromptBanner = dynamic(
+  () => import("@/components/notifications/PushPromptBanner"),
   { ssr: false },
 );
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
@@ -37,7 +46,7 @@ const categories = [
   { name: "موبايلات", slug: "phones" },
   { name: "موضة", slug: "fashion" },
   { name: "خردة", slug: "scrap" },
-  { name: "ذهب", slug: "gold" },
+  { name: "ذهب وفضة", slug: "gold" },
   { name: "فاخرة", slug: "luxury" },
   { name: "أجهزة", slug: "appliances" },
   { name: "أثاث", slug: "furniture" },
@@ -55,6 +64,7 @@ export default function HomePage() {
     sentinelRef,
     error: feedError,
     retry: retryFeed,
+    refresh: refreshFeed,
   } = useInfiniteScroll<AdSummary>({ fetchFn: fetchFeedAds });
 
   const { requireAuth, user } = useAuth();
@@ -123,6 +133,17 @@ export default function HomePage() {
     [requireAuth, personalizedAds, matchingAuctions, feedAds, track],
   );
 
+  const handlePullRefresh = useCallback(async () => {
+    const userId = user?.id || "";
+    const [, recResult] = await Promise.all([
+      refreshFeed(),
+      getRecommendations(userId, user?.governorate ?? undefined),
+    ]);
+    if (recResult.personalizedAds.length > 0) setPersonalizedAds(recResult.personalizedAds);
+    if (recResult.matchingAuctions.length > 0) setMatchingAuctions(recResult.matchingAuctions);
+    setFavoriteIds(new Set(getFavoriteIds()));
+  }, [refreshFeed, user]);
+
   return (
     <main className="bg-white">
       {/* ═══ Sticky Top Bar: Header + InstaPay + Search ═══════════ */}
@@ -171,11 +192,12 @@ export default function HomePage() {
         {/* Search bar — sticky */}
         <div className="px-3 pt-2 pb-1.5">
           <Link href="/search" className="block">
-            <div className="flex items-center gap-3 bg-gray-light rounded-full pe-4 ps-1.5 py-1.5 hover:bg-gray-200/80 transition-colors">
-              <div className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
-                <Search size={20} className="text-white" strokeWidth={2.5} />
+            <div className="flex items-center gap-3 bg-white rounded-2xl pe-4 ps-2 py-2.5 border-2 border-gray-200 shadow-md hover:border-brand-green/40 hover:shadow-lg hover:shadow-brand-green/5 transition-all duration-300">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-green to-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                <Search size={18} className="text-white" strokeWidth={2.5} />
               </div>
-              <span className="flex-1 text-sm text-gray-text">ابحث في مكسب... سيارات، موبايلات، عقارات</span>
+              <span className="flex-1 text-sm text-gray-400">ابحث في مكسب...</span>
+              <span className="text-[10px] text-brand-green bg-brand-green/10 px-2 py-1 rounded-full font-medium">بحث ذكي</span>
             </div>
           </Link>
         </div>
@@ -196,7 +218,7 @@ export default function HomePage() {
             <MapPin size={12} />
             خريطة
           </Link>
-          {["سيارات", "موبايلات", "عقارات", "ذهب", "أثاث", "خردة"].map((term) => (
+          {["سيارات", "موبايلات", "عقارات", "ذهب وفضة", "أثاث", "خردة"].map((term) => (
             <Link
               key={term}
               href={`/search?q=${encodeURIComponent(term)}`}
@@ -208,18 +230,19 @@ export default function HomePage() {
         </div>
       </div>
 
+      <PullToRefresh onRefresh={handlePullRefresh}>
       {/* ─── 2. Categories Grid ────────────────────────────────── */}
-      <section className="px-4 pb-5">
-        <h2 className="text-sm font-bold text-dark mb-3">الأقسام</h2>
-        <div className="grid grid-cols-3 gap-3">
+      <section className="px-4 pb-6">
+        <h2 className="text-sm font-bold text-dark mb-4">الأقسام</h2>
+        <div className="grid grid-cols-4 gap-y-5 gap-x-2">
           {categories.map((cat) => (
             <Link
               key={cat.slug}
               href={`/search?category=${cat.slug}`}
-              className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-gray-light/60 active:scale-[0.97] transition-all"
+              className="flex flex-col items-center gap-2 group"
             >
               <CategoryIcon slug={cat.slug} size="md" />
-              <span className="text-xs font-bold text-dark leading-tight text-center">
+              <span className="text-[11px] font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1 max-w-[76px]">
                 {cat.name}
               </span>
             </Link>
@@ -251,10 +274,16 @@ export default function HomePage() {
         </Link>
       </section>
 
+      {/* ─── Push Notification Prompt ────────────────────────── */}
+      <PushPromptBanner />
+
+      {/* ─── Recently Viewed ─────────────────────────────────── */}
+      <RecentlyViewed />
+
       {/* ─── 3. Recommended Ads (horizontal scroll) ────────────── */}
       <HorizontalSection
-        title="عروض مقترحة ليك"
-        subtitle={hasSignals ? "بناءً على بحثاتك ومفضلاتك" : "إعلانات جديدة ممكن تعجبك"}
+        title="ليك عروض تحفة"
+        subtitle={hasSignals ? "على حسب بحثاتك ومفضلاتك" : "إعلانات جديدة ممكن تعجبك"}
         icon="🔥"
         ads={personalizedAds}
         onToggleFavorite={handleToggleFavorite}
@@ -262,9 +291,9 @@ export default function HomePage() {
 
       {/* ─── 4. Matching Auctions (horizontal scroll) ──────────── */}
       <HorizontalSection
-        title="مزادات تناسبك"
-        subtitle={hasSignals ? "بناءً على اهتماماتك" : undefined}
-        icon="🔨"
+        title="شوف المزادات دي"
+        subtitle={hasSignals ? "على حسب اهتماماتك" : "زايد واكسب!"}
+        icon="🔥"
         ads={matchingAuctions}
         href="/auctions"
         onToggleFavorite={handleToggleFavorite}
@@ -272,19 +301,19 @@ export default function HomePage() {
 
       {/* ─── 5. New Ads Feed (infinite scroll grid) ────────────── */}
       <section className="px-4 pb-6">
-        <h2 className="text-sm font-bold text-dark mb-3">إعلانات جديدة</h2>
+        <h2 className="text-sm font-bold text-dark mb-3">جديد على مكسب</h2>
 
         {isLoading ? (
           <AdGridSkeleton count={4} />
         ) : feedError ? (
           <div className="py-8 text-center">
             <p className="text-4xl mb-3">⚠️</p>
-            <p className="text-sm text-gray-text mb-3">حصل مشكلة في تحميل الإعلانات</p>
+            <p className="text-sm text-gray-text mb-3">حصلت مشكلة في التحميل — معلش!</p>
             <button
               onClick={retryFeed}
               className="text-sm font-bold text-brand-green hover:text-brand-green-dark"
             >
-              جرب تاني
+              جرّب تاني
             </button>
           </div>
         ) : feedAds.length > 0 ? (
@@ -313,7 +342,7 @@ export default function HomePage() {
             {/* End of feed */}
             {!hasMore && (
               <p className="text-center text-xs text-gray-text py-6">
-                وصلت للآخر — مفيش إعلانات تانية دلوقتي
+                خلاص كده — مفيش إعلانات تانية دلوقتي 👋
               </p>
             )}
           </>
@@ -325,10 +354,10 @@ export default function HomePage() {
               أهلاً بيك في مكسب!
             </h3>
             <p className="text-sm text-gray-text mb-1">
-              أسهل وأذكى سوق على الإطلاق
+              بيع واشتري وبدّل بسهولة
             </p>
             <p className="text-sm text-gray-text mb-4">
-              كن أول واحد يضيف إعلان!
+              كن أول واحد يضيف إعلان هنا!
             </p>
             <Link href="/ad/create">
               <Button icon={<Plus size={18} />} size="lg">
@@ -350,6 +379,8 @@ export default function HomePage() {
           </Link>
         </section>
       )}
+
+      </PullToRefresh>
 
       <ShoppingAssistantFab />
       <BottomNavWithBadge />

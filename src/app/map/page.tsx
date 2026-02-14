@@ -323,7 +323,7 @@ export default function MapPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-dark line-clamp-1">{ad.title}</p>
                     <p className="text-xs font-bold text-brand-green mt-0.5">
-                      {ad.saleType === "auction" ? "🔨 مزاد" : ad.saleType === "exchange" ? "🔄 تبديل" : ""}
+                      {ad.saleType === "auction" ? "🔥 مزاد" : ad.saleType === "exchange" ? "🔄 للتبديل" : ""}
                       {ad.price ? ` ${formatPrice(ad.price)}` : ""}
                     </p>
                     <div className="flex items-center gap-2 mt-1">

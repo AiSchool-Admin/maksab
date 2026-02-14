@@ -20,9 +20,14 @@ const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
 
 function getSecret(): string {
-  const secret = process.env.OTP_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.OTP_SECRET;
   if (!secret) {
-    throw new Error("Missing OTP_SECRET or SUPABASE_SERVICE_ROLE_KEY");
+    // SECURITY: Do not fall back to SUPABASE_SERVICE_ROLE_KEY — it's a separate secret.
+    // In development, use a hardcoded dev-only secret.
+    if (process.env.NODE_ENV === "development") {
+      return "maksab-dev-otp-secret-not-for-production";
+    }
+    throw new Error("Missing OTP_SECRET environment variable. Set it in production.");
   }
   return secret;
 }
@@ -43,9 +48,16 @@ function generateOTP(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const phone = body.phone?.replace(/\D/g, "");
+    let phone = body.phone?.replace(/\D/g, "") || "";
 
-    // Validate Egyptian phone number
+    // Normalize: user may enter 10 digits without leading 0 (e.g. 1XXXXXXXXX)
+    if (/^1[0125]\d{8}$/.test(phone)) phone = `0${phone}`;
+    // Normalize: +20XXXXXXXXXX or 20XXXXXXXXXX
+    if (phone.startsWith("20") && phone.length === 12) phone = phone.slice(1);
+    // Normalize: 0020XXXXXXXXXX
+    if (phone.startsWith("0020") && phone.length === 14) phone = phone.slice(3);
+
+    // Validate Egyptian phone number (must be 01XXXXXXXXX after normalization)
     if (!phone || !/^01[0125]\d{8}$/.test(phone)) {
       return NextResponse.json(
         { error: "رقم الموبايل مش صحيح" },

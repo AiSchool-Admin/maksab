@@ -134,7 +134,7 @@ export function useLiveChat({ roomId, userId, userName }: UseLiveChatOptions) {
         id: crypto.randomUUID(),
         userId: "system",
         userName: "مكسب",
-        text: `🔨 ${bidderName} زايد بـ ${amount.toLocaleString("en-US")} جنيه`,
+        text: `🔥 ${bidderName} زايد بـ ${amount.toLocaleString("en-US")} جنيه`,
         timestamp: Date.now(),
         type: "bid",
       };

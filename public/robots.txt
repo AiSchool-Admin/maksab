@@ -1,0 +1,12 @@
+# مكسب Maksab — robots.txt
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /chat/
+Disallow: /my-ads/
+Disallow: /profile/edit
+Disallow: /favorites
+
+# Sitemap
+Sitemap: https://maksab.app/sitemap.xml

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#1B7A3D" />
+  <title>مكسب — بدون إنترنت</title>
+  <link rel="icon" href="/icons/icon-192x192.png" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', -apple-system, sans-serif;
+      background: #FFFFFF;
+      color: #1A1A2E;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1B7A3D;
+      margin-bottom: 32px;
+    }
+    .icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    p {
+      font-size: 14px;
+      color: #6B7280;
+      line-height: 1.7;
+      max-width: 320px;
+      margin-bottom: 24px;
+    }
+    .retry-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #1B7A3D;
+      color: white;
+      border: none;
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .retry-btn:hover { background: #145C2E; }
+    .retry-btn:active { transform: scale(0.97); }
+    .tips {
+      margin-top: 48px;
+      padding: 20px;
+      background: #F3F4F6;
+      border-radius: 16px;
+      max-width: 340px;
+      text-align: start;
+    }
+    .tips h2 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .tips ul {
+      list-style: none;
+      padding: 0;
+    }
+    .tips li {
+      font-size: 12px;
+      color: #6B7280;
+      padding: 4px 0;
+      padding-right: 16px;
+      position: relative;
+    }
+    .tips li::before {
+      content: '•';
+      position: absolute;
+      right: 0;
+      color: #1B7A3D;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">مكسب 💚</div>
+  <div class="icon">📡</div>
+  <h1>مفيش إنترنت دلوقتي</h1>
+  <p>مش قادرين نوصلك بالسيرفر. اتأكد إن الإنترنت شغال وجرّب تاني.</p>
+  <button class="retry-btn" onclick="window.location.reload()">
+    🔄 جرّب تاني
+  </button>
+  <div class="tips">
+    <h2>💡 نصائح</h2>
+    <ul>
+      <li>اتأكد إن الواي فاي أو البيانات شغالة</li>
+      <li>جرّب تقفل وتفتح التطبيق تاني</li>
+      <li>الصفحات اللي زرتها قبل كده ممكن تفتح offline</li>
+    </ul>
+  </div>
+</body>
+</html>

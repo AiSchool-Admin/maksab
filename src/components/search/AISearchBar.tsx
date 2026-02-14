@@ -189,11 +189,15 @@ export default function AISearchBar({
     <div ref={containerRef} className="relative">
       {/* Search input */}
       <form onSubmit={handleSubmit}>
-        <div className="flex items-center gap-2 bg-gray-light rounded-xl px-3 py-2.5 ring-2 ring-transparent focus-within:ring-brand-green/30 transition-all">
+        <div className="flex items-center gap-2 bg-white rounded-2xl px-4 py-3 border-2 border-gray-200 shadow-sm focus-within:border-brand-green focus-within:shadow-lg focus-within:shadow-brand-green/10 transition-all duration-300">
           {showAiPreview && aiPreview ? (
-            <Brain size={18} className="text-brand-green flex-shrink-0 animate-pulse" />
+            <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+              <Brain size={16} className="text-brand-green animate-pulse" />
+            </div>
           ) : (
-            <Search size={18} className="text-gray-text flex-shrink-0" />
+            <div className="w-8 h-8 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
+              <Search size={15} className="text-white" strokeWidth={2.5} />
+            </div>
           )}
           <input
             ref={inputRef}
@@ -201,8 +205,8 @@ export default function AISearchBar({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setIsFocused(true)}
-            placeholder="اكتب اللي في بالك... مكسب هيفهمك 🧠"
-            className="flex-1 bg-transparent text-sm text-dark placeholder:text-gray-text outline-none min-w-0"
+            placeholder="ابحث... سيارات، موبايلات، عقارات"
+            className="flex-1 bg-transparent text-sm text-dark placeholder:text-gray-400 outline-none min-w-0"
             autoFocus={autoFocus}
             autoComplete="off"
           />
@@ -213,10 +217,10 @@ export default function AISearchBar({
             <button
               type="button"
               onClick={handleClear}
-              className="p-0.5 text-gray-text hover:text-dark transition-colors"
+              className="p-1 rounded-full bg-gray-100 text-gray-text hover:bg-gray-200 hover:text-dark transition-colors"
               aria-label="مسح"
             >
-              <X size={16} />
+              <X size={14} />
             </button>
           )}
           {/* Image search button */}
@@ -226,9 +230,9 @@ export default function AISearchBar({
               setShowImageSearch(!showImageSearch);
               setIsFocused(false);
             }}
-            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+            className={`p-1.5 rounded-xl transition-all flex-shrink-0 ${
               showImageSearch
-                ? "bg-brand-green text-white"
+                ? "bg-brand-green text-white shadow-sm"
                 : "text-gray-text hover:text-brand-green hover:bg-brand-green-light"
             }`}
             aria-label="بحث بالصورة"
@@ -540,7 +544,7 @@ function getCategoryIcon(id: string): string {
 function getCategoryName(id: string): string {
   const names: Record<string, string> = {
     cars: "سيارات", real_estate: "عقارات", phones: "موبايلات", fashion: "موضة",
-    scrap: "خردة", gold: "ذهب", luxury: "فاخرة", appliances: "أجهزة",
+    scrap: "خردة", gold: "ذهب وفضة", luxury: "فاخرة", appliances: "أجهزة",
     furniture: "أثاث", hobbies: "هوايات", tools: "عدد", services: "خدمات",
   };
   return names[id] || id;

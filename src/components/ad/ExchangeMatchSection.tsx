@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeftRight, MapPin, MessageCircle, Zap, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeftRight, MapPin, MessageCircle, Zap, ArrowRight, User, Loader2 } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { findSmartExchangeMatches, findChainExchanges, parseExchangeWanted } from "@/lib/exchange/exchange-engine";
 import { MATCH_LEVEL_CONFIG } from "@/lib/exchange/types";
 import type { ExchangeMatchResult, ChainExchange, ExchangeWantedItem } from "@/lib/exchange/types";
@@ -81,6 +83,8 @@ export default function ExchangeMatchSection({
             matchScore: m.matchType === "perfect" ? 80 : 30,
             matchReasons: [m.matchReason],
             categoryIcon: "📦",
+            sellerId: null,
+            sellerName: null,
           })),
         );
       }
@@ -174,7 +178,7 @@ export default function ExchangeMatchSection({
       {/* ── Good matches ── */}
       {goodMatches.length > 0 && (
         <MatchGroup
-          title="مطابقات جيدة"
+          title="مطابقات كويسة"
           icon="👍"
           subtitle="إعلانات ممكن تناسبك للتبديل"
           matches={goodMatches}
@@ -243,6 +247,30 @@ function MatchGroup({
 
 function MatchCard({ match }: { match: ExchangeMatchResult }) {
   const levelConfig = MATCH_LEVEL_CONFIG[match.matchLevel];
+  const router = useRouter();
+  const { requireAuth } = useAuth();
+  const [isStartingChat, setIsStartingChat] = useState(false);
+
+  const handleContactForExchange = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const authedUser = await requireAuth();
+    if (!authedUser) return;
+    setIsStartingChat(true);
+    try {
+      const { findOrCreateConversation } = await import("@/lib/chat/chat-service");
+      const conv = await findOrCreateConversation(match.adId);
+      if (conv) {
+        router.push(`/chat/${conv.id}`);
+      } else {
+        router.push(`/ad/${match.adId}`);
+      }
+    } catch {
+      router.push(`/ad/${match.adId}`);
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
 
   return (
     <Link
@@ -269,7 +297,7 @@ function MatchCard({ match }: { match: ExchangeMatchResult }) {
 
         {/* Content */}
         <div className="flex-1 min-w-0 p-2.5">
-          {/* Match badge */}
+          {/* Match badge + seller name */}
           <div className="flex items-center gap-1.5 mb-1">
             <span
               className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full ${levelConfig.bgColor} ${levelConfig.color}`}
@@ -279,6 +307,12 @@ function MatchCard({ match }: { match: ExchangeMatchResult }) {
             <span className="text-[10px] text-gray-text font-medium">
               {match.matchScore}%
             </span>
+            {match.sellerName && (
+              <span className="flex items-center gap-0.5 text-[10px] text-gray-text mr-auto">
+                <User size={9} />
+                {match.sellerName}
+              </span>
+            )}
           </div>
 
           {/* Title */}
@@ -290,10 +324,10 @@ function MatchCard({ match }: { match: ExchangeMatchResult }) {
           <div className="flex items-center gap-2 text-[10px] text-gray-text mb-1">
             <span>
               {match.saleType === "exchange"
-                ? "🔄 تبديل"
+                ? "🔄 للتبديل"
                 : match.saleType === "auction"
-                  ? "🔨 مزاد"
-                  : "💵 نقدي"}
+                  ? "🔥 مزاد"
+                  : "💰 للبيع"}
             </span>
             {match.price != null && (
               <span className="font-semibold text-brand-green">
@@ -321,7 +355,7 @@ function MatchCard({ match }: { match: ExchangeMatchResult }) {
             </p>
           )}
 
-          {/* Location */}
+          {/* Location + contact button */}
           <div className="flex items-center justify-between mt-1">
             {match.governorate && (
               <span className="flex items-center gap-0.5 text-[10px] text-gray-text">
@@ -329,10 +363,15 @@ function MatchCard({ match }: { match: ExchangeMatchResult }) {
                 {match.governorate}
               </span>
             )}
-            <span className="flex items-center gap-0.5 text-[10px] text-brand-green font-semibold">
-              <MessageCircle size={10} />
-              تواصل
-            </span>
+            <button
+              type="button"
+              onClick={handleContactForExchange}
+              disabled={isStartingChat}
+              className="flex items-center gap-0.5 text-[10px] text-brand-green font-semibold hover:text-brand-green-dark transition-colors disabled:opacity-50"
+            >
+              {isStartingChat ? <Loader2 size={10} className="animate-spin" /> : <MessageCircle size={10} />}
+              كلّمه للتبديل
+            </button>
           </div>
         </div>
       </div>

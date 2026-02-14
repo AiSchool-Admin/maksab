@@ -3,7 +3,7 @@
 import { useState, useEffect, memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Heart, MapPin, Clock } from "lucide-react";
+import { Heart, MapPin, Clock, TrendingDown } from "lucide-react";
 import { formatPrice, formatTimeAgo, formatCountdown } from "@/lib/utils/format";
 
 interface AdCardProps {
@@ -27,13 +27,15 @@ interface AdCardProps {
   // Interaction
   isFavorited?: boolean;
   onToggleFavorite?: (id: string) => void;
+  // Price drop indicator (percentage, e.g. 15 means 15% drop)
+  priceDropPercent?: number;
 }
 
 const saleTypeBadge = {
-  cash: { label: "نقدي", icon: "💵", color: "bg-brand-green-light text-brand-green-dark" },
-  auction: { label: "مزاد", icon: "🔨", color: "bg-brand-gold-light text-brand-gold" },
-  live_auction: { label: "مباشر", icon: "📡", color: "bg-red-50 text-red-600 border border-red-200" },
-  exchange: { label: "تبديل", icon: "🔄", color: "bg-blue-50 text-blue-700" },
+  cash: { label: "للبيع", icon: "💰", color: "bg-brand-green-light text-brand-green-dark" },
+  auction: { label: "مزاد", icon: "🔥", color: "bg-gradient-to-l from-amber-100 to-orange-100 text-orange-700 border border-orange-200" },
+  live_auction: { label: "مزاد لايف", icon: "📡", color: "bg-red-50 text-red-600 border border-red-200 animate-pulse" },
+  exchange: { label: "للتبديل", icon: "🔄", color: "bg-gradient-to-l from-purple-50 to-indigo-50 text-purple-700 border border-purple-200" },
 };
 
 function AuctionTimer({ endsAt }: { endsAt: string }) {
@@ -54,15 +56,15 @@ function AuctionTimer({ endsAt }: { endsAt: string }) {
 
   if (remaining <= 0) {
     return (
-      <span className="text-[11px] text-error font-semibold">انتهى المزاد</span>
+      <span className="text-[11px] text-error font-bold">خلاص المزاد خلص!</span>
     );
   }
 
   return (
-    <div className={`flex items-center gap-1 text-[11px] font-semibold ${isUrgent ? "text-error" : "text-gray-text"}`}>
+    <div className={`flex items-center gap-1 text-[11px] font-bold ${isUrgent ? "text-error" : "text-orange-600"}`}>
       <Clock size={12} />
-      <span>متبقي: {formatCountdown(remaining)}</span>
-      {isUrgent && <span className="btn-icon-sm">🔥</span>}
+      <span>فاضل: {formatCountdown(remaining)}</span>
+      {isUrgent && <span className="btn-icon-sm">🔥 الحق!</span>}
     </div>
   );
 }
@@ -84,6 +86,7 @@ function AdCard({
   exchangeDescription,
   isFavorited = false,
   onToggleFavorite,
+  priceDropPercent,
 }: AdCardProps) {
   const badgeKey = isLiveAuction && saleType === "auction" ? "live_auction" : saleType;
   const badge = saleTypeBadge[badgeKey];
@@ -111,7 +114,7 @@ function AdCard({
 
           {/* Sale type badge */}
           <span
-            className={`absolute top-2 start-2 text-[11px] font-semibold px-2 py-1 rounded-lg backdrop-blur-sm flex items-center gap-1 ${badge.color}`}
+            className={`absolute top-2 start-2 text-[11px] font-bold px-2.5 py-1 rounded-lg backdrop-blur-sm flex items-center gap-1 shadow-sm ${badge.color}`}
           >
             {isLiveAuction && saleType === "auction" && (
               <span className="relative flex h-2 w-2">
@@ -121,6 +124,14 @@ function AdCard({
             )}
             {badge.icon} {badge.label}
           </span>
+
+          {/* Price drop badge */}
+          {priceDropPercent != null && priceDropPercent > 0 && (
+            <span className="absolute bottom-2 start-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-error/90 text-white backdrop-blur-sm flex items-center gap-0.5 shadow-sm">
+              <TrendingDown size={10} />
+              نزل {priceDropPercent}%
+            </span>
+          )}
 
           {/* Favorite button */}
           <button
@@ -134,7 +145,7 @@ function AdCard({
                 ? "bg-error/10 text-error"
                 : "bg-white/80 text-gray-text hover:text-error"
             }`}
-            aria-label={isFavorited ? "إزالة من المفضلة" : "إضافة للمفضلة"}
+            aria-label={isFavorited ? "شيل من المفضلة" : "حفظ في المفضلة"}
           >
             <Heart size={16} fill={isFavorited ? "currentColor" : "none"} />
           </button>
@@ -155,7 +166,7 @@ function AdCard({
               </p>
               {isNegotiable && (
                 <span className="text-[10px] text-gray-text font-medium">
-                  قابل للتفاوض
+                  الكلام فيه
                 </span>
               )}
             </div>
@@ -164,15 +175,15 @@ function AdCard({
           {saleType === "auction" && (
             <div className="mb-1.5 space-y-1">
               <div className="flex items-center justify-between">
-                <p className="text-brand-gold font-bold text-sm">
+                <p className="text-orange-600 font-bold text-sm">
                   {auctionHighestBid
-                    ? `أعلى مزايدة: ${formatPrice(auctionHighestBid)}`
+                    ? `🔥 وصل لـ ${formatPrice(auctionHighestBid)}`
                     : price != null
                       ? `يبدأ من ${formatPrice(price)}`
                       : ""}
                 </p>
                 {auctionBidsCount != null && auctionBidsCount > 0 && (
-                  <span className="text-[10px] text-gray-text btn-icon-sm">
+                  <span className="text-[10px] text-orange-500 font-bold bg-orange-50 px-1.5 py-0.5 rounded-full btn-icon-sm">
                     {auctionBidsCount} مزايدة
                   </span>
                 )}
@@ -183,9 +194,13 @@ function AdCard({
 
           {saleType === "exchange" && (
             <div className="mb-1.5">
-              {exchangeDescription && (
-                <p className="text-sm text-blue-700 font-medium line-clamp-1">
-                  🔄 عايز: {exchangeDescription}
+              {exchangeDescription ? (
+                <p className="text-sm text-purple-700 font-medium line-clamp-1">
+                  🔄 عايز يبدّل بـ: {exchangeDescription}
+                </p>
+              ) : (
+                <p className="text-sm text-purple-600 font-medium">
+                  🔄 تبدّل معايا؟
                 </p>
               )}
             </div>

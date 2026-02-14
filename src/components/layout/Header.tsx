@@ -3,8 +3,9 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronRight, Plus, LogIn, LogOut, Home } from "lucide-react";
+import { Bell, ChevronRight, Plus, LogIn, LogOut, Home, Moon, Sun } from "lucide-react";
 import { useNotificationStore } from "@/stores/notification-store";
+import { useThemeStore } from "@/stores/theme-store";
 import { useAuth } from "@/components/auth/AuthProvider";
 import NotificationDropdown from "@/components/notifications/NotificationDropdown";
 
@@ -24,6 +25,7 @@ export default function Header({
   const router = useRouter();
   const { user, isLoading, logout } = useAuth();
   const { unreadCount, isOpen, setOpen, load } = useNotificationStore();
+  const { theme, toggle: toggleTheme } = useThemeStore();
 
   // Load unread count on mount
   useEffect(() => {
@@ -118,6 +120,15 @@ export default function Header({
                 <span className="text-sm font-bold">أضف إعلان</span>
               </Link>
             )
+          )}
+          {!showBack && (
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-gray-text hover:text-brand-green transition-colors rounded-full hover:bg-gray-light"
+              aria-label={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الليلي"}
+            >
+              {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
           )}
           {actions}
           {showNotifications && (

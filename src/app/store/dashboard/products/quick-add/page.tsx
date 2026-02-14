@@ -10,12 +10,16 @@ import {
   Plus,
   Check,
   Zap,
+  Bookmark,
+  BookmarkCheck,
+  Trash2,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import DynamicCategoryForm from "@/components/ad/DynamicCategoryForm";
 import { useAuthStore } from "@/stores/auth-store";
+import { getSessionToken } from "@/lib/supabase/auth";
 import { getStoreByUserId } from "@/lib/stores/store-service";
 import {
   getCategoryById,
@@ -27,6 +31,12 @@ import {
 } from "@/lib/categories/generate";
 import { compressImage } from "@/lib/utils/image-compress";
 import type { CompressedImage } from "@/lib/utils/image-compress";
+import {
+  getTemplates,
+  saveTemplate,
+  deleteTemplate,
+  type ProductTemplate,
+} from "@/lib/stores/product-templates";
 import type { Store } from "@/types";
 
 const MAX_IMAGES = 5;
@@ -48,6 +58,12 @@ export default function QuickAddProductPage() {
   const [price, setPrice] = useState("");
   const [isNegotiable, setIsNegotiable] = useState(false);
   const [images, setImages] = useState<CompressedImage[]>([]);
+  // Templates
+  const [templates, setTemplates] = useState<ProductTemplate[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+
   // Publishing state
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPublishing, setIsPublishing] = useState(false);
@@ -88,7 +104,40 @@ export default function QuickAddProductPage() {
       setIsLoadingStore(false);
     }
     load();
+    setTemplates(getTemplates());
   }, [user, router]);
+
+  // Load template into form
+  const handleLoadTemplate = useCallback((tpl: ProductTemplate) => {
+    setCategoryId(tpl.category_id);
+    setSubcategoryId(tpl.subcategory_id || "");
+    setCategoryFields(tpl.category_fields);
+    if (tpl.default_price) setPrice(tpl.default_price);
+    setIsNegotiable(tpl.is_negotiable);
+    setShowTemplates(false);
+    setErrors({});
+  }, []);
+
+  // Save current form as template
+  const handleSaveTemplate = useCallback(() => {
+    if (!templateName.trim() || !categoryId) return;
+    const tpl = saveTemplate({
+      name: templateName.trim(),
+      category_id: categoryId,
+      subcategory_id: subcategoryId || undefined,
+      category_fields: categoryFields,
+      default_price: price || undefined,
+      is_negotiable: isNegotiable,
+    });
+    setTemplates(prev => [tpl, ...prev]);
+    setTemplateName("");
+    setShowSaveTemplate(false);
+  }, [templateName, categoryId, subcategoryId, categoryFields, price, isNegotiable]);
+
+  const handleDeleteTemplate = useCallback((tplId: string) => {
+    deleteTemplate(tplId);
+    setTemplates(prev => prev.filter(t => t.id !== tplId));
+  }, []);
 
   // Image handling
   const handleAddImages = useCallback(
@@ -245,7 +294,7 @@ export default function QuickAddProductPage() {
         const res = await fetch("/api/ads/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: user.id, ad_data: adData }),
+          body: JSON.stringify({ user_id: user.id, session_token: getSessionToken(), ad_data: adData }),
         });
 
         const result = await res.json();
@@ -358,6 +407,47 @@ export default function QuickAddProductPage() {
           <span className="text-sm font-bold">
             تم إضافة المنتج بنجاح! أضف منتج تاني
           </span>
+        </div>
+      )}
+
+      {/* Templates bar */}
+      {templates.length > 0 && (
+        <div className="px-4 mt-3">
+          <button
+            onClick={() => setShowTemplates(!showTemplates)}
+            className="flex items-center gap-2 text-sm font-semibold text-brand-green"
+          >
+            <BookmarkCheck size={16} />
+            القوالب المحفوظة ({templates.length})
+          </button>
+
+          {showTemplates && (
+            <div className="mt-2 space-y-1.5">
+              {templates.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  className="bg-white rounded-xl border border-gray-light p-3 flex items-center justify-between"
+                >
+                  <button
+                    onClick={() => handleLoadTemplate(tpl)}
+                    className="flex-1 text-start"
+                  >
+                    <p className="text-sm font-semibold text-dark">{tpl.name}</p>
+                    <p className="text-[10px] text-gray-text">
+                      {categoriesConfig.find(c => c.id === tpl.category_id)?.name || tpl.category_id}
+                      {tpl.default_price ? ` — ${Number(tpl.default_price).toLocaleString()} جنيه` : ""}
+                    </p>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTemplate(tpl.id)}
+                    className="p-1.5 text-gray-text hover:text-error"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -548,6 +638,45 @@ export default function QuickAddProductPage() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Save as template */}
+        {categoryId && (
+          <div className="bg-white rounded-xl border border-gray-light p-4">
+            {showSaveTemplate ? (
+              <div className="flex items-center gap-2">
+                <input
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="اسم القالب (مثلاً: موبايل سامسونج)"
+                  className="flex-1 text-sm px-3 py-2 bg-gray-light rounded-lg outline-none focus:bg-white focus:ring-1 focus:ring-brand-green"
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveTemplate()}
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveTemplate}
+                  disabled={!templateName.trim()}
+                  className="p-2 bg-brand-green text-white rounded-lg disabled:opacity-40"
+                >
+                  <Check size={16} />
+                </button>
+                <button
+                  onClick={() => setShowSaveTemplate(false)}
+                  className="p-2 text-gray-text"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSaveTemplate(true)}
+                className="flex items-center gap-2 text-sm text-brand-green font-semibold"
+              >
+                <Bookmark size={16} />
+                حفظ كقالب لاستخدامه لاحقاً
+              </button>
+            )}
           </div>
         )}
 

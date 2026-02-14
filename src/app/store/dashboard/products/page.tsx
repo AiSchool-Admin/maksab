@@ -16,6 +16,11 @@ import {
   Eye,
   X,
   Zap,
+  Copy,
+  FileSpreadsheet,
+  Camera,
+  Loader2,
+  Rocket,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { getStoreByUserId, getStoreProductsForDashboard } from "@/lib/stores/store-service";
@@ -135,16 +140,49 @@ export default function DashboardProductsPage() {
     setDeleteConfirm(null);
   }, []);
 
+  const [duplicating, setDuplicating] = useState<string | null>(null);
+
+  const handleDuplicate = useCallback(async (productId: string) => {
+    if (!user) return;
+    setDuplicating(productId);
+    setActiveMenu(null);
+    try {
+      const res = await fetch("/api/ads/duplicate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id, ad_id: productId }),
+      });
+      const result = await res.json();
+      if (res.ok && result.ad) {
+        // Add the duplicate to the list
+        const original = products.find(p => p.id === productId);
+        if (original) {
+          setProducts(prev => [{
+            ...original,
+            id: result.ad.id,
+            title: result.ad.title,
+            status: "active",
+            views_count: 0,
+            created_at: new Date().toISOString(),
+          }, ...prev]);
+        }
+      }
+    } catch {
+      // Silent fail
+    }
+    setDuplicating(null);
+  }, [user, products]);
+
   const saleTypeLabel: Record<string, string> = {
-    cash: "💵 نقدي",
-    auction: "🔨 مزاد",
-    exchange: "🔄 تبديل",
+    cash: "💰 للبيع",
+    auction: "🔥 مزاد",
+    exchange: "🔄 للتبديل",
   };
 
   const statusLabel: Record<string, { label: string; color: string }> = {
-    active: { label: "نشط", color: "bg-green-50 text-green-700" },
-    sold: { label: "مباع", color: "bg-blue-50 text-blue-700" },
-    expired: { label: "منتهي", color: "bg-gray-100 text-gray-500" },
+    active: { label: "شغال", color: "bg-green-50 text-green-700" },
+    sold: { label: "اتباع", color: "bg-blue-50 text-blue-700" },
+    expired: { label: "خلص", color: "bg-gray-100 text-gray-500" },
   };
 
   const filteredProducts = statusFilter === "all"
@@ -175,19 +213,33 @@ export default function DashboardProductsPage() {
           </button>
           <h1 className="text-base font-bold text-dark">المنتجات</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Link
-            href="/store/dashboard/products/quick-add"
-            className="flex items-center gap-1 bg-brand-green text-white text-xs font-bold px-3 py-2 rounded-xl"
+            href="/store/dashboard/products/rapid-entry"
+            className="flex items-center gap-1 bg-brand-green text-white text-xs font-bold px-2.5 py-2 rounded-xl"
           >
-            <Zap size={14} />
-            إضافة سريعة
+            <Rocket size={13} />
+            إدخال سريع
+          </Link>
+          <Link
+            href="/store/dashboard/products/bulk-photos"
+            className="flex items-center gap-1 bg-white text-brand-green text-xs font-bold px-2 py-2 rounded-xl border border-brand-green"
+            title="رفع صور بالجملة"
+          >
+            <Camera size={13} />
+          </Link>
+          <Link
+            href="/store/dashboard/products/bulk-import"
+            className="flex items-center gap-1 bg-white text-brand-green text-xs font-bold px-2 py-2 rounded-xl border border-brand-green"
+            title="استيراد من Excel"
+          >
+            <FileSpreadsheet size={13} />
           </Link>
           <Link
             href="/ad/create"
-            className="flex items-center gap-1 bg-white text-brand-green text-xs font-bold px-2.5 py-2 rounded-xl border border-brand-green"
+            className="flex items-center gap-1 bg-white text-brand-green text-xs font-bold px-2 py-2 rounded-xl border border-brand-green"
           >
-            <Plus size={14} />
+            <Plus size={13} />
           </Link>
         </div>
       </header>
@@ -313,6 +365,17 @@ export default function DashboardProductsPage() {
                       <Edit size={14} />
                       تعديل
                     </Link>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDuplicate(product.id);
+                      }}
+                      disabled={duplicating === product.id}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-brand-green hover:bg-green-50 w-full disabled:opacity-50"
+                    >
+                      {duplicating === product.id ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
+                      نسخ المنتج
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

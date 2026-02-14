@@ -9,6 +9,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
+import { verifySessionToken } from "@/lib/auth/session-token";
+import { validateAdData } from "@/lib/validation/ad-validation";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,12 +24,62 @@ function getServiceClient() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { user_id, ad_data } = body;
+    const { user_id: bodyUserId, session_token, ad_data } = body;
 
-    if (!user_id || !ad_data) {
+    if (!ad_data) {
       return NextResponse.json(
         { error: "بيانات ناقصة" },
         { status: 400 },
+      );
+    }
+
+    // ── Authenticate user via session token ──────────────────────────
+    let user_id: string;
+
+    if (session_token) {
+      // Verify the server-signed session token (primary auth method)
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json(
+          { error: tokenResult.error },
+          { status: 401 },
+        );
+      }
+      user_id = tokenResult.userId;
+
+      // If body also sent user_id, it must match the token
+      if (bodyUserId && bodyUserId !== user_id) {
+        return NextResponse.json(
+          { error: "بيانات المصادقة مش متطابقة" },
+          { status: 403 },
+        );
+      }
+    } else if (bodyUserId) {
+      // Fallback: accept user_id from body but verify via Supabase auth session
+      const authHeader = req.headers.get("authorization");
+      if (authHeader?.startsWith("Bearer ")) {
+        const supabaseAnon = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        );
+        const { data: { user: authUser } } = await supabaseAnon.auth.getUser(authHeader.slice(7));
+        if (!authUser || authUser.id !== bodyUserId) {
+          return NextResponse.json(
+            { error: "غير مصرح. سجل دخول تاني" },
+            { status: 401 },
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { error: "مطلوب توكن الجلسة. سجل خروج وادخل تاني" },
+          { status: 401 },
+        );
+      }
+      user_id = bodyUserId;
+    } else {
+      return NextResponse.json(
+        { error: "مطلوب تسجيل الدخول" },
+        { status: 401 },
       );
     }
 
@@ -53,6 +105,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "المستخدم مش موجود. سجل خروج وادخل تاني" },
         { status: 401 },
+      );
+    }
+
+    // ── Validate ad_data (including category_fields) ──────────────────
+    const validation = validateAdData(ad_data);
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: 400 },
       );
     }
 
@@ -154,8 +215,12 @@ export async function POST(req: NextRequest) {
       auction_buy_now_price: ad_data.auction_buy_now_price ?? null,
       auction_duration_hours: ad_data.auction_duration_hours ?? null,
       auction_min_increment: ad_data.auction_min_increment ?? null,
-      auction_ends_at: ad_data.auction_ends_at ?? null,
-      auction_status: ad_data.auction_status ?? null,
+      auction_ends_at:
+        ad_data.auction_ends_at ??
+        (ad_data.sale_type === "auction" && ad_data.auction_duration_hours
+          ? new Date(Date.now() + ad_data.auction_duration_hours * 3600_000).toISOString()
+          : null),
+      auction_status: ad_data.sale_type === "auction" ? "active" : null,
       // Exchange
       exchange_description: ad_data.exchange_description ?? null,
       exchange_accepts_price_diff: ad_data.exchange_accepts_price_diff ?? false,
@@ -187,9 +252,32 @@ export async function POST(req: NextRequest) {
     // Record rate limit usage after successful creation
     await recordRateLimit(user_id, "ad_create");
 
+    // Fire-and-forget: notify matching buyers and exchange matches
+    const adId = (insertedAd as Record<string, unknown>)?.id as string | null;
+    if (adId) {
+      const adNotifData = {
+        id: adId,
+        title: ad_data.title,
+        category_id: ad_data.category_id,
+        subcategory_id: ad_data.subcategory_id || null,
+        sale_type: ad_data.sale_type,
+        price: ad_data.price ?? null,
+        governorate: ad_data.governorate || null,
+        user_id,
+        category_fields: ad_data.category_fields || {},
+      };
+
+      import("@/lib/notifications/smart-notifications").then(({ notifyMatchingBuyers, notifyExchangeMatch }) => {
+        notifyMatchingBuyers(adNotifData).catch(() => {});
+        if (ad_data.sale_type === "exchange") {
+          notifyExchangeMatch(adNotifData).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+
     return NextResponse.json({
       success: true,
-      ad_id: (insertedAd as Record<string, unknown>)?.id || null,
+      ad_id: adId,
     });
   } catch (err) {
     console.error("[ads/create] Error:", err);

@@ -121,6 +121,7 @@ export default function AdDetailPage({
   const [sellerIsIdVerified, setSellerIsIdVerified] = useState(false);
   const [reviewsKey, setReviewsKey] = useState(0); // force refresh reviews
   const [sellerLoyaltyLevel, setSellerLoyaltyLevel] = useState<"member" | "silver" | "gold" | "diamond">("member");
+  const [sellerRank, setSellerRank] = useState<"beginner" | "good" | "pro" | "elite">("beginner");
 
   const [notFound, setNotFound] = useState(false);
   const [autoDropEnabled, setAutoDropEnabled] = useState(false);
@@ -138,6 +139,17 @@ export default function AdDetailPage({
       }
       setAd(data);
       setIsFavorited(data.isFavorited);
+
+      // Track recently viewed
+      import("@/lib/hooks/useRecentlyViewed").then(({ addToRecentlyViewed }) => {
+        addToRecentlyViewed({
+          id: data.id,
+          title: data.title,
+          image: data.images?.[0] ?? null,
+          price: data.price,
+          saleType: data.saleType as "cash" | "auction" | "exchange",
+        });
+      });
 
       // Initialize auction state
       if (data.saleType === "auction" && data.auctionStartPrice) {
@@ -177,6 +189,11 @@ export default function AdDetailPage({
         const loyaltyProfile = getUserLoyaltyProfile(sellerId);
         setSellerLoyaltyLevel(loyaltyProfile.currentLevel);
       }),
+      import("@/lib/social/seller-rank-service").then(({ calculateSellerScore }) =>
+        calculateSellerScore(sellerId).then((breakdown) => {
+          setSellerRank(breakdown.rank);
+        })
+      ),
     ]).catch(() => {});
   }, [ad?.seller?.id]);
 
@@ -242,15 +259,26 @@ export default function AdDetailPage({
   };
 
   const handleShare = async () => {
-    if (navigator.share && ad) {
+    if (!ad) return;
+    const shareData = {
+      title: ad.title,
+      text: `${ad.title} على مكسب`,
+      url: window.location.href,
+    };
+    if (navigator.share) {
       try {
-        await navigator.share({
-          title: ad.title,
-          text: `${ad.title} على مكسب`,
-          url: window.location.href,
-        });
+        await navigator.share(shareData);
       } catch {
-        // User cancelled
+        // User cancelled or share failed
+      }
+    } else {
+      // Fallback: copy link to clipboard
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        const { default: toast } = await import("react-hot-toast");
+        toast.success("تم نسخ رابط الإعلان");
+      } catch {
+        // Clipboard not available
       }
     }
   };
@@ -406,10 +434,10 @@ export default function AdDetailPage({
   /* ── Sale type label ───────────────────────────────── */
   const saleLabel =
     ad.saleType === "cash"
-      ? `💵 بيع نقدي${ad.isNegotiable ? " — قابل للتفاوض" : ""}`
+      ? `💰 للبيع${ad.isNegotiable ? " — الكلام فيه" : ""}`
       : ad.saleType === "auction"
-        ? "🔨 مزاد"
-        : "🔄 تبديل";
+        ? "🔥 مزاد"
+        : "🔄 للتبديل";
 
   /* ── Member since ──────────────────────────────────── */
   const memberYear = new Date(ad.seller.memberSince).getFullYear();
@@ -453,7 +481,7 @@ export default function AdDetailPage({
                   : "text-gray-text hover:text-error hover:bg-gray-light"
               }`}
               aria-label={
-                isFavorited ? "إزالة من المفضلة" : "إضافة للمفضلة"
+                isFavorited ? "شيل من المفضلة" : "حفظ في المفضلة"
               }
             >
               <Heart
@@ -522,8 +550,8 @@ export default function AdDetailPage({
             </p>
           )}
           {ad.saleType === "exchange" && (
-            <p className="text-xl font-bold text-blue-700 mb-1">
-              🔄 للتبديل
+            <p className="text-xl font-bold text-purple-700 mb-1">
+              🔄 تبدّل معايا؟
             </p>
           )}
           <span className="text-sm text-gray-text">{saleLabel}</span>
@@ -591,11 +619,11 @@ export default function AdDetailPage({
 
         {/* Exchange details — structured display */}
         {ad.saleType === "exchange" && Boolean(ad.exchangeDescription || (ad.categoryFields as Record<string, unknown>)?.exchange_wanted) && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+          <div className="bg-gradient-to-l from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-4 space-y-2">
             <h3 className="text-sm font-bold text-dark flex items-center gap-1.5">
-              🔄 عايز يبدل بـ:
+              🔄 عايز يبدّل بـ:
             </h3>
-            <p className="text-base font-bold text-blue-700">
+            <p className="text-base font-bold text-purple-700">
               {ad.exchangeDescription}
             </p>
             {ad.exchangeAcceptsPriceDiff && ad.exchangePriceDiff && (
@@ -705,7 +733,7 @@ export default function AdDetailPage({
                   <Link href={`/user/${ad.seller.id}`} className="font-bold text-dark text-sm hover:text-brand-green transition-colors">
                     {ad.seller.displayName}
                   </Link>
-                  <SellerRankBadge rank="beginner" size="sm" />
+                  <SellerRankBadge rank={sellerRank} size="sm" />
                   <VerificationBadge level={sellerVerificationLevel} />
                   <LoyaltyBadge level={sellerLoyaltyLevel} size="sm" />
                   {sellerIsTrusted && <TrustedSellerBadge />}
@@ -814,7 +842,7 @@ export default function AdDetailPage({
         {similarAds.length > 0 && (
           <div>
             <h3 className="text-sm font-bold text-dark mb-3">
-              🎯 شبيه اللي بتدور عليه
+              🎯 إعلانات شبه دي — يمكن تعجبك
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {similarAds.map((simAd) => (

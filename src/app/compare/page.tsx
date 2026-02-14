@@ -185,10 +185,10 @@ export default function ComparePage() {
                   </p>
                   <p className="text-[11px] text-gray-text">
                     {ad.saleType === "cash"
-                      ? "💵 نقدي"
+                      ? "💰 للبيع"
                       : ad.saleType === "auction"
-                        ? "🔨 مزاد"
-                        : "🔄 تبديل"}
+                        ? "🔥 مزاد"
+                        : "🔄 للتبديل"}
                   </p>
                 </td>
               ))}
