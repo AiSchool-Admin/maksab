@@ -5,7 +5,11 @@ import ThemeProvider from "@/components/theme/ThemeProvider";
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration";
 import UpdateBanner from "@/components/pwa/UpdateBanner";
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget";
+import { validateEnv } from "@/lib/env-check";
 import "./globals.css";
+
+// Validate environment variables at startup (server-side only)
+validateEnv();
 
 const cairo = localFont({
   src: "../fonts/Cairo-Variable.ttf",
