@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, X } from "lucide-react";
 import { categoriesConfig, getCategoryById } from "@/lib/categories/categories-config";
 import { governorates, citiesByGovernorate } from "@/lib/data/governorates";
@@ -26,7 +27,7 @@ interface FilterChipsProps {
   onCategoryFilterChange?: (fieldId: string, value: string | undefined) => void;
 }
 
-/* ── Filter chip dropdown component ─────────────────────────────────── */
+/* ── Filter chip dropdown component (uses Portal to escape overflow) ── */
 
 interface ChipDropdownProps {
   label: string;
@@ -36,21 +37,54 @@ interface ChipDropdownProps {
 
 function ChipDropdown({ label, isActive, children }: ChipDropdownProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, right: 0 });
+
+  // Calculate dropdown position from button
+  const updatePosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setPosition({
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+  }, []);
 
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
+    if (!open) return;
+    updatePosition();
+
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        buttonRef.current?.contains(e.target as Node) ||
+        dropdownRef.current?.contains(e.target as Node)
+      ) {
+        return;
       }
+      setOpen(false);
     }
-    if (open) document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+
+    function handleScroll() {
+      updatePosition();
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside as EventListener);
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", handleScroll);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside as EventListener);
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, [open, updatePosition]);
 
   return (
-    <div ref={ref} className="relative flex-shrink-0">
+    <div className="relative flex-shrink-0">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
@@ -65,11 +99,21 @@ function ChipDropdown({ label, isActive, children }: ChipDropdownProps) {
           className={`transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && (
-        <div className="absolute top-full mt-1 start-0 bg-white rounded-xl shadow-lg border border-gray-light z-50 min-w-[200px] max-h-60 overflow-y-auto">
-          {children}
-        </div>
-      )}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="fixed bg-white rounded-xl shadow-lg border border-gray-light z-[9999] min-w-[200px] max-h-60 overflow-y-auto"
+            style={{
+              top: position.top,
+              right: position.right,
+            }}
+          >
+            {children}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

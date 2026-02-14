@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       query,
+      originalQuery,
       category,
       subcategory,
       saleType,
@@ -39,8 +40,11 @@ export async function POST(request: NextRequest) {
     const offset = page * limit;
 
     // Try RPC first (full-text + fuzzy)
+    // Pass the original user-typed query (before AI cleaning) if no clean query available
+    const rpcQuery = query || originalQuery || null;
+    // Pass categoryFilters as object (not string) so PostgREST maps it to JSONB correctly
     const { data, error } = await supabase.rpc("search_ads_advanced" as never, {
-      p_query: query || null,
+      p_query: rpcQuery,
       p_category: category || null,
       p_subcategory: subcategory || null,
       p_sale_type: saleType || null,
@@ -50,7 +54,9 @@ export async function POST(request: NextRequest) {
       p_city: city || null,
       p_condition: condition || null,
       p_sort_by: sortBy || "relevance",
-      p_category_filters: categoryFilters ? JSON.stringify(categoryFilters) : null,
+      p_category_filters: categoryFilters && Object.keys(categoryFilters).length > 0
+        ? categoryFilters
+        : null,
       p_limit: limit,
       p_offset: offset,
     } as never);
@@ -58,7 +64,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       // Fallback to basic search if RPC doesn't exist yet
       console.warn("RPC search_ads_advanced failed, falling back:", error.message);
-      return fallbackSearch(supabase, body, offset, limit);
+      return fallbackSearch(supabase, { ...body, originalQuery }, offset, limit);
     }
 
     const rows = (data || []) as Record<string, unknown>[];
@@ -166,7 +172,7 @@ function buildFallbackQuery(
   if (body.condition === "new") {
     q = q.in("category_fields->>condition", ["new", "sealed", "new_tagged", "new_no_tag"]);
   } else if (body.condition === "used") {
-    q = q.not("category_fields->>condition", "in", '("new","sealed","new_tagged","new_no_tag")');
+    q = q.not("category_fields->>condition", "in", "(new,sealed,new_tagged,new_no_tag)");
   }
 
   // Apply category-specific JSONB filters (brand, karat, storage, etc.)
@@ -193,7 +199,7 @@ function buildFallbackQuery(
   return q;
 }
 
-/** Fallback when RPC is not available */
+/** Fallback when RPC is not available — progressive relaxation */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fallbackSearch(
   supabase: any,
@@ -232,28 +238,65 @@ async function fallbackSearch(
     };
     });
 
-  // Try with text search first
+  // Also try with original query text (before AI cleaning) for ILIKE matching
+  const originalQuery = body.originalQuery as string | undefined;
+
+  // Step 1: Try full query with all filters (strictest)
   const q = buildFallbackQuery(supabase, body, true)
     .range(offset, offset + limit - 1);
 
   const { data, error, count } = await q;
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.warn("Fallback search step 1 error:", error.message);
   }
 
-  const rows = (data || []) as Record<string, unknown>[];
+  let rows = (!error && data ? data : []) as Record<string, unknown>[];
 
-  // If text search returned 0 results but we have category/other filters,
-  // retry without text search to show broader category results
-  if (rows.length === 0 && body.query && (body.category || body.categoryFilters)) {
-    const broaderQ = buildFallbackQuery(supabase, body, false)
+  // Step 2: If 0 results and we have an original query, try with original text + category (no categoryFilters)
+  if (rows.length === 0 && (originalQuery || body.query)) {
+    const relaxedBody: Record<string, unknown> = { ...body, categoryFilters: undefined };
+    // Use original query for text search if available
+    if (originalQuery && !body.query) {
+      relaxedBody.query = originalQuery;
+    }
+    const relaxedQ = buildFallbackQuery(supabase, relaxedBody, true)
       .range(offset, offset + limit - 1);
 
-    const { data: broaderData, error: broaderError, count: broaderCount } = await broaderQ;
-    if (!broaderError && broaderData && (broaderData as unknown[]).length > 0) {
-      const broaderRows = broaderData as Record<string, unknown>[];
-      const ads = formatRows(broaderRows);
-      const total = broaderCount ?? ads.length;
+    const { data: rData, error: rErr, count: rCount } = await relaxedQ;
+    if (!rErr && rData && (rData as unknown[]).length > 0) {
+      const rRows = rData as Record<string, unknown>[];
+      const ads = formatRows(rRows);
+      const total = rCount ?? ads.length;
+      return NextResponse.json({
+        ads,
+        total,
+        hasMore: offset + limit < total,
+        page: Math.floor(offset / limit),
+        searchMethod: "relaxed",
+      });
+    }
+  }
+
+  // Step 3: If still 0 results and we have category, try category-only (no text, no categoryFilters)
+  if (rows.length === 0 && body.category) {
+    const categoryOnlyBody = {
+      category: body.category,
+      subcategory: body.subcategory,
+      saleType: body.saleType,
+      priceMin: body.priceMin,
+      priceMax: body.priceMax,
+      governorate: body.governorate,
+      city: body.city,
+      sortBy: body.sortBy,
+    };
+    const catQ = buildFallbackQuery(supabase, categoryOnlyBody, false)
+      .range(offset, offset + limit - 1);
+
+    const { data: catData, error: catErr, count: catCount } = await catQ;
+    if (!catErr && catData && (catData as unknown[]).length > 0) {
+      const catRows = catData as Record<string, unknown>[];
+      const ads = formatRows(catRows);
+      const total = catCount ?? ads.length;
       return NextResponse.json({
         ads,
         total,

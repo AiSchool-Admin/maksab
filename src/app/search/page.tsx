@@ -85,7 +85,7 @@ function SearchPageInner() {
   const [isImageSearching, setIsImageSearching] = useState(false);
 
   /* ── Build SearchFilters from state ────────────────────────────────── */
-  const buildFilters = useCallback((): SearchFilters => {
+  const buildFilters = useCallback((): SearchFilters & { originalQuery?: string } => {
     // Use AI-parsed cleanQuery when available — this removes keywords that
     // were already consumed by entity extraction (category, brand, etc.).
     // e.g. "شنطة" → category=fashion, cleanQuery="" → no redundant text filter
@@ -96,6 +96,9 @@ function SearchPageInner() {
 
     return {
       query: effectiveQuery,
+      // Always pass original query so the API can use it for ILIKE fallback
+      // when AI-extracted filters return 0 results
+      originalQuery: query || undefined,
       category: filters.category,
       subcategory: filters.subcategory,
       saleType: filters.saleType,
@@ -141,6 +144,7 @@ function SearchPageInner() {
       const result = await advancedSearch(
         {
           query: searchFilters.query,
+          originalQuery: searchFilters.originalQuery,
           category: searchFilters.category,
           subcategory: searchFilters.subcategory,
           saleType: searchFilters.saleType,
@@ -197,6 +201,7 @@ function SearchPageInner() {
     const result = await advancedSearch(
       {
         query: sf.query,
+        originalQuery: sf.originalQuery,
         category: sf.category,
         subcategory: sf.subcategory,
         saleType: sf.saleType,
