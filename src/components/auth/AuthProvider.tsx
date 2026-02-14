@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase/client";
 import { trackPresence, cleanupAllChannels } from "@/lib/chat/realtime";
 import { useAuthStore } from "@/stores/auth-store";
 import AuthBottomSheet, { type AccountType } from "./AuthBottomSheet";
+import PostLoginPushPrompt from "@/components/notifications/PostLoginPushPrompt";
 
 // ── Merchant pending flag ────────────────────────────────────────────
 const MERCHANT_FLAG_KEY = "maksab_pending_merchant";
@@ -63,6 +64,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
   // Store resolve callback so we can resolve the promise when login completes
   const [authResolve, setAuthResolve] = useState<
     ((user: UserProfile | null) => void) | null
@@ -188,6 +190,16 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         setPendingMerchant();
         router.push("/store/create");
       }
+
+      // Show push notification prompt after successful login (if not already granted)
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "default"
+      ) {
+        // Small delay so the login flow completes first
+        setTimeout(() => setShowPushPrompt(true), 1500);
+      }
     },
     [authResolve, router],
   );
@@ -227,6 +239,12 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         onClose={handleAuthClose}
         onSuccess={handleAuthSuccess}
       />
+      {showPushPrompt && user && (
+        <PostLoginPushPrompt
+          userId={user.id}
+          onClose={() => setShowPushPrompt(false)}
+        />
+      )}
     </AuthContext.Provider>
   );
 }
