@@ -59,7 +59,7 @@ export default function RecentlyViewed() {
                       : "bg-brand-green text-white"
                 }`}
               >
-                {item.saleType === "auction" ? "🔨" : item.saleType === "exchange" ? "🔄" : "💵"}
+                {item.saleType === "auction" ? "🔥" : item.saleType === "exchange" ? "🔄" : "💰"}
               </span>
             </div>
             <p className="text-[11px] font-semibold text-dark line-clamp-1 leading-tight">

@@ -28,12 +28,12 @@ export interface AppNotification {
 /** Map notification types to icons */
 export const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   chat: "💬",
-  auction_bid: "🔨",
+  auction_bid: "🔥",
   auction_outbid: "⚠️",
   auction_ending: "⏰",
   auction_ended: "🏆",
   auction_won: "🎉",
-  auction_ended_no_bids: "🔨",
+  auction_ended_no_bids: "🔥",
   favorite_price_drop: "💰",
   recommendation: "🔥",
   new_match: "🎯",

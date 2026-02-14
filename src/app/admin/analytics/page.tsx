@@ -20,9 +20,9 @@ function formatPrice(n: number): string {
 }
 
 const saleTypeNames: Record<string, { label: string; icon: string; color: string }> = {
-  cash: { label: "بيع نقدي", icon: "💵", color: "bg-green-500" },
-  auction: { label: "مزاد", icon: "🔨", color: "bg-purple-500" },
-  exchange: { label: "تبديل", icon: "🔄", color: "bg-blue-500" },
+  cash: { label: "للبيع", icon: "💰", color: "bg-green-500" },
+  auction: { label: "مزاد", icon: "🔥", color: "bg-purple-500" },
+  exchange: { label: "للتبديل", icon: "🔄", color: "bg-blue-500" },
 };
 
 function BarRow({ label, value, maxValue, color, subtitle }: {

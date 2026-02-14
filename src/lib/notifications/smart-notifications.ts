@@ -251,19 +251,19 @@ export async function notifyMatchingBuyers(ad: NewAdData): Promise<number> {
 
       const saleTypeLabel =
         ad.sale_type === "auction"
-          ? "🔨 مزاد"
+          ? "🔥 مزاد"
           : ad.sale_type === "exchange"
-            ? "🔄 تبديل"
-            : "💵 نقدي";
+            ? "🔄 للتبديل"
+            : "💰 للبيع";
 
       const bodyText = reason
-        ? `${ad.title} — ${saleTypeLabel}\nبناءً على بحثك عن "${reason}"`
+        ? `${ad.title} — ${saleTypeLabel}\nعشان أنت دورت على "${reason}"`
         : `${ad.title} — ${saleTypeLabel}`;
 
       notifications.push({
         user_id: userId,
         type: "new_match",
-        title: "إعلان جديد يطابق بحثك! 🎯",
+        title: "فيه إعلان جديد يناسبك! 🎯",
         body: bodyText,
         ad_id: ad.id,
         data: { ad_id: ad.id, sale_type: ad.sale_type },
@@ -389,7 +389,7 @@ export async function notifyAuctionBid(params: {
       await client.from("notifications").insert({
         user_id: params.sellerId,
         type: "auction_bid",
-        title: "مزايدة جديدة! 🔨",
+        title: "مزايدة جديدة! 🔥",
         body: `${params.bidderName} زايد بـ ${formattedAmount} جنيه على "${params.adTitle}"`,
         ad_id: params.adId,
         data: { bidder_id: params.bidderId, amount: params.bidAmount },
@@ -398,7 +398,7 @@ export async function notifyAuctionBid(params: {
       await sendPushToUser(
         client,
         params.sellerId,
-        "مزايدة جديدة! 🔨",
+        "مزايدة جديدة! 🔥",
         `${params.bidderName} زايد بـ ${formattedAmount} جنيه`,
         `/ad/${params.adId}`,
       );

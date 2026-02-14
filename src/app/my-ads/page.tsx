@@ -51,9 +51,9 @@ function getExpiryWarning(daysLeft: number | null): { text: string; color: strin
 
 const tabs: { id: TabFilter; label: string }[] = [
   { id: "all", label: "الكل" },
-  { id: "active", label: "نشط" },
-  { id: "sold", label: "تم البيع" },
-  { id: "expired", label: "منتهي" },
+  { id: "active", label: "شغال" },
+  { id: "sold", label: "اتباع" },
+  { id: "expired", label: "خلص" },
 ];
 
 export default function MyAdsPage() {
@@ -219,9 +219,9 @@ export default function MyAdsPage() {
             icon={activeTab === "sold" ? "🎉" : activeTab === "expired" ? "⏰" : "📦"}
             title={
               activeTab === "sold"
-                ? "مفيش إعلانات مباعة"
+                ? "لسه مبعتش حاجة"
                 : activeTab === "expired"
-                  ? "مفيش إعلانات منتهية"
+                  ? "مفيش إعلانات خلصت"
                   : "مفيش إعلانات"
             }
             description={
@@ -260,7 +260,7 @@ export default function MyAdsPage() {
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-2xl">
                         {ad.saleType === "auction"
-                          ? "🔨"
+                          ? "🔥"
                           : ad.saleType === "exchange"
                             ? "🔄"
                             : "📷"}
@@ -303,7 +303,7 @@ export default function MyAdsPage() {
                                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-blue-600 hover:bg-gray-light transition-colors"
                                 >
                                   <CheckCircle size={14} />
-                                  تم البيع
+                                  خلاص اتباع
                                 </button>
                               </>
                             )}
@@ -313,7 +313,7 @@ export default function MyAdsPage() {
                                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-brand-green hover:bg-gray-light transition-colors"
                               >
                                 <RefreshCw size={14} />
-                                تجديد
+                                جدّد
                               </button>
                             )}
                             <button

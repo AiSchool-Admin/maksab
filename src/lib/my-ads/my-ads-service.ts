@@ -91,15 +91,15 @@ export async function deleteAd(
 export function getStatusLabel(status: AdStatus): { label: string; color: string } {
   switch (status) {
     case "active":
-      return { label: "نشط", color: "bg-brand-green/10 text-brand-green" };
+      return { label: "شغال", color: "bg-brand-green/10 text-brand-green" };
     case "sold":
-      return { label: "تم البيع", color: "bg-blue-100 text-blue-700" };
+      return { label: "اتباع", color: "bg-blue-100 text-blue-700" };
     case "exchanged":
-      return { label: "تم التبديل", color: "bg-purple-100 text-purple-700" };
+      return { label: "اتبدّل", color: "bg-purple-100 text-purple-700" };
     case "expired":
-      return { label: "منتهي", color: "bg-orange-100 text-orange-700" };
+      return { label: "خلص", color: "bg-orange-100 text-orange-700" };
     case "deleted":
-      return { label: "محذوف", color: "bg-gray-200 text-gray-text" };
+      return { label: "اتحذف", color: "bg-gray-200 text-gray-text" };
     default:
       return { label: status, color: "bg-gray-200 text-gray-text" };
   }

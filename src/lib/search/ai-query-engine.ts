@@ -677,7 +677,7 @@ export function generateRefinements(parsed: AIParsedQuery): SearchRefinement[] {
   // Suggest sale types
   if (!parsed.saleType) {
     refinements.push({ label: "تبديل فقط", type: "saleType", value: "exchange", icon: "🔄" });
-    refinements.push({ label: "مزادات فقط", type: "saleType", value: "auction", icon: "🔨" });
+    refinements.push({ label: "مزادات فقط", type: "saleType", value: "auction", icon: "🔥" });
   }
 
   // Suggest condition

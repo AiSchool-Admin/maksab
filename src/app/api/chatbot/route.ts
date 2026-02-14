@@ -336,7 +336,7 @@ async function generateResponse(message: string, history?: ChatMessage[]): Promi
       let response = `لقيتلك ${ads.length} إعلان${intent.brand ? ` لـ ${intent.brand}` : ""}${intent.maxPrice ? ` بأقل من ${intent.maxPrice.toLocaleString("en-US")} جنيه` : ""}:\n\n`;
 
       ads.forEach((ad, i) => {
-        const icon = ad.saleType === "auction" ? "🔨" : ad.saleType === "exchange" ? "🔄" : "💵";
+        const icon = ad.saleType === "auction" ? "🔥" : ad.saleType === "exchange" ? "🔄" : "💰";
         response += `${i + 1}. ${icon} ${ad.title}\n`;
         if (ad.price) response += `   💰 ${ad.price.toLocaleString("en-US")} جنيه`;
         if (ad.governorate) response += ` · 📍 ${ad.governorate}`;
@@ -410,7 +410,7 @@ async function generateResponse(message: string, history?: ChatMessage[]): Promi
 
       let response = "🔍 لقيتلك بدائل ممكن تعجبك:\n\n";
       ads.forEach((ad, i) => {
-        const icon = ad.saleType === "auction" ? "🔨" : ad.saleType === "exchange" ? "🔄" : "💵";
+        const icon = ad.saleType === "auction" ? "🔥" : ad.saleType === "exchange" ? "🔄" : "💰";
         response += `${i + 1}. ${icon} ${ad.title}\n`;
         if (ad.price) response += `   💰 ${ad.price.toLocaleString("en-US")} جنيه\n`;
       });

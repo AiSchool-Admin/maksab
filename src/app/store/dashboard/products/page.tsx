@@ -174,15 +174,15 @@ export default function DashboardProductsPage() {
   }, [user, products]);
 
   const saleTypeLabel: Record<string, string> = {
-    cash: "💵 نقدي",
-    auction: "🔨 مزاد",
-    exchange: "🔄 تبديل",
+    cash: "💰 للبيع",
+    auction: "🔥 مزاد",
+    exchange: "🔄 للتبديل",
   };
 
   const statusLabel: Record<string, { label: string; color: string }> = {
-    active: { label: "نشط", color: "bg-green-50 text-green-700" },
-    sold: { label: "مباع", color: "bg-blue-50 text-blue-700" },
-    expired: { label: "منتهي", color: "bg-gray-100 text-gray-500" },
+    active: { label: "شغال", color: "bg-green-50 text-green-700" },
+    sold: { label: "اتباع", color: "bg-blue-50 text-blue-700" },
+    expired: { label: "خلص", color: "bg-gray-100 text-gray-500" },
   };
 
   const filteredProducts = statusFilter === "all"

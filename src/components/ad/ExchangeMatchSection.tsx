@@ -174,7 +174,7 @@ export default function ExchangeMatchSection({
       {/* ── Good matches ── */}
       {goodMatches.length > 0 && (
         <MatchGroup
-          title="مطابقات جيدة"
+          title="مطابقات كويسة"
           icon="👍"
           subtitle="إعلانات ممكن تناسبك للتبديل"
           matches={goodMatches}
@@ -290,10 +290,10 @@ function MatchCard({ match }: { match: ExchangeMatchResult }) {
           <div className="flex items-center gap-2 text-[10px] text-gray-text mb-1">
             <span>
               {match.saleType === "exchange"
-                ? "🔄 تبديل"
+                ? "🔄 للتبديل"
                 : match.saleType === "auction"
-                  ? "🔨 مزاد"
-                  : "💵 نقدي"}
+                  ? "🔥 مزاد"
+                  : "💰 للبيع"}
             </span>
             {match.price != null && (
               <span className="font-semibold text-brand-green">
@@ -331,7 +331,7 @@ function MatchCard({ match }: { match: ExchangeMatchResult }) {
             )}
             <span className="flex items-center gap-0.5 text-[10px] text-brand-green font-semibold">
               <MessageCircle size={10} />
-              تواصل
+              كلّمه
             </span>
           </div>
         </div>
