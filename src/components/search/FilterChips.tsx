@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { categoriesConfig } from "@/lib/categories/categories-config";
-import { governorates } from "@/lib/data/governorates";
+import { governorates, citiesByGovernorate } from "@/lib/data/governorates";
 
 /* ── Types ──────────────────────────────────────────────────────────── */
 
@@ -116,12 +116,18 @@ export default function FilterChips({ filters, onChange }: FilterChipsProps) {
     filters.saleType,
     filters.priceMin != null || filters.priceMax != null,
     filters.governorate,
+    filters.city,
     filters.condition,
   ].filter(Boolean).length;
 
   const selectedCat = filters.category
     ? categoriesConfig.find((c) => c.slug === filters.category || c.id === filters.category)
     : null;
+
+  // Get cities for selected governorate
+  const availableCities = filters.governorate
+    ? citiesByGovernorate[filters.governorate] || []
+    : [];
 
   return (
     <div className="space-y-2">
@@ -146,14 +152,14 @@ export default function FilterChips({ filters, onChange }: FilterChipsProps) {
           <OptionButton
             label="الكل"
             selected={!filters.category}
-            onClick={() => onChange({ ...filters, category: undefined, condition: undefined })}
+            onClick={() => onChange({ ...filters, category: undefined, subcategory: undefined, condition: undefined })}
           />
           {categoriesConfig.map((cat) => (
             <OptionButton
               key={cat.id}
               label={`${cat.icon} ${cat.name}`}
               selected={filters.category === cat.id || filters.category === cat.slug}
-              onClick={() => onChange({ ...filters, category: cat.id })}
+              onClick={() => onChange({ ...filters, category: cat.id, subcategory: undefined })}
             />
           ))}
         </ChipDropdown>
@@ -230,23 +236,45 @@ export default function FilterChips({ filters, onChange }: FilterChipsProps) {
 
         {/* Governorate filter */}
         <ChipDropdown
-          label={filters.governorate || "الموقع"}
+          label={filters.governorate || "المحافظة"}
           isActive={!!filters.governorate}
         >
           <OptionButton
             label="كل المحافظات"
             selected={!filters.governorate}
-            onClick={() => onChange({ ...filters, governorate: undefined })}
+            onClick={() => onChange({ ...filters, governorate: undefined, city: undefined })}
           />
           {governorates.map((gov) => (
             <OptionButton
               key={gov}
               label={gov}
               selected={filters.governorate === gov}
-              onClick={() => onChange({ ...filters, governorate: gov })}
+              onClick={() => onChange({ ...filters, governorate: gov, city: undefined })}
             />
           ))}
         </ChipDropdown>
+
+        {/* City filter — only visible when governorate is selected */}
+        {filters.governorate && availableCities.length > 0 && (
+          <ChipDropdown
+            label={filters.city || "المدينة"}
+            isActive={!!filters.city}
+          >
+            <OptionButton
+              label={`كل ${filters.governorate}`}
+              selected={!filters.city}
+              onClick={() => onChange({ ...filters, city: undefined })}
+            />
+            {availableCities.map((city) => (
+              <OptionButton
+                key={city}
+                label={city}
+                selected={filters.city === city}
+                onClick={() => onChange({ ...filters, city })}
+              />
+            ))}
+          </ChipDropdown>
+        )}
 
         {/* Condition filter */}
         <ChipDropdown

@@ -111,6 +111,13 @@ export async function searchAds(
       query = query.eq("city", filters.city);
     }
 
+    // Condition filter: "new" matches new/sealed, "used" matches everything else
+    if (filters.condition === "new") {
+      query = query.in("category_fields->>condition", ["new", "sealed", "new_tagged", "new_no_tag"]);
+    } else if (filters.condition === "used") {
+      query = query.not("category_fields->>condition", "in", '("new","sealed","new_tagged","new_no_tag")');
+    }
+
     // Apply category-specific JSONB filters (brand, karat, storage, etc.)
     if (filters.categoryFilters) {
       for (const [key, value] of Object.entries(filters.categoryFilters)) {
@@ -162,9 +169,44 @@ export async function getSimilarSearchAds(
   filters: SearchFilters,
 ): Promise<AdSummary[]> {
   try {
-    // First try with category filter
+    // First try with category + location filters
     if (filters.category) {
-      const { data, error } = await supabase
+      let q = supabase
+        .from("ads" as never)
+        .select("*")
+        .eq("status", "active")
+        .eq("category_id", filters.category);
+
+      // Respect location filters for relevant similar results
+      if (filters.governorate) q = q.eq("governorate", filters.governorate);
+      if (filters.city) q = q.eq("city", filters.city);
+
+      const { data, error } = await q
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (!error && data && (data as unknown[]).length > 0) {
+        return (data as Record<string, unknown>[]).map(rowToAdSummary);
+      }
+
+      // If no results with city, try with just governorate
+      if (filters.city && filters.governorate) {
+        const { data: govData, error: govError } = await supabase
+          .from("ads" as never)
+          .select("*")
+          .eq("status", "active")
+          .eq("category_id", filters.category)
+          .eq("governorate", filters.governorate)
+          .order("created_at", { ascending: false })
+          .limit(6);
+
+        if (!govError && govData && (govData as unknown[]).length > 0) {
+          return (govData as Record<string, unknown>[]).map(rowToAdSummary);
+        }
+      }
+
+      // Try category only (no location)
+      const { data: catData, error: catError } = await supabase
         .from("ads" as never)
         .select("*")
         .eq("status", "active")
@@ -172,8 +214,8 @@ export async function getSimilarSearchAds(
         .order("created_at", { ascending: false })
         .limit(6);
 
-      if (!error && data && (data as unknown[]).length > 0) {
-        return (data as Record<string, unknown>[]).map(rowToAdSummary);
+      if (!catError && catData && (catData as unknown[]).length > 0) {
+        return (catData as Record<string, unknown>[]).map(rowToAdSummary);
       }
     }
 

@@ -368,17 +368,23 @@ function SearchPageInner() {
   /* ── Handle filter changes ─────────────────────────────────────────── */
   const handleFilterChange = useCallback(
     (newFilters: ActiveFilters) => {
-      setFilters(newFilters);
+      // When category changes, clear subcategory and category-specific filters
       if (newFilters.category !== filters.category) {
+        newFilters.subcategory = undefined;
         setCategoryFilters({});
       }
+      // When governorate changes, clear city if it doesn't belong to new governorate
+      if (newFilters.governorate !== filters.governorate) {
+        newFilters.city = undefined;
+      }
+      setFilters(newFilters);
       // When filters are cleared manually, reset parsedQuery so the raw query
       // is used for text search instead of the (now irrelevant) cleanQuery
       if (!newFilters.category && !newFilters.governorate && !newFilters.saleType) {
         setParsedQuery(null);
       }
     },
-    [filters.category],
+    [filters.category, filters.governorate],
   );
 
   const handleCategoryFilterChange = useCallback(

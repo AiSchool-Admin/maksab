@@ -162,6 +162,13 @@ function buildFallbackQuery(
   if (body.governorate) q = q.eq("governorate", body.governorate);
   if (body.city) q = q.eq("city", body.city);
 
+  // Condition filter: "new" matches new/sealed, "used" matches everything else
+  if (body.condition === "new") {
+    q = q.in("category_fields->>condition", ["new", "sealed", "new_tagged", "new_no_tag"]);
+  } else if (body.condition === "used") {
+    q = q.not("category_fields->>condition", "in", '("new","sealed","new_tagged","new_no_tag")');
+  }
+
   // Apply category-specific JSONB filters (brand, karat, storage, etc.)
   if (body.categoryFilters && typeof body.categoryFilters === "object") {
     const cf = body.categoryFilters as Record<string, string>;

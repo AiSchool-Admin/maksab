@@ -192,11 +192,12 @@ export default function HomePage() {
         {/* Search bar — sticky */}
         <div className="px-3 pt-2 pb-1.5">
           <Link href="/search" className="block">
-            <div className="flex items-center gap-3 bg-white rounded-full pe-4 ps-1.5 py-1.5 border-2 border-gray-300 shadow-sm hover:border-brand-green/50 hover:shadow-md transition-all">
-              <div className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
-                <Search size={20} className="text-white" strokeWidth={2.5} />
+            <div className="flex items-center gap-3 bg-white rounded-2xl pe-4 ps-2 py-2.5 border-2 border-gray-200 shadow-md hover:border-brand-green/40 hover:shadow-lg hover:shadow-brand-green/5 transition-all duration-300">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-green to-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                <Search size={18} className="text-white" strokeWidth={2.5} />
               </div>
-              <span className="flex-1 text-sm text-gray-text">ابحث في مكسب... سيارات، موبايلات، عقارات</span>
+              <span className="flex-1 text-sm text-gray-400">ابحث في مكسب...</span>
+              <span className="text-[10px] text-brand-green bg-brand-green/10 px-2 py-1 rounded-full font-medium">بحث ذكي</span>
             </div>
           </Link>
         </div>
