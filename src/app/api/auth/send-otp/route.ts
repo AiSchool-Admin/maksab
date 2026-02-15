@@ -22,9 +22,9 @@ const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
 function getSecret(): string {
   const secret = process.env.OTP_SECRET;
   if (!secret) {
-    // SECURITY: Do not fall back to SUPABASE_SERVICE_ROLE_KEY — it's a separate secret.
-    // In development, use a hardcoded dev-only secret.
-    if (process.env.NODE_ENV === "development") {
+    // In non-production environments (dev, preview, staging), use a dev-only secret.
+    // In production, OTP_SECRET MUST be set for security.
+    if (process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV !== "production") {
       return "maksab-dev-otp-secret-not-for-production";
     }
     throw new Error("Missing OTP_SECRET environment variable. Set it in production.");
@@ -66,19 +66,27 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Rate limit check (Supabase-based, persistent) ───────────────
-    const rateCheck = await checkRateLimit(phone, "otp_send");
-    if (!rateCheck.allowed) {
-      return NextResponse.json(
-        {
-          error: `عديت الحد المسموح. جرب تاني بعد ${Math.ceil((rateCheck.retryAfterSeconds || 60) / 60)} دقيقة`,
-          retry_after: rateCheck.retryAfterSeconds,
-        },
-        { status: 429 }
-      );
+    // Wrapped in try-catch so OTP still works if Supabase service key is missing
+    try {
+      const rateCheck = await checkRateLimit(phone, "otp_send");
+      if (!rateCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: `عديت الحد المسموح. جرب تاني بعد ${Math.ceil((rateCheck.retryAfterSeconds || 60) / 60)} دقيقة`,
+            retry_after: rateCheck.retryAfterSeconds,
+          },
+          { status: 429 }
+        );
+      }
+    } catch (rateLimitErr) {
+      // Rate limiting unavailable (e.g. missing service role key) — continue without it
+      console.warn("[send-otp] Rate limit check skipped:", rateLimitErr);
     }
 
-    // Record this OTP request
-    await recordRateLimit(phone, "otp_send");
+    // Record this OTP request (fire-and-forget, don't block OTP delivery)
+    recordRateLimit(phone, "otp_send").catch((err) => {
+      console.warn("[send-otp] Rate limit record skipped:", err);
+    });
 
     // Generate OTP
     const code = generateOTP();

@@ -67,6 +67,11 @@ export async function getRecommendations(
   userId: string,
   userGovernorate?: string,
 ): Promise<RecommendationResult> {
+  // For unauthenticated users (empty userId), skip API and use direct fallback
+  if (!userId) {
+    return fallbackRecommendations(userId);
+  }
+
   try {
     const response = await fetch("/api/recommendations", {
       method: "POST",
@@ -113,26 +118,37 @@ async function fallbackRecommendations(userId: string): Promise<RecommendationRe
   try {
     const { supabase } = await import("@/lib/supabase/client");
 
-    const { data: adsData } = await supabase
+    let adsQuery = supabase
       .from("ads" as never)
       .select("*")
       .eq("status", "active")
-      .neq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(10);
+
+    // Only exclude own ads when userId is a real value (not empty string)
+    if (userId) {
+      adsQuery = adsQuery.neq("user_id", userId);
+    }
+
+    const { data: adsData } = await adsQuery;
 
     const personalizedAds = adsData && (adsData as unknown[]).length > 0
       ? (adsData as Record<string, unknown>[]).map(rowToAdSummary)
       : [];
 
-    const { data: auctionData } = await supabase
+    let auctionQuery = supabase
       .from("ads" as never)
       .select("*")
       .eq("status", "active")
       .eq("sale_type", "auction")
-      .neq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(8);
+
+    if (userId) {
+      auctionQuery = auctionQuery.neq("user_id", userId);
+    }
+
+    const { data: auctionData } = await auctionQuery;
 
     const matchingAuctions = auctionData && (auctionData as unknown[]).length > 0
       ? (auctionData as Record<string, unknown>[]).map(rowToAdSummary)
