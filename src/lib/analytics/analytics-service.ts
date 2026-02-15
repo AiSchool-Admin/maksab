@@ -203,7 +203,10 @@ async function flushQueue(): Promise<void> {
   flushing = true;
 
   const queue = getQueue();
-  if (queue.length === 0) return;
+  if (queue.length === 0) {
+    flushing = false;
+    return;
+  }
 
   // Take a batch
   const batch = queue.splice(0, BATCH_SIZE);
