@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CheckCircle2, XCircle, Loader2, Copy, Check, ExternalLink, Database, Users, ShoppingBag } from "lucide-react";
 import Button from "@/components/ui/Button";
 
@@ -242,12 +243,12 @@ export default function SetupPage() {
               كل الجداول والبيانات اتعملت. دلوقتي تقدر تضيف إعلانات وتستخدم التطبيق
             </p>
             <div className="flex gap-3 justify-center pt-2">
-              <a href="/" className="px-6 py-2.5 bg-brand-green text-white rounded-xl font-semibold hover:bg-brand-green-dark transition-all">
+              <Link href="/" className="px-6 py-2.5 bg-brand-green text-white rounded-xl font-semibold hover:bg-brand-green-dark transition-all">
                 الصفحة الرئيسية
-              </a>
-              <a href="/ad/create" className="px-6 py-2.5 bg-brand-gold text-white rounded-xl font-semibold hover:bg-brand-gold/90 transition-all">
+              </Link>
+              <Link href="/ad/create" className="px-6 py-2.5 bg-brand-gold text-white rounded-xl font-semibold hover:bg-brand-gold/90 transition-all">
                 أضف إعلان
-              </a>
+              </Link>
             </div>
           </section>
         )}

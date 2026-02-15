@@ -47,6 +47,20 @@ export default function ProfilePage() {
   const router = useRouter();
   const { user, isLoading, requireAuth, logout } = useAuth();
 
+  // All hooks must be called before any early returns
+  const [isSupporter, setIsSupporter] = useState(false);
+  const [loyaltyProfile, setLoyaltyProfile] = useState<UserLoyaltyProfile | null>(null);
+
+  useEffect(() => {
+    if (user?.id) {
+      isCommissionSupporter(user.id).then(setIsSupporter);
+      // Load loyalty profile + award daily login
+      const profile = getUserLoyaltyProfile(user.id);
+      setLoyaltyProfile(profile);
+      awardPoints(user.id, "daily_login");
+    }
+  }, [user?.id]);
+
   // ── Not logged in ─────────────────────────────────────────────────
   if (!isLoading && !user) {
     return (
@@ -95,19 +109,6 @@ export default function ProfilePage() {
   }
 
   // ── Logged in ─────────────────────────────────────────────────────
-  const [isSupporter, setIsSupporter] = useState(false);
-  const [loyaltyProfile, setLoyaltyProfile] = useState<UserLoyaltyProfile | null>(null);
-
-  useEffect(() => {
-    if (user?.id) {
-      isCommissionSupporter(user.id).then(setIsSupporter);
-      // Load loyalty profile + award daily login
-      const profile = getUserLoyaltyProfile(user.id);
-      setLoyaltyProfile(profile);
-      awardPoints(user.id, "daily_login");
-    }
-  }, [user?.id]);
-
   const { percentage, missing } = calcProfileCompletion(user!);
 
   return (

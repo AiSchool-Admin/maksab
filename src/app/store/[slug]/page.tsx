@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { ArrowRight, Grid3X3, List, LayoutGrid } from "lucide-react";
 import StoreHeader from "@/components/store/StoreHeader";
 import PinnedProducts from "@/components/store/PinnedProducts";
@@ -293,12 +294,12 @@ export default function StorePublicPage() {
       {/* Owner CTA */}
       {isOwner && (
         <div className="px-4 mt-4">
-          <a
+          <Link
             href="/store/dashboard"
             className="block bg-brand-green text-white text-center text-sm font-bold py-3 rounded-xl hover:bg-brand-green-dark transition-colors"
           >
             لوحة تحكم المتجر
-          </a>
+          </Link>
         </div>
       )}
     </div>
