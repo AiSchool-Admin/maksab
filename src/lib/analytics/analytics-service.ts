@@ -190,13 +190,17 @@ function setFlushDisabled(): void {
   }
 }
 
+/** Guard to prevent concurrent flush calls (race condition → multiple 404s) */
+let flushing = false;
+
 /**
  * Flush queued events to Supabase.
  * If the analytics_events table doesn't exist (404), disable flushing
  * to avoid spamming console errors. Events stay in localStorage.
  */
 async function flushQueue(): Promise<void> {
-  if (isFlushDisabled()) return;
+  if (isFlushDisabled() || flushing) return;
+  flushing = true;
 
   const queue = getQueue();
   if (queue.length === 0) return;
@@ -229,6 +233,7 @@ async function flushQueue(): Promise<void> {
         // Put batch back
         const currentQueue = getQueue();
         saveQueue([...batch, ...currentQueue]);
+        flushing = false;
         return;
       }
       // Other errors — put back and retry later
@@ -239,6 +244,8 @@ async function flushQueue(): Promise<void> {
     // Network error — put events back silently
     const currentQueue = getQueue();
     saveQueue([...batch, ...currentQueue]);
+  } finally {
+    flushing = false;
   }
 }
 
