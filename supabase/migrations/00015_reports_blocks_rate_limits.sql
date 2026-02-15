@@ -31,8 +31,18 @@ CREATE TABLE IF NOT EXISTS reports (
   reviewed_at TIMESTAMPTZ,
   -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  -- Prevent duplicate reports
-  CONSTRAINT unique_report UNIQUE (reporter_id, target_type, COALESCE(target_ad_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(target_user_id, '00000000-0000-0000-0000-000000000000'::uuid))
+  -- Validation: must have either target_ad_id or target_user_id
+  CONSTRAINT report_has_target CHECK (
+    (target_type = 'ad' AND target_ad_id IS NOT NULL) OR
+    (target_type = 'user' AND target_user_id IS NOT NULL)
+  )
+);
+
+-- Prevent duplicate reports (unique index instead of constraint for COALESCE support)
+CREATE UNIQUE INDEX idx_unique_report ON reports (
+  reporter_id, target_type,
+  COALESCE(target_ad_id, '00000000-0000-0000-0000-000000000000'::uuid),
+  COALESCE(target_user_id, '00000000-0000-0000-0000-000000000000'::uuid)
 );
 
 CREATE INDEX idx_reports_status ON reports(status, created_at DESC);
