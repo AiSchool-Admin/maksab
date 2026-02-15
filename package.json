@@ -8,7 +8,7 @@
     "prebuild": "node scripts/bump-sw-version.js",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src/",
     "test": "jest",
     "test:ci": "jest --ci --coverage --forceExit",
     "test:watch": "jest --watch"

@@ -270,7 +270,7 @@ export default function PreLaunchPage() {
                 سجّل من الأوائل واحصل على 🏆
               </h2>
               <p className="text-xs text-gray-text">
-                أول 1,000 مستخدم هياخدوا شارة <strong className="text-amber-700">"رائد مكسب"</strong> الحصرية
+                أول 1,000 مستخدم هياخدوا شارة <strong className="text-amber-700">&quot;رائد مكسب&quot;</strong> الحصرية
               </p>
             </div>
 
