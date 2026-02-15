@@ -5,6 +5,7 @@ import ThemeProvider from "@/components/theme/ThemeProvider";
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration";
 import UpdateBanner from "@/components/pwa/UpdateBanner";
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget";
+import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
 import { validateEnv } from "@/lib/env-check";
 import "./globals.css";
 
@@ -20,6 +21,7 @@ const cairo = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://maksab.app"),
   title: "مكسب — كل صفقة مكسب",
   description:
     "سوق إلكتروني مصري لبيع وشراء وتبديل السلع الجديدة والمستعملة. بيع نقدي، مزادات، وتبديل.",
@@ -89,6 +91,7 @@ export default function RootLayout({
             {/* Main content with bottom padding to avoid BottomNav overlap */}
             <div className="min-h-screen pb-20">{children}</div>
             <ChatbotWidget />
+            <AnalyticsProvider />
           </AuthProvider>
         </ThemeProvider>
       </body>
