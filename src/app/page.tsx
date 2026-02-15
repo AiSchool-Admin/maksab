@@ -93,9 +93,9 @@ export default function HomePage() {
     }
   }, []);
 
-  // Load personalized recommendations
+  // Load personalized recommendations (use empty fallback for unauthenticated users)
   useEffect(() => {
-    const userId = user?.id || "";
+    const userId = user?.id ?? "";
     getRecommendations(userId, user?.governorate ?? undefined).then((result) => {
       if (result.personalizedAds.length > 0) {
         setPersonalizedAds(result.personalizedAds);

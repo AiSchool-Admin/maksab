@@ -169,11 +169,17 @@ export function trackAdFunnel(
 // ── Queue Flushing ─────────────────────────────────────
 
 let flushTimer: ReturnType<typeof setInterval> | null = null;
+/** When true, stop trying to flush (table doesn't exist yet) */
+let flushDisabled = false;
 
 /**
- * Flush queued events to Supabase
+ * Flush queued events to Supabase.
+ * If the analytics_events table doesn't exist (404), disable flushing
+ * to avoid spamming console errors. Events stay in localStorage.
  */
 async function flushQueue(): Promise<void> {
+  if (flushDisabled) return;
+
   const queue = getQueue();
   if (queue.length === 0) return;
 
@@ -182,7 +188,6 @@ async function flushQueue(): Promise<void> {
   saveQueue(queue);
 
   try {
-    // Insert batch to Supabase analytics table
     const rows = batch.map((event) => ({
       id: event.id,
       event_type: event.eventType,
@@ -194,9 +199,26 @@ async function flushQueue(): Promise<void> {
       created_at: event.timestamp,
     }));
 
-    await supabase.from("analytics_events" as never).insert(rows as never);
+    const { error } = await supabase
+      .from("analytics_events" as never)
+      .insert(rows as never) as { error: { code?: string; message?: string } | null };
+
+    if (error) {
+      // Table doesn't exist (404) or RLS/permission issue — stop retrying
+      if (error.code === "42P01" || error.message?.includes("not found") || error.message?.includes("404")) {
+        console.warn("[analytics] Table analytics_events not found — disabling flush. Events stored locally.");
+        flushDisabled = true;
+        // Put batch back
+        const currentQueue = getQueue();
+        saveQueue([...batch, ...currentQueue]);
+        return;
+      }
+      // Other errors — put back and retry later
+      const currentQueue = getQueue();
+      saveQueue([...batch, ...currentQueue]);
+    }
   } catch {
-    // On failure, put events back in queue
+    // Network error — put events back silently
     const currentQueue = getQueue();
     saveQueue([...batch, ...currentQueue]);
   }

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { userId, governorate, limit = 20, auctionLimit = 10 } = body;
 
-    if (!userId) {
+    if (!userId || typeof userId !== "string" || userId.trim() === "") {
       return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
