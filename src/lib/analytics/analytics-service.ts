@@ -169,8 +169,26 @@ export function trackAdFunnel(
 // ── Queue Flushing ─────────────────────────────────────
 
 let flushTimer: ReturnType<typeof setInterval> | null = null;
+const FLUSH_DISABLED_KEY = "maksab_analytics_flush_disabled";
+
 /** When true, stop trying to flush (table doesn't exist yet) */
-let flushDisabled = false;
+function isFlushDisabled(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(FLUSH_DISABLED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setFlushDisabled(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(FLUSH_DISABLED_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * Flush queued events to Supabase.
@@ -178,7 +196,7 @@ let flushDisabled = false;
  * to avoid spamming console errors. Events stay in localStorage.
  */
 async function flushQueue(): Promise<void> {
-  if (flushDisabled) return;
+  if (isFlushDisabled()) return;
 
   const queue = getQueue();
   if (queue.length === 0) return;
@@ -207,7 +225,7 @@ async function flushQueue(): Promise<void> {
       // Table doesn't exist (404) or RLS/permission issue — stop retrying
       if (error.code === "42P01" || error.message?.includes("not found") || error.message?.includes("404")) {
         console.warn("[analytics] Table analytics_events not found — disabling flush. Events stored locally.");
-        flushDisabled = true;
+        setFlushDisabled();
         // Put batch back
         const currentQueue = getQueue();
         saveQueue([...batch, ...currentQueue]);
