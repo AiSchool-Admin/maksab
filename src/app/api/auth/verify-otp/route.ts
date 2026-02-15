@@ -33,11 +33,45 @@ function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    throw new Error("Missing Supabase env vars");
+    return null; // Service client unavailable
   }
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+}
+
+/** Check if we're in a non-production environment (dev/preview/staging) */
+function isNonProduction(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV !== "production";
+}
+
+/**
+ * Generate a dev-mode user profile when Supabase admin API is unavailable.
+ * This allows testing the app on preview deployments without SUPABASE_SERVICE_ROLE_KEY.
+ */
+function createDevProfile(phone: string, displayName: string | null) {
+  // Generate a deterministic UUID from the phone number so the same phone
+  // always gets the same dev user ID
+  const hash = createHmac("sha256", "dev-user-id")
+    .update(phone)
+    .digest("hex")
+    .slice(0, 32);
+  const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+
+  return {
+    id,
+    phone,
+    display_name: displayName || `مستخدم ${phone.slice(-4)}`,
+    avatar_url: null,
+    governorate: null,
+    city: null,
+    bio: null,
+    is_commission_supporter: false,
+    total_ads_count: 0,
+    rating: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
 }
 
 /** Verify HMAC-SHA256 signature */
@@ -105,6 +139,25 @@ export async function POST(req: NextRequest) {
       }
 
       const supabase = getServiceClient();
+
+      if (!supabase) {
+        if (isNonProduction()) {
+          console.warn("[verify-otp] No SUPABASE_SERVICE_ROLE_KEY — using dev session for Firebase user", phoneClean);
+          const devProfile = createDevProfile(phoneClean, displayName);
+          const devToken = generateSessionToken(devProfile.id);
+          return NextResponse.json({
+            user: devProfile,
+            session_token: devToken,
+            magic_link_token: null,
+            virtual_email: `${phoneClean}@maksab.auth`,
+          });
+        }
+        return NextResponse.json(
+          { error: "إعدادات السيرفر ناقصة. تواصل مع الدعم" },
+          { status: 500 },
+        );
+      }
+
       const profile = await findOrCreateUser(supabase, firebasePhone, displayName);
 
       if (!profile) {
@@ -115,19 +168,25 @@ export async function POST(req: NextRequest) {
       }
 
       const virtualEmail = `${firebasePhone}@maksab.auth`;
-      const {
-        data: { properties },
-      } = await supabase.auth.admin.generateLink({
-        type: "magiclink",
-        email: virtualEmail,
-      });
+      let fbMagicToken: string | null = null;
+      try {
+        const {
+          data: { properties },
+        } = await supabase.auth.admin.generateLink({
+          type: "magiclink",
+          email: virtualEmail,
+        });
+        fbMagicToken = properties?.hashed_token || null;
+      } catch (linkErr) {
+        console.warn("[verify-otp] Magic link generation failed:", linkErr);
+      }
 
       const firebaseSessionToken = generateSessionToken(profile.id);
 
       return NextResponse.json({
         user: profile,
         session_token: firebaseSessionToken,
-        magic_link_token: properties?.hashed_token || null,
+        magic_link_token: fbMagicToken,
         virtual_email: virtualEmail,
       });
     }
@@ -174,6 +233,26 @@ export async function POST(req: NextRequest) {
     // ── Find or create user ──────────────────────────────────────────
     const supabase = getServiceClient();
 
+    // If Supabase service client is unavailable (no SUPABASE_SERVICE_ROLE_KEY),
+    // fall back to dev-mode session in non-production environments.
+    if (!supabase) {
+      if (isNonProduction()) {
+        console.warn("[verify-otp] No SUPABASE_SERVICE_ROLE_KEY — using dev session for", phone);
+        const devProfile = createDevProfile(phone, displayName);
+        const devSessionToken = generateSessionToken(devProfile.id);
+        return NextResponse.json({
+          user: devProfile,
+          session_token: devSessionToken,
+          magic_link_token: null,
+          virtual_email: `${phone}@maksab.auth`,
+        });
+      }
+      return NextResponse.json(
+        { error: "إعدادات السيرفر ناقصة. تواصل مع الدعم" },
+        { status: 500 }
+      );
+    }
+
     const profile = await findOrCreateUser(supabase, phone, displayName);
 
     if (!profile) {
@@ -186,19 +265,25 @@ export async function POST(req: NextRequest) {
     // ── Generate session ─────────────────────────────────────────────
     const virtualEmail = `${phone}@maksab.auth`;
 
-    const {
-      data: { properties },
-    } = await supabase.auth.admin.generateLink({
-      type: "magiclink",
-      email: virtualEmail,
-    });
+    let magicLinkToken: string | null = null;
+    try {
+      const {
+        data: { properties },
+      } = await supabase.auth.admin.generateLink({
+        type: "magiclink",
+        email: virtualEmail,
+      });
+      magicLinkToken = properties?.hashed_token || null;
+    } catch (linkErr) {
+      console.warn("[verify-otp] Magic link generation failed:", linkErr);
+    }
 
     const sessionToken = generateSessionToken(profile.id);
 
     return NextResponse.json({
       user: profile,
       session_token: sessionToken,
-      magic_link_token: properties?.hashed_token || null,
+      magic_link_token: magicLinkToken,
       virtual_email: virtualEmail,
     });
 
