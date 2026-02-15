@@ -6,7 +6,7 @@
  * The build script auto-updates this value.
  */
 
-const APP_VERSION = "2026.02.14.1700";
+const APP_VERSION = "2026.02.15.1102";
 const CACHE_NAME = `maksab-pages-${APP_VERSION}`;
 const STATIC_CACHE = `maksab-static-${APP_VERSION}`;
 const API_CACHE = `maksab-api-${APP_VERSION}`;
