@@ -1,14 +1,8 @@
 "use client";
 
 /**
- * MaksabLogo — Professional brand logo for مكسب
- * Egyptian-inspired world-class design with stylized م lettermark.
- *
- * The logo combines:
- * - A shield/coin shape (trust + commerce)
- * - Stylized م lettermark (Arabic identity)
- * - Gold accent crescent (Egyptian heritage)
- * - Clean modern typography
+ * MaksabLogo — Brand logo for مكسب
+ * Green rounded square with gold $ symbol + brand text.
  */
 
 interface MaksabLogoProps {
@@ -40,40 +34,38 @@ export default function MaksabLogo({
       xmlns="http://www.w3.org/2000/svg"
       className="flex-shrink-0"
     >
-      {/* Background — rounded shield/coin shape */}
-      <rect width="120" height="120" rx="28" fill="#1B7A3D" />
+      <defs>
+        <linearGradient id="logoBg" x1="0" y1="0" x2="0.5" y2="1">
+          <stop offset="0%" stopColor="#22A94E" />
+          <stop offset="100%" stopColor="#1B7A3D" />
+        </linearGradient>
+        <linearGradient id="logoGold" x1="0.2" y1="0" x2="0.8" y2="1">
+          <stop offset="0%" stopColor="#F0D060" />
+          <stop offset="50%" stopColor="#D4A843" />
+          <stop offset="100%" stopColor="#C49530" />
+        </linearGradient>
+      </defs>
 
-      {/* Inner glow ring */}
-      <rect x="6" y="6" width="108" height="108" rx="22" fill="none" stroke="#2A9D4E" strokeWidth="1.5" opacity="0.4" />
+      {/* Background — green rounded square */}
+      <rect width="120" height="120" rx="26" fill="url(#logoBg)" />
 
-      {/* Gold crescent accent — Egyptian heritage element */}
-      <path
-        d="M92 22C86 28 82 36 82 45C82 62 95 76 112 76C104 84 93 89 80 89C58 89 40 71 40 49C40 27 58 9 80 9C85 9 89 10 92 12"
-        fill="#D4A843"
-        opacity="0.15"
-        transform="translate(-18, 8) scale(0.7)"
-      />
-
-      {/* Stylized م lettermark — main brand element */}
+      {/* Dollar sign $ — main brand symbol */}
       <text
         x="60"
-        y="68"
-        fontFamily="'Cairo', 'Noto Sans Arabic', Arial, sans-serif"
-        fontSize="62"
-        fontWeight="800"
-        fill="white"
+        y="66"
+        fontFamily="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        fontSize="82"
+        fontWeight="900"
+        fill="url(#logoGold)"
         textAnchor="middle"
         dominantBaseline="central"
       >
-        م
+        $
       </text>
 
-      {/* Gold dot accent — like the dot on Egyptian coins */}
-      <circle cx="60" cy="98" r="4" fill="#D4A843" />
-
-      {/* Subtle sparkle accents */}
-      <circle cx="96" cy="24" r="2" fill="#D4A843" opacity="0.6" />
-      <circle cx="100" cy="18" r="1.2" fill="#D4A843" opacity="0.4" />
+      {/* Green accent circle */}
+      <circle cx="82" cy="24" r="7" fill="#2ECC60" />
+      <circle cx="82" cy="24" r="4.5" fill="#3DDB72" />
     </svg>
   );
 
@@ -107,7 +99,7 @@ export default function MaksabLogo({
     return <div className={`inline-flex items-center ${className}`}>{wordmark}</div>;
   }
 
-  // Full logo: icon + wordmark
+  // Full logo: icon + brand name
   return (
     <div className={`inline-flex items-center gap-1.5 ${className}`}>
       {iconMark}

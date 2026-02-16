@@ -27,7 +27,16 @@ export default function OGImage() {
             marginBottom: 40,
           }}
         >
-          <span style={{ fontSize: 80, marginLeft: 20 }}>💚</span>
+          <span
+            style={{
+              fontSize: 80,
+              fontWeight: 900,
+              color: "#D4A843",
+              marginLeft: 20,
+            }}
+          >
+            $
+          </span>
           <span
             style={{
               fontSize: 72,

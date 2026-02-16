@@ -1,39 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1F8C45"/>
-      <stop offset="100%" stop-color="#145C2E"/>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#22A94E"/>
+      <stop offset="100%" stop-color="#1B7A3D"/>
     </linearGradient>
-    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#E8C054"/>
+    <linearGradient id="goldGrad" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#F0D060"/>
+      <stop offset="50%" stop-color="#D4A843"/>
       <stop offset="100%" stop-color="#C49530"/>
     </linearGradient>
-    <filter id="innerGlow">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur"/>
-      <feOffset dx="0" dy="2" result="offsetBlur"/>
-      <feComposite in="SourceGraphic" in2="offsetBlur" operator="over"/>
+    <!-- Shadow filter for depth -->
+    <filter id="dollarShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0D3D1A" flood-opacity="0.3"/>
     </filter>
   </defs>
 
-  <!-- Background — rounded shield shape -->
-  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <!-- Background — green rounded square -->
+  <rect width="512" height="512" rx="108" fill="url(#bgGrad)"/>
 
-  <!-- Subtle inner border -->
-  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#2AAD55" stroke-width="3" opacity="0.3"/>
+  <!-- Subtle inner border for depth -->
+  <rect x="12" y="12" width="488" height="488" rx="96" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
 
-  <!-- Gold crescent accent — Egyptian heritage -->
-  <path d="M390 80C370 110 358 146 358 185C358 250 404 304 466 304C440 335 402 355 360 355C280 355 216 291 216 211C216 131 280 67 360 67C370 67 380 69 390 72Z" fill="#D4A843" opacity="0.12"/>
+  <!-- Dollar sign $ — main brand symbol -->
+  <text
+    x="256"
+    y="280"
+    font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+    font-size="340"
+    font-weight="900"
+    fill="url(#goldGrad)"
+    text-anchor="middle"
+    dominant-baseline="central"
+    filter="url(#dollarShadow)"
+  >$</text>
 
-  <!-- Stylized م lettermark -->
-  <text x="256" y="270" font-family="Cairo, 'Noto Sans Arabic', Arial, sans-serif" font-size="250" font-weight="800" fill="white" text-anchor="middle" dominant-baseline="central" filter="url(#innerGlow)">م</text>
-
-  <!-- Gold accent dot -->
-  <circle cx="256" cy="410" r="16" fill="url(#goldGrad)"/>
-
-  <!-- Sparkle accents -->
-  <circle cx="405" cy="95" r="8" fill="#D4A843" opacity="0.5"/>
-  <circle cx="420" cy="75" r="5" fill="#D4A843" opacity="0.35"/>
-
-  <!-- Brand name -->
-  <text x="256" y="465" font-family="Cairo, 'Noto Sans Arabic', Arial, sans-serif" font-size="52" font-weight="700" fill="#D4A843" text-anchor="middle" opacity="0.9">مكسب</text>
+  <!-- Green accent circle — top right of $ sign -->
+  <circle cx="340" cy="108" r="28" fill="#2ECC60"/>
+  <circle cx="340" cy="108" r="18" fill="#3DDB72"/>
 </svg>
