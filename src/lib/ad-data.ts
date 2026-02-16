@@ -23,6 +23,7 @@ export interface AdSummary {
   exchangeDescription?: string;
   isFavorited?: boolean;
   isLiveAuction?: boolean;
+  categoryId?: string;
 }
 
 /**
@@ -61,6 +62,7 @@ function rowToAdSummary(row: Record<string, unknown>): AdSummary {
     auctionEndsAt: (row.auction_ends_at as string) ?? undefined,
     exchangeDescription: (row.exchange_description as string) ?? undefined,
     isLiveAuction: Boolean(categoryFields.is_live_auction),
+    categoryId: (row.category_id as string) ?? undefined,
   };
 }
 

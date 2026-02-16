@@ -1,6 +1,6 @@
 /**
- * Generate beautiful, high-quality category images using sharp.
- * Creates 400x400 PNG images with professional gradients, centered SVG icons, and polish.
+ * Generate realistic, product-style category images using sharp.
+ * White/light backgrounds with filled, 3D-effect illustrations.
  * Run: node scripts/generate-category-images.mjs
  */
 
@@ -15,374 +15,515 @@ mkdirSync(OUTPUT_DIR, { recursive: true });
 
 const SIZE = 400;
 
-/**
- * Each category has:
- * - gradient colors for a rich background
- * - A detailed SVG icon rendered large and crisp
- * - Subtle decorative elements for premium feel
- */
 const categories = [
   {
     slug: "cars",
     name: "سيارات",
-    gradient: { c1: "#1E40AF", c2: "#3B82F6", c3: "#60A5FA" },
-    accent: "#93C5FD",
+    bg: "#EBF3FF",
     icon: `
-      <!-- Car body -->
-      <path d="M80 225 L110 170 C115 158 128 148 145 148 L255 148 C272 148 285 158 290 170 L320 225"
-            fill="none" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
-      <rect x="68" y="220" width="264" height="70" rx="20" fill="white" fill-opacity="0.15" stroke="white" stroke-width="8" opacity="0.95"/>
-      <!-- Windows -->
-      <path d="M142 170 L128 210 L195 210 L195 166 C195 162 193 160 190 160 L150 160 C146 160 143 164 142 170Z"
-            fill="white" fill-opacity="0.2" stroke="white" stroke-width="4" stroke-opacity="0.6"/>
-      <path d="M210 210 L272 210 L262 170 C261 164 258 160 254 160 L215 160 C212 160 210 162 210 166Z"
-            fill="white" fill-opacity="0.2" stroke="white" stroke-width="4" stroke-opacity="0.6"/>
-      <!-- Wheels -->
-      <circle cx="130" cy="292" r="30" fill="white" fill-opacity="0.1" stroke="white" stroke-width="8" opacity="0.95"/>
-      <circle cx="130" cy="292" r="12" fill="white" fill-opacity="0.25"/>
-      <circle cx="270" cy="292" r="30" fill="white" fill-opacity="0.1" stroke="white" stroke-width="8" opacity="0.95"/>
-      <circle cx="270" cy="292" r="12" fill="white" fill-opacity="0.25"/>
+      <!-- Shadow -->
+      <ellipse cx="200" cy="310" rx="120" ry="14" fill="#B0C4DE" opacity="0.4"/>
+      <!-- Car body lower -->
+      <path d="M60 240 L60 270 C60 285 70 290 85 290 L315 290 C330 290 340 285 340 270 L340 240 C340 228 332 220 320 220 L80 220 C68 220 60 228 60 240Z" fill="#2563EB"/>
+      <path d="M60 240 L60 270 C60 285 70 290 85 290 L315 290 C330 290 340 285 340 270 L340 240 C340 228 332 220 320 220 L80 220 C68 220 60 228 60 240Z" fill="url(#carShine)" opacity="0.3"/>
+      <!-- Car body upper/cabin -->
+      <path d="M108 220 L130 155 C135 142 148 135 162 135 L238 135 C252 135 265 142 270 155 L292 220" fill="#3B82F6"/>
+      <path d="M108 220 L130 155 C135 142 148 135 162 135 L238 135 C252 135 265 142 270 155 L292 220" fill="url(#carShine)" opacity="0.25"/>
+      <!-- Windshield -->
+      <path d="M140 165 L155 215 L195 215 L195 158 C195 155 192 152 188 152 L150 152 C145 152 141 158 140 165Z" fill="#E0EDFF" opacity="0.85"/>
+      <path d="M205 215 L260 215 L248 165 C247 158 244 152 239 152 L212 152 C208 152 205 155 205 158Z" fill="#E0EDFF" opacity="0.85"/>
       <!-- Headlights -->
-      <rect x="74" y="235" width="28" height="16" rx="6" fill="white" fill-opacity="0.4"/>
-      <rect x="298" y="235" width="28" height="16" rx="6" fill="white" fill-opacity="0.4"/>
-      <!-- Light beam effect -->
-      <ellipse cx="200" cy="180" rx="80" ry="50" fill="white" fill-opacity="0.04"/>
+      <rect x="64" y="238" width="30" height="18" rx="6" fill="#FCD34D"/>
+      <rect x="64" y="238" width="30" height="9" rx="4" fill="white" opacity="0.5"/>
+      <rect x="306" y="238" width="30" height="18" rx="6" fill="#FCD34D"/>
+      <rect x="306" y="238" width="30" height="9" rx="4" fill="white" opacity="0.5"/>
+      <!-- Tail lights -->
+      <rect x="64" y="262" width="20" height="12" rx="4" fill="#EF4444"/>
+      <rect x="316" y="262" width="20" height="12" rx="4" fill="#EF4444"/>
+      <!-- Grill -->
+      <rect x="155" y="225" width="90" height="14" rx="5" fill="#1E3A5F"/>
+      <line x1="170" y1="225" x2="170" y2="239" stroke="#2563EB" stroke-width="2" opacity="0.5"/>
+      <line x1="185" y1="225" x2="185" y2="239" stroke="#2563EB" stroke-width="2" opacity="0.5"/>
+      <line x1="200" y1="225" x2="200" y2="239" stroke="#2563EB" stroke-width="2" opacity="0.5"/>
+      <line x1="215" y1="225" x2="215" y2="239" stroke="#2563EB" stroke-width="2" opacity="0.5"/>
+      <line x1="230" y1="225" x2="230" y2="239" stroke="#2563EB" stroke-width="2" opacity="0.5"/>
+      <!-- Wheels -->
+      <circle cx="128" cy="290" r="32" fill="#1E293B"/>
+      <circle cx="128" cy="290" r="22" fill="#475569"/>
+      <circle cx="128" cy="290" r="14" fill="#94A3B8"/>
+      <circle cx="128" cy="290" r="6" fill="#CBD5E1"/>
+      <circle cx="272" cy="290" r="32" fill="#1E293B"/>
+      <circle cx="272" cy="290" r="22" fill="#475569"/>
+      <circle cx="272" cy="290" r="14" fill="#94A3B8"/>
+      <circle cx="272" cy="290" r="6" fill="#CBD5E1"/>
+      <!-- Door line -->
+      <line x1="200" y1="152" x2="200" y2="220" stroke="#1D4ED8" stroke-width="2" opacity="0.4"/>
+      <!-- Door handle -->
+      <rect x="166" y="195" width="22" height="6" rx="3" fill="#93C5FD"/>
+      <rect x="214" y="195" width="22" height="6" rx="3" fill="#93C5FD"/>
+      <!-- Roof shine -->
+      <path d="M155 140 C170 132 230 132 245 140" stroke="white" stroke-width="3" opacity="0.4" fill="none"/>
     `,
+    defs: `<linearGradient id="carShine" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="white"/><stop offset="100%" stop-color="white" stop-opacity="0"/></linearGradient>`,
   },
   {
     slug: "real-estate",
     name: "عقارات",
-    gradient: { c1: "#312E81", c2: "#6366F1", c3: "#818CF8" },
-    accent: "#A5B4FC",
+    bg: "#EEF0FF",
     icon: `
+      <!-- Shadow -->
+      <ellipse cx="200" cy="330" rx="140" ry="12" fill="#9CA3AF" opacity="0.3"/>
       <!-- Main building -->
-      <rect x="90" y="140" width="130" height="180" rx="6" fill="white" fill-opacity="0.12" stroke="white" stroke-width="7" opacity="0.95"/>
+      <rect x="80" y="120" width="140" height="210" rx="4" fill="#6366F1"/>
+      <rect x="80" y="120" width="140" height="210" rx="4" fill="url(#bldgShine)" opacity="0.2"/>
+      <!-- Tower -->
+      <rect x="230" y="160" width="90" height="170" rx="4" fill="#818CF8"/>
+      <rect x="230" y="160" width="90" height="170" rx="4" fill="url(#bldgShine)" opacity="0.15"/>
+      <!-- Tower top -->
+      <rect x="230" y="148" width="90" height="18" rx="3" fill="#4F46E5"/>
       <!-- Roof -->
-      <path d="M75 148 L155 80 L235 148" fill="none" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
-      <!-- Tower right -->
-      <rect x="225" y="170" width="80" height="150" rx="5" fill="white" fill-opacity="0.08" stroke="white" stroke-width="6" opacity="0.9"/>
-      <rect x="225" y="160" width="80" height="20" rx="4" fill="white" fill-opacity="0.15"/>
-      <!-- Windows left -->
-      <rect x="110" y="160" width="28" height="28" rx="4" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2.5" stroke-opacity="0.4"/>
-      <rect x="150" y="160" width="28" height="28" rx="4" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2.5" stroke-opacity="0.4"/>
-      <rect x="110" y="205" width="28" height="28" rx="4" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2.5" stroke-opacity="0.4"/>
-      <rect x="150" y="205" width="28" height="28" rx="4" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2.5" stroke-opacity="0.4"/>
-      <rect x="110" y="250" width="28" height="28" rx="4" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2.5" stroke-opacity="0.4"/>
-      <rect x="150" y="250" width="28" height="28" rx="4" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2.5" stroke-opacity="0.4"/>
-      <!-- Windows right building -->
-      <rect x="245" y="195" width="24" height="22" rx="3" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2" stroke-opacity="0.4"/>
-      <rect x="245" y="230" width="24" height="22" rx="3" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2" stroke-opacity="0.4"/>
-      <rect x="245" y="265" width="24" height="22" rx="3" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2" stroke-opacity="0.4"/>
-      <rect x="275" y="195" width="24" height="22" rx="3" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2" stroke-opacity="0.4"/>
-      <rect x="275" y="230" width="24" height="22" rx="3" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2" stroke-opacity="0.4"/>
-      <rect x="275" y="265" width="24" height="22" rx="3" fill="white" fill-opacity="0.2" stroke="white" stroke-width="2" stroke-opacity="0.4"/>
+      <path d="M70 125 L150 70 L230 125" fill="#4F46E5"/>
+      <path d="M70 125 L150 70 L150 125Z" fill="white" opacity="0.08"/>
+      <!-- Main windows -->
+      <rect x="98" y="145" width="28" height="32" rx="3" fill="#C7D2FE"/>
+      <rect x="98" y="145" width="28" height="16" rx="3" fill="#E0E7FF"/>
+      <rect x="138" y="145" width="28" height="32" rx="3" fill="#C7D2FE"/>
+      <rect x="138" y="145" width="28" height="16" rx="3" fill="#E0E7FF"/>
+      <rect x="178" y="145" width="28" height="32" rx="3" fill="#C7D2FE"/>
+      <rect x="178" y="145" width="28" height="16" rx="3" fill="#E0E7FF"/>
+      <rect x="98" y="195" width="28" height="32" rx="3" fill="#C7D2FE"/>
+      <rect x="98" y="195" width="28" height="16" rx="3" fill="#E0E7FF"/>
+      <rect x="138" y="195" width="28" height="32" rx="3" fill="#C7D2FE"/>
+      <rect x="138" y="195" width="28" height="16" rx="3" fill="#E0E7FF"/>
+      <rect x="178" y="195" width="28" height="32" rx="3" fill="#C7D2FE"/>
+      <rect x="178" y="195" width="28" height="16" rx="3" fill="#E0E7FF"/>
+      <rect x="98" y="245" width="28" height="32" rx="3" fill="#C7D2FE"/>
+      <rect x="138" y="245" width="28" height="32" rx="3" fill="#C7D2FE"/>
+      <rect x="178" y="245" width="28" height="32" rx="3" fill="#C7D2FE"/>
+      <!-- Tower windows -->
+      <rect x="245" y="178" width="22" height="26" rx="2" fill="#C7D2FE"/>
+      <rect x="275" y="178" width="22" height="26" rx="2" fill="#C7D2FE"/>
+      <rect x="245" y="216" width="22" height="26" rx="2" fill="#C7D2FE"/>
+      <rect x="275" y="216" width="22" height="26" rx="2" fill="#C7D2FE"/>
+      <rect x="245" y="254" width="22" height="26" rx="2" fill="#C7D2FE"/>
+      <rect x="275" y="254" width="22" height="26" rx="2" fill="#C7D2FE"/>
       <!-- Door -->
-      <rect x="135" y="286" width="40" height="34" rx="6" fill="white" fill-opacity="0.3" stroke="white" stroke-width="3" stroke-opacity="0.5"/>
+      <rect x="130" y="290" width="40" height="40" rx="4" fill="#4338CA"/>
+      <rect x="130" y="290" width="40" height="20" rx="4" fill="#4F46E5"/>
+      <circle cx="163" cy="312" r="3" fill="#FCD34D"/>
+      <!-- Antenna -->
+      <line x1="275" y1="148" x2="275" y2="120" stroke="#6366F1" stroke-width="3"/>
+      <circle cx="275" cy="118" r="4" fill="#EF4444"/>
     `,
+    defs: `<linearGradient id="bldgShine" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="white"/><stop offset="100%" stop-color="white" stop-opacity="0"/></linearGradient>`,
   },
   {
     slug: "phones",
     name: "موبايلات",
-    gradient: { c1: "#1E293B", c2: "#475569", c3: "#64748B" },
-    accent: "#94A3B8",
+    bg: "#F0F2F5",
     icon: `
+      <!-- Shadow -->
+      <ellipse cx="200" cy="348" rx="80" ry="10" fill="#94A3B8" opacity="0.35"/>
       <!-- Phone body -->
-      <rect x="130" y="75" width="140" height="250" rx="24" fill="white" fill-opacity="0.1" stroke="white" stroke-width="7" opacity="0.95"/>
+      <rect x="120" y="60" width="160" height="285" rx="28" fill="#1E293B"/>
+      <!-- Screen bezel -->
+      <rect x="126" y="66" width="148" height="273" rx="24" fill="#334155"/>
       <!-- Screen -->
-      <rect x="145" y="110" width="110" height="165" rx="8" fill="white" fill-opacity="0.12" stroke="white" stroke-width="3" stroke-opacity="0.3"/>
-      <!-- Camera notch -->
-      <rect x="170" y="85" width="60" height="16" rx="8" fill="white" fill-opacity="0.2"/>
-      <circle cx="210" cy="93" r="5" fill="white" fill-opacity="0.35"/>
-      <!-- Screen content -->
-      <rect x="158" y="128" width="70" height="8" rx="4" fill="white" fill-opacity="0.18"/>
-      <rect x="158" y="145" width="50" height="8" rx="4" fill="white" fill-opacity="0.12"/>
-      <rect x="158" y="162" width="84" height="8" rx="4" fill="white" fill-opacity="0.1"/>
-      <rect x="158" y="179" width="60" height="8" rx="4" fill="white" fill-opacity="0.08"/>
-      <rect x="158" y="200" width="84" height="40" rx="6" fill="white" fill-opacity="0.06"/>
-      <!-- Home bar -->
-      <rect x="172" y="295" width="56" height="8" rx="4" fill="white" fill-opacity="0.25"/>
-      <!-- Glow effect -->
-      <ellipse cx="200" cy="190" rx="55" ry="80" fill="white" fill-opacity="0.03"/>
+      <rect x="132" y="90" width="136" height="228" rx="4" fill="#0F172A"/>
+      <!-- Dynamic Island -->
+      <rect x="172" y="72" width="56" height="14" rx="7" fill="#0F172A"/>
+      <circle cx="210" cy="79" r="4" fill="#1E293B"/>
+      <!-- Screen content - app icons grid -->
+      <rect x="144" y="108" width="30" height="30" rx="8" fill="#3B82F6"/>
+      <rect x="184" y="108" width="30" height="30" rx="8" fill="#10B981"/>
+      <rect x="224" y="108" width="30" height="30" rx="8" fill="#F59E0B"/>
+      <rect x="144" y="148" width="30" height="30" rx="8" fill="#EF4444"/>
+      <rect x="184" y="148" width="30" height="30" rx="8" fill="#8B5CF6"/>
+      <rect x="224" y="148" width="30" height="30" rx="8" fill="#EC4899"/>
+      <rect x="144" y="188" width="30" height="30" rx="8" fill="#06B6D4"/>
+      <rect x="184" y="188" width="30" height="30" rx="8" fill="#F97316"/>
+      <rect x="224" y="188" width="30" height="30" rx="8" fill="#14B8A6"/>
+      <!-- Dock -->
+      <rect x="140" y="240" width="120" height="42" rx="12" fill="#1E293B"/>
+      <rect x="150" y="248" width="26" height="26" rx="7" fill="#22C55E"/>
+      <rect x="184" y="248" width="26" height="26" rx="7" fill="#3B82F6"/>
+      <rect x="218" y="248" width="26" height="26" rx="7" fill="#A855F7"/>
+      <!-- Status bar -->
+      <rect x="145" y="95" width="24" height="4" rx="2" fill="white" opacity="0.5"/>
+      <rect x="222" y="95" width="16" height="4" rx="2" fill="white" opacity="0.5"/>
+      <rect x="208" y="95" width="10" height="4" rx="2" fill="white" opacity="0.3"/>
+      <!-- Home indicator -->
+      <rect x="175" y="302" width="50" height="5" rx="2.5" fill="white" opacity="0.3"/>
+      <!-- Side button -->
+      <rect x="280" y="140" width="4" height="40" rx="2" fill="#475569"/>
+      <!-- Volume buttons -->
+      <rect x="116" y="130" width="4" height="28" rx="2" fill="#475569"/>
+      <rect x="116" y="168" width="4" height="28" rx="2" fill="#475569"/>
+      <!-- Reflection -->
+      <rect x="132" y="90" width="30" height="228" rx="4" fill="white" opacity="0.04"/>
     `,
+    defs: ``,
   },
   {
     slug: "fashion",
     name: "موضة",
-    gradient: { c1: "#9D174D", c2: "#EC4899", c3: "#F472B6" },
-    accent: "#F9A8D4",
+    bg: "#FFF0F5",
     icon: `
-      <!-- Hanger hook -->
-      <path d="M200 85 C200 85 188 85 188 96 C188 108 200 108 200 108" stroke="white" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.9"/>
-      <!-- Hanger bar -->
-      <path d="M200 108 L300 175 L100 175 Z" fill="none" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
-      <!-- Dress body -->
-      <path d="M120 175 L105 320 C105 326 110 330 118 330 L282 330 C290 330 295 326 295 320 L280 175"
-            fill="white" fill-opacity="0.1" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
-      <!-- Waist belt -->
-      <path d="M128 235 L272 235" stroke="white" stroke-width="5" stroke-linecap="round" stroke-opacity="0.5"/>
-      <!-- Dress folds -->
-      <path d="M155 235 L118 330" stroke="white" stroke-width="3" stroke-linecap="round" stroke-opacity="0.15"/>
-      <path d="M200 235 L200 330" stroke="white" stroke-width="3" stroke-linecap="round" stroke-opacity="0.1"/>
-      <path d="M245 235 L282 330" stroke="white" stroke-width="3" stroke-linecap="round" stroke-opacity="0.15"/>
+      <!-- Hanger -->
+      <path d="M200 72 C200 72 190 72 190 82 C190 92 200 92 200 92" stroke="#9CA3AF" stroke-width="5" fill="none"/>
+      <circle cx="200" cy="68" r="5" fill="#9CA3AF"/>
+      <path d="M200 92 L290 155 L110 155 Z" fill="#D1D5DB" stroke="#9CA3AF" stroke-width="3"/>
+      <!-- T-shirt -->
+      <path d="M130 155 L130 148 L155 125 L180 148 L180 155" fill="#EC4899" stroke="#DB2777" stroke-width="2"/>
+      <path d="M220 155 L220 148 L245 125 L270 148 L270 155" fill="#EC4899" stroke="#DB2777" stroke-width="2"/>
+      <path d="M130 155 L120 320 C120 325 125 330 135 330 L265 330 C275 330 280 325 280 320 L270 155" fill="#EC4899"/>
+      <path d="M130 155 L120 320 C120 325 125 330 135 330 L265 330 C275 330 280 325 280 320 L270 155" fill="url(#fashShine)" opacity="0.15"/>
       <!-- Collar -->
-      <path d="M165 175 C165 188 180 195 200 195 C220 195 235 188 235 175" stroke="white" stroke-width="3" stroke-linecap="round" stroke-opacity="0.35" fill="none"/>
-      <!-- Decorative sparkle -->
-      <circle cx="200" cy="210" r="4" fill="white" fill-opacity="0.3"/>
+      <path d="M180 155 C180 170 190 178 200 178 C210 178 220 170 220 155" fill="#DB2777"/>
+      <!-- Pocket -->
+      <rect x="155" y="218" width="40" height="35" rx="3" fill="#DB2777" opacity="0.3"/>
+      <path d="M155 218 L195 218" stroke="#DB2777" stroke-width="2.5"/>
+      <!-- Button line -->
+      <line x1="200" y1="178" x2="200" y2="320" stroke="#DB2777" stroke-width="1.5" opacity="0.2"/>
+      <!-- Buttons -->
+      <circle cx="200" cy="200" r="4" fill="#DB2777" opacity="0.4"/>
+      <circle cx="200" cy="230" r="4" fill="#DB2777" opacity="0.4"/>
+      <circle cx="200" cy="260" r="4" fill="#DB2777" opacity="0.4"/>
+      <!-- Sleeves shadow -->
+      <path d="M130 155 L120 200" stroke="#DB2777" stroke-width="2.5" opacity="0.3"/>
+      <path d="M270 155 L280 200" stroke="#DB2777" stroke-width="2.5" opacity="0.3"/>
+      <!-- Tag -->
+      <rect x="232" y="160" width="22" height="30" rx="2" fill="white"/>
+      <rect x="232" y="160" width="22" height="10" rx="2" fill="#FCD34D"/>
+      <line x1="237" y1="178" x2="249" y2="178" stroke="#D1D5DB" stroke-width="1.5"/>
+      <line x1="237" y1="183" x2="245" y2="183" stroke="#D1D5DB" stroke-width="1.5"/>
     `,
+    defs: `<linearGradient id="fashShine" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="white"/><stop offset="100%" stop-color="white" stop-opacity="0"/></linearGradient>`,
   },
   {
     slug: "scrap",
     name: "خردة",
-    gradient: { c1: "#065F46", c2: "#10B981", c3: "#34D399" },
-    accent: "#6EE7B7",
+    bg: "#ECFDF5",
     icon: `
-      <!-- Outer circle -->
-      <circle cx="200" cy="210" r="120" fill="none" stroke="white" stroke-width="7" opacity="0.9"/>
-      <!-- Recycle arrows -->
-      <path d="M200 100 L218 130 L182 130 Z" fill="white" fill-opacity="0.35"/>
-      <path d="M200 100 C225 100 252 115 265 138 L218 130" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
-      <path d="M265 138 L285 195 C292 225 280 258 262 272" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.95"/>
-      <path d="M285 195 L272 185 L278 210 Z" fill="white" fill-opacity="0.35"/>
-      <path d="M262 272 C245 290 220 298 195 295 L170 280" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.95"/>
-      <path d="M195 295 L192 278 L175 290 Z" fill="white" fill-opacity="0.35"/>
-      <path d="M138 262 L115 205 C108 180 118 152 135 138" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.95"/>
-      <!-- Center gear -->
-      <circle cx="200" cy="210" r="26" stroke="white" stroke-width="4" stroke-opacity="0.4" fill="none"/>
-      <circle cx="200" cy="210" r="10" fill="white" fill-opacity="0.3"/>
+      <!-- Shadow -->
+      <ellipse cx="200" cy="335" rx="110" ry="12" fill="#6EE7B7" opacity="0.3"/>
+      <!-- Recycle arrows - 3 curved arrows forming triangle -->
+      <!-- Arrow 1: top -->
+      <path d="M200 90 C240 90 275 110 290 145" stroke="#10B981" stroke-width="28" stroke-linecap="round" fill="none"/>
+      <path d="M200 90 C240 90 275 110 290 145" stroke="#34D399" stroke-width="18" stroke-linecap="round" fill="none"/>
+      <polygon points="200,62 218,98 182,98" fill="#10B981"/>
+      <!-- Arrow 2: bottom-right -->
+      <path d="M290 145 C310 195 295 250 255 280" stroke="#10B981" stroke-width="28" stroke-linecap="round" fill="none"/>
+      <path d="M290 145 C310 195 295 250 255 280" stroke="#34D399" stroke-width="18" stroke-linecap="round" fill="none"/>
+      <polygon points="304,138 290,172 276,142" fill="#10B981"/>
+      <!-- Arrow 3: bottom-left -->
+      <path d="M255 280 C215 305 165 300 135 270" stroke="#10B981" stroke-width="28" stroke-linecap="round" fill="none"/>
+      <path d="M255 280 C215 305 165 300 135 270" stroke="#34D399" stroke-width="18" stroke-linecap="round" fill="none"/>
+      <polygon points="262,296 240,290 256,272" fill="#10B981"/>
+      <!-- Arrow 4: left side going up -->
+      <path d="M135 270 C105 230 110 175 140 140" stroke="#10B981" stroke-width="28" stroke-linecap="round" fill="none"/>
+      <path d="M135 270 C105 230 110 175 140 140" stroke="#34D399" stroke-width="18" stroke-linecap="round" fill="none"/>
+      <polygon points="126,276 140,248 152,278" fill="#10B981"/>
+      <!-- Center circle -->
+      <circle cx="200" cy="195" r="32" fill="#D1FAE5" stroke="#10B981" stroke-width="6"/>
+      <circle cx="200" cy="195" r="14" fill="#10B981"/>
+      <circle cx="200" cy="195" r="6" fill="#D1FAE5"/>
     `,
+    defs: ``,
   },
   {
     slug: "gold",
     name: "ذهب وفضة",
-    gradient: { c1: "#92400E", c2: "#D97706", c3: "#FBBF24" },
-    accent: "#FDE68A",
+    bg: "#FFFBEB",
     icon: `
+      <!-- Shadow -->
+      <ellipse cx="200" cy="340" rx="120" ry="12" fill="#D4A843" opacity="0.25"/>
+      <!-- Gold bar bottom -->
+      <path d="M80 285 L110 255 L290 255 L320 285 Z" fill="#D97706"/>
+      <path d="M80 285 L110 255 L200 255 L170 285 Z" fill="#F59E0B"/>
+      <rect x="80" y="285" width="240" height="45" rx="4" fill="#D97706"/>
+      <rect x="80" y="285" width="120" height="45" rx="4" fill="#F59E0B"/>
+      <rect x="100" y="297" width="60" height="14" rx="4" fill="#FBBF24" opacity="0.5"/>
+      <!-- Gold bar top -->
+      <path d="M120 230 L145 205 L255 205 L280 230 Z" fill="#FBBF24"/>
+      <path d="M120 230 L145 205 L200 205 L175 230 Z" fill="#FDE68A"/>
+      <rect x="120" y="230" width="160" height="30" rx="3" fill="#FBBF24"/>
+      <rect x="120" y="230" width="80" height="30" rx="3" fill="#FDE68A"/>
       <!-- Ring -->
-      <ellipse cx="200" cy="175" rx="100" ry="80" fill="none" stroke="white" stroke-width="9" opacity="0.95"/>
-      <ellipse cx="200" cy="175" rx="72" ry="58" fill="none" stroke="white" stroke-width="5" opacity="0.6"/>
+      <ellipse cx="200" cy="140" rx="72" ry="58" fill="none" stroke="#D97706" stroke-width="12"/>
+      <ellipse cx="200" cy="140" rx="72" ry="58" fill="none" stroke="#F59E0B" stroke-width="8"/>
+      <ellipse cx="200" cy="140" rx="52" ry="42" fill="none" stroke="#D97706" stroke-width="6"/>
+      <ellipse cx="200" cy="140" rx="52" ry="42" fill="none" stroke="#FBBF24" stroke-width="3"/>
       <!-- Diamond on ring -->
-      <path d="M200 95 L228 125 L200 160 L172 125 Z" fill="white" fill-opacity="0.3" stroke="white" stroke-width="5" stroke-linejoin="round" opacity="0.9"/>
-      <path d="M172 125 L228 125 L200 160 Z" fill="white" fill-opacity="0.15"/>
-      <!-- Shine on ring -->
-      <path d="M140 155 C140 155 155 132 180 125" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.35"/>
-      <!-- Gold bar -->
-      <path d="M105 280 L135 250 L265 250 L295 280 Z" fill="white" fill-opacity="0.15" stroke="white" stroke-width="6" stroke-linejoin="round" opacity="0.9"/>
-      <rect x="105" y="280" width="190" height="45" rx="5" fill="white" fill-opacity="0.1" stroke="white" stroke-width="6" opacity="0.9"/>
-      <rect x="130" y="292" width="60" height="14" rx="5" fill="white" fill-opacity="0.15"/>
+      <path d="M200 80 L222 105 L200 135 L178 105 Z" fill="#FDE68A" stroke="#D97706" stroke-width="3"/>
+      <path d="M178 105 L222 105 L200 135 Z" fill="#FBBF24"/>
       <!-- Sparkles -->
-      <path d="M310 95 L316 110 L330 115 L316 120 L310 135 L304 120 L290 115 L304 110 Z" fill="white" fill-opacity="0.45"/>
-      <path d="M90 80 L95 92 L106 95 L95 98 L90 110 L85 98 L74 95 L85 92 Z" fill="white" fill-opacity="0.3"/>
-      <path d="M320 200 L324 208 L332 212 L324 216 L320 224 L316 216 L308 212 L316 208 Z" fill="white" fill-opacity="0.25"/>
+      <path d="M310 85 L316 102 L332 108 L316 114 L310 130 L304 114 L288 108 L304 102 Z" fill="#FCD34D"/>
+      <path d="M90 70 L94 82 L106 86 L94 90 L90 102 L86 90 L74 86 L86 82 Z" fill="#FDE68A"/>
+      <path d="M320 180 L323 188 L330 190 L323 192 L320 200 L317 192 L310 190 L317 188 Z" fill="#FCD34D" opacity="0.7"/>
     `,
+    defs: ``,
   },
   {
     slug: "luxury",
     name: "فاخرة",
-    gradient: { c1: "#581C87", c2: "#A855F7", c3: "#C084FC" },
-    accent: "#D8B4FE",
+    bg: "#FAF5FF",
     icon: `
-      <!-- Diamond -->
-      <path d="M200 70 L325 185 L200 340 L75 185 Z" fill="white" fill-opacity="0.06" stroke="white" stroke-width="7" stroke-linejoin="round" opacity="0.95"/>
-      <!-- Top facets -->
-      <path d="M200 70 L150 185 L250 185 Z" fill="white" fill-opacity="0.1" stroke="white" stroke-width="3" stroke-opacity="0.4" stroke-linejoin="round"/>
-      <path d="M75 185 L150 185 L200 70" stroke="white" stroke-width="3" stroke-opacity="0.35" stroke-linejoin="round" fill="none"/>
-      <path d="M325 185 L250 185 L200 70" stroke="white" stroke-width="3" stroke-opacity="0.35" stroke-linejoin="round" fill="none"/>
-      <!-- Lower facets -->
-      <path d="M150 185 L200 340 L250 185" stroke="white" stroke-width="3" stroke-opacity="0.3" stroke-linejoin="round" fill="white" fill-opacity="0.04"/>
-      <path d="M75 185 L150 185 L200 340" fill="white" fill-opacity="0.06"/>
-      <path d="M250 185 L325 185 L200 340" fill="white" fill-opacity="0.06"/>
-      <!-- Shine -->
-      <path d="M120 148 L155 185" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.4"/>
-      <path d="M100 185 L135 215" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.25"/>
-      <!-- Sparkles -->
-      <path d="M340 80 L345 95 L358 100 L345 105 L340 120 L335 105 L322 100 L335 95 Z" fill="white" fill-opacity="0.45"/>
-      <path d="M65 105 L69 115 L78 118 L69 121 L65 131 L61 121 L52 118 L61 115 Z" fill="white" fill-opacity="0.35"/>
-      <path d="M290 50 L293 58 L300 60 L293 62 L290 70 L287 62 L280 60 L287 58 Z" fill="white" fill-opacity="0.3"/>
+      <!-- Shadow -->
+      <ellipse cx="200" cy="345" rx="100" ry="10" fill="#A855F7" opacity="0.2"/>
+      <!-- Handbag body -->
+      <rect x="100" y="170" width="200" height="155" rx="12" fill="#9333EA"/>
+      <rect x="100" y="170" width="200" height="155" rx="12" fill="url(#luxShine)" opacity="0.15"/>
+      <!-- Bag flap -->
+      <path d="M100 200 L100 175 C100 168 106 162 113 162 L287 162 C294 162 300 168 300 175 L300 200" fill="#7C3AED"/>
+      <!-- Clasp -->
+      <rect x="182" y="192" width="36" height="22" rx="6" fill="#FCD34D" stroke="#D97706" stroke-width="2"/>
+      <circle cx="200" cy="203" r="5" fill="#D97706"/>
+      <!-- Handle -->
+      <path d="M150 162 C150 120 170 95 200 95 C230 95 250 120 250 162" fill="none" stroke="#7C3AED" stroke-width="14" stroke-linecap="round"/>
+      <path d="M150 162 C150 120 170 95 200 95 C230 95 250 120 250 162" fill="none" stroke="#9333EA" stroke-width="10" stroke-linecap="round"/>
+      <!-- Stitching -->
+      <line x1="105" y1="230" x2="295" y2="230" stroke="#A855F7" stroke-width="2" stroke-dasharray="6 4"/>
+      <!-- Brand logo area -->
+      <rect x="160" y="248" width="80" height="30" rx="4" fill="#7C3AED" opacity="0.5"/>
+      <rect x="172" y="256" width="56" height="5" rx="2" fill="#C4B5FD"/>
+      <rect x="180" y="265" width="40" height="4" rx="2" fill="#C4B5FD" opacity="0.6"/>
+      <!-- Side texture -->
+      <line x1="110" y1="240" x2="110" y2="320" stroke="#A855F7" stroke-width="1.5" opacity="0.3"/>
+      <line x1="290" y1="240" x2="290" y2="320" stroke="#A855F7" stroke-width="1.5" opacity="0.3"/>
+      <!-- Sparkle -->
+      <path d="M322 130 L326 142 L338 146 L326 150 L322 162 L318 150 L306 146 L318 142 Z" fill="#C084FC"/>
+      <path d="M80 120 L83 128 L90 130 L83 132 L80 140 L77 132 L70 130 L77 128 Z" fill="#DDD6FE"/>
     `,
+    defs: `<linearGradient id="luxShine" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="white"/><stop offset="100%" stop-color="white" stop-opacity="0"/></linearGradient>`,
   },
   {
     slug: "appliances",
     name: "أجهزة",
-    gradient: { c1: "#155E75", c2: "#0891B2", c3: "#22D3EE" },
-    accent: "#67E8F9",
+    bg: "#ECFEFF",
     icon: `
-      <!-- Washing machine body -->
-      <rect x="100" y="75" width="200" height="260" rx="16" fill="white" fill-opacity="0.08" stroke="white" stroke-width="7" opacity="0.95"/>
+      <!-- Shadow -->
+      <ellipse cx="200" cy="340" rx="110" ry="12" fill="#67E8F9" opacity="0.3"/>
+      <!-- Body -->
+      <rect x="95" y="70" width="210" height="265" rx="14" fill="#E2E8F0"/>
+      <rect x="95" y="70" width="210" height="265" rx="14" fill="url(#applShine)" opacity="0.3"/>
+      <rect x="100" y="75" width="200" height="255" rx="10" fill="#F1F5F9"/>
       <!-- Control panel -->
-      <rect x="100" y="75" width="200" height="68" rx="16" fill="white" fill-opacity="0.1" stroke="white" stroke-width="7" opacity="0.95"/>
+      <rect x="100" y="75" width="200" height="65" rx="10" fill="#CBD5E1"/>
       <!-- Knob -->
-      <circle cx="148" cy="109" r="18" fill="none" stroke="white" stroke-width="4" stroke-opacity="0.6"/>
-      <line x1="148" y1="95" x2="148" y2="109" stroke="white" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+      <circle cx="145" cy="107" r="18" fill="#94A3B8" stroke="#64748B" stroke-width="3"/>
+      <circle cx="145" cy="107" r="12" fill="#E2E8F0"/>
+      <line x1="145" y1="95" x2="145" y2="104" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
       <!-- Display -->
-      <rect x="200" y="97" width="76" height="26" rx="5" fill="white" fill-opacity="0.15" stroke="white" stroke-width="2.5" stroke-opacity="0.35"/>
-      <!-- LED dots -->
-      <circle cx="186" cy="110" r="3.5" fill="white" fill-opacity="0.3"/>
-      <circle cx="186" cy="98" r="3.5" fill="white" fill-opacity="0.15"/>
+      <rect x="195" y="92" width="80" height="30" rx="5" fill="#0F172A"/>
+      <text x="235" y="113" font-family="monospace" font-size="16" fill="#22D3EE" text-anchor="middle">30°C</text>
+      <!-- LED indicators -->
+      <circle cx="180" cy="85" r="4" fill="#22C55E"/>
+      <circle cx="180" cy="100" r="4" fill="#64748B"/>
+      <circle cx="180" cy="115" r="4" fill="#64748B"/>
       <!-- Drum circle -->
-      <circle cx="200" cy="228" r="72" fill="none" stroke="white" stroke-width="7" opacity="0.95"/>
-      <circle cx="200" cy="228" r="52" fill="none" stroke="white" stroke-width="3.5" stroke-opacity="0.3"/>
-      <!-- Clothes swirl -->
-      <path d="M172 210 C180 195 195 188 215 200 C235 212 228 235 218 242" stroke="white" stroke-width="4" stroke-linecap="round" stroke-opacity="0.25" fill="none"/>
-      <path d="M185 245 C192 252 205 256 218 248" stroke="white" stroke-width="3" stroke-linecap="round" stroke-opacity="0.15" fill="none"/>
+      <circle cx="200" cy="225" r="80" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="5"/>
+      <circle cx="200" cy="225" r="65" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="3"/>
+      <circle cx="200" cy="225" r="50" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="2"/>
+      <!-- Drum perforations -->
+      <circle cx="200" cy="190" r="4" fill="#CBD5E1"/>
+      <circle cx="220" cy="200" r="4" fill="#CBD5E1"/>
+      <circle cx="230" cy="222" r="4" fill="#CBD5E1"/>
+      <circle cx="220" cy="245" r="4" fill="#CBD5E1"/>
+      <circle cx="200" cy="255" r="4" fill="#CBD5E1"/>
+      <circle cx="180" cy="245" r="4" fill="#CBD5E1"/>
+      <circle cx="170" cy="222" r="4" fill="#CBD5E1"/>
+      <circle cx="180" cy="200" r="4" fill="#CBD5E1"/>
+      <!-- Center -->
+      <circle cx="200" cy="225" r="16" fill="#CBD5E1"/>
+      <circle cx="200" cy="225" r="8" fill="#94A3B8"/>
       <!-- Door handle -->
-      <circle cx="200" cy="228" r="14" fill="white" fill-opacity="0.18"/>
+      <rect x="285" y="200" width="12" height="50" rx="6" fill="#94A3B8"/>
     `,
+    defs: `<linearGradient id="applShine" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="white" stop-opacity="0.5"/><stop offset="50%" stop-color="white" stop-opacity="0"/><stop offset="100%" stop-color="black" stop-opacity="0.05"/></linearGradient>`,
   },
   {
     slug: "furniture",
     name: "أثاث",
-    gradient: { c1: "#14532D", c2: "#16A34A", c3: "#4ADE80" },
-    accent: "#86EFAC",
+    bg: "#F0FDF4",
     icon: `
+      <!-- Shadow -->
+      <ellipse cx="200" cy="320" rx="150" ry="14" fill="#86EFAC" opacity="0.3"/>
       <!-- Sofa back -->
-      <path d="M85 145 C85 128 96 115 115 115 L285 115 C304 115 315 128 315 145 L315 210 L85 210 Z"
-            fill="white" fill-opacity="0.1" stroke="white" stroke-width="7" stroke-linejoin="round" opacity="0.95"/>
-      <!-- Sofa seat -->
-      <rect x="72" y="208" width="256" height="62" rx="18" fill="white" fill-opacity="0.1" stroke="white" stroke-width="7" opacity="0.95"/>
-      <!-- Left armrest -->
-      <path d="M72 165 C55 165 45 178 45 192 L45 252 C45 266 55 278 72 278" stroke="white" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.9"/>
-      <!-- Right armrest -->
-      <path d="M328 165 C345 165 355 178 355 192 L355 252 C355 266 345 278 328 278" stroke="white" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.9"/>
-      <!-- Cushion dividers -->
-      <line x1="160" y1="120" x2="160" y2="210" stroke="white" stroke-width="3" stroke-opacity="0.18"/>
-      <line x1="240" y1="120" x2="240" y2="210" stroke="white" stroke-width="3" stroke-opacity="0.18"/>
-      <!-- Cushion details -->
-      <path d="M108 155 C118 145 148 145 155 155" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.15" fill="none"/>
-      <path d="M175 155 C185 145 225 145 235 155" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.15" fill="none"/>
-      <path d="M252 155 C262 145 292 145 300 155" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.15" fill="none"/>
+      <path d="M60 150 C60 130 75 115 95 115 L305 115 C325 115 340 130 340 150 L340 215 L60 215 Z" fill="#16A34A"/>
+      <path d="M60 150 C60 130 75 115 95 115 L200 115 L200 215 L60 215 Z" fill="#22C55E"/>
+      <!-- Sofa seat cushion -->
+      <rect x="50" y="212" width="300" height="55" rx="14" fill="#15803D"/>
+      <rect x="50" y="212" width="150" height="55" rx="14" fill="#16A34A"/>
+      <!-- Left arm -->
+      <path d="M50 160 C30 160 18 175 18 195 L18 255 C18 270 30 280 50 280" fill="#15803D"/>
+      <path d="M50 160 C35 160 25 175 25 195 L25 255 C25 265 32 272 42 275 L50 280" fill="#16A34A"/>
+      <!-- Right arm -->
+      <path d="M350 160 C370 160 382 175 382 195 L382 255 C382 270 370 280 350 280" fill="#15803D"/>
+      <!-- Cushion lines -->
+      <line x1="160" y1="120" x2="160" y2="215" stroke="#14532D" stroke-width="2" opacity="0.15"/>
+      <line x1="240" y1="120" x2="240" y2="215" stroke="#14532D" stroke-width="2" opacity="0.15"/>
+      <!-- Pillow left -->
+      <ellipse cx="110" cy="165" rx="30" ry="38" fill="#4ADE80" opacity="0.6"/>
+      <!-- Pillow right -->
+      <ellipse cx="290" cy="165" rx="30" ry="38" fill="#4ADE80" opacity="0.6"/>
       <!-- Legs -->
-      <line x1="105" y1="270" x2="105" y2="315" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
-      <line x1="295" y1="270" x2="295" y2="315" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
-      <!-- Decorative pillows -->
-      <ellipse cx="120" cy="175" rx="22" ry="28" fill="white" fill-opacity="0.08" stroke="white" stroke-width="2" stroke-opacity="0.2"/>
-      <ellipse cx="280" cy="175" rx="22" ry="28" fill="white" fill-opacity="0.08" stroke="white" stroke-width="2" stroke-opacity="0.2"/>
+      <rect x="85" y="267" width="12" height="40" rx="3" fill="#854D0E"/>
+      <rect x="303" y="267" width="12" height="40" rx="3" fill="#854D0E"/>
+      <rect x="85" y="267" width="12" height="10" rx="3" fill="#A16207"/>
+      <rect x="303" y="267" width="12" height="10" rx="3" fill="#A16207"/>
     `,
+    defs: ``,
   },
   {
     slug: "hobbies",
     name: "هوايات",
-    gradient: { c1: "#9F1239", c2: "#E11D48", c3: "#FB7185" },
-    accent: "#FDA4AF",
+    bg: "#FFF1F2",
     icon: `
+      <!-- Shadow -->
+      <ellipse cx="200" cy="310" rx="145" ry="12" fill="#FDA4AF" opacity="0.3"/>
       <!-- Controller body -->
-      <path d="M85 165 C68 165 52 180 52 200 L52 248 C52 268 68 282 88 282 L140 282 L168 240 L232 240 L260 282 L312 282 C332 282 348 268 348 248 L348 200 C348 180 332 165 315 165 Z"
-            fill="white" fill-opacity="0.08" stroke="white" stroke-width="7" stroke-linejoin="round" opacity="0.95"/>
+      <path d="M75 180 C55 180 38 198 38 218 L38 255 C38 278 55 295 80 295 L138 295 L165 250 L235 250 L262 295 L320 295 C345 295 362 278 362 255 L362 218 C362 198 345 180 325 180 Z" fill="#E11D48"/>
+      <path d="M75 180 C55 180 38 198 38 218 L38 255 C38 278 55 295 80 295 L138 295 L165 250 L200 250 L200 180 Z" fill="#F43F5E"/>
       <!-- D-pad -->
-      <rect x="98" y="190" width="22" height="60" rx="6" fill="white" fill-opacity="0.3"/>
-      <rect x="82" y="206" width="54" height="22" rx="6" fill="white" fill-opacity="0.3"/>
+      <rect x="82" y="206" width="20" height="52" rx="5" fill="#9F1239"/>
+      <rect x="68" y="220" width="48" height="20" rx="5" fill="#9F1239"/>
+      <rect x="84" y="208" width="16" height="48" rx="4" fill="#BE123C"/>
+      <rect x="70" y="222" width="44" height="16" rx="4" fill="#BE123C"/>
       <!-- Action buttons -->
-      <circle cx="288" cy="192" r="14" fill="white" fill-opacity="0.15" stroke="white" stroke-width="3" stroke-opacity="0.4"/>
-      <circle cx="318" cy="218" r="14" fill="white" fill-opacity="0.15" stroke="white" stroke-width="3" stroke-opacity="0.4"/>
-      <circle cx="258" cy="218" r="14" fill="white" fill-opacity="0.15" stroke="white" stroke-width="3" stroke-opacity="0.4"/>
-      <circle cx="288" cy="244" r="14" fill="white" fill-opacity="0.15" stroke="white" stroke-width="3" stroke-opacity="0.4"/>
-      <!-- Button symbols -->
-      <path d="M282 186 L294 198" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.4"/>
-      <path d="M294 186 L282 198" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.4"/>
-      <circle cx="318" cy="218" r="5" fill="white" fill-opacity="0.2"/>
-      <rect x="254" y="215" width="8" height="6" rx="2" fill="white" fill-opacity="0.2"/>
-      <path d="M283 238 L293 248" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.35"/>
-      <path d="M288 238 L288 248" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.35"/>
+      <circle cx="295" cy="200" r="14" fill="#9F1239"/>
+      <circle cx="295" cy="200" r="11" fill="#BE123C"/>
+      <path d="M289 194 L301 206 M301 194 L289 206" stroke="white" stroke-width="2.5" opacity="0.7"/>
+
+      <circle cx="325" cy="228" r="14" fill="#9F1239"/>
+      <circle cx="325" cy="228" r="11" fill="#BE123C"/>
+      <circle cx="325" cy="228" r="5" fill="white" opacity="0.4"/>
+
+      <circle cx="265" cy="228" r="14" fill="#9F1239"/>
+      <circle cx="265" cy="228" r="11" fill="#BE123C"/>
+      <rect x="261" y="225" width="8" height="6" rx="2" fill="white" opacity="0.4"/>
+
+      <circle cx="295" cy="256" r="14" fill="#9F1239"/>
+      <circle cx="295" cy="256" r="11" fill="#BE123C"/>
+      <path d="M290 250 L295 260 L300 250" stroke="white" stroke-width="2.5" fill="none" opacity="0.7"/>
       <!-- Center buttons -->
-      <rect x="175" y="192" width="22" height="14" rx="5" fill="white" fill-opacity="0.2"/>
-      <rect x="203" y="192" width="22" height="14" rx="5" fill="white" fill-opacity="0.2"/>
+      <rect x="178" y="203" width="20" height="12" rx="5" fill="#881337"/>
+      <rect x="204" y="203" width="20" height="12" rx="5" fill="#881337"/>
       <!-- Analog sticks -->
-      <circle cx="140" cy="160" r="6" fill="white" fill-opacity="0.2"/>
-      <circle cx="260" cy="160" r="6" fill="white" fill-opacity="0.2"/>
+      <circle cx="120" cy="192" r="16" fill="#881337"/>
+      <circle cx="120" cy="192" r="11" fill="#9F1239"/>
+      <circle cx="120" cy="190" r="8" fill="#BE123C"/>
+      <circle cx="280" cy="270" r="16" fill="#881337"/>
+      <circle cx="280" cy="270" r="11" fill="#9F1239"/>
+      <circle cx="280" cy="268" r="8" fill="#BE123C"/>
+      <!-- Share/options -->
+      <circle cx="165" cy="195" r="4" fill="#881337"/>
+      <circle cx="238" cy="195" r="4" fill="#881337"/>
+      <!-- Light bar -->
+      <rect x="160" y="178" width="80" height="6" rx="3" fill="#3B82F6"/>
+      <rect x="160" y="178" width="40" height="6" rx="3" fill="#60A5FA"/>
     `,
+    defs: ``,
   },
   {
     slug: "tools",
     name: "عدد",
-    gradient: { c1: "#9A3412", c2: "#EA580C", c3: "#FB923C" },
-    accent: "#FDBA74",
+    bg: "#FFF7ED",
     icon: `
-      <!-- Wrench -->
-      <path d="M110 90 C88 90 70 108 70 132 C70 148 80 162 92 172 L230 310 C236 316 246 316 252 310 L265 297 C271 291 271 281 265 275 L128 140 C136 130 140 118 140 108 C140 96 132 90 120 90 Z"
-            fill="white" fill-opacity="0.08" stroke="white" stroke-width="7" stroke-linejoin="round" opacity="0.95"/>
-      <circle cx="98" cy="125" r="16" fill="white" fill-opacity="0.18"/>
-      <!-- Screwdriver -->
-      <path d="M280 72 L328 120 L302 148 L254 100 Z" fill="white" fill-opacity="0.15" stroke="white" stroke-width="6" stroke-linejoin="round" opacity="0.9"/>
-      <path d="M254 100 L165 190" stroke="white" stroke-width="10" stroke-linecap="round" opacity="0.95"/>
-      <path d="M165 190 L152 218 L176 232 L190 212" stroke="white" stroke-width="7" stroke-linejoin="round" opacity="0.95" fill="none"/>
-      <path d="M152 218 L128 280 C122 296 140 312 154 306 L176 232" stroke="white" stroke-width="7" stroke-linejoin="round" opacity="0.95" fill="white" fill-opacity="0.06"/>
-      <!-- Sparkle -->
-      <path d="M325 232 L332 250 L348 256 L332 262 L325 280 L318 262 L302 256 L318 250 Z" fill="white" fill-opacity="0.35"/>
-      <path d="M80 290 L84 300 L94 304 L84 308 L80 318 L76 308 L66 304 L76 300 Z" fill="white" fill-opacity="0.2"/>
+      <!-- Shadow -->
+      <ellipse cx="200" cy="340" rx="120" ry="10" fill="#FDBA74" opacity="0.3"/>
+      <!-- Drill body -->
+      <rect x="130" y="140" width="180" height="80" rx="12" fill="#EA580C"/>
+      <rect x="130" y="140" width="180" height="40" rx="12" fill="#F97316"/>
+      <!-- Drill chuck -->
+      <rect x="60" y="158" width="75" height="44" rx="6" fill="#94A3B8"/>
+      <rect x="60" y="158" width="75" height="22" rx="6" fill="#CBD5E1"/>
+      <!-- Drill bit -->
+      <path d="M60 180 L20 178 L15 180 L20 182 L60 180" fill="#64748B"/>
+      <line x1="20" y1="180" x2="60" y2="180" stroke="#94A3B8" stroke-width="2"/>
+      <!-- Trigger area -->
+      <path d="M200 220 L200 280 C200 295 210 300 220 300 L260 300 C270 300 270 292 270 285 L270 220" fill="#C2410C"/>
+      <path d="M200 220 L200 280 C200 295 210 300 220 300 L235 300 L235 220" fill="#EA580C"/>
+      <!-- Trigger -->
+      <rect x="215" y="240" width="30" height="22" rx="5" fill="#7C2D12"/>
+      <rect x="215" y="240" width="30" height="11" rx="5" fill="#9A3412"/>
+      <!-- Chuck ring details -->
+      <line x1="80" y1="158" x2="80" y2="202" stroke="#64748B" stroke-width="2" opacity="0.5"/>
+      <line x1="95" y1="158" x2="95" y2="202" stroke="#64748B" stroke-width="2" opacity="0.5"/>
+      <line x1="110" y1="158" x2="110" y2="202" stroke="#64748B" stroke-width="2" opacity="0.5"/>
+      <!-- Battery -->
+      <rect x="240" y="220" width="68" height="60" rx="6" fill="#1E293B"/>
+      <rect x="240" y="220" width="68" height="30" rx="6" fill="#334155"/>
+      <!-- Battery indicator -->
+      <rect x="252" y="232" width="30" height="8" rx="2" fill="#22C55E"/>
+      <rect x="252" y="232" width="20" height="8" rx="2" fill="#4ADE80"/>
+      <!-- Speed switch -->
+      <rect x="250" y="150" width="40" height="16" rx="4" fill="#9A3412"/>
+      <circle cx="278" cy="158" r="6" fill="#FCD34D"/>
+      <!-- Top vent -->
+      <line x1="160" y1="148" x2="180" y2="148" stroke="#C2410C" stroke-width="2"/>
+      <line x1="185" y1="148" x2="205" y2="148" stroke="#C2410C" stroke-width="2"/>
+      <line x1="210" y1="148" x2="230" y2="148" stroke="#C2410C" stroke-width="2"/>
+      <!-- Brand label -->
+      <rect x="155" y="165" width="50" height="16" rx="3" fill="#7C2D12"/>
+      <rect x="161" y="170" width="38" height="5" rx="2" fill="#FDBA74"/>
     `,
+    defs: ``,
   },
   {
     slug: "services",
     name: "خدمات",
-    gradient: { c1: "#115E59", c2: "#0D9488", c3: "#2DD4BF" },
-    accent: "#5EEAD4",
+    bg: "#F0FDFA",
     icon: `
-      <!-- Person -->
-      <circle cx="168" cy="115" r="38" fill="none" stroke="white" stroke-width="7" opacity="0.95"/>
-      <path d="M95 282 L95 235 C95 208 115 185 142 185 L194 185 C221 185 241 208 241 235 L241 282"
-            stroke="white" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.95"/>
-      <!-- Gear -->
-      <circle cx="290" cy="245" r="42" fill="none" stroke="white" stroke-width="6" opacity="0.9"/>
-      <circle cx="290" cy="245" r="18" fill="white" fill-opacity="0.15" stroke="white" stroke-width="3.5" stroke-opacity="0.4"/>
-      <!-- Gear teeth -->
-      <line x1="290" y1="196" x2="290" y2="210" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
-      <line x1="290" y1="280" x2="290" y2="294" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
-      <line x1="241" y1="245" x2="255" y2="245" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
-      <line x1="325" y1="245" x2="339" y2="245" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
-      <line x1="255" y1="210" x2="265" y2="220" stroke="white" stroke-width="6" stroke-linecap="round" opacity="0.85"/>
-      <line x1="315" y1="270" x2="325" y2="280" stroke="white" stroke-width="6" stroke-linecap="round" opacity="0.85"/>
-      <line x1="325" y1="210" x2="315" y2="220" stroke="white" stroke-width="6" stroke-linecap="round" opacity="0.85"/>
-      <line x1="265" y1="270" x2="255" y2="280" stroke="white" stroke-width="6" stroke-linecap="round" opacity="0.85"/>
-      <!-- Verification badge -->
-      <circle cx="248" cy="140" r="32" fill="white" stroke="white" stroke-width="4" opacity="0.95"/>
-      <path d="M234 140 L244 150 L264 130" stroke="#0D9488" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Shadow -->
+      <ellipse cx="200" cy="335" rx="120" ry="10" fill="#5EEAD4" opacity="0.25"/>
+      <!-- Person body -->
+      <path d="M130 320 L130 250 C130 222 150 200 178 200 L222 200 C250 200 270 222 270 250 L270 320" fill="#0D9488"/>
+      <path d="M130 320 L130 250 C130 222 150 200 178 200 L200 200 L200 320 Z" fill="#14B8A6"/>
+      <!-- Head -->
+      <circle cx="200" cy="145" r="48" fill="#FDE68A"/>
+      <circle cx="200" cy="145" r="48" fill="url(#svcFace)" opacity="0.15"/>
+      <!-- Hard hat -->
+      <path d="M148 140 C148 110 170 85 200 85 C230 85 252 110 252 140" fill="#F59E0B"/>
+      <path d="M148 140 C148 110 170 85 200 85 C200 85 200 140 200 140 L148 140Z" fill="#FBBF24"/>
+      <rect x="140" y="136" width="120" height="14" rx="4" fill="#D97706"/>
+      <rect x="140" y="136" width="60" height="14" rx="4" fill="#F59E0B"/>
+      <!-- Face -->
+      <circle cx="185" cy="148" r="4" fill="#78350F"/>
+      <circle cx="215" cy="148" r="4" fill="#78350F"/>
+      <path d="M190 162 C195 168 205 168 210 162" stroke="#78350F" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <!-- Collar -->
+      <path d="M178 200 L200 218 L222 200" fill="#0F766E"/>
+      <!-- Tool belt -->
+      <rect x="130" y="270" width="140" height="14" rx="3" fill="#92400E"/>
+      <rect x="160" y="264" width="20" height="24" rx="3" fill="#78350F"/>
+      <rect x="190" y="264" width="16" height="20" rx="2" fill="#78350F"/>
+      <!-- Wrench in hand -->
+      <path d="M270 250 L310 210 L320 220 L280 260" fill="#94A3B8" stroke="#64748B" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="316" cy="208" r="12" fill="none" stroke="#94A3B8" stroke-width="6"/>
+      <!-- Checkmark badge -->
+      <circle cx="260" cy="120" r="22" fill="white" stroke="#0D9488" stroke-width="4"/>
+      <path d="M250 120 L257 127 L272 112" stroke="#0D9488" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
     `,
+    defs: `<radialGradient id="svcFace" cx="40%" cy="40%"><stop offset="0%" stop-color="white"/><stop offset="100%" stop-color="black" stop-opacity="0.1"/></radialGradient>`,
   },
 ];
 
 async function generateImage(cat) {
-  const { slug, gradient, accent, icon } = cat;
-  const { c1, c2, c3 } = gradient;
+  const { slug, bg, icon, defs } = cat;
 
   const svg = `<svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <!-- Main gradient -->
-    <radialGradient id="bg-${slug}" cx="30%" cy="25%" r="80%">
-      <stop offset="0%" stop-color="${c3}"/>
-      <stop offset="50%" stop-color="${c2}"/>
-      <stop offset="100%" stop-color="${c1}"/>
-    </radialGradient>
-    <!-- Glow effect -->
-    <radialGradient id="glow-${slug}" cx="50%" cy="40%" r="45%">
-      <stop offset="0%" stop-color="white" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="white" stop-opacity="0"/>
-    </radialGradient>
-    <!-- Bottom shadow -->
-    <linearGradient id="shadow-${slug}" x1="0" y1="0.7" x2="0" y2="1">
-      <stop offset="0%" stop-color="black" stop-opacity="0"/>
-      <stop offset="100%" stop-color="black" stop-opacity="0.2"/>
-    </linearGradient>
-  </defs>
-
+  <defs>${defs || ""}</defs>
   <!-- Background -->
-  <rect width="${SIZE}" height="${SIZE}" rx="48" fill="url(#bg-${slug})"/>
-
-  <!-- Ambient glow -->
-  <rect width="${SIZE}" height="${SIZE}" rx="48" fill="url(#glow-${slug})"/>
-
-  <!-- Subtle top-left shine -->
-  <ellipse cx="100" cy="80" rx="160" ry="120" fill="white" fill-opacity="0.05"/>
-
-  <!-- Decorative circles -->
-  <circle cx="340" cy="60" r="80" fill="white" fill-opacity="0.03"/>
-  <circle cx="60" cy="340" r="60" fill="white" fill-opacity="0.03"/>
-
-  <!-- Bottom vignette -->
-  <rect width="${SIZE}" height="${SIZE}" rx="48" fill="url(#shadow-${slug})"/>
-
+  <rect width="${SIZE}" height="${SIZE}" fill="${bg}"/>
+  <!-- Subtle radial light -->
+  <radialGradient id="ambientLight-${slug}">
+    <stop offset="0%" stop-color="white" stop-opacity="0.4"/>
+    <stop offset="100%" stop-color="white" stop-opacity="0"/>
+  </radialGradient>
+  <ellipse cx="180" cy="120" rx="200" ry="150" fill="url(#ambientLight-${slug})"/>
   <!-- Icon -->
-  <g>
-    ${icon}
-  </g>
+  <g>${icon}</g>
 </svg>`;
 
   await sharp(Buffer.from(svg))
@@ -394,12 +535,10 @@ async function generateImage(cat) {
 
 async function main() {
   console.log("Generating category images...\n");
-
   for (const cat of categories) {
     await generateImage(cat);
   }
-
-  console.log(`\nDone! ${categories.length} images created in public/images/categories/`);
+  console.log(`\nDone! ${categories.length} images in public/images/categories/`);
 }
 
 main().catch(console.error);
