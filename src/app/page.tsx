@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus, Loader2, Heart } from "lucide-react";
+import { Search, Plus, Heart } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
@@ -59,9 +59,6 @@ export default function HomePage() {
   const {
     items: feedAds,
     isLoading,
-    isLoadingMore,
-    hasMore,
-    sentinelRef,
     error: feedError,
     retry: retryFeed,
     refresh: refreshFeed,
@@ -229,26 +226,23 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Commission / InstaPay — small icon style ────────────── */}
-      <section className="px-4 pb-3">
+      {/* ─── Commission / InstaPay — compact inline ────────────── */}
+      <div className="px-4 pb-2">
         <a
           href="https://ipn.eg/S/maksab/instapay/QR"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 px-3 py-2.5 bg-gradient-to-l from-emerald-50 to-green-50 border border-emerald-200 rounded-xl active:scale-[0.98] transition-all"
+          className="flex items-center gap-2 active:opacity-70 transition-opacity"
         >
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center flex-shrink-0">
-            <Heart size={18} className="text-white" fill="white" />
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center flex-shrink-0">
+            <Heart size={12} className="text-white" fill="white" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-dark">عمولة 1% بس.. وبمزاجك</p>
-            <p className="text-xs text-gray-text">لو الصفقة عجبتك ادعمنا عبر إنستاباي</p>
-          </div>
-          <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-lg flex-shrink-0" dir="ltr">
-            ادعم
-          </span>
+          <p className="text-xs text-gray-text">
+            <span className="font-bold text-emerald-600">عمولة 1% بس.. وبمزاجك</span>
+            {" · "}لو الصفقة عجبتك ادعمنا عبر إنستاباي
+          </p>
         </a>
-      </section>
+      </div>
 
       {/* ─── Upgrade to Store Banner (individual users only) ──── */}
       {user && (!user.seller_type || user.seller_type === "individual") && (
@@ -317,35 +311,16 @@ export default function HomePage() {
             </button>
           </div>
         ) : feedAds.length > 0 ? (
-          <>
-            <div className="grid grid-cols-3 gap-2">
-              {feedAds.map((ad) => (
-                <AdCard
-                  key={ad.id}
-                  {...ad}
-                  isFavorited={favoriteIds.has(ad.id)}
-                  onToggleFavorite={handleToggleFavorite}
-                />
-              ))}
-            </div>
-
-            {/* Loading more indicator */}
-            {isLoadingMore && (
-              <div className="flex justify-center py-4">
-                <Loader2 size={24} className="animate-spin text-brand-green" />
-              </div>
-            )}
-
-            {/* Infinite scroll sentinel */}
-            {hasMore && <div ref={sentinelRef} className="h-1" />}
-
-            {/* End of feed */}
-            {!hasMore && (
-              <p className="text-center text-xs text-gray-text py-4">
-                خلاص كده — مفيش إعلانات تانية دلوقتي 👋
-              </p>
-            )}
-          </>
+          <div className="grid grid-cols-3 gap-2">
+            {feedAds.slice(0, 6).map((ad) => (
+              <AdCard
+                key={ad.id}
+                {...ad}
+                isFavorited={favoriteIds.has(ad.id)}
+                onToggleFavorite={handleToggleFavorite}
+              />
+            ))}
+          </div>
         ) : (
           /* Empty State */
           <div className="py-6 text-center">
