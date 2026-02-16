@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus, Loader2, MapPin, Sparkles } from "lucide-react";
+import { Search, Plus, Loader2, Heart } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
@@ -144,43 +144,37 @@ export default function HomePage() {
     setFavoriteIds(new Set(getFavoriteIds()));
   }, [refreshFeed, user]);
 
+  // Group feed ads by category for browse sections
+  const adsByCategory = feedAds.reduce<Record<string, AdSummary[]>>((acc, ad) => {
+    const catSlug = ad.categoryId || "other";
+    if (!acc[catSlug]) acc[catSlug] = [];
+    acc[catSlug].push(ad);
+    return acc;
+  }, {});
+
   return (
     <main className="bg-white">
-      {/* ═══ Sticky Top Bar: Header + InstaPay + Search ═══════════ */}
+      {/* ═══ Sticky Top Bar ═══════════════════════════════════════ */}
       <div className="sticky top-0 z-50 bg-white shadow-sm">
         <Header title="مكسب" showNotifications />
 
-        {/* InstaPay — always visible at top */}
-        <a
-          href="https://ipn.eg/S/maksab/instapay/QR"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 mx-3 mt-1 px-3 py-1.5 bg-gradient-to-l from-emerald-500 to-green-600 rounded-xl text-white active:scale-[0.98] transition-all"
-        >
-          <span className="text-base leading-none">💳</span>
-          <p className="flex-1 text-[11px] font-bold">ادعم مكسب — حوّل عبر إنستاباي</p>
-          <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-md flex-shrink-0" dir="ltr">
-            maksab@instapay
-          </span>
-        </a>
-
         {/* Welcome message with user name */}
         {user && user.display_name && (
-          <div className="px-4 pt-3 pb-1">
+          <div className="px-4 pt-2 pb-0.5">
             <p className="text-base font-bold text-dark">
               أهلاً يا {user.display_name} 👋
             </p>
-            <p className="text-xs text-gray-text mt-0.5">
+            <p className="text-sm text-gray-text mt-0.5">
               عايز تبيع إيه النهاردة؟
             </p>
           </div>
         )}
         {user && !user.display_name && (
-          <div className="px-4 pt-3 pb-1">
+          <div className="px-4 pt-2 pb-0.5">
             <p className="text-base font-bold text-dark">
               أهلاً بيك في مكسب 👋
             </p>
-            <p className="text-xs text-gray-text mt-0.5">
+            <p className="text-sm text-gray-text mt-0.5">
               <Link href="/profile/edit" className="text-brand-green font-semibold hover:underline">
                 أضف اسمك
               </Link>
@@ -189,40 +183,25 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Search bar — sticky */}
+        {/* Search bar — black border */}
         <div className="px-3 pt-2 pb-1.5">
           <Link href="/search" className="block">
-            <div className="flex items-center gap-3 bg-white rounded-2xl pe-4 ps-2 py-2.5 border-2 border-gray-200 shadow-md hover:border-brand-green/40 hover:shadow-lg hover:shadow-brand-green/5 transition-all duration-300">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-green to-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <div className="flex items-center gap-3 bg-white rounded-2xl pe-4 ps-2 py-2.5 border-2 border-gray-800 hover:border-brand-green transition-colors duration-200">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-green to-emerald-600 flex items-center justify-center flex-shrink-0">
                 <Search size={18} className="text-white" strokeWidth={2.5} />
               </div>
               <span className="flex-1 text-sm text-gray-400">ابحث في مكسب...</span>
-              <span className="text-[10px] text-brand-green bg-brand-green/10 px-2 py-1 rounded-full font-medium">بحث ذكي</span>
             </div>
           </Link>
         </div>
 
-        {/* Quick search chips */}
+        {/* Quick search chips — no price scanner or map */}
         <div className="flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide">
-          <Link
-            href="/price-scanner"
-            className="flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 bg-brand-gold-light text-brand-gold text-xs font-semibold rounded-full hover:bg-brand-gold hover:text-white transition-colors"
-          >
-            <Sparkles size={12} />
-            كام سعره؟
-          </Link>
-          <Link
-            href="/map"
-            className="flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 bg-brand-green-light text-brand-green text-xs font-semibold rounded-full hover:bg-brand-green hover:text-white transition-colors"
-          >
-            <MapPin size={12} />
-            خريطة
-          </Link>
-          {["سيارات", "موبايلات", "عقارات", "ذهب وفضة", "أثاث", "خردة"].map((term) => (
+          {["سيارات", "موبايلات", "عقارات", "ذهب وفضة", "أثاث", "خردة", "أجهزة", "موضة"].map((term) => (
             <Link
               key={term}
               href={`/search?q=${encodeURIComponent(term)}`}
-              className="flex-shrink-0 px-3.5 py-1.5 bg-gray-light text-dark text-xs font-semibold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
+              className="flex-shrink-0 px-3.5 py-1.5 bg-gray-light text-dark text-xs font-bold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
             >
               {term}
             </Link>
@@ -231,23 +210,44 @@ export default function HomePage() {
       </div>
 
       <PullToRefresh onRefresh={handlePullRefresh}>
-      {/* ─── 2. Categories Grid ────────────────────────────────── */}
-      <section className="px-4 pb-6">
-        <h2 className="text-sm font-bold text-dark mb-4">الأقسام</h2>
-        <div className="grid grid-cols-4 gap-y-5 gap-x-2">
+      {/* ─── Categories Grid ─────────────────────────────────────── */}
+      <section className="px-4 pb-3 pt-1">
+        <h2 className="text-base font-bold text-dark mb-3">الأقسام</h2>
+        <div className="grid grid-cols-4 gap-y-4 gap-x-2">
           {categories.map((cat) => (
             <Link
               key={cat.slug}
               href={`/search?category=${cat.slug}`}
-              className="flex flex-col items-center gap-2 group"
+              className="flex flex-col items-center gap-1.5 group"
             >
               <CategoryIcon slug={cat.slug} size="md" />
-              <span className="text-[11px] font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1 max-w-[76px]">
+              <span className="text-xs font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1 max-w-[76px]">
                 {cat.name}
               </span>
             </Link>
           ))}
         </div>
+      </section>
+
+      {/* ─── Commission / InstaPay — small icon style ────────────── */}
+      <section className="px-4 pb-3">
+        <a
+          href="https://ipn.eg/S/maksab/instapay/QR"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 px-3 py-2.5 bg-gradient-to-l from-emerald-50 to-green-50 border border-emerald-200 rounded-xl active:scale-[0.98] transition-all"
+        >
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center flex-shrink-0">
+            <Heart size={18} className="text-white" fill="white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-dark">عمولة 1% بس.. وبمزاجك</p>
+            <p className="text-xs text-gray-text">لو الصفقة عجبتك ادعمنا عبر إنستاباي</p>
+          </div>
+          <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-lg flex-shrink-0" dir="ltr">
+            ادعم
+          </span>
+        </a>
       </section>
 
       {/* ─── Upgrade to Store Banner (individual users only) ──── */}
@@ -256,10 +256,10 @@ export default function HomePage() {
       )}
 
       {/* ─── Browse Stores ─────────────────────────────────────── */}
-      <section className="px-4 pb-5">
+      <section className="px-4 pb-3">
         <Link
           href="/stores"
-          className="flex items-center justify-between bg-gradient-to-l from-brand-green-light to-white border border-brand-green/20 rounded-xl p-4 hover:shadow-sm transition-shadow"
+          className="flex items-center justify-between bg-gradient-to-l from-brand-green-light to-white border border-brand-green/20 rounded-xl p-3 hover:shadow-sm transition-shadow"
         >
           <div className="flex items-center gap-3">
             <span className="text-2xl">🏪</span>
@@ -280,7 +280,7 @@ export default function HomePage() {
       {/* ─── Recently Viewed ─────────────────────────────────── */}
       <RecentlyViewed />
 
-      {/* ─── 3. Recommended Ads (horizontal scroll) ────────────── */}
+      {/* ─── Recommended Ads (horizontal scroll) ────────────── */}
       <HorizontalSection
         title="ليك عروض تحفة"
         subtitle={hasSignals ? "على حسب بحثاتك ومفضلاتك" : "إعلانات جديدة ممكن تعجبك"}
@@ -289,7 +289,7 @@ export default function HomePage() {
         onToggleFavorite={handleToggleFavorite}
       />
 
-      {/* ─── 4. Matching Auctions (horizontal scroll) ──────────── */}
+      {/* ─── Matching Auctions (horizontal scroll) ──────────── */}
       <HorizontalSection
         title="شوف المزادات دي"
         subtitle={hasSignals ? "على حسب اهتماماتك" : "زايد واكسب!"}
@@ -299,14 +299,14 @@ export default function HomePage() {
         onToggleFavorite={handleToggleFavorite}
       />
 
-      {/* ─── 5. New Ads Feed (infinite scroll grid) ────────────── */}
-      <section className="px-4 pb-6">
-        <h2 className="text-sm font-bold text-dark mb-3">جديد على مكسب</h2>
+      {/* ─── New Ads Feed (3-col grid) ───────────────────────── */}
+      <section className="px-3 pb-3">
+        <h2 className="text-base font-bold text-dark mb-2">جديد على مكسب</h2>
 
         {isLoading ? (
-          <AdGridSkeleton count={4} />
+          <AdGridSkeleton count={6} />
         ) : feedError ? (
-          <div className="py-8 text-center">
+          <div className="py-6 text-center">
             <p className="text-4xl mb-3">⚠️</p>
             <p className="text-sm text-gray-text mb-3">حصلت مشكلة في التحميل — معلش!</p>
             <button
@@ -318,7 +318,7 @@ export default function HomePage() {
           </div>
         ) : feedAds.length > 0 ? (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               {feedAds.map((ad) => (
                 <AdCard
                   key={ad.id}
@@ -331,7 +331,7 @@ export default function HomePage() {
 
             {/* Loading more indicator */}
             {isLoadingMore && (
-              <div className="flex justify-center py-6">
+              <div className="flex justify-center py-4">
                 <Loader2 size={24} className="animate-spin text-brand-green" />
               </div>
             )}
@@ -341,15 +341,15 @@ export default function HomePage() {
 
             {/* End of feed */}
             {!hasMore && (
-              <p className="text-center text-xs text-gray-text py-6">
+              <p className="text-center text-xs text-gray-text py-4">
                 خلاص كده — مفيش إعلانات تانية دلوقتي 👋
               </p>
             )}
           </>
         ) : (
           /* Empty State */
-          <div className="py-8 text-center">
-            <p className="text-6xl mb-4">🏪</p>
+          <div className="py-6 text-center">
+            <p className="text-5xl mb-3">🏪</p>
             <h3 className="text-lg font-bold text-dark mb-2">
               أهلاً بيك في مكسب!
             </h3>
@@ -368,9 +368,41 @@ export default function HomePage() {
         )}
       </section>
 
+      {/* ─── Category Browse Sections ─────────────────────────── */}
+      {categories.map((cat) => {
+        const catAds = adsByCategory[cat.slug] || adsByCategory[cat.slug.replace("-", "_")] || [];
+        if (catAds.length === 0) return null;
+        return (
+          <section key={cat.slug} className="px-3 pb-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <CategoryIcon slug={cat.slug} size="sm" />
+                <h2 className="text-base font-bold text-dark">{cat.name}</h2>
+              </div>
+              <Link
+                href={`/search?category=${cat.slug}`}
+                className="text-xs font-bold text-brand-green hover:underline"
+              >
+                عرض الكل ←
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {catAds.slice(0, 3).map((ad) => (
+                <AdCard
+                  key={ad.id}
+                  {...ad}
+                  isFavorited={favoriteIds.has(ad.id)}
+                  onToggleFavorite={handleToggleFavorite}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
       {/* ─── Merchant: Add Regular Ad (green CTA) ────────────── */}
       {user?.seller_type === "store" && user?.store_id && (
-        <section className="px-4 pb-6">
+        <section className="px-4 pb-4">
           <Link href="/ad/create" className="block">
             <div className="flex items-center justify-center gap-2 bg-brand-green hover:bg-brand-green-dark active:scale-[0.98] text-white py-3.5 rounded-xl shadow-md shadow-brand-green/20 transition-all">
               <Plus size={20} strokeWidth={2.5} />
