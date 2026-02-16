@@ -1,9 +1,8 @@
 "use client";
 
 /**
- * CategoryIcon — High-quality PNG category images.
- * Images are generated via scripts/generate-category-images.mjs
- * and stored in public/images/categories/.
+ * CategoryIcon — Real photography category images.
+ * High-quality photographs stored in public/images/categories/.
  */
 
 import Image from "next/image";
@@ -14,19 +13,19 @@ interface CategoryImageConfig {
 }
 
 const categoryImages: Record<string, CategoryImageConfig> = {
-  cars: { name: "سيارات", src: "/images/categories/cars.png" },
-  "real-estate": { name: "عقارات", src: "/images/categories/real-estate.png" },
-  real_estate: { name: "عقارات", src: "/images/categories/real-estate.png" },
-  phones: { name: "موبايلات", src: "/images/categories/phones.png" },
-  fashion: { name: "موضة", src: "/images/categories/fashion.png" },
-  scrap: { name: "خردة", src: "/images/categories/scrap.png" },
-  gold: { name: "ذهب وفضة", src: "/images/categories/gold.png" },
-  luxury: { name: "فاخرة", src: "/images/categories/luxury.png" },
-  appliances: { name: "أجهزة", src: "/images/categories/appliances.png" },
-  furniture: { name: "أثاث", src: "/images/categories/furniture.png" },
-  hobbies: { name: "هوايات", src: "/images/categories/hobbies.png" },
-  tools: { name: "عدد", src: "/images/categories/tools.png" },
-  services: { name: "خدمات", src: "/images/categories/services.png" },
+  cars: { name: "سيارات", src: "/images/categories/cars.jpg" },
+  "real-estate": { name: "عقارات", src: "/images/categories/real-estate.jpg" },
+  real_estate: { name: "عقارات", src: "/images/categories/real-estate.jpg" },
+  phones: { name: "موبايلات", src: "/images/categories/phones.jpg" },
+  fashion: { name: "موضة", src: "/images/categories/fashion.jpg" },
+  scrap: { name: "خردة", src: "/images/categories/scrap.jpg" },
+  gold: { name: "ذهب وفضة", src: "/images/categories/gold.jpg" },
+  luxury: { name: "فاخرة", src: "/images/categories/luxury.jpg" },
+  appliances: { name: "أجهزة", src: "/images/categories/appliances.jpg" },
+  furniture: { name: "أثاث", src: "/images/categories/furniture.jpg" },
+  hobbies: { name: "هوايات", src: "/images/categories/hobbies.jpg" },
+  tools: { name: "عدد", src: "/images/categories/tools.jpg" },
+  services: { name: "خدمات", src: "/images/categories/services.jpg" },
 };
 
 const sizeMap = {
@@ -50,7 +49,7 @@ export default function CategoryIcon({
   const s = sizeMap[size];
   const normalizedSlug = slug === "real_estate" ? "real-estate" : slug;
   const cat = categoryImages[slug] || categoryImages[normalizedSlug];
-  const src = cat?.src || "/images/categories/cars.png";
+  const src = cat?.src || "/images/categories/cars.jpg";
   const name = cat?.name || slug;
 
   return (
