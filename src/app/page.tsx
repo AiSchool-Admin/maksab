@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus, Heart } from "lucide-react";
+import { Search, Plus } from "lucide-react";
+import InstaPayLogo from "@/components/ui/InstaPayLogo";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
@@ -208,8 +209,8 @@ export default function HomePage() {
 
       <PullToRefresh onRefresh={handlePullRefresh}>
       {/* ─── Categories Grid ─────────────────────────────────────── */}
-      <section className="px-4 pb-3 pt-1">
-        <h2 className="text-base font-bold text-dark mb-3">الأقسام</h2>
+      <section className="px-4 pb-1.5 pt-1">
+        <h2 className="text-base font-bold text-dark mb-2">الأقسام</h2>
         <div className="grid grid-cols-4 gap-y-4 gap-x-2">
           {categories.map((cat) => (
             <Link
@@ -227,16 +228,14 @@ export default function HomePage() {
       </section>
 
       {/* ─── Commission / InstaPay — compact inline ────────────── */}
-      <div className="px-4 pb-2">
+      <div className="px-4 pb-1">
         <a
           href="https://ipn.eg/S/maksab/instapay/QR"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 active:opacity-70 transition-opacity"
+          className="flex items-center gap-2.5 active:opacity-70 transition-opacity"
         >
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center flex-shrink-0">
-            <Heart size={12} className="text-white" fill="white" />
-          </div>
+          <InstaPayLogo size={30} />
           <p className="text-xs text-gray-text">
             <span className="font-bold text-emerald-600">عمولة 1% بس.. وبمزاجك</span>
             {" · "}لو الصفقة عجبتك ادعمنا عبر إنستاباي
@@ -250,7 +249,7 @@ export default function HomePage() {
       )}
 
       {/* ─── Browse Stores ─────────────────────────────────────── */}
-      <section className="px-4 pb-3">
+      <section className="px-4 pb-1.5">
         <Link
           href="/stores"
           className="flex items-center justify-between bg-gradient-to-l from-brand-green-light to-white border border-brand-green/20 rounded-xl p-3 hover:shadow-sm transition-shadow"
@@ -294,8 +293,8 @@ export default function HomePage() {
       />
 
       {/* ─── New Ads Feed (3-col grid) ───────────────────────── */}
-      <section className="px-3 pb-3">
-        <h2 className="text-base font-bold text-dark mb-2">جديد على مكسب</h2>
+      <section className="px-3 pb-1.5">
+        <h2 className="text-base font-bold text-dark mb-1.5">جديد على مكسب</h2>
 
         {isLoading ? (
           <AdGridSkeleton count={6} />
@@ -348,8 +347,8 @@ export default function HomePage() {
         const catAds = adsByCategory[cat.slug] || adsByCategory[cat.slug.replace("-", "_")] || [];
         if (catAds.length === 0) return null;
         return (
-          <section key={cat.slug} className="px-3 pb-3">
-            <div className="flex items-center justify-between mb-2">
+          <section key={cat.slug} className="px-3 pb-1.5">
+            <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-2">
                 <CategoryIcon slug={cat.slug} size="sm" />
                 <h2 className="text-base font-bold text-dark">{cat.name}</h2>
@@ -377,7 +376,7 @@ export default function HomePage() {
 
       {/* ─── Merchant: Add Regular Ad (green CTA) ────────────── */}
       {user?.seller_type === "store" && user?.store_id && (
-        <section className="px-4 pb-4">
+        <section className="px-4 pb-2">
           <Link href="/ad/create" className="block">
             <div className="flex items-center justify-center gap-2 bg-brand-green hover:bg-brand-green-dark active:scale-[0.98] text-white py-3.5 rounded-xl shadow-md shadow-brand-green/20 transition-all">
               <Plus size={20} strokeWidth={2.5} />

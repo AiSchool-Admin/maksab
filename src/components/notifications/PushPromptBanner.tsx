@@ -51,7 +51,7 @@ export default function PushPromptBanner() {
   };
 
   return (
-    <div className="mx-4 mb-4 bg-gradient-to-l from-brand-green-light to-emerald-50 border border-brand-green/20 rounded-xl p-4 relative animate-in slide-in-from-top duration-300">
+    <div className="mx-4 mb-2 bg-gradient-to-l from-brand-green-light to-emerald-50 border border-brand-green/20 rounded-xl p-3 relative animate-in slide-in-from-top duration-300">
       <button
         onClick={handleDismiss}
         className="absolute top-2 end-2 p-1 text-gray-text hover:text-dark rounded-full"
