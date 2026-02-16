@@ -8,6 +8,7 @@ import { useNotificationStore } from "@/stores/notification-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useAuth } from "@/components/auth/AuthProvider";
 import NotificationDropdown from "@/components/notifications/NotificationDropdown";
+import MaksabLogo from "@/components/ui/MaksabLogo";
 
 interface HeaderProps {
   title?: string;
@@ -74,7 +75,7 @@ export default function Header({
             </>
           ) : (
             <Link href="/" className="flex items-center">
-              <h1 className="text-xl font-bold text-brand-green">{title}</h1>
+              <MaksabLogo size="sm" variant="full" />
             </Link>
           )}
         </div>

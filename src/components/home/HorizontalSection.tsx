@@ -28,9 +28,9 @@ export default function HorizontalSection({
   if (ads.length === 0) return null;
 
   return (
-    <section className="pb-5">
+    <section className="pb-2">
       {/* Section header */}
-      <div className="flex items-center justify-between px-4 mb-3">
+      <div className="flex items-center justify-between px-4 mb-2">
         <div>
           <h2 className="text-sm font-bold text-dark flex items-center gap-1.5">
             {icon && <span>{icon}</span>}
