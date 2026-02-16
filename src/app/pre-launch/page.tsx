@@ -197,8 +197,8 @@ export default function PreLaunchPage() {
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-light">
         <div className="max-w-lg mx-auto flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
+            <span className="text-brand-gold text-xl font-black">$</span>
             <span className="text-xl font-bold text-brand-green">مكسب</span>
-            <span className="text-brand-gold text-lg">💚</span>
           </div>
           <Link
             href="/"
