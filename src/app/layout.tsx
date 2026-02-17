@@ -4,6 +4,7 @@ import AuthProvider from "@/components/auth/AuthProvider";
 import ThemeProvider from "@/components/theme/ThemeProvider";
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration";
 import UpdateBanner from "@/components/pwa/UpdateBanner";
+import InstallPrompt from "@/components/pwa/InstallPrompt";
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
 import { validateEnv } from "@/lib/env-check";
@@ -96,6 +97,7 @@ export default function RootLayout({
           <AuthProvider>
             {/* Main content with bottom padding to avoid BottomNav overlap */}
             <div className="min-h-screen pb-20">{children}</div>
+            <InstallPrompt />
             <ChatbotWidget />
             <AnalyticsProvider />
           </AuthProvider>
