@@ -42,6 +42,8 @@ import type { UserLoyaltyProfile } from "@/lib/loyalty/types";
 import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
 import PointsDisplay from "@/components/loyalty/PointsDisplay";
 import UpgradeToStoreBanner from "@/components/store/UpgradeToStoreBanner";
+import FounderBadge from "@/components/social/FounderBadge";
+import { getFounderProfile, type FounderProfile } from "@/lib/founder/founder-service";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -50,6 +52,7 @@ export default function ProfilePage() {
   // All hooks must be called before any early returns
   const [isSupporter, setIsSupporter] = useState(false);
   const [loyaltyProfile, setLoyaltyProfile] = useState<UserLoyaltyProfile | null>(null);
+  const [founderProfile, setFounderProfile] = useState<FounderProfile | null>(null);
 
   useEffect(() => {
     if (user?.id) {
@@ -58,6 +61,8 @@ export default function ProfilePage() {
       const profile = getUserLoyaltyProfile(user.id);
       setLoyaltyProfile(profile);
       awardPoints(user.id, "daily_login");
+      // Load founder profile
+      getFounderProfile(user.id).then(setFounderProfile);
     }
   }, [user?.id]);
 
@@ -155,6 +160,9 @@ export default function ProfilePage() {
               </p>
             )}
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {founderProfile?.isFounder && founderProfile.founderNumber && (
+                <FounderBadge founderNumber={founderProfile.founderNumber} size="sm" />
+              )}
               {loyaltyProfile && (
                 <LoyaltyBadge level={loyaltyProfile.currentLevel} size="sm" />
               )}
@@ -227,6 +235,28 @@ export default function ProfilePage() {
           >
             <PointsDisplay profile={loyaltyProfile} compact />
           </button>
+        </section>
+      )}
+
+      {/* Founder card */}
+      {founderProfile?.isFounder && founderProfile.founderNumber && (
+        <section className="px-4 pb-5">
+          <FounderBadge founderNumber={founderProfile.founderNumber} size="lg" />
+          {founderProfile.inviteCode && (
+            <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-amber-700">كود الدعوة بتاعك</p>
+                  <p className="text-[11px] text-amber-600/60 mt-0.5">
+                    {founderProfile.invitedCount > 0
+                      ? `دعيت ${founderProfile.invitedCount} شخص`
+                      : "شاركه مع صحابك"}
+                  </p>
+                </div>
+                <FounderInviteCode code={founderProfile.inviteCode} />
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -425,6 +455,36 @@ function InstaPayBanner() {
         </div>
       </div>
     </section>
+  );
+}
+
+function FounderInviteCode({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1.5 bg-white rounded-lg px-3 py-1.5 border border-amber-200 hover:bg-amber-50 transition-colors"
+    >
+      <span className="text-sm font-bold text-amber-800 tracking-wider" dir="ltr">
+        {code}
+      </span>
+      {copied ? (
+        <Check size={14} className="text-green-600" />
+      ) : (
+        <Copy size={14} className="text-amber-500" />
+      )}
+    </button>
   );
 }
 

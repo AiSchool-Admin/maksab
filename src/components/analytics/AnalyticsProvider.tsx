@@ -3,10 +3,11 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { startAnalyticsFlush, trackPageView } from "@/lib/analytics/analytics-service";
+import { captureUTMParams, syncUTMVisit } from "@/lib/utm/utm-service";
 
 /**
- * Analytics Provider — initializes analytics flush timer
- * and tracks page views on route changes.
+ * Analytics Provider — initializes analytics flush timer,
+ * tracks page views on route changes, and captures UTM params.
  * Place once in the root layout.
  */
 export default function AnalyticsProvider() {
@@ -14,10 +15,12 @@ export default function AnalyticsProvider() {
   const initialized = useRef(false);
   const lastPath = useRef("");
 
-  // Start analytics flush timer on mount
+  // Start analytics flush timer + capture UTM on mount
   useEffect(() => {
     if (!initialized.current) {
       startAnalyticsFlush();
+      captureUTMParams();
+      syncUTMVisit();
       initialized.current = true;
     }
   }, []);
