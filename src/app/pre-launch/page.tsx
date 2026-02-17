@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Rocket, Users, Gavel, ArrowLeftRight, Recycle, Shield, ChevronLeft, Check, Gift, Share2 } from "lucide-react";
+import MaksabLogo from "@/components/ui/MaksabLogo";
 import Link from "next/link";
 import toast, { Toaster } from "react-hot-toast";
 import { trackEvent } from "@/lib/analytics/analytics-service";
@@ -196,10 +197,7 @@ export default function PreLaunchPage() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-light">
         <div className="max-w-lg mx-auto flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-2">
-            <span className="text-brand-gold text-xl font-black">$</span>
-            <span className="text-xl font-bold text-brand-green">مكسب</span>
-          </div>
+          <MaksabLogo size="sm" variant="full" />
           <Link
             href="/"
             className="text-xs text-gray-text hover:text-brand-green flex items-center gap-1 transition-colors"
@@ -213,6 +211,10 @@ export default function PreLaunchPage() {
       <div className="max-w-lg mx-auto px-4 py-8 space-y-8">
         {/* Hero */}
         <section className="text-center space-y-4">
+          <div className="flex justify-center mb-2">
+            <MaksabLogo size="xl" variant="stacked" />
+          </div>
+
           <div className="inline-flex items-center gap-2 bg-brand-green/10 text-brand-green text-sm font-bold px-4 py-2 rounded-full">
             <Rocket size={16} />
             قريبًا جدًا!
@@ -227,7 +229,7 @@ export default function PreLaunchPage() {
           <p className="text-gray-text text-sm leading-relaxed">
             أول سوق إلكتروني مصري فيه مزادات حقيقية + تبديل ذكي + أقسام متخصصة.
             <br />
-            <strong className="text-dark">كل صفقة مكسب 💚</strong>
+            <strong className="text-dark">كل صفقة مكسب</strong>
           </p>
         </section>
 

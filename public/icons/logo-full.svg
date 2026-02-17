@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 700" width="512" height="700">
+  <defs>
+    <linearGradient id="bgGrad" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#2E8B4A"/>
+      <stop offset="100%" stop-color="#1D6B36"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon — green rounded square with $ -->
+  <g transform="translate(96, 0) scale(0.625)">
+    <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+    <text
+      x="272"
+      y="266"
+      font-family="sans-serif"
+      font-size="260"
+      font-weight="900"
+      fill="#C8942A"
+      text-anchor="middle"
+      dominant-baseline="central"
+    >$</text>
+    <circle cx="370" cy="90" r="15" fill="#45C468"/>
+  </g>
+
+  <!-- Arabic name: مكسب -->
+  <text
+    x="256"
+    y="400"
+    font-family="Cairo, 'Noto Sans Arabic', Arial, sans-serif"
+    font-size="72"
+    font-weight="800"
+    fill="#145C2E"
+    text-anchor="middle"
+    dominant-baseline="central"
+  >مكسب</text>
+
+  <!-- English name: Maksab -->
+  <text
+    x="256"
+    y="460"
+    font-family="Cairo, 'Segoe UI', Arial, sans-serif"
+    font-size="40"
+    font-weight="700"
+    fill="#145C2E"
+    text-anchor="middle"
+    dominant-baseline="central"
+    letter-spacing="6"
+  >Maksab</text>
+
+  <!-- Tagline: EARN WITH EVERY DEAL -->
+  <text
+    x="256"
+    y="510"
+    font-family="Cairo, 'Segoe UI', Arial, sans-serif"
+    font-size="20"
+    font-weight="600"
+    fill="#D4A843"
+    text-anchor="middle"
+    dominant-baseline="central"
+    letter-spacing="3"
+  >EARN WITH EVERY DEAL</text>
+</svg>
