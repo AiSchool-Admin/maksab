@@ -143,16 +143,34 @@ export default function MaksabLogo({
     );
   }
 
-  // Full logo: icon + brand name (inline, for header)
+  // Full logo: icon + brand name with English name & tagline (for header)
   return (
-    <div className={`inline-flex items-center gap-1.5 ${className}`}>
+    <div className={`inline-flex items-center gap-2 ${className}`}>
       <LogoIcon size={iconSize} id="full" />
-      <span
-        className="font-extrabold text-brand-green leading-none"
-        style={{ fontSize: height * 0.6 }}
-      >
-        مكسب
-      </span>
+      <div className="flex flex-col">
+        <div className="flex items-baseline gap-1.5">
+          <span
+            className="font-extrabold text-brand-green-dark leading-none"
+            style={{ fontSize: height * 0.6 }}
+          >
+            مكسب
+          </span>
+          <span
+            className="font-bold text-brand-green leading-none tracking-wide"
+            style={{ fontSize: height * 0.3 }}
+          >
+            Maksab
+          </span>
+        </div>
+        {showTagline && (
+          <span
+            className="font-semibold text-brand-gold leading-none mt-0.5 tracking-wider uppercase"
+            style={{ fontSize: Math.max(height * 0.2, 7) }}
+          >
+            EARN WITH EVERY DEAL
+          </span>
+        )}
+      </div>
     </div>
   );
 }
