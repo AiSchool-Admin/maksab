@@ -12,7 +12,7 @@ interface ThemeState {
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  theme: "dark",
+  theme: "light",
 
   setTheme: (theme) => {
     set({ theme });
@@ -38,8 +38,8 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     if (stored === "dark" || stored === "light") {
       get().setTheme(stored);
     } else {
-      // Default to dark mode for new users
-      get().setTheme("dark");
+      // Default to light mode for new users
+      get().setTheme("light");
     }
   },
 }));
