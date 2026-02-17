@@ -7,8 +7,8 @@
   "orientation": "portrait",
   "dir": "rtl",
   "lang": "ar",
-  "background_color": "#FFFFFF",
-  "theme_color": "#1B7A3D",
+  "background_color": "#0f1117",
+  "theme_color": "#0f1117",
   "categories": ["shopping", "marketplace"],
   "icons": [
     {
