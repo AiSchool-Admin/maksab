@@ -1,40 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="0.5" y2="1">
-      <stop offset="0%" stop-color="#22A94E"/>
-      <stop offset="100%" stop-color="#1B7A3D"/>
+    <linearGradient id="bgGrad" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#2E8B4A"/>
+      <stop offset="100%" stop-color="#1D6B36"/>
     </linearGradient>
-    <linearGradient id="goldGrad" x1="0.2" y1="0" x2="0.8" y2="1">
-      <stop offset="0%" stop-color="#F0D060"/>
-      <stop offset="50%" stop-color="#D4A843"/>
-      <stop offset="100%" stop-color="#C49530"/>
-    </linearGradient>
-    <!-- Shadow filter for depth -->
-    <filter id="dollarShadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0D3D1A" flood-opacity="0.3"/>
-    </filter>
   </defs>
 
   <!-- Background — green rounded square -->
-  <rect width="512" height="512" rx="108" fill="url(#bgGrad)"/>
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
 
-  <!-- Subtle inner border for depth -->
-  <rect x="12" y="12" width="488" height="488" rx="96" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
-
-  <!-- Dollar sign $ — main brand symbol -->
+  <!-- Dollar sign $ — visually centered -->
   <text
-    x="256"
-    y="280"
-    font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
-    font-size="340"
+    x="272"
+    y="266"
+    font-family="sans-serif"
+    font-size="260"
     font-weight="900"
-    fill="url(#goldGrad)"
+    fill="#C8942A"
     text-anchor="middle"
     dominant-baseline="central"
-    filter="url(#dollarShadow)"
   >$</text>
 
-  <!-- Green accent circle — top right of $ sign -->
-  <circle cx="340" cy="108" r="28" fill="#2ECC60"/>
-  <circle cx="340" cy="108" r="18" fill="#3DDB72"/>
+  <!-- Green accent dot — top-right -->
+  <circle cx="370" cy="90" r="15" fill="#45C468"/>
 </svg>

@@ -29,43 +29,37 @@ export default function MaksabLogo({
     <svg
       width={iconSize}
       height={iconSize}
-      viewBox="0 0 120 120"
+      viewBox="0 0 512 512"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className="flex-shrink-0"
     >
       <defs>
-        <linearGradient id="logoBg" x1="0" y1="0" x2="0.5" y2="1">
-          <stop offset="0%" stopColor="#22A94E" />
-          <stop offset="100%" stopColor="#1B7A3D" />
-        </linearGradient>
-        <linearGradient id="logoGold" x1="0.2" y1="0" x2="0.8" y2="1">
-          <stop offset="0%" stopColor="#F0D060" />
-          <stop offset="50%" stopColor="#D4A843" />
-          <stop offset="100%" stopColor="#C49530" />
+        <linearGradient id="logoBg" x1="0.2" y1="0" x2="0.8" y2="1">
+          <stop offset="0%" stopColor="#2E8B4A" />
+          <stop offset="100%" stopColor="#1D6B36" />
         </linearGradient>
       </defs>
 
       {/* Background — green rounded square */}
-      <rect width="120" height="120" rx="26" fill="url(#logoBg)" />
+      <rect width="512" height="512" rx="112" fill="url(#logoBg)" />
 
-      {/* Dollar sign $ — main brand symbol */}
+      {/* Dollar sign $ — visually centered */}
       <text
-        x="60"
-        y="66"
-        fontFamily="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
-        fontSize="82"
+        x="272"
+        y="266"
+        fontFamily="sans-serif"
+        fontSize="260"
         fontWeight="900"
-        fill="url(#logoGold)"
+        fill="#C8942A"
         textAnchor="middle"
         dominantBaseline="central"
       >
         $
       </text>
 
-      {/* Green accent circle */}
-      <circle cx="82" cy="24" r="7" fill="#2ECC60" />
-      <circle cx="82" cy="24" r="4.5" fill="#3DDB72" />
+      {/* Green accent dot */}
+      <circle cx="370" cy="90" r="15" fill="#45C468" />
     </svg>
   );
 
