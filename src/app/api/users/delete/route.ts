@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,11 +19,19 @@ function getServiceClient() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { user_id, reason } = await req.json();
-
-    if (!user_id) {
-      return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
+    // Verify authentication — user can only delete their own account
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "لازم تسجل دخول الأول" }, { status: 401 });
     }
+    const session = verifySessionToken(token);
+    if (!session.valid) {
+      return NextResponse.json({ error: session.error }, { status: 401 });
+    }
+
+    const { reason } = await req.json();
+    const user_id = session.userId; // Use authenticated user ID — can only delete own account
 
     const supabase = getServiceClient();
 

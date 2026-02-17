@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -30,6 +31,17 @@ const BUCKET_CONFIG: Record<string, { maxSize: number; label: string }> = {
 
 export async function POST(req: NextRequest) {
   try {
+    // Verify authentication — uploads require a logged-in user
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "لازم تسجل دخول الأول" }, { status: 401 });
+    }
+    const session = verifySessionToken(token);
+    if (!session.valid) {
+      return NextResponse.json({ error: session.error }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const bucket = formData.get("bucket") as string | null;

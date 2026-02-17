@@ -9,7 +9,7 @@
  * HMAC payload: user_id:issued_at
  */
 
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const SESSION_TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -62,7 +62,10 @@ export function verifySessionToken(
       .update(`${user_id}:${issued_at}`)
       .digest("hex");
 
-    if (expectedHmac !== hmac) {
+    // Use constant-time comparison to prevent timing attacks
+    const expectedBuf = Buffer.from(expectedHmac, "hex");
+    const actualBuf = Buffer.from(hmac, "hex");
+    if (expectedBuf.length !== actualBuf.length || !timingSafeEqual(expectedBuf, actualBuf)) {
       return { valid: false, error: "توكن الجلسة مش صحيح" };
     }
 

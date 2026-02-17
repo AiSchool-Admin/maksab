@@ -52,8 +52,19 @@ export function middleware(request: NextRequest) {
 
   // ── 2. API Route Protection ──────────────────────────────
   if (pathname.startsWith("/api/")) {
-    // Add CORS headers for API routes
-    response.headers.set("Access-Control-Allow-Origin", request.headers.get("origin") || "*");
+    // Add CORS headers for API routes — restrict to allowed origins only
+    const origin = request.headers.get("origin") || "";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+    const allowedOrigins = [
+      appUrl,
+      "https://maksab.app",
+      "https://www.maksab.app",
+    ].filter(Boolean);
+    const isDev = process.env.NODE_ENV === "development";
+    const isAllowedOrigin = allowedOrigins.includes(origin) || (isDev && origin.startsWith("http://localhost"));
+    if (isAllowedOrigin) {
+      response.headers.set("Access-Control-Allow-Origin", origin);
+    }
     response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 

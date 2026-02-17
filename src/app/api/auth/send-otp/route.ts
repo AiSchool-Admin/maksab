@@ -141,7 +141,17 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // No real delivery channel — use dev fallback (code shown in UI)
+    // No real delivery channel configured
+    if (process.env.NODE_ENV === "production" && process.env.VERCEL_ENV === "production") {
+      // In production, refuse to send OTP without a real delivery channel
+      console.error("[send-otp] CRITICAL: No OTP delivery channel configured in production!");
+      return NextResponse.json(
+        { error: "خدمة الرسائل مش متاحة حالياً. جرب تاني بعد شوية" },
+        { status: 503 }
+      );
+    }
+
+    // Dev/preview only — code shown in UI for testing
     console.log(`[DEV OTP] Phone: ${phone}, Code: ${code}`);
     return NextResponse.json({
       success: true,

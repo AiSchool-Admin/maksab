@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { notifyAuctionBid } from "@/lib/notifications/smart-notifications";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 const ANTI_SNIPE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 const MIN_INCREMENT_EGP = 50;
@@ -20,10 +21,28 @@ function getServiceClient() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { ad_id, bidder_id, bidder_name, amount } = body;
+    // Verify authentication
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json(
+        { error: "لازم تسجل دخول الأول" },
+        { status: 401 },
+      );
+    }
+    const session = verifySessionToken(token);
+    if (!session.valid) {
+      return NextResponse.json(
+        { error: session.error },
+        { status: 401 },
+      );
+    }
 
-    if (!ad_id || !bidder_id || !amount) {
+    const body = await request.json();
+    const { ad_id, bidder_name, amount } = body;
+    const bidder_id = session.userId; // Use authenticated user ID, not from body
+
+    if (!ad_id || !amount) {
       return NextResponse.json(
         { error: "بيانات ناقصة" },
         { status: 400 },
