@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, RefreshCw, Phone, Smartphone, Home, Store, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
+import MaksabLogo from "@/components/ui/MaksabLogo";
 import { useAuth, setPendingMerchant } from "@/components/auth/AuthProvider";
 import {
   sendOTP,
@@ -426,8 +427,8 @@ function LoginPageContent() {
           >
             {/* Branding */}
             <div className="text-center pt-4 pb-3">
-              <div className="w-20 h-20 bg-brand-green rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <span className="text-3xl font-bold text-white">م</span>
+              <div className="flex justify-center mb-4">
+                <MaksabLogo size="lg" variant="stacked" />
               </div>
               <h2 className="text-xl font-bold text-dark mb-1">أهلاً بيك في مكسب</h2>
               <p className="text-sm text-gray-text">
