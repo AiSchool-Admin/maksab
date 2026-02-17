@@ -350,7 +350,6 @@ export default function HomePage() {
           <section key={cat.slug} className="px-3 pb-1.5">
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-2">
-                <CategoryIcon slug={cat.slug} size="sm" />
                 <h2 className="text-base font-bold text-dark">{cat.name}</h2>
               </div>
               <Link
