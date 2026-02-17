@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, PlusCircle, Home, Camera, Mic, Video, PenLine, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlusCircle, Home } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -17,21 +17,15 @@ import type { CompressedImage } from "@/lib/utils/image-compress";
 import type { VideoFile } from "@/lib/utils/video-compress";
 import type { AudioRecording } from "@/lib/utils/audio-recorder";
 import type { PriceData } from "@/components/ad/steps/Step3PricePhotos";
-import type { ProductAnalysis } from "@/lib/ai/ai-service";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import SellerInsightsCard from "@/components/ad/SellerInsightsCard";
 import Step1CategorySaleType from "@/components/ad/steps/Step1CategorySaleType";
 import Step2CategoryDetails from "@/components/ad/steps/Step2CategoryDetails";
 import Step3PricePhotos from "@/components/ad/steps/Step3PricePhotos";
 import Step4LocationReview from "@/components/ad/steps/Step4LocationReview";
-import SnapAndSell from "@/components/ai/SnapAndSell";
-import VoiceToListing from "@/components/ai/VoiceToListing";
-import VideoToListing from "@/components/ai/VideoToListing";
 
 const STORAGE_KEY = "maksab_ad_draft";
 const TOTAL_STEPS = 4;
-
-type AIMode = "photo" | "voice" | "video" | null;
 
 const stepTitles = [
   "اختار القسم",
@@ -134,8 +128,6 @@ export default function CreateAdPage() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [published, setPublished] = useState(false);
-  const [showAISelector, setShowAISelector] = useState(true);
-  const [activeAIMode, setActiveAIMode] = useState<AIMode>(null);
   const initialized = useRef(false);
 
   // Load draft from localStorage on mount (+ check for AI scanner prefill)
@@ -167,7 +159,6 @@ export default function CreateAdPage() {
               currentStep: 1,
             };
             setDraft(prefillDraft);
-            setShowAISelector(false);
             initialized.current = true;
             return;
           }
@@ -266,72 +257,6 @@ export default function CreateAdPage() {
     },
     [draft, images],
   );
-
-  /* ── AI Analysis handler ──────────────────────────── */
-  const handleAIAnalysisComplete = useCallback(
-    (analysis: ProductAnalysis, mediaData: string[] | string) => {
-      // Convert AI analysis results into draft data
-      const aiDraft: Partial<DraftData> = {
-        categoryId: analysis.category_id || "",
-        subcategoryId: analysis.subcategory_id || "",
-        saleType: analysis.sale_type || "cash",
-        categoryFields: (analysis.category_fields as Record<string, unknown>) || {},
-        title: analysis.suggested_title || "",
-        description: analysis.suggested_description || "",
-        isTitleDescEdited: true,
-        currentStep: 1,
-      };
-
-      // Set price if suggested
-      if (analysis.suggested_price) {
-        aiDraft.priceData = {
-          ...getInitialPriceData(),
-          price: String(analysis.suggested_price),
-        };
-      }
-
-      // Set location if detected
-      if (analysis.governorate) {
-        aiDraft.governorate = analysis.governorate;
-      }
-      if (analysis.city) {
-        aiDraft.city = analysis.city;
-      }
-
-      setDraft((prev) => ({ ...prev, ...aiDraft }));
-
-      // If image data URLs were provided, convert to CompressedImage format
-      if (Array.isArray(mediaData) && mediaData.length > 0 && mediaData[0].startsWith("data:")) {
-        const aiImages: CompressedImage[] = mediaData.map((dataUrl, i) => {
-          // Convert data URL to File for upload
-          const byteString = atob(dataUrl.split(",")[1] || "");
-          const mimeString = dataUrl.split(",")[0]?.split(":")[1]?.split(";")[0] || "image/jpeg";
-          const ab = new ArrayBuffer(byteString.length);
-          const ia = new Uint8Array(ab);
-          for (let j = 0; j < byteString.length; j++) {
-            ia[j] = byteString.charCodeAt(j);
-          }
-          const blob = new Blob([ab], { type: mimeString });
-          const file = new File([blob], `ai-photo-${i}.jpg`, { type: mimeString });
-          return { file, preview: dataUrl, width: 0, height: 0, originalSize: blob.size, compressedSize: blob.size };
-        });
-        setImages(aiImages);
-      }
-
-      // Close AI mode and show wizard
-      setActiveAIMode(null);
-      setShowAISelector(false);
-    },
-    [],
-  );
-
-  const handleAIModeCancel = useCallback(() => {
-    setActiveAIMode(null);
-  }, []);
-
-  const handleSkipAI = useCallback(() => {
-    setShowAISelector(false);
-  }, []);
 
   /* ── Navigation ────────────────────────────────────── */
   const goNext = useCallback(() => {
@@ -676,168 +601,6 @@ export default function CreateAdPage() {
               أضف إعلان تاني
             </Button>
           </div>
-        </div>
-      </main>
-    );
-  }
-
-  /* ── Active AI Mode Screen ─────────────────────────── */
-  if (activeAIMode) {
-    return (
-      <main className="min-h-screen bg-white">
-        <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
-          <div className="flex items-center justify-between px-4 h-14">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleAIModeCancel}
-                className="p-1 -me-1 text-gray-text hover:text-dark transition-colors"
-                aria-label="رجوع"
-              >
-                <ChevronRight size={24} />
-              </button>
-              <Sparkles size={20} className="text-brand-green" />
-              <h1 className="text-lg font-bold text-dark">
-                {activeAIMode === "photo" && "صوّر واِبيع"}
-                {activeAIMode === "voice" && "اتكلم واِبيع"}
-                {activeAIMode === "video" && "فيديو واِبيع"}
-              </h1>
-            </div>
-            <Link
-              href="/"
-              className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
-              aria-label="الرئيسية"
-            >
-              <Home size={18} />
-            </Link>
-          </div>
-        </header>
-        <div className="px-4 py-5">
-          {activeAIMode === "photo" && (
-            <SnapAndSell
-              onAnalysisComplete={(analysis, imageDataUrls) => handleAIAnalysisComplete(analysis, imageDataUrls)}
-              onCancel={handleAIModeCancel}
-            />
-          )}
-          {activeAIMode === "voice" && (
-            <VoiceToListing
-              onAnalysisComplete={(analysis, transcript) => handleAIAnalysisComplete(analysis, transcript)}
-              onCancel={handleAIModeCancel}
-            />
-          )}
-          {activeAIMode === "video" && (
-            <VideoToListing
-              onAnalysisComplete={(analysis, imageDataUrls) => handleAIAnalysisComplete(analysis, imageDataUrls)}
-              onCancel={handleAIModeCancel}
-            />
-          )}
-        </div>
-      </main>
-    );
-  }
-
-  /* ── AI Mode Selector Screen ─────────────────────── */
-  if (showAISelector) {
-    return (
-      <main className="min-h-screen bg-white">
-        <header className="sticky top-0 z-50 bg-white border-b border-gray-light">
-          <div className="flex items-center justify-between px-4 h-14">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => router.back()}
-                className="p-1 -me-1 text-gray-text hover:text-dark transition-colors"
-                aria-label="رجوع"
-              >
-                <ChevronRight size={24} />
-              </button>
-              <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center shadow-sm">
-                <PlusCircle size={22} className="text-white" />
-              </div>
-              <h1 className="text-lg font-bold text-dark">أضف إعلان</h1>
-            </div>
-            <Link
-              href="/"
-              className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
-              aria-label="الرئيسية"
-            >
-              <Home size={18} />
-            </Link>
-          </div>
-        </header>
-
-        <div className="px-4 py-6 max-w-md mx-auto">
-          {/* AI Section */}
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-brand-green-light rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Sparkles size={30} className="text-brand-green" />
-            </div>
-            <h2 className="text-lg font-bold text-dark">إعلانك جاهز في ثواني</h2>
-            <p className="text-sm text-gray-text mt-1">الذكاء الاصطناعي هيملأ كل التفاصيل تلقائياً</p>
-          </div>
-
-          <div className="space-y-3 mb-8">
-            {/* Photo mode */}
-            <button
-              onClick={() => setActiveAIMode("photo")}
-              className="w-full flex items-center gap-4 p-4 bg-brand-green-light border-2 border-brand-green/20 rounded-xl hover:border-brand-green/40 transition-all active:scale-[0.98]"
-            >
-              <div className="w-12 h-12 bg-brand-green rounded-xl flex items-center justify-center flex-shrink-0">
-                <Camera size={24} className="text-white" />
-              </div>
-              <div className="text-start">
-                <h3 className="text-sm font-bold text-dark">صوّر واِبيع</h3>
-                <p className="text-xs text-gray-text mt-0.5">صوّر المنتج والباقي علينا</p>
-              </div>
-            </button>
-
-            {/* Voice mode */}
-            <button
-              onClick={() => setActiveAIMode("voice")}
-              className="w-full flex items-center gap-4 p-4 bg-blue-50 border-2 border-blue-200/50 rounded-xl hover:border-blue-300 transition-all active:scale-[0.98]"
-            >
-              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Mic size={24} className="text-white" />
-              </div>
-              <div className="text-start">
-                <h3 className="text-sm font-bold text-dark">اتكلم واِبيع</h3>
-                <p className="text-xs text-gray-text mt-0.5">احكي عن المنتج بصوتك</p>
-              </div>
-            </button>
-
-            {/* Video mode */}
-            <button
-              onClick={() => setActiveAIMode("video")}
-              className="w-full flex items-center gap-4 p-4 bg-purple-50 border-2 border-purple-200/50 rounded-xl hover:border-purple-300 transition-all active:scale-[0.98]"
-            >
-              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Video size={24} className="text-white" />
-              </div>
-              <div className="text-start">
-                <h3 className="text-sm font-bold text-dark">فيديو واِبيع</h3>
-                <p className="text-xs text-gray-text mt-0.5">صوّر فيديو واحكي عن المنتج</p>
-              </div>
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-text font-medium">أو</span>
-            <div className="flex-1 h-px bg-gray-200" />
-          </div>
-
-          {/* Manual mode */}
-          <button
-            onClick={handleSkipAI}
-            className="w-full flex items-center gap-4 p-4 bg-gray-light border-2 border-transparent rounded-xl hover:border-gray-200 transition-all active:scale-[0.98]"
-          >
-            <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center flex-shrink-0">
-              <PenLine size={24} className="text-gray-text" />
-            </div>
-            <div className="text-start">
-              <h3 className="text-sm font-bold text-dark">اعمل الإعلان يدوي</h3>
-              <p className="text-xs text-gray-text mt-0.5">املأ التفاصيل بنفسك خطوة بخطوة</p>
-            </div>
-          </button>
         </div>
       </main>
     );
