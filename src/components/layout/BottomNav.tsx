@@ -84,7 +84,7 @@ export default function BottomNav({ unreadMessages = 0, isMerchant = false }: Bo
                 )}
               </div>
               <span
-                className={`text-[10px] leading-tight ${isActive ? "font-bold" : "font-medium"}`}
+                className={`text-xs leading-tight ${isActive ? "font-bold" : "font-medium"}`}
               >
                 {tab.label}
               </span>
