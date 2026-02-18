@@ -656,14 +656,7 @@ function SearchPageInner() {
                   </div>
                 )}
               </div>
-            ) : (
-              /* Softer message when similar ads exist */
-              <p className="text-xs text-gray-text text-center py-2">
-                {query
-                  ? `مفيش نتيجة مطابقة لـ "${query}" — بس لقينالك إعلانات شبيهة 👇`
-                  : "مفيش نتائج مطابقة — بس ممكن تلاقي حاجة شبيهة 👇"}
-              </p>
-            )}
+            ) : null}
           </>
         )}
 
