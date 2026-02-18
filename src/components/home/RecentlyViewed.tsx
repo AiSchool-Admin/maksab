@@ -19,7 +19,7 @@ export default function RecentlyViewed() {
   return (
     <section className="pb-2">
       <div className="flex items-center justify-between px-4 mb-2">
-        <h2 className="text-sm font-bold text-dark flex items-center gap-1.5">
+        <h2 className="text-lg font-bold text-dark flex items-center gap-1.5">
           <Clock size={14} className="text-gray-text" />
           شفتها قبل كده
         </h2>

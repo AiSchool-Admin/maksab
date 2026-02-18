@@ -341,7 +341,7 @@ export default function ChatPage({
 
           {/* Name + status */}
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-bold text-dark truncate">
+            <h2 className="text-lg font-bold text-dark truncate">
               {otherUser.displayName}
             </h2>
             {isOtherTyping ? (

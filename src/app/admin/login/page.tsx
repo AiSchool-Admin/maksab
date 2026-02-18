@@ -211,7 +211,7 @@ export default function AdminLoginPage() {
           <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
             <Shield size={40} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">لوحة تحكم مكسب</h1>
+          <h1 className="text-4xl font-bold text-white">لوحة تحكم مكسب</h1>
           <p className="text-sm text-white/60 mt-1">دخول الأدمن</p>
         </div>
 

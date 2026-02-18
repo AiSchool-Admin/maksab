@@ -70,7 +70,7 @@ export default function SharedCollectionPage({
       <main className="min-h-screen bg-white pb-20">
         <div className="text-center py-16">
           <div className="text-5xl mb-4">🔗</div>
-          <h2 className="text-base font-bold text-dark mb-2">
+          <h2 className="text-xl font-bold text-dark mb-2">
             القائمة مش موجودة أو خاصة
           </h2>
           <p className="text-sm text-gray-text mb-6">
@@ -97,7 +97,7 @@ export default function SharedCollectionPage({
             <ChevronRight size={24} />
           </button>
           <span className="text-lg">{collection.icon}</span>
-          <h1 className="text-base font-bold text-dark">{collection.name}</h1>
+          <h1 className="text-xl font-bold text-dark">{collection.name}</h1>
           <Globe size={14} className="text-gray-text" />
         </div>
       </header>

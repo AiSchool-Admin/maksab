@@ -382,7 +382,7 @@ function TierCard({ profile }: { profile: AmbassadorProfile }) {
     <div className={`${tierConfig.bgColor} rounded-2xl p-5 text-center space-y-3`}>
       {/* Tier icon & name */}
       <span className="text-5xl block">{tierConfig.icon}</span>
-      <h2 className={`text-xl font-bold ${tierConfig.color}`}>
+      <h2 className={`text-3xl font-bold ${tierConfig.color}`}>
         {tierConfig.name}
       </h2>
       <p className="text-sm text-dark">

@@ -275,7 +275,7 @@ export default function RapidEntryPage() {
         <div className="flex items-center gap-2 flex-1">
           <Rocket size={20} />
           <div>
-            <h1 className="text-base font-bold">إدخال سريع</h1>
+            <h1 className="text-xl font-bold">إدخال سريع</h1>
             <p className="text-[10px] text-white/70">سطر = منتج — Enter = سطر جديد</p>
           </div>
         </div>

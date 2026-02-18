@@ -93,7 +93,7 @@ export default function StoreHeader({
 
         {/* Name + Badges */}
         <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <h1 className="text-xl font-bold text-dark">{store.name}</h1>
+          <h1 className="text-3xl font-bold text-dark">{store.name}</h1>
           {store.is_verified && (
             <span className="text-brand-green" title="متجر موثّق">
               ✅

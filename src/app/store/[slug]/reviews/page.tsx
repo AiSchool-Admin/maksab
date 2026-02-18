@@ -60,7 +60,7 @@ export default function StoreReviewsPage() {
           <ArrowRight size={20} />
         </button>
         <div>
-          <h1 className="text-base font-bold text-dark">
+          <h1 className="text-xl font-bold text-dark">
             تقييمات {storeName}
           </h1>
           <div className="flex items-center gap-1 text-xs text-gray-text">

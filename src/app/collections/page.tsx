@@ -132,7 +132,7 @@ export default function CollectionsPage() {
             >
               <ChevronRight size={24} />
             </button>
-            <h1 className="text-base font-bold text-dark">قوائم مكسب</h1>
+            <h1 className="text-xl font-bold text-dark">قوائم مكسب</h1>
           </div>
           <button
             type="button"
@@ -208,7 +208,7 @@ export default function CollectionsPage() {
         ) : collections.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-5xl mb-4">📋</div>
-            <h2 className="text-base font-bold text-dark mb-2">مفيش قوائم لسه</h2>
+            <h2 className="text-xl font-bold text-dark mb-2">مفيش قوائم لسه</h2>
             <p className="text-sm text-gray-text mb-6 max-w-[250px] mx-auto">
               اعمل قائمة واحفظ فيها الإعلانات اللي عجبتك وشاركها مع صحابك
             </p>

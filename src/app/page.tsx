@@ -210,7 +210,7 @@ export default function HomePage() {
       <PullToRefresh onRefresh={handlePullRefresh}>
       {/* ─── Categories Grid ─────────────────────────────────────── */}
       <section className="px-4 pb-1.5 pt-1">
-        <h2 className="text-base font-bold text-dark mb-2">الأقسام</h2>
+        <h2 className="text-xl font-bold text-dark mb-2">الأقسام</h2>
         <div className="grid grid-cols-4 gap-y-4 gap-x-2">
           {categories.map((cat) => (
             <Link
@@ -294,7 +294,7 @@ export default function HomePage() {
 
       {/* ─── New Ads Feed (3-col grid) ───────────────────────── */}
       <section className="px-3 pb-1.5">
-        <h2 className="text-base font-bold text-dark mb-1.5">جديد على مكسب</h2>
+        <h2 className="text-xl font-bold text-dark mb-1.5">جديد على مكسب</h2>
 
         {isLoading ? (
           <AdGridSkeleton count={6} />
@@ -350,7 +350,7 @@ export default function HomePage() {
           <section key={cat.slug} className="px-3 pb-1.5">
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-dark">{cat.name}</h2>
+                <h2 className="text-xl font-bold text-dark">{cat.name}</h2>
               </div>
               <Link
                 href={`/search?category=${cat.slug}`}

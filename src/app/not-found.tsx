@@ -13,7 +13,7 @@ export default function NotFound() {
         </div>
 
         {/* Message */}
-        <h1 className="text-xl font-bold text-dark mb-2">
+        <h1 className="text-3xl font-bold text-dark mb-2">
           الصفحة دي مش موجودة
         </h1>
         <p className="text-gray-text mb-8 leading-relaxed">

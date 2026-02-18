@@ -122,7 +122,7 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       {/* Welcome */}
       <div>
-        <h2 className="text-lg font-bold text-dark">أهلاً بيك يا أدمن 👋</h2>
+        <h2 className="text-2xl font-bold text-dark">أهلاً بيك يا أدمن 👋</h2>
         <p className="text-sm text-gray-text">ملخص أداء مكسب</p>
       </div>
 

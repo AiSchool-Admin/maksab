@@ -147,7 +147,7 @@ export default function CollectionDetailPage({
       <main className="min-h-screen bg-white pb-20">
         <div className="text-center py-16">
           <div className="text-5xl mb-4">📋</div>
-          <h2 className="text-base font-bold text-dark mb-2">القائمة مش موجودة</h2>
+          <h2 className="text-xl font-bold text-dark mb-2">القائمة مش موجودة</h2>
           <button
             type="button"
             onClick={() => router.push("/collections")}
@@ -171,7 +171,7 @@ export default function CollectionDetailPage({
               <ChevronRight size={24} />
             </button>
             <span className="text-lg">{collection.icon}</span>
-            <h1 className="text-base font-bold text-dark">{collection.name}</h1>
+            <h1 className="text-xl font-bold text-dark">{collection.name}</h1>
           </div>
           <div className="flex items-center gap-1">
             <button

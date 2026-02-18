@@ -211,7 +211,7 @@ export default function DashboardProductsPage() {
           <button onClick={() => router.push("/store/dashboard")} className="p-1">
             <ArrowRight size={20} />
           </button>
-          <h1 className="text-base font-bold text-dark">المنتجات</h1>
+          <h1 className="text-xl font-bold text-dark">المنتجات</h1>
         </div>
         <div className="flex items-center gap-1.5">
           <Link

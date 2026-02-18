@@ -169,7 +169,7 @@ export default function MapPage() {
             <button onClick={() => router.back()} className="p-1">
               <ChevronLeft size={22} className="text-dark" />
             </button>
-            <h1 className="text-lg font-bold text-dark flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-dark flex items-center gap-2">
               <MapPin size={20} className="text-brand-green" />
               خريطة الإعلانات
             </h1>
@@ -265,7 +265,7 @@ export default function MapPage() {
       {showList && (
         <div className="bg-white rounded-t-3xl -mt-4 relative z-20 border-t border-gray-100">
           <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <h2 className="text-sm font-bold text-dark">
+            <h2 className="text-lg font-bold text-dark">
               {radius > 0 && userLocation
                 ? `إعلانات في نطاق ${radius} كم`
                 : `${ads.length} إعلان`}

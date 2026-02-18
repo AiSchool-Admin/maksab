@@ -97,7 +97,7 @@ export default function AdminAnalyticsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-dark">التحليلات</h2>
+        <h2 className="text-2xl font-bold text-dark">التحليلات</h2>
         <p className="text-xs text-gray-text">تحليل الإعلانات حسب الفئة والموقع ونوع البيع</p>
       </div>
 

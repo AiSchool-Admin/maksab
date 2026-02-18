@@ -65,7 +65,7 @@ export default function SetupPage() {
     <main className="min-h-screen bg-white">
       {/* Header */}
       <div className="bg-brand-green text-white px-5 py-6">
-        <h1 className="text-xl font-bold mb-1">إعداد قاعدة بيانات مكسب</h1>
+        <h1 className="text-3xl font-bold mb-1">إعداد قاعدة بيانات مكسب</h1>
         <p className="text-sm text-white/80">خطوتين بس وكل حاجة هتشتغل</p>
       </div>
 
@@ -82,7 +82,7 @@ export default function SetupPage() {
               )}
             </div>
             <div>
-              <h2 className="text-lg font-bold text-dark">الخطوة 1: إنشاء الجداول</h2>
+              <h2 className="text-2xl font-bold text-dark">الخطوة 1: إنشاء الجداول</h2>
               <p className="text-xs text-gray-text">مرة واحدة بس — بتعمل كل جداول التطبيق</p>
             </div>
           </div>
@@ -157,7 +157,7 @@ export default function SetupPage() {
               )}
             </div>
             <div>
-              <h2 className="text-lg font-bold text-dark">الخطوة 2: تعبئة البيانات</h2>
+              <h2 className="text-2xl font-bold text-dark">الخطوة 2: تعبئة البيانات</h2>
               <p className="text-xs text-gray-text">أقسام، محافظات، مدن، وبروفايلات المستخدمين</p>
             </div>
           </div>

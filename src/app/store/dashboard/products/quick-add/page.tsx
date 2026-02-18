@@ -389,7 +389,7 @@ export default function QuickAddProductPage() {
               <Zap size={16} className="text-brand-green" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-dark">إضافة سريعة</h1>
+              <h1 className="text-xl font-bold text-dark">إضافة سريعة</h1>
               {successCount > 0 && (
                 <p className="text-[10px] text-brand-green font-semibold">
                   تم إضافة {successCount} منتج

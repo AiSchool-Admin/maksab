@@ -85,7 +85,7 @@ export default function HelpPage() {
       <div className="px-4 py-4 space-y-6">
         {/* Quick contact */}
         <section className="bg-brand-green-light rounded-xl p-4">
-          <h2 className="text-sm font-bold text-dark mb-3">
+          <h2 className="text-lg font-bold text-dark mb-3">
             محتاج مساعدة؟ تواصل معانا
           </h2>
           <div className="space-y-2">
@@ -123,7 +123,7 @@ export default function HelpPage() {
 
         {/* FAQ */}
         <section>
-          <h2 className="text-base font-bold text-dark mb-3">
+          <h2 className="text-xl font-bold text-dark mb-3">
             الأسئلة الشائعة
           </h2>
 

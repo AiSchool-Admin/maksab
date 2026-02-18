@@ -133,7 +133,7 @@ export default function SettingsPage() {
       <div className="px-4 py-4 space-y-6">
         {/* Notifications section */}
         <section>
-          <h2 className="text-sm font-bold text-dark mb-3 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-dark mb-3 flex items-center gap-2">
             <Bell size={16} className="text-brand-green" />
             الإشعارات
           </h2>
@@ -180,7 +180,7 @@ export default function SettingsPage() {
 
         {/* Appearance */}
         <section>
-          <h2 className="text-sm font-bold text-dark mb-3 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-dark mb-3 flex items-center gap-2">
             <Moon size={16} className="text-brand-green" />
             المظهر
           </h2>
@@ -196,7 +196,7 @@ export default function SettingsPage() {
 
         {/* Location */}
         <section>
-          <h2 className="text-sm font-bold text-dark mb-3 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-dark mb-3 flex items-center gap-2">
             <MapPin size={16} className="text-brand-green" />
             الموقع
           </h2>
@@ -227,7 +227,7 @@ export default function SettingsPage() {
 
         {/* App info */}
         <section>
-          <h2 className="text-sm font-bold text-dark mb-3 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-dark mb-3 flex items-center gap-2">
             <Smartphone size={16} className="text-brand-green" />
             التطبيق
           </h2>
@@ -256,7 +256,7 @@ export default function SettingsPage() {
 
         {/* Privacy & Security */}
         <section>
-          <h2 className="text-sm font-bold text-dark mb-3 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-dark mb-3 flex items-center gap-2">
             <Shield size={16} className="text-brand-green" />
             الخصوصية والأمان
           </h2>
@@ -274,7 +274,7 @@ export default function SettingsPage() {
         {user && (
           <section>
             <div className="border border-red-200 rounded-xl p-4">
-              <h2 className="text-sm font-bold text-error mb-2 flex items-center gap-2">
+              <h2 className="text-lg font-bold text-error mb-2 flex items-center gap-2">
                 <Trash2 size={16} />
                 منطقة الخطر
               </h2>

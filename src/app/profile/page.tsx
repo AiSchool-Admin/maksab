@@ -76,7 +76,7 @@ export default function ProfilePage() {
           <div className="w-20 h-20 bg-gray-light rounded-full flex items-center justify-center mx-auto mb-4">
             <User size={36} className="text-gray-text" />
           </div>
-          <h2 className="text-lg font-bold text-dark mb-2">
+          <h2 className="text-2xl font-bold text-dark mb-2">
             سجّل دخولك في مكسب
           </h2>
           <p className="text-sm text-gray-text mb-6">
@@ -146,7 +146,7 @@ export default function ProfilePage() {
 
           {/* Name + phone */}
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-bold text-dark truncate">
+            <h2 className="text-2xl font-bold text-dark truncate">
               {user!.display_name || "مستخدم مكسب"}
             </h2>
             <p className="text-sm text-gray-text" dir="ltr">

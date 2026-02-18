@@ -42,7 +42,7 @@ export default function RewardsPage() {
         <Header title="المكافآت" showNotifications={false} />
         <div className="px-4 py-12 text-center">
           <p className="text-5xl mb-4">🏆</p>
-          <h2 className="text-lg font-bold text-dark mb-2">
+          <h2 className="text-2xl font-bold text-dark mb-2">
             برنامج مكافآت مكسب
           </h2>
           <p className="text-sm text-gray-text mb-6">
@@ -88,7 +88,7 @@ export default function RewardsPage() {
           >
             <ChevronRight size={24} />
           </button>
-          <h1 className="text-base font-bold text-dark flex-1">المكافآت والنقاط</h1>
+          <h1 className="text-xl font-bold text-dark flex-1">المكافآت والنقاط</h1>
           <span className="text-xs font-bold text-brand-green bg-brand-green-light px-2.5 py-1 rounded-full">
             {profile.totalPoints.toLocaleString("en-US")} نقطة
           </span>

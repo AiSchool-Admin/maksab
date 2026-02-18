@@ -355,7 +355,7 @@ export default function AdDetailClient({ id }: { id: string }) {
         </header>
         <div className="flex flex-col items-center justify-center px-4 py-20 text-center">
           <div className="text-6xl mb-4">🔍</div>
-          <h2 className="text-xl font-bold text-dark mb-2">الإعلان مش موجود</h2>
+          <h2 className="text-3xl font-bold text-dark mb-2">الإعلان مش موجود</h2>
           <p className="text-sm text-gray-text mb-6">
             الإعلان ده ممكن يكون اتحذف أو مش متاح حالياً
           </p>
@@ -555,7 +555,7 @@ export default function AdDetailClient({ id }: { id: string }) {
         <ReactionsBar adId={ad.id} />
 
         {/* Title */}
-        <h1 className="text-lg font-bold text-dark leading-relaxed">
+        <h1 className="text-2xl font-bold text-dark leading-relaxed">
           {resolvedTitle}
         </h1>
 

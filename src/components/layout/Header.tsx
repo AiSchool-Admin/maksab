@@ -64,7 +64,7 @@ export default function Header({
           ) : null}
           {showBack ? (
             <>
-              <h1 className="text-lg font-bold text-dark">{title}</h1>
+              <h1 className="text-2xl font-bold text-dark">{title}</h1>
               <Link
                 href="/"
                 className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"

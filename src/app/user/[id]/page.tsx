@@ -157,7 +157,7 @@ export default function PublicProfilePage({
         </header>
         <div className="flex flex-col items-center justify-center px-4 py-20 text-center">
           <div className="text-6xl mb-4">👤</div>
-          <h2 className="text-xl font-bold text-dark mb-2">المستخدم مش موجود</h2>
+          <h2 className="text-3xl font-bold text-dark mb-2">المستخدم مش موجود</h2>
           <p className="text-sm text-gray-text mb-6">
             الحساب ده ممكن يكون اتحذف أو مش متاح
           </p>
@@ -208,7 +208,7 @@ export default function PublicProfilePage({
           <Link href="/" className="p-1.5 text-brand-green rounded-full" aria-label="الرئيسية">
             <Home size={18} />
           </Link>
-          <h1 className="text-base font-bold text-dark flex-1">{profile.displayName}</h1>
+          <h1 className="text-xl font-bold text-dark flex-1">{profile.displayName}</h1>
         </div>
       </header>
 
@@ -229,7 +229,7 @@ export default function PublicProfilePage({
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                <h2 className="text-lg font-bold text-dark">{profile.displayName}</h2>
+                <h2 className="text-2xl font-bold text-dark">{profile.displayName}</h2>
                 <VerificationBadge level={verificationLevel} />
                 <LoyaltyBadge level={loyaltyLevel} size="sm" />
                 {isTrusted && <TrustedSellerBadge />}

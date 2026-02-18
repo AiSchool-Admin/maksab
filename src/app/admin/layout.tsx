@@ -117,7 +117,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <Shield size={18} className="text-white" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-bold text-dark">مكسب</h2>
+                    <h2 className="text-lg font-bold text-dark">مكسب</h2>
                     <p className="text-[10px] text-gray-text">لوحة التحكم</p>
                   </div>
                 </div>
@@ -178,7 +178,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1.5 text-gray-text hover:text-dark rounded-lg hover:bg-gray-100">
               <Menu size={20} />
             </button>
-            <h1 className="text-sm font-bold text-dark">
+            <h1 className="text-lg font-bold text-dark">
               {navItems.find((n) => n.href === pathname)?.label || "لوحة التحكم"}
             </h1>
             <div className="flex-1" />

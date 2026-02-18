@@ -402,7 +402,7 @@ function LoginPageContent() {
         >
           <ArrowLeft size={22} />
         </button>
-        <h1 className="text-lg font-bold text-dark flex-1">
+        <h1 className="text-2xl font-bold text-dark flex-1">
           {step === "otp" ? "كود التأكيد" : "تسجيل الدخول"}
         </h1>
         <Link
@@ -430,7 +430,7 @@ function LoginPageContent() {
               <div className="flex justify-center mb-4">
                 <MaksabLogo size="lg" variant="stacked" />
               </div>
-              <h2 className="text-xl font-bold text-dark mb-1">أهلاً بيك في مكسب</h2>
+              <h2 className="text-3xl font-bold text-dark mb-1">أهلاً بيك في مكسب</h2>
               <p className="text-sm text-gray-text">
                 سجّل برقم موبايلك في ثواني
               </p>
@@ -551,7 +551,7 @@ function LoginPageContent() {
               <div className="w-16 h-16 bg-brand-green/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Smartphone size={28} className="text-brand-green" />
               </div>
-              <h2 className="text-lg font-bold text-dark mb-2">أدخل كود التأكيد</h2>
+              <h2 className="text-2xl font-bold text-dark mb-2">أدخل كود التأكيد</h2>
               <p className="text-sm text-gray-text">
                 {otpChannel === "whatsapp" ? "بعتنالك كود على واتساب" : otpChannel === "firebase" ? "بعتنالك كود SMS على" : otpChannel === "dev" ? "كود التأكيد" : "بعتنالك كود على"}{" "}
                 {otpChannel !== "dev" && (

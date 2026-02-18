@@ -163,7 +163,7 @@ export default function BillingPage() {
         >
           <ArrowRight size={20} />
         </button>
-        <h1 className="text-base font-bold text-dark">الاشتراك والباقات</h1>
+        <h1 className="text-xl font-bold text-dark">الاشتراك والباقات</h1>
       </header>
 
       <div className="px-4 mt-4 space-y-4">
@@ -175,7 +175,7 @@ export default function BillingPage() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-dark">
+                <h2 className="text-xl font-bold text-dark">
                   باقة {planConfig.name}
                 </h2>
                 <SubscriptionBadge plan={currentPlan} size="md" />
