@@ -32,7 +32,7 @@ export default function HorizontalSection({
       {/* Section header */}
       <div className="flex items-center justify-between px-4 mb-2">
         <div>
-          <h2 className="text-sm font-bold text-dark flex items-center gap-1.5">
+          <h2 className="text-lg font-bold text-dark flex items-center gap-1.5">
             {icon && <span>{icon}</span>}
             {title}
           </h2>

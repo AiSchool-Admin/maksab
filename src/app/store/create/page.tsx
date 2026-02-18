@@ -278,7 +278,7 @@ export default function CreateStorePage() {
           <Sparkles size={36} className="text-brand-green" />
         </div>
 
-        <h1 className="text-2xl font-bold text-dark mb-2">
+        <h1 className="text-4xl font-bold text-dark mb-2">
           مبروك! محلك جاهز!
         </h1>
         <p className="text-sm text-gray-text mb-6 max-w-xs">
@@ -342,7 +342,7 @@ export default function CreateStorePage() {
           <button onClick={() => setView("steps")} className="p-1">
             <ArrowRight size={20} />
           </button>
-          <h1 className="text-base font-bold text-dark">معاينة المتجر</h1>
+          <h1 className="text-xl font-bold text-dark">معاينة المتجر</h1>
         </header>
 
         <div className="px-4 mt-4 space-y-4">
@@ -365,7 +365,7 @@ export default function CreateStorePage() {
                   <Store size={32} className="text-white/80" />
                 </div>
               )}
-              <h2 className="text-xl font-bold">{name || "اسم المتجر"}</h2>
+              <h2 className="text-3xl font-bold">{name || "اسم المتجر"}</h2>
               {description && (
                 <p className="text-sm opacity-80 mt-1">{description}</p>
               )}
@@ -470,7 +470,7 @@ export default function CreateStorePage() {
             <ArrowRight size={20} />
           </button>
         )}
-        <h1 className="text-base font-bold text-dark flex-1">افتح متجرك في مكسب</h1>
+        <h1 className="text-xl font-bold text-dark flex-1">افتح متجرك في مكسب</h1>
       </header>
       {forcedMode && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5">
@@ -518,7 +518,7 @@ export default function CreateStorePage() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <span className="text-4xl">🏪</span>
-              <h2 className="text-lg font-bold text-dark mt-2">
+              <h2 className="text-2xl font-bold text-dark mt-2">
                 إيه نوع نشاطك؟
               </h2>
               <p className="text-sm text-gray-text">
@@ -553,7 +553,7 @@ export default function CreateStorePage() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <span className="text-4xl">{businessTypeIcon}</span>
-              <h2 className="text-lg font-bold text-dark mt-2">
+              <h2 className="text-2xl font-bold text-dark mt-2">
                 بيانات {businessTypeLabel}
               </h2>
               <p className="text-sm text-gray-text">
@@ -670,7 +670,7 @@ export default function CreateStorePage() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <span className="text-4xl">🖼️</span>
-              <h2 className="text-lg font-bold text-dark mt-2">
+              <h2 className="text-2xl font-bold text-dark mt-2">
                 هوية متجرك
               </h2>
               <p className="text-sm text-gray-text">
@@ -741,7 +741,7 @@ export default function CreateStorePage() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <span className="text-4xl">🎨</span>
-              <h2 className="text-lg font-bold text-dark mt-2">
+              <h2 className="text-2xl font-bold text-dark mt-2">
                 خصّص مظهر متجرك
               </h2>
               <p className="text-sm text-gray-text">

@@ -146,7 +146,7 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-dark flex items-center gap-2">
+        <h2 className="text-2xl font-bold text-dark flex items-center gap-2">
           <Settings size={20} />
           الإعدادات
         </h2>

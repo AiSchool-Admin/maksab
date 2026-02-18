@@ -242,7 +242,7 @@ export default function InvitePage() {
             فرصة محدودة — {founderStats.remaining} مكان متبقي
           </div>
 
-          <h1 className="text-4xl font-bold text-white leading-tight">
+          <h1 className="text-6xl font-bold text-white leading-tight">
             كن <span className="text-amber-400">مؤسس</span>
             <br />
             <span className="text-brand-green">مكسب</span>
@@ -307,7 +307,7 @@ export default function InvitePage() {
         {!isRegistered ? (
           <section className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 space-y-4">
             <div className="text-center">
-              <h2 className="text-lg font-bold text-white mb-1">
+              <h2 className="text-2xl font-bold text-white mb-1">
                 سجّل كمؤسس مكسب 🏛️
               </h2>
               <p className="text-xs text-white/50">
@@ -392,7 +392,7 @@ export default function InvitePage() {
               <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-amber-100 to-yellow-100 border-4 border-amber-300 flex items-center justify-center text-4xl shadow-lg shadow-amber-500/20">
                 🏛️
               </div>
-              <h2 className="text-xl font-bold text-white">
+              <h2 className="text-3xl font-bold text-white">
                 مبروك يا مؤسس مكسب!
               </h2>
               <p className="text-sm text-white/60">
@@ -477,7 +477,7 @@ export default function InvitePage() {
 
         {/* Founder Benefits */}
         <section className="space-y-3">
-          <h2 className="text-base font-bold text-white text-center">
+          <h2 className="text-xl font-bold text-white text-center">
             مميزات المؤسس الحصرية
           </h2>
 
@@ -529,7 +529,7 @@ export default function InvitePage() {
 
         {/* What is Maksab */}
         <section className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 space-y-4">
-          <h2 className="text-base font-bold text-white text-center">
+          <h2 className="text-xl font-bold text-white text-center">
             ليه مكسب مختلف؟
           </h2>
 
@@ -572,7 +572,7 @@ export default function InvitePage() {
 
         {/* Categories Preview */}
         <section className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-5 space-y-3">
-          <h2 className="text-sm font-bold text-white/80 text-center">
+          <h2 className="text-lg font-bold text-white/80 text-center">
             12 قسم متخصص
           </h2>
           <div className="grid grid-cols-6 gap-2 text-center">
@@ -600,7 +600,7 @@ export default function InvitePage() {
 
         {/* Testimonials / Social Proof */}
         <section className="space-y-3">
-          <h2 className="text-base font-bold text-white text-center">
+          <h2 className="text-xl font-bold text-white text-center">
             المؤسسين بيقولوا إيه؟
           </h2>
           <div className="space-y-2">

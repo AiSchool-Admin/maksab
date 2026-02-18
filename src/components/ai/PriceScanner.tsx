@@ -337,7 +337,7 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
         </button>
         <div className="flex items-center gap-1.5">
           <Sparkles size={18} className="text-brand-gold" />
-          <h1 className="text-base font-bold text-dark">كام سعره؟</h1>
+          <h1 className="text-xl font-bold text-dark">كام سعره؟</h1>
         </div>
         <div className="w-16" /> {/* Spacer for centering */}
       </div>
@@ -351,7 +351,7 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
               <div className="w-20 h-20 bg-brand-gold-light rounded-2xl flex items-center justify-center mx-auto">
                 <Sparkles size={36} className="text-brand-gold" />
               </div>
-              <h2 className="text-xl font-bold text-dark">اعرف سعر أي حاجة</h2>
+              <h2 className="text-3xl font-bold text-dark">اعرف سعر أي حاجة</h2>
               <p className="text-sm text-gray-text leading-relaxed">
                 صوّر المنتج أو اكتب تفاصيله وهنقولك يسوى كام في السوق المصري
               </p>
@@ -413,7 +413,7 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
               <div className="w-16 h-16 bg-gray-light rounded-2xl flex items-center justify-center mx-auto">
                 <Type size={28} className="text-dark" />
               </div>
-              <h2 className="text-lg font-bold text-dark">اكتب تفاصيل المنتج</h2>
+              <h2 className="text-2xl font-bold text-dark">اكتب تفاصيل المنتج</h2>
               <p className="text-sm text-gray-text">
                 اكتب أي تفاصيل تعرفها — النوع، الماركة، الحالة، إلخ
               </p>

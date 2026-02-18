@@ -83,7 +83,7 @@ export default function StoresDirectoryPage() {
             <Link href="/" className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors" aria-label="الرئيسية">
               <Home size={18} />
             </Link>
-            <h1 className="text-lg font-bold text-dark">🏪 المتاجر</h1>
+            <h1 className="text-2xl font-bold text-dark">🏪 المتاجر</h1>
           </div>
           {isStoreOwner ? (
             <Link

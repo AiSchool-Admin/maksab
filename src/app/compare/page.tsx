@@ -21,7 +21,7 @@ export default function ComparePage() {
             <button onClick={() => router.back()} className="p-1 text-gray-text">
               <ChevronRight size={24} />
             </button>
-            <h1 className="text-lg font-bold text-dark">مقارنة الإعلانات</h1>
+            <h1 className="text-2xl font-bold text-dark">مقارنة الإعلانات</h1>
             <Link
               href="/"
               className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors"
@@ -113,7 +113,7 @@ export default function ComparePage() {
           >
             <ChevronRight size={24} />
           </button>
-          <h1 className="text-lg font-bold text-dark flex-1">
+          <h1 className="text-2xl font-bold text-dark flex-1">
             مقارنة {categoryConfig?.name || "إعلانات"}
           </h1>
           <Link

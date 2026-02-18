@@ -76,7 +76,7 @@ export default function AdminAdsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-bold text-dark">الإعلانات</h2>
+        <h2 className="text-2xl font-bold text-dark">الإعلانات</h2>
         <p className="text-xs text-gray-text">{total} إعلان</p>
       </div>
 

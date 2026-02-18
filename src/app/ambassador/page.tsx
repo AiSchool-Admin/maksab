@@ -31,7 +31,7 @@ export default function AmbassadorPage() {
             >
               <ChevronRight size={24} />
             </button>
-            <h1 className="text-base font-bold text-dark flex-1">
+            <h1 className="text-xl font-bold text-dark flex-1">
               سفير مكسب
             </h1>
           </div>
@@ -39,7 +39,7 @@ export default function AmbassadorPage() {
 
         <div className="px-4 py-12 text-center">
           <p className="text-5xl mb-4">{"\u{1F91D}"}</p>
-          <h2 className="text-lg font-bold text-dark mb-2">
+          <h2 className="text-2xl font-bold text-dark mb-2">
             برنامج سفير مكسب
           </h2>
           <p className="text-sm text-gray-text mb-6 max-w-xs mx-auto">
@@ -73,7 +73,7 @@ export default function AmbassadorPage() {
             >
               <ChevronRight size={24} />
             </button>
-            <h1 className="text-base font-bold text-dark flex-1">
+            <h1 className="text-xl font-bold text-dark flex-1">
               سفير مكسب
             </h1>
           </div>
@@ -106,7 +106,7 @@ export default function AmbassadorPage() {
           >
             <ChevronRight size={24} />
           </button>
-          <h1 className="text-base font-bold text-dark flex-1">
+          <h1 className="text-xl font-bold text-dark flex-1">
             سفير مكسب
           </h1>
           <span className="text-lg">{"\u{1F91D}"}</span>

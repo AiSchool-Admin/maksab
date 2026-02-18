@@ -24,7 +24,7 @@ export default function Error({
         </div>
 
         {/* Message */}
-        <h1 className="text-xl font-bold text-dark mb-2">حصل مشكلة</h1>
+        <h1 className="text-3xl font-bold text-dark mb-2">حصل مشكلة</h1>
         <p className="text-gray-text mb-8 leading-relaxed">
           في حاجة غلط حصلت. جرب تاني أو ارجع للصفحة الرئيسية.
         </p>

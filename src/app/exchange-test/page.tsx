@@ -70,7 +70,7 @@ export default function ExchangeTestPage() {
         <div className="max-w-lg mx-auto">
           <div className="flex items-center gap-2 mb-3">
             <ArrowLeftRight size={24} />
-            <h1 className="text-xl font-bold font-cairo">تجربة نظام التبديل الذكي</h1>
+            <h1 className="text-3xl font-bold font-cairo">تجربة نظام التبديل الذكي</h1>
           </div>
           <p className="text-sm opacity-90 font-cairo">
             اختبر كل سيناريوهات التبديل: تطابق مثالي، تطابق قوي، تبديل ثلاثي، عبر الأقسام، وأكتر
@@ -84,7 +84,7 @@ export default function ExchangeTestPage() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Sparkles size={18} className="text-brand-gold" />
-              <h2 className="text-sm font-bold text-dark font-cairo">الخطوة 1: تجهيز البيانات</h2>
+              <h2 className="text-lg font-bold text-dark font-cairo">الخطوة 1: تجهيز البيانات</h2>
             </div>
             {seedResult?.success && (
               <span className="flex items-center gap-1 text-[11px] text-brand-green font-bold">

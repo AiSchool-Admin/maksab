@@ -365,7 +365,7 @@ export default function BulkImportPage() {
         </button>
         <div className="flex items-center gap-2">
           <FileSpreadsheet size={20} className="text-brand-green" />
-          <h1 className="text-base font-bold text-dark">استيراد من ملف Excel</h1>
+          <h1 className="text-xl font-bold text-dark">استيراد من ملف Excel</h1>
         </div>
       </header>
 
@@ -403,7 +403,7 @@ export default function BulkImportPage() {
                 <div className="w-16 h-16 bg-brand-green/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
                   <FileSpreadsheet size={28} className="text-brand-green" />
                 </div>
-                <h2 className="text-lg font-bold text-dark mb-1">استيراد منتجات من ملف</h2>
+                <h2 className="text-2xl font-bold text-dark mb-1">استيراد منتجات من ملف</h2>
                 <p className="text-sm text-gray-text">
                   حمّل قالب Excel، عبّيه بالمنتجات، وارفعه هنا
                 </p>

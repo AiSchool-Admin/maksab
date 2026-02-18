@@ -62,7 +62,7 @@ export default function AdminUsersPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-dark">المستخدمين</h2>
+          <h2 className="text-2xl font-bold text-dark">المستخدمين</h2>
           <p className="text-xs text-gray-text">{total} مستخدم مسجّل</p>
         </div>
       </div>

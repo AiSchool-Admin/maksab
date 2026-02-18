@@ -220,7 +220,7 @@ export default function PreLaunchPage() {
             قريبًا جدًا!
           </div>
 
-          <h1 className="text-3xl font-bold text-dark leading-tight">
+          <h1 className="text-5xl font-bold text-dark leading-tight">
             مكسب جاي يغيّر
             <br />
             <span className="text-brand-green">السوق المصري</span>
@@ -268,7 +268,7 @@ export default function PreLaunchPage() {
         {!isRegistered ? (
           <section className="bg-white rounded-2xl shadow-sm border border-gray-light p-6 space-y-4">
             <div className="text-center">
-              <h2 className="text-lg font-bold text-dark mb-1">
+              <h2 className="text-2xl font-bold text-dark mb-1">
                 سجّل من الأوائل واحصل على 🏆
               </h2>
               <p className="text-xs text-gray-text">
@@ -332,7 +332,7 @@ export default function PreLaunchPage() {
           <section className="bg-gradient-to-bl from-brand-green-light to-brand-gold-light rounded-2xl shadow-sm border border-green-200 p-6 space-y-4">
             <div className="text-center space-y-2">
               <div className="text-4xl">🎉</div>
-              <h2 className="text-lg font-bold text-dark">مبروك! انت من الأوائل</h2>
+              <h2 className="text-2xl font-bold text-dark">مبروك! انت من الأوائل</h2>
               <p className="text-sm text-gray-text">
                 هنبعتلك إشعار أول ما التطبيق ينزل
               </p>
@@ -396,7 +396,7 @@ export default function PreLaunchPage() {
 
         {/* Features Grid */}
         <section className="space-y-4">
-          <h2 className="text-lg font-bold text-dark text-center">
+          <h2 className="text-2xl font-bold text-dark text-center">
             ليه مكسب مختلف؟
           </h2>
 
@@ -420,7 +420,7 @@ export default function PreLaunchPage() {
 
         {/* Category Preview */}
         <section className="bg-white rounded-2xl shadow-sm border border-gray-light p-6 space-y-4">
-          <h2 className="text-base font-bold text-dark text-center">
+          <h2 className="text-xl font-bold text-dark text-center">
             12 قسم متخصص
           </h2>
           <div className="grid grid-cols-4 gap-3 text-center">

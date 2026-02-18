@@ -122,7 +122,7 @@ export default function DashboardSettingsPage() {
         <button onClick={() => router.push("/store/dashboard")} className="p-1">
           <ArrowRight size={20} />
         </button>
-        <h1 className="text-base font-bold text-dark">إعدادات المتجر</h1>
+        <h1 className="text-xl font-bold text-dark">إعدادات المتجر</h1>
       </header>
 
       <div className="px-4 mt-4 space-y-4">

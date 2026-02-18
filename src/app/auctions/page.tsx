@@ -183,7 +183,7 @@ export default function AuctionsPage() {
               <Link href="/" className="p-1.5 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-full transition-colors" aria-label="الرئيسية">
                 <Home size={18} />
               </Link>
-              <h1 className="text-lg font-bold text-dark flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-dark flex items-center gap-2">
                 <Flame size={22} className="text-orange-500" />
                 شوف المزادات 🔥
               </h1>
@@ -287,7 +287,7 @@ export default function AuctionsPage() {
         {!isLoading && auctions.length === 0 && (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">🔥</div>
-            <h2 className="text-lg font-bold text-dark mb-2">
+            <h2 className="text-2xl font-bold text-dark mb-2">
               مفيش مزادات{" "}
               {statusFilter === "active" ? "شغالة" : ""}
               {" "}دلوقتي

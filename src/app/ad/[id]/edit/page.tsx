@@ -359,7 +359,7 @@ export default function EditAdPage({
       <main className="min-h-screen bg-white flex items-center justify-center px-4">
         <div className="text-center space-y-3">
           <p className="text-6xl">🔍</p>
-          <h2 className="text-lg font-bold text-dark">الإعلان مش موجود</h2>
+          <h2 className="text-2xl font-bold text-dark">الإعلان مش موجود</h2>
           <p className="text-sm text-gray-text">
             ممكن يكون اتحذف أو الرابط غلط
           </p>
@@ -377,7 +377,7 @@ export default function EditAdPage({
       <main className="min-h-screen bg-white px-4 py-8">
         <div className="max-w-md mx-auto text-center space-y-5">
           <div className="text-6xl">✅</div>
-          <h2 className="text-xl font-bold text-dark">تم تحديث إعلانك!</h2>
+          <h2 className="text-3xl font-bold text-dark">تم تحديث إعلانك!</h2>
           <p className="text-sm text-gray-text">
             التعديلات اتحفظت بنجاح
           </p>
@@ -414,7 +414,7 @@ export default function EditAdPage({
             <div className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center shadow-sm">
               <Edit3 size={18} className="text-white" />
             </div>
-            <h1 className="text-lg font-bold text-dark">
+            <h1 className="text-2xl font-bold text-dark">
               {stepTitles[currentStep - 1]}
             </h1>
           </div>

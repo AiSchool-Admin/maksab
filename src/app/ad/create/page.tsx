@@ -566,7 +566,7 @@ export default function CreateAdPage() {
         <div className="max-w-md mx-auto space-y-5">
           <div className="text-center space-y-3">
             <div className="text-6xl">🎉</div>
-            <h2 className="text-xl font-bold text-dark">تم نشر إعلانك!</h2>
+            <h2 className="text-3xl font-bold text-dark">تم نشر إعلانك!</h2>
             <p className="text-sm text-gray-text">
               إعلانك اتنشر بنجاح ويقدر الناس تشوفه دلوقتي
             </p>
@@ -624,7 +624,7 @@ export default function CreateAdPage() {
             <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center shadow-sm">
               <PlusCircle size={22} className="text-white" />
             </div>
-            <h1 className="text-lg font-bold text-dark">
+            <h1 className="text-2xl font-bold text-dark">
               {stepTitles[draft.currentStep - 1]}
             </h1>
           </div>

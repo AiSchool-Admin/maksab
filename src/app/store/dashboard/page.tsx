@@ -167,7 +167,7 @@ export default function StoreDashboardPage() {
       <header className="bg-white border-b border-gray-light px-4 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold text-dark">لوحة التحكم</h1>
+            <h1 className="text-2xl font-bold text-dark">لوحة التحكم</h1>
             <p className="text-xs text-gray-text">{store.name}</p>
           </div>
           <Link

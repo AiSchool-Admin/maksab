@@ -112,7 +112,7 @@ export default function ShoppingAssistant({ onClose }: ShoppingAssistantProps) {
             <ShoppingBag size={16} className="text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-dark">مساعد التسوق</h2>
+            <h2 className="text-lg font-bold text-dark">مساعد التسوق</h2>
             <p className="text-[10px] text-brand-green">مكسب بوت</p>
           </div>
         </div>

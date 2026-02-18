@@ -73,7 +73,7 @@ export default function Modal({
               {(title || showCloseButton) && (
                 <div className="flex items-center justify-between px-4 pb-3">
                   {title && (
-                    <h2 className="text-lg font-bold text-dark">{title}</h2>
+                    <h2 className="text-2xl font-bold text-dark">{title}</h2>
                   )}
                   {showCloseButton && (
                     <button
@@ -106,7 +106,7 @@ export default function Modal({
                 {(title || showCloseButton) && (
                   <div className="flex items-center justify-between p-4 border-b border-gray-light">
                     {title && (
-                      <h2 className="text-lg font-bold text-dark">{title}</h2>
+                      <h2 className="text-2xl font-bold text-dark">{title}</h2>
                     )}
                     {showCloseButton && (
                       <button

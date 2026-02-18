@@ -112,7 +112,7 @@ export default function CommissionPrompt({
         <div className="w-16 h-16 bg-brand-green-light rounded-full flex items-center justify-center mx-auto">
           <Heart size={32} className="text-brand-green" />
         </div>
-        <h2 className="text-xl font-bold text-dark">شكراً يا كبير! 💚</h2>
+        <h2 className="text-3xl font-bold text-dark">شكراً يا كبير! 💚</h2>
         <p className="text-sm text-gray-text">
           دعمك بيساعدنا نكبر ونخدمك أحسن. أنت دلوقتي &quot;داعم مكسب&quot; 💚
         </p>
@@ -128,7 +128,7 @@ export default function CommissionPrompt({
     return (
       <div className="bg-white rounded-2xl p-6 text-center space-y-4 max-w-sm mx-auto">
         <p className="text-4xl">👋</p>
-        <h2 className="text-lg font-bold text-dark">مفيش مشكلة!</h2>
+        <h2 className="text-2xl font-bold text-dark">مفيش مشكلة!</h2>
         <p className="text-sm text-gray-text">
           مكسب مجاني بالكامل ومفيش أي قيود. نتمنى الصفقة تكون عجبتك!
         </p>
@@ -143,7 +143,7 @@ export default function CommissionPrompt({
   if (step === "custom") {
     return (
       <div className="bg-white rounded-2xl p-6 space-y-4 max-w-sm mx-auto">
-        <h2 className="text-lg font-bold text-dark text-center">
+        <h2 className="text-2xl font-bold text-dark text-center">
           💚 ادفع مبلغ تاني
         </h2>
         <div className="flex items-center gap-2">
@@ -184,7 +184,7 @@ export default function CommissionPrompt({
   if (step === "select_method") {
     return (
       <div className="bg-white rounded-2xl p-6 space-y-4 max-w-sm mx-auto">
-        <h2 className="text-lg font-bold text-dark text-center">
+        <h2 className="text-2xl font-bold text-dark text-center">
           اختار طريقة الدفع
         </h2>
         <p className="text-sm text-gray-text text-center">
@@ -224,7 +224,7 @@ export default function CommissionPrompt({
 
     return (
       <div className="bg-white rounded-2xl p-6 space-y-4 max-w-sm mx-auto">
-        <h2 className="text-lg font-bold text-dark text-center">
+        <h2 className="text-2xl font-bold text-dark text-center">
           {methodInfo?.icon} {methodInfo?.name}
         </h2>
 
@@ -298,7 +298,7 @@ export default function CommissionPrompt({
       {/* Header */}
       <div className="text-center space-y-2">
         <p className="text-4xl">🎉</p>
-        <h2 className="text-xl font-bold text-dark">مبروك! تمت الصفقة</h2>
+        <h2 className="text-3xl font-bold text-dark">مبروك! تمت الصفقة</h2>
         <p className="text-sm text-gray-text">{adTitle}</p>
         <p className="text-lg font-bold text-brand-green">
           {transactionAmount.toLocaleString("en-US")} جنيه

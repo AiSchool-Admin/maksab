@@ -249,7 +249,7 @@ export default function BulkPhotosPage() {
         <div className="flex items-center gap-2">
           <Camera size={20} className="text-brand-green" />
           <div>
-            <h1 className="text-base font-bold text-dark">رفع صور بالجملة</h1>
+            <h1 className="text-xl font-bold text-dark">رفع صور بالجملة</h1>
             {products.length > 0 && (
               <p className="text-[10px] text-gray-text">{products.length} صورة</p>
             )}

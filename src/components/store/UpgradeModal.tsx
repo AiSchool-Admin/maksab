@@ -48,7 +48,7 @@ export default function UpgradeModal({
       <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[85vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-light px-4 py-3 flex items-center justify-between rounded-t-2xl z-10">
-          <h2 className="text-base font-bold text-dark">
+          <h2 className="text-xl font-bold text-dark">
             ترقية لباقة {plan.name} {plan.icon}
           </h2>
           <button

@@ -117,7 +117,7 @@ export default function DashboardPromotionsPage() {
           <button onClick={() => router.push("/store/dashboard")} className="p-1">
             <ArrowRight size={20} />
           </button>
-          <h1 className="text-base font-bold text-dark">العروض والخصومات</h1>
+          <h1 className="text-xl font-bold text-dark">العروض والخصومات</h1>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
