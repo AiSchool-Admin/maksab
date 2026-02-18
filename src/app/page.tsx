@@ -195,11 +195,11 @@ export default function HomePage() {
 
         {/* Quick search chips — no price scanner or map */}
         <div className="flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide">
-          {["سيارات", "موبايلات", "عقارات", "ذهب وفضة", "أثاث", "خردة", "أجهزة", "موضة"].map((term) => (
+          {["سيارات", "موبايلات", "عقارات", "ذهب وفضة", "أثاث", "خردة", "أجهزة", "موضة", "فاخرة", "هوايات", "عدد", "خدمات"].map((term) => (
             <Link
               key={term}
               href={`/search?q=${encodeURIComponent(term)}`}
-              className="flex-shrink-0 px-3.5 py-1.5 bg-gray-light text-dark text-xs font-bold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
+              className="flex-shrink-0 px-4 py-2 bg-gray-light text-dark text-base font-bold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
             >
               {term}
             </Link>
