@@ -48,7 +48,7 @@ export default function Step1CategorySaleType({
               }`}
             >
               <CategoryIcon slug={cat.slug} size="sm" />
-              <span className="text-[11px] font-semibold text-dark leading-tight text-center line-clamp-1 max-w-[72px]">
+              <span className="text-sm font-semibold text-dark leading-tight text-center line-clamp-1 max-w-[84px]">
                 {cat.name}
               </span>
             </button>

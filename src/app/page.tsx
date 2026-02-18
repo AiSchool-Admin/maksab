@@ -219,7 +219,7 @@ export default function HomePage() {
               className="flex flex-col items-center gap-1.5 group"
             >
               <CategoryIcon slug={cat.slug} size="md" />
-              <span className="text-xs font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1 max-w-[76px]">
+              <span className="text-base font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1 max-w-[88px]">
                 {cat.name}
               </span>
             </Link>
