@@ -458,7 +458,7 @@ export default function Step3PricePhotos({
           )}
         </div>
 
-        <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleAddImages} className="hidden" />
+        <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleAddImages} className="sr-only" />
       </div>
 
       {/* ── Video section ────────────────────────────────── */}
@@ -528,7 +528,7 @@ export default function Step3PricePhotos({
           </div>
         )}
 
-        <input ref={videoInputRef} type="file" accept="video/*" onChange={handleAddVideo} className="hidden" />
+        <input ref={videoInputRef} type="file" accept="video/*" onChange={handleAddVideo} className="sr-only" />
       </div>
 
       {/* ── Voice note section ───────────────────────────── */}
@@ -586,6 +586,17 @@ function VoiceNoteRecorder({
 
   const startRecording = async () => {
     setError(null);
+
+    // Check if MediaRecorder API is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setError("المتصفح مش بيدعم التسجيل الصوتي. جرب متصفح تاني (Chrome أو Safari)");
+      return;
+    }
+    if (typeof MediaRecorder === "undefined") {
+      setError("المتصفح مش بيدعم التسجيل الصوتي. جرب متصفح تاني (Chrome أو Safari)");
+      return;
+    }
+
     try {
       const recorder = new VoiceRecorder();
       recorderRef.current = recorder;
@@ -604,8 +615,10 @@ function VoiceNoteRecorder({
     } catch (err) {
       setError(
         err instanceof Error && err.name === "NotAllowedError"
-          ? "محتاجين إذن الميكروفون. اسمح بالوصول وجرب تاني"
-          : "مش قادرين نفتح الميكروفون. تأكد من الإذن وجرب تاني",
+          ? "محتاجين إذن الميكروفون. اسمح بالوصول من إعدادات المتصفح وجرب تاني"
+          : err instanceof Error && err.name === "NotFoundError"
+            ? "مفيش ميكروفون متوصل. تأكد إن الجهاز فيه ميكروفون"
+            : "مش قادرين نفتح الميكروفون. تأكد من الإذن وجرب تاني",
       );
     }
   };

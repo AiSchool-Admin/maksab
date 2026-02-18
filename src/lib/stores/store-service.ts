@@ -175,43 +175,77 @@ export async function getStores(params?: {
     const { data, count, error } = await query;
 
     if (error || !data || data.length === 0) {
+      // Fallback: try via API route (bypasses client RLS edge cases)
+      try {
+        const qs = new URLSearchParams();
+        if (params?.category) qs.set("category", params.category);
+        if (params?.governorate) qs.set("governorate", params.governorate);
+        if (params?.search) qs.set("search", params.search);
+        qs.set("page", String(page));
+        qs.set("limit", String(limit));
+        const res = await fetch(`/api/stores?${qs.toString()}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.stores && json.stores.length > 0) {
+            return { stores: json.stores as StoreWithStats[], total: json.total || 0 };
+          }
+        }
+      } catch {
+        // API fallback also failed
+      }
       return { stores: [], total: 0 };
     }
 
     const rawStores = (data || []) as unknown as Store[];
 
-    // Enrich each store with stats
+    // Enrich each store with stats — failures must NOT prevent store display
     const storesWithStats: StoreWithStats[] = await Promise.all(
       rawStores.map(async (s) => {
-        const [followers, reviews, products] = await Promise.all([
-          supabase
-            .from("store_followers" as never)
-            .select("id", { count: "exact", head: true })
-            .eq("store_id", s.id),
-          supabase
-            .from("store_reviews" as never)
-            .select("overall_rating")
-            .eq("store_id", s.id),
-          supabase
-            .from("ads" as never)
-            .select("id", { count: "exact", head: true })
-            .eq("store_id", s.id)
-            .eq("status", "active"),
-        ]);
+        let totalFollowers = 0;
+        let totalReviews = 0;
+        let avgRating = 0;
+        let totalProducts = 0;
 
-        const reviewsData = (reviews.data || []) as { overall_rating: number }[];
-        const avgRating =
-          reviewsData.length > 0
-            ? reviewsData.reduce((sum, r) => sum + r.overall_rating, 0) /
-              reviewsData.length
-            : 0;
+        try {
+          const [followers, reviews, products] = await Promise.all([
+            supabase
+              .from("store_followers" as never)
+              .select("id", { count: "exact", head: true })
+              .eq("store_id", s.id)
+              .then((r) => r, () => ({ count: 0, data: null })),
+            supabase
+              .from("store_reviews" as never)
+              .select("overall_rating")
+              .eq("store_id", s.id)
+              .then((r) => r, () => ({ data: null })),
+            supabase
+              .from("ads" as never)
+              .select("id", { count: "exact", head: true })
+              .eq("store_id", s.id)
+              .eq("status", "active")
+              .then((r) => r, () => ({ count: 0, data: null })),
+          ]);
+
+          totalFollowers = followers.count || 0;
+          totalProducts = products.count || 0;
+
+          const reviewsData = (reviews.data || []) as { overall_rating: number }[];
+          totalReviews = reviewsData.length;
+          avgRating =
+            reviewsData.length > 0
+              ? reviewsData.reduce((sum, r) => sum + r.overall_rating, 0) /
+                reviewsData.length
+              : 0;
+        } catch {
+          // Stats failed — show store with zero stats
+        }
 
         return {
           ...s,
           avg_rating: Math.round(avgRating * 10) / 10,
-          total_reviews: reviewsData.length,
-          total_followers: followers.count || 0,
-          total_products: products.count || 0,
+          total_reviews: totalReviews,
+          total_followers: totalFollowers,
+          total_products: totalProducts,
           total_sales: 0,
           avg_response_time: null,
           is_following: false,
