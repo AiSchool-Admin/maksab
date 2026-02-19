@@ -111,12 +111,12 @@ export default function PriceOfferButton({
       {!isOwnAd && (
         <button
           onClick={handleOpenOffer}
-          className="flex items-center gap-2 w-full bg-brand-gold-light text-brand-gold border border-brand-gold/30 rounded-xl px-4 py-3 hover:bg-brand-gold/10 transition-colors"
+          className="flex items-center justify-center gap-3 w-full bg-brand-gold text-white rounded-xl px-4 py-4 hover:bg-brand-gold/90 active:scale-[0.98] transition-all shadow-md"
         >
-          <DollarSign size={18} />
-          <span className="text-sm font-bold">قدّم عرض سعر</span>
+          <DollarSign size={22} />
+          <span className="text-lg font-bold">قدّم عرض سعر</span>
           {currentPrice && (
-            <span className="text-xs text-gray-text me-auto">
+            <span className="text-xs text-white/70 me-auto">
               السعر المطلوب: {formatPrice(currentPrice)}
             </span>
           )}

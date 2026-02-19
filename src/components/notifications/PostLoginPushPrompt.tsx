@@ -19,6 +19,10 @@ export default function PostLoginPushPrompt({
     setIsRequesting(true);
     await setupPushNotifications(userId);
     setIsRequesting(false);
+    // Mark as dismissed so PushPromptBanner doesn't show again
+    if (typeof window !== "undefined") {
+      localStorage.setItem("maksab_push_prompt_dismissed", "1");
+    }
     onClose();
   };
 
@@ -97,7 +101,12 @@ export default function PostLoginPushPrompt({
           {isRequesting ? "جاري التفعيل..." : "فعّل الإشعارات 🔔"}
         </button>
         <button
-          onClick={onClose}
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              localStorage.setItem("maksab_push_prompt_dismissed", "1");
+            }
+            onClose();
+          }}
           className="w-full text-sm text-gray-text hover:text-dark transition-colors py-2"
         >
           مش دلوقتي

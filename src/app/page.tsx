@@ -54,6 +54,10 @@ const categories = [
   { name: "هوايات", slug: "hobbies" },
   { name: "عدد", slug: "tools" },
   { name: "خدمات", slug: "services" },
+  { name: "كمبيوتر", slug: "computers" },
+  { name: "أطفال", slug: "kids-babies" },
+  { name: "إلكترونيات", slug: "electronics" },
+  { name: "جمال وصحة", slug: "beauty" },
 ];
 
 export default function HomePage() {
@@ -194,16 +198,21 @@ export default function HomePage() {
         </div>
 
         {/* Quick search chips — no price scanner or map */}
-        <div className="flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide">
-          {["سيارات", "موبايلات", "عقارات", "ذهب وفضة", "أثاث", "خردة", "أجهزة", "موضة", "فاخرة", "هوايات", "عدد", "خدمات"].map((term) => (
-            <Link
-              key={term}
-              href={`/search?q=${encodeURIComponent(term)}`}
-              className="flex-shrink-0 px-4 py-2 bg-gray-light text-dark text-base font-bold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
-            >
-              {term}
-            </Link>
-          ))}
+        <div className="relative">
+          <div className="flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide">
+            {["سيارات", "موبايلات", "عقارات", "ذهب وفضة", "أثاث", "خردة", "أجهزة", "موضة", "فاخرة", "هوايات", "عدد", "خدمات", "كمبيوتر", "أطفال", "إلكترونيات", "جمال وصحة"].map((term) => (
+              <Link
+                key={term}
+                href={`/search?q=${encodeURIComponent(term)}`}
+                className="flex-shrink-0 px-4 py-2 bg-gray-light text-dark text-base font-bold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
+              >
+                {term}
+              </Link>
+            ))}
+          </div>
+          <div className="absolute start-0 top-0 bottom-2 w-10 bg-gradient-to-l from-transparent to-white pointer-events-none flex items-center justify-start ps-1">
+            <span className="text-gray-text text-sm font-bold animate-pulse">&#x203A;</span>
+          </div>
         </div>
       </div>
 
