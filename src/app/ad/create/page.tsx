@@ -77,7 +77,7 @@ function getInitialDraft(): DraftData {
     saleType: "cash",
     categoryFields: {},
     priceData: getInitialPriceData(),
-    governorate: "",
+    governorate: "القاهرة",
     city: "",
     title: "",
     description: "",
