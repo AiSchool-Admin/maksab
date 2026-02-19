@@ -85,9 +85,11 @@ const GIFT_TARGETS: Record<string, string[]> = {
   "أبويا": ["phones", "tools", "hobbies"],
   "صاحبي": ["phones", "hobbies", "tools"],
   "صاحبتي": ["fashion", "luxury", "gold"],
-  "أطفال": ["hobbies", "fashion", "phones"],
-  "راجل": ["phones", "tools", "hobbies", "luxury"],
-  "ست": ["gold", "luxury", "fashion"],
+  "أطفال": ["kids_babies", "hobbies", "fashion"],
+  "راجل": ["phones", "tools", "hobbies", "luxury", "electronics"],
+  "ست": ["gold", "luxury", "fashion", "beauty"],
+  "بنتي الصغيرة": ["kids_babies", "fashion"],
+  "ابني الصغير": ["kids_babies", "hobbies"],
 };
 
 /** Extended brand → category map (supplements smart-parser.ts) */
@@ -168,6 +170,25 @@ const EXTENDED_BRANDS: Record<string, { category: string; value: string; model?:
   "إكسبوكس": { category: "hobbies", value: "microsoft" },
   "xbox": { category: "hobbies", value: "microsoft" },
   "نينتيندو": { category: "hobbies", value: "nintendo" },
+  // Computers
+  "ديل": { category: "computers", value: "dell" },
+  "dell": { category: "computers", value: "dell" },
+  "لينوفو": { category: "computers", value: "lenovo" },
+  "lenovo": { category: "computers", value: "lenovo" },
+  "إيسر": { category: "computers", value: "acer" },
+  "أسوس": { category: "computers", value: "asus" },
+  "asus": { category: "computers", value: "asus" },
+  "msi": { category: "computers", value: "msi" },
+  "ماك بوك": { category: "computers", value: "apple" },
+  "macbook": { category: "computers", value: "apple" },
+  // Electronics
+  "سوني": { category: "electronics", value: "sony" },
+  "jbl": { category: "electronics", value: "jbl" },
+  "بوز": { category: "electronics", value: "bose" },
+  // Beauty
+  "ماك": { category: "beauty", value: "mac" },
+  "لوريال": { category: "beauty", value: "loreal" },
+  "مايبيلين": { category: "beauty", value: "maybelline" },
 };
 
 /** Keyword → entity mapping: maps common product keywords to subcategory + type fields.
@@ -222,6 +243,30 @@ const KEYWORD_ENTITY_MAP: Record<string, {
   "سبيكة": { category: "gold", fields: { type: "bar" } },
   // Luxury — bags
   "شنط فاخرة": { category: "luxury", subcategory: "luxury-bags", fields: { type: "bag" } },
+  // Computers
+  "لابتوب": { category: "computers", subcategory: "laptops" },
+  "لاب توب": { category: "computers", subcategory: "laptops" },
+  "كمبيوتر مكتبي": { category: "computers", subcategory: "desktops" },
+  "طابعة": { category: "computers", subcategory: "printers" },
+  "برنتر": { category: "computers", subcategory: "printers" },
+  "كارت شاشة": { category: "computers", subcategory: "pc-parts" },
+  "رامات": { category: "computers", subcategory: "pc-parts" },
+  // Kids & Babies
+  "عربية أطفال": { category: "kids_babies", subcategory: "strollers", fields: { type: "stroller" } },
+  "سرير أطفال": { category: "kids_babies", subcategory: "cribs", fields: { type: "crib" } },
+  "كرسي سيارة أطفال": { category: "kids_babies", subcategory: "car-seats", fields: { type: "car_seat" } },
+  "ألعاب أطفال": { category: "kids_babies", subcategory: "kids-toys", fields: { type: "toy" } },
+  // Electronics
+  "تليفزيون": { category: "electronics", subcategory: "tvs", fields: { type: "tv" } },
+  "تلفزيون": { category: "electronics", subcategory: "tvs", fields: { type: "tv" } },
+  "كاميرا مراقبة": { category: "electronics", subcategory: "security-cameras", fields: { type: "camera" } },
+  "بروجكتور": { category: "electronics", subcategory: "projectors", fields: { type: "projector" } },
+  // Beauty
+  "مكياج": { category: "beauty", subcategory: "makeup", fields: { type: "makeup" } },
+  "ميكب": { category: "beauty", subcategory: "makeup", fields: { type: "makeup" } },
+  "عناية بالبشرة": { category: "beauty", subcategory: "skincare", fields: { type: "skincare" } },
+  "عناية بالشعر": { category: "beauty", subcategory: "haircare", fields: { type: "haircare" } },
+  "مكمل غذائي": { category: "beauty", subcategory: "supplements", fields: { type: "supplement" } },
 };
 
 /** Extended category keywords (slang, colloquial) */
@@ -238,6 +283,10 @@ const EXTENDED_CATEGORY_KEYWORDS: Record<string, string[]> = {
   hobbies: ["كاميرا", "دراجة", "عجلة", "كتاب", "كتب", "جيتار", "بيانو", "أورج"],
   tools: ["شنيور", "دريل", "صاروخ", "جلاخة", "عدة", "عدد", "كمبروسر", "مولد"],
   services: ["سباك", "كهربائي", "نقاش", "نجار", "سيراميك", "حداد", "نقل عفش", "نقل أثاث", "دروس", "صيانة"],
+  computers: ["لابتوب", "لاب توب", "كمبيوتر", "PC", "ديسك توب", "شاشة كمبيوتر", "طابعة", "برنتر", "هارد ديسك", "رامات", "كارت شاشة", "بروسيسور", "ماوس", "كيبورد", "راوتر"],
+  kids_babies: ["أطفال", "رضع", "بيبي", "حفاضات", "ببرونة", "كرسي سيارة أطفال", "عربية أطفال", "سرير أطفال", "ألعاب أطفال", "مستلزمات مدرسية", "يونيفورم"],
+  electronics: ["تليفزيون", "تلفزيون", "شاشة تلفزيون", "سماعة", "سبيكر", "ساوند بار", "ريسيفر", "بروجكتور", "كاميرا مراقبة", "سمارت هوم", "جهاز ذكي"],
+  beauty: ["مكياج", "ميكب", "ميك اب", "كريم", "سيروم", "مستحضرات تجميل", "فاونديشن", "روج", "ماسكارا", "عطر", "برفان", "شامبو", "بلسم", "مكمل غذائي", "فيتامين"],
 };
 
 /** City → governorate mapping (extended) */

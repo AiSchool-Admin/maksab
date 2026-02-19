@@ -15,6 +15,10 @@ const CATEGORIES = [
   "hobbies",
   "tools",
   "services",
+  "computers",
+  "kids-babies",
+  "electronics",
+  "beauty",
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

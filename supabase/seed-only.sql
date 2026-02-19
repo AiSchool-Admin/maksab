@@ -20,7 +20,11 @@ INSERT INTO categories (id, name, icon, slug, sort_order) VALUES
   ('furniture',  'الأثاث والديكور',   '🪑', 'furniture',    9),
   ('hobbies',    'الهوايات',          '🎮', 'hobbies',     10),
   ('tools',      'العدد والأدوات',    '🔧', 'tools',       11),
-  ('services',   'الخدمات',           '🛠️', 'services',    12)
+  ('services',   'الخدمات',           '🛠️', 'services',    12),
+  ('computers',  'الكمبيوتر واللابتوب','💻', 'computers',   13),
+  ('kids_babies','مستلزمات الأطفال',  '👶', 'kids-babies',  14),
+  ('electronics','الإلكترونيات',      '📺', 'electronics',  15),
+  ('beauty',     'الجمال والصحة',     '💄', 'beauty',       16)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
@@ -148,6 +152,53 @@ INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
   ('svc_tech',           'services', 'خدمات تقنية',    'tech',           8),
   ('svc_tutoring',       'services', 'دروس خصوصية',    'tutoring',       9),
   ('svc_other',          'services', 'خدمات أخرى',     'services-other', 10)
+ON CONFLICT (id) DO NOTHING;
+
+-- 13. الكمبيوتر واللابتوب
+INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
+  ('comp_laptops',      'computers', 'لابتوبات',          'laptops',          1),
+  ('comp_desktops',     'computers', 'كمبيوتر مكتبي',     'desktops',         2),
+  ('comp_monitors',     'computers', 'شاشات',             'monitors',         3),
+  ('comp_printers',     'computers', 'طابعات وماسحات',    'printers',         4),
+  ('comp_parts',        'computers', 'قطع غيار كمبيوتر',  'pc-parts',         5),
+  ('comp_networking',   'computers', 'معدات شبكات',       'networking',       6),
+  ('comp_storage',      'computers', 'أجهزة تخزين',       'storage-devices',  7),
+  ('comp_accessories',  'computers', 'إكسسوارات كمبيوتر', 'pc-accessories',   8)
+ON CONFLICT (id) DO NOTHING;
+
+-- 14. مستلزمات الأطفال
+INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
+  ('kids_clothes',      'kids_babies', 'ملابس أطفال ورضع',       'kids-clothes',    1),
+  ('kids_strollers',    'kids_babies', 'عربيات أطفال',            'strollers',       2),
+  ('kids_cribs',        'kids_babies', 'سراير أطفال',             'cribs',           3),
+  ('kids_car_seats',    'kids_babies', 'كراسي سيارة',             'car-seats',       4),
+  ('kids_feeding',      'kids_babies', 'مستلزمات رضاعة وتغذية',  'feeding',         5),
+  ('kids_toys',         'kids_babies', 'ألعاب أطفال',             'kids-toys',       6),
+  ('kids_maternity',    'kids_babies', 'مستلزمات حمل وأمومة',    'maternity',       7),
+  ('kids_school',       'kids_babies', 'مستلزمات مدرسية',         'school-supplies', 8),
+  ('kids_other',        'kids_babies', 'أخرى',                    'kids-other',      9)
+ON CONFLICT (id) DO NOTHING;
+
+-- 15. الإلكترونيات
+INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
+  ('elec_tvs',          'electronics', 'تليفزيونات وشاشات',  'tvs',              1),
+  ('elec_speakers',     'electronics', 'سماعات وأنظمة صوت',  'speakers',         2),
+  ('elec_cameras',      'electronics', 'كاميرات مراقبة',     'security-cameras', 3),
+  ('elec_smart',        'electronics', 'أجهزة ذكية',         'smart-home',       4),
+  ('elec_projectors',   'electronics', 'بروجكتور',           'projectors',       5),
+  ('elec_gaming',       'electronics', 'أجهزة ألعاب',        'gaming-consoles',  6),
+  ('elec_other',        'electronics', 'إلكترونيات أخرى',    'electronics-other', 7)
+ON CONFLICT (id) DO NOTHING;
+
+-- 16. الجمال والصحة
+INSERT INTO subcategories (id, category_id, name, slug, sort_order) VALUES
+  ('beauty_makeup',       'beauty', 'مستحضرات تجميل',   'makeup',          1),
+  ('beauty_skincare',     'beauty', 'عناية بالبشرة',     'skincare',        2),
+  ('beauty_haircare',     'beauty', 'عناية بالشعر',      'haircare',        3),
+  ('beauty_tools',        'beauty', 'أدوات تجميل',       'beauty-tools',    4),
+  ('beauty_supplements',  'beauty', 'مكملات غذائية',     'supplements',     5),
+  ('beauty_medical',      'beauty', 'أجهزة صحية',        'medical-devices', 6),
+  ('beauty_other',        'beauty', 'أخرى',              'beauty-other',    7)
 ON CONFLICT (id) DO NOTHING;
 
 

@@ -162,4 +162,8 @@ export const CATEGORY_PRICE_RANGES: Record<string, {
   tools: { budget: [0, 1000], mid: [1000, 5000], premium: [5000, 50000] },
   scrap: { budget: [0, 500], mid: [500, 5000], premium: [5000, 100000] },
   services: { budget: [0, 500], mid: [500, 3000], premium: [3000, 20000] },
+  computers: { budget: [0, 5000], mid: [5000, 20000], premium: [20000, 100000] },
+  kids_babies: { budget: [0, 500], mid: [500, 3000], premium: [3000, 20000] },
+  electronics: { budget: [0, 3000], mid: [3000, 15000], premium: [15000, 80000] },
+  beauty: { budget: [0, 200], mid: [200, 1500], premium: [1500, 10000] },
 };

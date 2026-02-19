@@ -17,6 +17,10 @@ const PLACEHOLDER_COLORS: Record<string, { bg: string; fg: string }> = {
   hobbies: { bg: "#EDE7F6", fg: "#4527A0" },
   tools: { bg: "#ECEFF1", fg: "#37474F" },
   services: { bg: "#E8EAF6", fg: "#283593" },
+  computers: { bg: "#E0E7EE", fg: "#34495E" },
+  kids_babies: { bg: "#F3E5F5", fg: "#9B59B6" },
+  electronics: { bg: "#E3F2FD", fg: "#2980B9" },
+  beauty: { bg: "#FCE4EC", fg: "#E74C3C" },
 };
 
 const PLACEHOLDER_ICONS: Record<string, string> = {
@@ -32,6 +36,10 @@ const PLACEHOLDER_ICONS: Record<string, string> = {
   hobbies: "🎮",
   tools: "🔧",
   services: "🛠️",
+  computers: "💻",
+  kids_babies: "👶",
+  electronics: "📺",
+  beauty: "💄",
 };
 
 /**
