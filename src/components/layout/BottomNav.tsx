@@ -60,7 +60,10 @@ export default function BottomNav({ unreadMessages = 0, isMerchant = false }: Bo
                 aria-label={tab.label}
               >
                 <Icon size={18} strokeWidth={2.5} />
-                <span className="text-sm font-bold whitespace-nowrap">{tab.label}</span>
+                <div className="flex flex-col items-center leading-none">
+                  <span className="text-sm font-bold whitespace-nowrap">{tab.label}</span>
+                  {!isMerchant && <span className="text-[8px] font-medium opacity-80 whitespace-nowrap">في ٣ خطوات بس</span>}
+                </div>
               </Link>
             );
           }

@@ -344,7 +344,7 @@ export default function HomePage() {
             </p>
             <Link href="/ad/create">
               <Button icon={<Plus size={18} />} size="lg">
-                أضف إعلان
+                أضف إعلان في ٣ خطوات
               </Button>
             </Link>
           </div>
