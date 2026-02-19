@@ -6,8 +6,9 @@
 const VALID_SALE_TYPES = ["cash", "auction", "exchange", "live_auction"];
 const VALID_CATEGORIES = [
   "cars", "real_estate", "phones", "fashion", "scrap",
-  "gold_silver", "luxury", "home_appliances", "furniture",
+  "gold", "luxury", "appliances", "furniture",
   "hobbies", "tools", "services",
+  "computers", "kids_babies", "electronics", "beauty",
 ];
 
 const MAX_TITLE_LENGTH = 200;

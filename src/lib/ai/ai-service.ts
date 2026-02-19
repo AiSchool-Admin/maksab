@@ -109,6 +109,10 @@ export async function analyzeProductImages(
 - hobbies: هوايات (type, condition, brand)
 - tools: عدد وأدوات (type, condition, brand)
 - services: خدمات (service_type, pricing, experience)
+- computers: كمبيوتر ولابتوب (brand, condition, processor, ram, storage)
+- kids_babies: مستلزمات أطفال (type, condition, age_range)
+- electronics: إلكترونيات (type, brand, condition)
+- beauty: جمال وصحة (type, brand, condition)
 
 أجب بـ JSON فقط بالشكل ده:
 {
@@ -172,7 +176,7 @@ export async function parseListingFromText(
 - "غسالة توشيبا 10 كيلو شغالة تمام عايز 5000"
 - "شقة في مدينة نصر 120 متر 3 أوض تشطيب سوبر لوكس"
 
-الأقسام: cars, real_estate, phones, fashion, scrap, gold, luxury, appliances, furniture, hobbies, tools, services
+الأقسام: cars, real_estate, phones, fashion, scrap, gold, luxury, appliances, furniture, hobbies, tools, services, computers, kids_babies, electronics, beauty
 
 أجب بـ JSON بالشكل ده:
 {

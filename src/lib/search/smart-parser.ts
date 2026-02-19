@@ -36,6 +36,10 @@ const categoryKeywords: Record<string, string[]> = {
   hobbies: ["بلايستيشن", "إكسبوكس", "كاميرا", "دراجة", "كتب", "كتاب"],
   tools: ["شنيور", "عدة", "عدد", "معدات"],
   services: ["سباك", "كهربائي", "نقاش", "نجار", "صيانة", "نقل أثاث", "تنظيف", "دروس"],
+  computers: ["لابتوب", "لاب توب", "كمبيوتر", "كمبيوتر مكتبي", "شاشة كمبيوتر", "طابعة", "برنتر", "كيبورد", "ماوس"],
+  kids_babies: ["أطفال", "رضع", "بيبي", "عربية أطفال", "سرير أطفال", "حفاضات", "ألعاب أطفال", "مستلزمات أطفال"],
+  electronics: ["تليفزيون", "تلفزيون", "شاشة", "سماعة", "سماعات", "ريسيفر", "بروجكتور", "كاميرا مراقبة"],
+  beauty: ["مكياج", "ميكب", "عناية بالبشرة", "كريم", "مستحضرات تجميل", "شامبو", "سيروم", "مكمل غذائي"],
 };
 
 /** Brand keyword → { category, value } */
@@ -60,6 +64,12 @@ const brandKeywords: Record<string, { category: string; value: string }> = {
   "هواوي": { category: "phones", value: "huawei" },
   "توشيبا": { category: "appliances", value: "toshiba" },
   "شارب": { category: "appliances", value: "sharp" },
+  "ديل": { category: "computers", value: "dell" },
+  "لينوفو": { category: "computers", value: "lenovo" },
+  "إيسر": { category: "computers", value: "acer" },
+  "أسوس": { category: "computers", value: "asus" },
+  "ماك بوك": { category: "computers", value: "apple" },
+  "سوني": { category: "electronics", value: "sony" },
 };
 
 /** City → governorate lookup */
