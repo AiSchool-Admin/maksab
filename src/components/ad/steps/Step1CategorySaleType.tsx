@@ -58,9 +58,11 @@ export default function Step1CategorySaleType({
 
       {/* Subcategory */}
       {selectedCategory && selectedCategory.subcategories.length > 0 && (
-        <div>
-          <h3 className="text-sm font-bold text-dark mb-3">
-            القسم الفرعي
+        <div className="bg-brand-green-light/60 border-2 border-brand-green/20 rounded-2xl p-4">
+          <h3 className="text-sm font-bold text-brand-green-dark mb-3 flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-brand-green text-white text-xs flex items-center justify-center font-bold">↓</span>
+            اختار القسم الفرعي
+            {!subcategoryId && <span className="text-xs text-orange-600 font-medium">(مهم)</span>}
           </h3>
           <div className="flex flex-wrap gap-2">
             {selectedCategory.subcategories.map((sub) => (
@@ -68,10 +70,10 @@ export default function Step1CategorySaleType({
                 key={sub.id}
                 type="button"
                 onClick={() => onSubcategoryChange(sub.id)}
-                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                className={`px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
                   subcategoryId === sub.id
-                    ? "bg-brand-green text-white"
-                    : "bg-gray-light text-dark hover:bg-gray-200"
+                    ? "bg-brand-green text-white border-brand-green shadow-md shadow-brand-green/20"
+                    : "bg-white text-dark border-gray-200 hover:border-brand-green/40 hover:bg-white"
                 }`}
               >
                 {sub.name}
