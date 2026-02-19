@@ -25,13 +25,12 @@ import Step3PricePhotos from "@/components/ad/steps/Step3PricePhotos";
 import Step4LocationReview from "@/components/ad/steps/Step4LocationReview";
 
 const STORAGE_KEY = "maksab_ad_draft";
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
 const stepTitles = [
   "اختار القسم",
   "تفاصيل المنتج",
-  "السعر والصور",
-  "الموقع والمراجعة",
+  "السعر والنشر",
 ];
 
 /* ── Persistable data (no File/Blob) ─────────────────────── */
@@ -245,9 +244,7 @@ export default function CreateAdPage() {
             errs.exchangeWantedCategory = "اختار قسم البديل المطلوب";
         }
         if (images.length === 0) errs.images = "أضف صورة واحدة على الأقل";
-      }
-
-      if (step === 4) {
+        // Location validation (merged from old step 4)
         if (!draft.governorate) errs.governorate = "اختار المحافظة";
         if (!draft.title.trim()) errs.title = "العنوان مطلوب";
       }
@@ -265,8 +262,8 @@ export default function CreateAdPage() {
     if (draft.currentStep < TOTAL_STEPS) {
       const next = draft.currentStep + 1;
       let updated = { ...draft, currentStep: next };
-      // Auto-generate title/desc when entering step 4
-      if (next === 4) {
+      // Auto-generate title/desc when entering step 3 (combined price + location + review)
+      if (next === 3) {
         updated = regenerateTitleDesc(updated);
       }
       setDraft(updated);
@@ -336,7 +333,7 @@ export default function CreateAdPage() {
 
   /* ── Publish ───────────────────────────────────────── */
   const handlePublish = useCallback(async () => {
-    if (!validateStep(4)) return;
+    if (!validateStep(3)) return;
 
     // Require auth
     const authedUser = user || (await requireAuth());
@@ -624,9 +621,12 @@ export default function CreateAdPage() {
             <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center shadow-sm">
               <PlusCircle size={22} className="text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-dark">
-              {stepTitles[draft.currentStep - 1]}
-            </h1>
+            <div>
+              <h1 className="text-2xl font-bold text-dark leading-tight">
+                {stepTitles[draft.currentStep - 1]}
+              </h1>
+              <p className="text-[10px] text-brand-green font-bold">إعلانك في ٣ خطوات بس</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -703,48 +703,55 @@ export default function CreateAdPage() {
         )}
 
         {draft.currentStep === 3 && (
-          <Step3PricePhotos
-            saleType={draft.saleType}
-            priceData={draft.priceData}
-            images={images}
-            videoFile={videoFile}
-            voiceNote={voiceNote}
-            onPriceChange={(key, value) =>
-              updateDraft({
-                priceData: { ...draft.priceData, [key]: value },
-              })
-            }
-            onImagesChange={setImages}
-            onVideoChange={setVideoFile}
-            onVoiceNoteChange={setVoiceNote}
-            errors={errors}
-            categoryId={draft.categoryId}
-            subcategoryId={draft.subcategoryId}
-            categoryFields={draft.categoryFields}
-          />
-        )}
+          <>
+            <Step3PricePhotos
+              saleType={draft.saleType}
+              priceData={draft.priceData}
+              images={images}
+              videoFile={videoFile}
+              voiceNote={voiceNote}
+              onPriceChange={(key, value) =>
+                updateDraft({
+                  priceData: { ...draft.priceData, [key]: value },
+                })
+              }
+              onImagesChange={setImages}
+              onVideoChange={setVideoFile}
+              onVoiceNoteChange={setVoiceNote}
+              errors={errors}
+              categoryId={draft.categoryId}
+              subcategoryId={draft.subcategoryId}
+              categoryFields={draft.categoryFields}
+            />
 
-        {draft.currentStep === 4 && (
-          <Step4LocationReview
-            governorate={draft.governorate}
-            city={draft.city}
-            title={draft.title}
-            description={draft.description}
-            isTitleDescEdited={draft.isTitleDescEdited}
-            images={images}
-            saleType={draft.saleType}
-            priceLabel={getPriceLabel()}
-            onGovernorateChange={(v) => updateDraft({ governorate: v })}
-            onCityChange={(v) => updateDraft({ city: v })}
-            onTitleChange={(v) => updateDraft({ title: v })}
-            onDescriptionChange={(v) => updateDraft({ description: v })}
-            onTitleDescEditToggle={() =>
-              updateDraft({ isTitleDescEdited: true })
-            }
-            onDetectLocation={handleDetectLocation}
-            isDetectingLocation={isDetectingLocation}
-            errors={errors}
-          />
+            {/* Divider between price/media and location/review */}
+            <div className="my-6 flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-text font-medium">الموقع والمراجعة</span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+
+            <Step4LocationReview
+              governorate={draft.governorate}
+              city={draft.city}
+              title={draft.title}
+              description={draft.description}
+              isTitleDescEdited={draft.isTitleDescEdited}
+              images={images}
+              saleType={draft.saleType}
+              priceLabel={getPriceLabel()}
+              onGovernorateChange={(v) => updateDraft({ governorate: v })}
+              onCityChange={(v) => updateDraft({ city: v })}
+              onTitleChange={(v) => updateDraft({ title: v })}
+              onDescriptionChange={(v) => updateDraft({ description: v })}
+              onTitleDescEditToggle={() =>
+                updateDraft({ isTitleDescEdited: true })
+              }
+              onDetectLocation={handleDetectLocation}
+              isDetectingLocation={isDetectingLocation}
+              errors={errors}
+            />
+          </>
         )}
 
         {/* Validation error for step 1 */}
