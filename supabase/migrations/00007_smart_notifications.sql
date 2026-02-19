@@ -9,7 +9,10 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_type_check CHECK (type IN
   'chat', 'auction_bid', 'auction_outbid', 'auction_ending',
   'auction_ended', 'auction_won', 'auction_ended_no_bids',
   'favorite_price_drop', 'recommendation', 'new_match',
-  'seller_interest', 'system'
+  'seller_interest', 'exchange_match',
+  'price_offer_new', 'price_offer_accepted',
+  'price_offer_rejected', 'price_offer_countered',
+  'system'
 ));
 
 -- Index to prevent duplicate notifications (same user, same type, same ad within 24h)

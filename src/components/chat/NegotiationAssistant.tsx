@@ -66,7 +66,8 @@ export default function NegotiationAssistant({
         const data = await res.json();
         setSuggestions(data.suggestions || []);
       } else {
-        setError("مقدرناش نجيب اقتراحات دلوقتي");
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "مساعد التفاوض مش متاح دلوقتي. جرب تاني بعدين");
       }
     } catch {
       setError("حصل مشكلة في الاتصال");

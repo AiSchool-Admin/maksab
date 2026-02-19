@@ -12,6 +12,9 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "trucks", name: "نقل", slug: "trucks" },
       { id: "motorcycles", name: "موتوسيكلات", slug: "motorcycles" },
       { id: "car-parts", name: "قطع غيار", slug: "car-parts" },
+      { id: "scooters", name: "سكوتر وتوك توك", slug: "scooters" },
+      { id: "car-accessories", name: "إكسسوارات سيارات", slug: "car-accessories" },
+      { id: "plate-numbers", name: "أرقام ولوحات مميزة", slug: "plate-numbers" },
     ],
     fields: [
       { id: "brand", label: "الماركة", type: "select", isRequired: true, order: 1, options: [
@@ -79,6 +82,9 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "land", name: "أراضي", slug: "land" },
       { id: "commercial", name: "محلات تجارية", slug: "commercial" },
       { id: "offices", name: "مكاتب", slug: "offices" },
+      { id: "chalets", name: "شاليهات واستراحات", slug: "chalets" },
+      { id: "farms", name: "مزارع", slug: "farms" },
+      { id: "shared-housing", name: "مشاركة سكن", slug: "shared-housing" },
     ],
     fields: [
       { id: "property_type", label: "النوع", type: "select", isRequired: true, order: 1, defaultValue: "apartment", options: [
@@ -161,6 +167,9 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "tablet", name: "تابلت", slug: "tablet" },
       { id: "phone-accessories", name: "إكسسوارات", slug: "phone-accessories" },
       { id: "phone-parts", name: "قطع غيار", slug: "phone-parts" },
+      { id: "smartwatch", name: "ساعات ذكية", slug: "smartwatch" },
+      { id: "headphones", name: "سماعات", slug: "headphones" },
+      { id: "special-numbers", name: "أرقام مميزة", slug: "special-numbers" },
     ],
     fields: [
       { id: "brand", label: "الماركة", type: "select", isRequired: true, order: 1, options: [
@@ -226,6 +235,8 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "shoes", name: "أحذية", slug: "shoes" },
       { id: "bags", name: "شنط", slug: "bags" },
       { id: "fashion-accessories", name: "إكسسوارات", slug: "fashion-accessories" },
+      { id: "hijab-fashion", name: "أزياء محجبات", slug: "hijab-fashion" },
+      { id: "sportswear", name: "ملابس رياضية", slug: "sportswear" },
     ],
     fields: [
       { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
@@ -844,6 +855,9 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "lighting", name: "إضاءة", slug: "lighting" },
       { id: "carpets", name: "سجاد", slug: "carpets" },
       { id: "furniture-other", name: "أخرى", slug: "furniture-other" },
+      { id: "office-furniture", name: "أثاث مكتبي", slug: "office-furniture" },
+      { id: "outdoor-furniture", name: "أثاث حدائق", slug: "outdoor-furniture" },
+      { id: "curtains", name: "ستائر", slug: "curtains" },
     ],
     fields: [
       { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
@@ -963,6 +977,9 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "bikes", name: "دراجات", slug: "bikes" },
       { id: "antiques", name: "تحف وأنتيكات", slug: "antiques" },
       { id: "pets", name: "حيوانات أليفة", slug: "pets" },
+      { id: "tickets", name: "تذاكر وقسائم", slug: "tickets" },
+      { id: "camping", name: "مستلزمات تخييم", slug: "camping" },
+      { id: "fishing", name: "معدات صيد", slug: "fishing" },
     ],
     fields: [
       { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
@@ -1345,6 +1362,10 @@ export const categoriesConfig: CategoryConfig[] = [
       { id: "tech", name: "خدمات تقنية", slug: "tech" },
       { id: "tutoring", name: "دروس خصوصية", slug: "tutoring" },
       { id: "services-other", name: "خدمات أخرى", slug: "services-other" },
+      { id: "car-services", name: "خدمات سيارات", slug: "car-services" },
+      { id: "events", name: "تنظيم فعاليات وأفراح", slug: "events" },
+      { id: "beauty-services", name: "خدمات تجميل", slug: "beauty-services" },
+      { id: "photography", name: "تصوير فوتوغرافي", slug: "photography" },
     ],
     fields: [
       { id: "service_type", label: "نوع الخدمة", type: "select", isRequired: true, order: 1, options: [
@@ -1453,6 +1474,180 @@ export const categoriesConfig: CategoryConfig[] = [
         descriptionTemplate: "خدمة تنظيف ${cleaning_type}، خبرة ${experience}، ${pricing}",
       },
     },
+  },
+  {
+    id: "computers",
+    name: "الكمبيوتر واللابتوب",
+    icon: "💻",
+    slug: "computers",
+    subcategories: [
+      { id: "laptops", name: "لابتوبات", slug: "laptops" },
+      { id: "desktops", name: "كمبيوتر مكتبي", slug: "desktops" },
+      { id: "monitors", name: "شاشات", slug: "monitors" },
+      { id: "printers", name: "طابعات وماسحات", slug: "printers" },
+      { id: "pc-parts", name: "قطع غيار كمبيوتر", slug: "pc-parts" },
+      { id: "networking", name: "معدات شبكات", slug: "networking" },
+      { id: "storage-devices", name: "أجهزة تخزين", slug: "storage-devices" },
+      { id: "pc-accessories", name: "إكسسوارات كمبيوتر", slug: "pc-accessories" },
+    ],
+    fields: [
+      { id: "brand", label: "الماركة", type: "select", isRequired: true, order: 1, options: [
+        { value: "dell", label: "ديل" }, { value: "hp", label: "HP" },
+        { value: "lenovo", label: "لينوفو" }, { value: "apple", label: "أبل" },
+        { value: "asus", label: "أسوس" }, { value: "acer", label: "إيسر" },
+        { value: "msi", label: "MSI" }, { value: "samsung", label: "سامسونج" },
+        { value: "toshiba", label: "توشيبا" }, { value: "other", label: "أخرى" },
+      ]},
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, defaultValue: "good", options: [
+        { value: "new_sealed", label: "جديد متبرشم" }, { value: "like_new", label: "مستعمل زيرو" },
+        { value: "good", label: "مستعمل كويس" }, { value: "acceptable", label: "مستعمل مقبول" },
+        { value: "needs_repair", label: "يحتاج صيانة" },
+      ]},
+      { id: "processor", label: "المعالج", type: "select", isRequired: true, order: 3, hiddenForSubcategories: ["printers", "networking", "storage-devices", "pc-accessories"], options: [
+        { value: "i3", label: "Intel Core i3" }, { value: "i5", label: "Intel Core i5" },
+        { value: "i7", label: "Intel Core i7" }, { value: "i9", label: "Intel Core i9" },
+        { value: "ryzen3", label: "AMD Ryzen 3" }, { value: "ryzen5", label: "AMD Ryzen 5" },
+        { value: "ryzen7", label: "AMD Ryzen 7" }, { value: "m1", label: "Apple M1" },
+        { value: "m2", label: "Apple M2" }, { value: "m3", label: "Apple M3" },
+        { value: "other", label: "أخرى" },
+      ]},
+      { id: "ram", label: "الرام", type: "select", isRequired: false, order: 4, hiddenForSubcategories: ["printers", "networking", "storage-devices", "pc-accessories"], options: [
+        { value: "4", label: "4GB" }, { value: "8", label: "8GB" },
+        { value: "16", label: "16GB" }, { value: "32", label: "32GB" },
+        { value: "64", label: "64GB" },
+      ]},
+      { id: "storage", label: "التخزين", type: "select", isRequired: false, order: 5, hiddenForSubcategories: ["printers", "networking", "pc-accessories"], options: [
+        { value: "128ssd", label: "128GB SSD" }, { value: "256ssd", label: "256GB SSD" },
+        { value: "512ssd", label: "512GB SSD" }, { value: "1tb_ssd", label: "1TB SSD" },
+        { value: "500hdd", label: "500GB HDD" }, { value: "1tb_hdd", label: "1TB HDD" },
+        { value: "2tb_hdd", label: "2TB HDD" },
+      ]},
+      { id: "screen_size", label: "حجم الشاشة", type: "select", isRequired: false, order: 6, hiddenForSubcategories: ["printers", "networking", "storage-devices", "pc-accessories", "pc-parts"], options: [
+        { value: "13", label: '13"' }, { value: "14", label: '14"' },
+        { value: "15", label: '15.6"' }, { value: "17", label: '17"' },
+        { value: "24", label: '24"' }, { value: "27", label: '27"' },
+        { value: "32", label: '32"' },
+      ]},
+    ],
+    requiredFields: ["brand", "condition", "processor"],
+    titleTemplate: "${brand} — ${processor} — ${condition}",
+    descriptionTemplate: "${brand}، معالج ${processor}، ${ram} رام، ${storage}، ${condition}",
+  },
+  {
+    id: "kids_babies",
+    name: "مستلزمات الأطفال",
+    icon: "👶",
+    slug: "kids-babies",
+    subcategories: [
+      { id: "kids-clothes", name: "ملابس أطفال ورضع", slug: "kids-clothes" },
+      { id: "strollers", name: "عربيات أطفال", slug: "strollers" },
+      { id: "cribs", name: "سراير أطفال", slug: "cribs" },
+      { id: "car-seats", name: "كراسي سيارة", slug: "car-seats" },
+      { id: "feeding", name: "مستلزمات رضاعة وتغذية", slug: "feeding" },
+      { id: "kids-toys", name: "ألعاب أطفال", slug: "kids-toys" },
+      { id: "maternity", name: "مستلزمات حمل وأمومة", slug: "maternity" },
+      { id: "school-supplies", name: "مستلزمات مدرسية", slug: "school-supplies" },
+      { id: "kids-other", name: "أخرى", slug: "kids-other" },
+    ],
+    fields: [
+      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
+        { value: "clothes", label: "ملابس" }, { value: "stroller", label: "عربية أطفال" },
+        { value: "crib", label: "سرير" }, { value: "car_seat", label: "كرسي سيارة" },
+        { value: "feeding", label: "مستلزمات رضاعة" }, { value: "toy", label: "لعبة" },
+        { value: "maternity", label: "مستلزمات أمومة" }, { value: "school", label: "مستلزمات مدرسية" },
+        { value: "other", label: "أخرى" },
+      ]},
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 2, defaultValue: "good", options: [
+        { value: "new_tagged", label: "جديد بالتاج" }, { value: "new_untagged", label: "جديد بدون تاج" },
+        { value: "excellent", label: "مستعمل ممتاز" }, { value: "good", label: "مستعمل جيد" },
+      ]},
+      { id: "age_range", label: "الفئة العمرية", type: "select", isRequired: true, order: 3, options: [
+        { value: "0_6m", label: "0-6 شهور" }, { value: "6_12m", label: "6-12 شهر" },
+        { value: "1_2y", label: "1-2 سنة" }, { value: "2_4y", label: "2-4 سنوات" },
+        { value: "4_8y", label: "4-8 سنوات" }, { value: "8_12y", label: "8-12 سنة" },
+        { value: "12plus", label: "12+ سنة" }, { value: "all", label: "كل الأعمار" },
+      ]},
+      { id: "brand", label: "الماركة", type: "text", isRequired: false, order: 4, placeholder: "مثال: Chicco, Graco" },
+      { id: "gender", label: "ولادي/بناتي", type: "select", isRequired: false, order: 5, options: [
+        { value: "boy", label: "ولادي" }, { value: "girl", label: "بناتي" }, { value: "unisex", label: "يونيسكس" },
+      ]},
+    ],
+    requiredFields: ["type", "condition", "age_range"],
+    titleTemplate: "${type} أطفال — ${condition} — ${age_range}",
+    descriptionTemplate: "${type} أطفال، ${condition}، مناسب لعمر ${age_range}",
+  },
+  {
+    id: "electronics",
+    name: "الإلكترونيات",
+    icon: "📺",
+    slug: "electronics",
+    subcategories: [
+      { id: "tvs", name: "تليفزيونات وشاشات", slug: "tvs" },
+      { id: "speakers", name: "سماعات وأنظمة صوت", slug: "speakers" },
+      { id: "security-cameras", name: "كاميرات مراقبة", slug: "security-cameras" },
+      { id: "smart-home", name: "أجهزة ذكية", slug: "smart-home" },
+      { id: "projectors", name: "بروجكتور", slug: "projectors" },
+      { id: "gaming-consoles", name: "أجهزة ألعاب", slug: "gaming-consoles" },
+      { id: "electronics-other", name: "إلكترونيات أخرى", slug: "electronics-other" },
+    ],
+    fields: [
+      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
+        { value: "tv", label: "تليفزيون" }, { value: "speaker", label: "سماعة/نظام صوت" },
+        { value: "camera", label: "كاميرا مراقبة" }, { value: "smart_device", label: "جهاز ذكي" },
+        { value: "projector", label: "بروجكتور" }, { value: "gaming", label: "جهاز ألعاب" },
+        { value: "other", label: "أخرى" },
+      ]},
+      { id: "brand", label: "الماركة", type: "select", isRequired: true, order: 2, options: [
+        { value: "samsung", label: "سامسونج" }, { value: "lg", label: "إل جي" },
+        { value: "sony", label: "سوني" }, { value: "toshiba", label: "توشيبا" },
+        { value: "sharp", label: "شارب" }, { value: "jbl", label: "JBL" },
+        { value: "bose", label: "بوز" }, { value: "xiaomi", label: "شاومي" },
+        { value: "other", label: "أخرى" },
+      ]},
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 3, defaultValue: "good", options: [
+        { value: "new_sealed", label: "جديد متبرشم" }, { value: "like_new", label: "مستعمل زيرو" },
+        { value: "good", label: "مستعمل كويس" }, { value: "needs_repair", label: "يحتاج صيانة" },
+      ]},
+      { id: "purchase_year", label: "سنة الشراء", type: "year-picker", isRequired: false, order: 4 },
+      { id: "warranty", label: "الضمان", type: "toggle", isRequired: false, order: 5 },
+    ],
+    requiredFields: ["type", "brand", "condition"],
+    titleTemplate: "${type} ${brand} — ${condition}",
+    descriptionTemplate: "${type} ${brand}، ${condition}",
+  },
+  {
+    id: "beauty",
+    name: "الجمال والصحة",
+    icon: "💄",
+    slug: "beauty",
+    subcategories: [
+      { id: "makeup", name: "مستحضرات تجميل", slug: "makeup" },
+      { id: "skincare", name: "عناية بالبشرة", slug: "skincare" },
+      { id: "haircare", name: "عناية بالشعر", slug: "haircare" },
+      { id: "beauty-tools", name: "أدوات تجميل", slug: "beauty-tools" },
+      { id: "supplements", name: "مكملات غذائية", slug: "supplements" },
+      { id: "medical-devices", name: "أجهزة صحية", slug: "medical-devices" },
+      { id: "beauty-other", name: "أخرى", slug: "beauty-other" },
+    ],
+    fields: [
+      { id: "type", label: "النوع", type: "select", isRequired: true, order: 1, options: [
+        { value: "makeup", label: "ميكب" }, { value: "skincare", label: "عناية بالبشرة" },
+        { value: "haircare", label: "عناية بالشعر" }, { value: "tools", label: "أدوات تجميل" },
+        { value: "supplement", label: "مكمل غذائي" }, { value: "medical", label: "جهاز صحي" },
+        { value: "other", label: "أخرى" },
+      ]},
+      { id: "brand", label: "الماركة", type: "text", isRequired: true, order: 2, placeholder: "مثال: MAC, L'Oréal" },
+      { id: "condition", label: "الحالة", type: "select", isRequired: true, order: 3, defaultValue: "new_sealed", options: [
+        { value: "new_sealed", label: "جديد متبرشم" }, { value: "new_opened", label: "جديد مفتوح" },
+        { value: "lightly_used", label: "مستعمل خفيف" },
+      ]},
+      { id: "expiry", label: "صلاحية المنتج", type: "select", isRequired: false, order: 4, options: [
+        { value: "valid", label: "ساري الصلاحية" }, { value: "near_expiry", label: "قرب انتهاء الصلاحية" },
+      ]},
+    ],
+    requiredFields: ["type", "brand", "condition"],
+    titleTemplate: "${type} ${brand} — ${condition}",
+    descriptionTemplate: "${type} من ${brand}، ${condition}",
   },
 ];
 

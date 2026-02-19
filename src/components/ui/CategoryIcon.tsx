@@ -26,6 +26,11 @@ const categoryImages: Record<string, CategoryImageConfig> = {
   hobbies: { name: "هوايات", src: "/images/categories/hobbies.jpg" },
   tools: { name: "عدد", src: "/images/categories/tools.jpg" },
   services: { name: "خدمات", src: "/images/categories/services.jpg" },
+  computers: { name: "كمبيوتر", src: "/images/categories/computers.jpg" },
+  "kids-babies": { name: "أطفال", src: "/images/categories/kids-babies.jpg" },
+  kids_babies: { name: "أطفال", src: "/images/categories/kids-babies.jpg" },
+  electronics: { name: "إلكترونيات", src: "/images/categories/electronics.jpg" },
+  beauty: { name: "جمال وصحة", src: "/images/categories/beauty.jpg" },
 };
 
 const sizeMap = {

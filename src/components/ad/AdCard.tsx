@@ -154,14 +154,14 @@ function AdCard({
         {/* Content */}
         <div className="p-3">
           {/* Title */}
-          <h3 className="text-sm font-semibold text-dark line-clamp-2 mb-1.5 leading-relaxed">
+          <h3 className="text-base font-semibold text-dark line-clamp-2 mb-1.5 leading-relaxed">
             {title}
           </h3>
 
           {/* Price section — different per sale type */}
           {saleType === "cash" && price != null && (
             <div className="flex items-baseline gap-1.5 mb-1.5">
-              <p className="text-brand-green font-bold text-sm">
+              <p className="text-brand-green font-bold text-base">
                 {formatPrice(price)}
               </p>
               {isNegotiable && (
@@ -175,7 +175,7 @@ function AdCard({
           {saleType === "auction" && (
             <div className="mb-1.5 space-y-1">
               <div className="flex items-center justify-between">
-                <p className="text-orange-600 font-bold text-sm">
+                <p className="text-orange-600 font-bold text-base">
                   {auctionHighestBid
                     ? `🔥 وصل لـ ${formatPrice(auctionHighestBid)}`
                     : price != null
@@ -195,11 +195,11 @@ function AdCard({
           {saleType === "exchange" && (
             <div className="mb-1.5">
               {exchangeDescription ? (
-                <p className="text-sm text-purple-700 font-medium line-clamp-1">
+                <p className="text-base text-purple-700 font-medium line-clamp-1">
                   🔄 عايز يبدّل بـ: {exchangeDescription}
                 </p>
               ) : (
-                <p className="text-sm text-purple-600 font-medium">
+                <p className="text-base text-purple-600 font-medium">
                   🔄 تبدّل معايا؟
                 </p>
               )}
@@ -209,13 +209,13 @@ function AdCard({
           {/* Location + time */}
           <div className="flex items-center justify-between pt-1.5 border-t border-gray-light">
             {governorate && (
-              <span className="flex items-center gap-0.5 text-[11px] text-gray-text">
+              <span className="flex items-center gap-0.5 text-sm text-gray-text">
                 <MapPin size={11} />
                 {governorate}
                 {city ? ` — ${city}` : ""}
               </span>
             )}
-            <span className="text-[11px] text-gray-text">
+            <span className="text-sm text-gray-text">
               {formatTimeAgo(createdAt)}
             </span>
           </div>
