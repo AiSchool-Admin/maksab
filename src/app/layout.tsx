@@ -7,6 +7,9 @@ import UpdateBanner from "@/components/pwa/UpdateBanner";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
+import GoogleAnalytics from "@/components/providers/GoogleAnalytics";
+import MetaPixel from "@/components/providers/MetaPixel";
+import TikTokPixel from "@/components/providers/TikTokPixel";
 import { validateEnv } from "@/lib/env-check";
 import "./globals.css";
 
@@ -100,6 +103,9 @@ export default function RootLayout({
             <InstallPrompt />
             <ChatbotWidget />
             <AnalyticsProvider />
+            <GoogleAnalytics />
+            <MetaPixel />
+            <TikTokPixel />
           </AuthProvider>
         </ThemeProvider>
       </body>
