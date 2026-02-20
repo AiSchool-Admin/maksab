@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { createClient } from "@supabase/supabase-js";
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://maksab.app";
 
@@ -21,7 +22,11 @@ const CATEGORIES = [
   "beauty",
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
+/**
+ * Dynamic sitemap — includes static pages, category pages,
+ * and up to 5,000 active ads for SEO indexing.
+ */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
 
   // Static pages
@@ -78,5 +83,33 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
-  return [...staticPages, ...categoryPages];
+  // Dynamic ad pages — fetch active ads from Supabase
+  let adPages: MetadataRoute.Sitemap = [];
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (supabaseUrl && supabaseKey) {
+    try {
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const { data: ads } = await supabase
+        .from("ads")
+        .select("id, updated_at")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(5000);
+
+      if (ads) {
+        adPages = ads.map((ad) => ({
+          url: `${BASE_URL}/ad/${ad.id}`,
+          lastModified: ad.updated_at ? new Date(ad.updated_at) : now,
+          changeFrequency: "weekly" as const,
+          priority: 0.6,
+        }));
+      }
+    } catch {
+      // Sitemap still works without dynamic ads
+    }
+  }
+
+  return [...staticPages, ...categoryPages, ...adPages];
 }
