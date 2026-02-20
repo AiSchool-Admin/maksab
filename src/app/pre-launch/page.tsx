@@ -231,6 +231,10 @@ export default function PreLaunchPage() {
             <br />
             <strong className="text-dark">كل صفقة مكسب</strong>
           </p>
+
+          <div className="inline-flex items-center gap-2 bg-white text-brand-green-dark text-sm font-bold px-5 py-2.5 rounded-full border-2 border-brand-green/20 shadow-sm">
+            إعلانك في ٣ خطوات بس
+          </div>
         </section>
 
         {/* Countdown Timer */}
@@ -421,7 +425,7 @@ export default function PreLaunchPage() {
         {/* Category Preview */}
         <section className="bg-white rounded-2xl shadow-sm border border-gray-light p-6 space-y-4">
           <h2 className="text-xl font-bold text-dark text-center">
-            12 قسم متخصص
+            16 قسم متخصص
           </h2>
           <div className="grid grid-cols-4 gap-3 text-center">
             {[
@@ -437,6 +441,10 @@ export default function PreLaunchPage() {
               { emoji: "🎮", name: "هوايات" },
               { emoji: "🔧", name: "عدد" },
               { emoji: "🛠️", name: "خدمات" },
+              { emoji: "💻", name: "كمبيوتر" },
+              { emoji: "👶", name: "أطفال" },
+              { emoji: "📺", name: "إلكترونيات" },
+              { emoji: "💄", name: "تجميل" },
             ].map((cat) => (
               <div key={cat.name} className="py-2">
                 <div className="text-2xl mb-1">{cat.emoji}</div>

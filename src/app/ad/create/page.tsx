@@ -19,6 +19,7 @@ import type { AudioRecording } from "@/lib/utils/audio-recorder";
 import type { PriceData } from "@/components/ad/steps/Step3PricePhotos";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import SellerInsightsCard from "@/components/ad/SellerInsightsCard";
+import ShareButtons from "@/components/ad/ShareButtons";
 import Step1CategorySaleType from "@/components/ad/steps/Step1CategorySaleType";
 import Step2CategoryDetails from "@/components/ad/steps/Step2CategoryDetails";
 import Step3PricePhotos from "@/components/ad/steps/Step3PricePhotos";
@@ -127,6 +128,7 @@ export default function CreateAdPage() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [published, setPublished] = useState(false);
+  const [publishedAdId, setPublishedAdId] = useState<string | null>(null);
   const initialized = useRef(false);
 
   // Load draft from localStorage on mount (+ check for AI scanner prefill)
@@ -529,6 +531,7 @@ export default function CreateAdPage() {
       }
 
       clearDraft();
+      setPublishedAdId(result.ad_id || null);
       setPublished(true);
     } catch {
       setErrors({ publish: "حصل مشكلة، جرب تاني" });
@@ -558,6 +561,8 @@ export default function CreateAdPage() {
 
   /* ── Success screen ────────────────────────────────── */
   if (published) {
+    const adUrl = publishedAdId ? `${typeof window !== "undefined" ? window.location.origin : ""}/ad/${publishedAdId}` : undefined;
+
     return (
       <main className="min-h-screen bg-white px-4 py-8">
         <div className="max-w-md mx-auto space-y-5">
@@ -567,6 +572,20 @@ export default function CreateAdPage() {
             <p className="text-sm text-gray-text">
               إعلانك اتنشر بنجاح ويقدر الناس تشوفه دلوقتي
             </p>
+          </div>
+
+          {/* Share CTA — Viral Loop */}
+          <div className="bg-gradient-to-bl from-brand-green-light to-brand-gold-light rounded-2xl border border-green-200 p-5 space-y-3">
+            <div className="text-center space-y-1">
+              <p className="text-base font-bold text-dark">شارك إعلانك وبيع أسرع!</p>
+              <p className="text-xs text-gray-text">الإعلانات اللي بتتشارك بتتباع أسرع 3 مرات</p>
+            </div>
+            <ShareButtons
+              title={draft.title}
+              url={adUrl}
+              priceText={getPriceLabel()}
+              variant="inline"
+            />
           </div>
 
           {/* Seller insights */}
@@ -580,7 +599,12 @@ export default function CreateAdPage() {
           )}
 
           <div className="flex flex-col gap-2 pt-2">
-            <Button fullWidth onClick={() => router.push("/")}>
+            {publishedAdId && (
+              <Button fullWidth onClick={() => router.push(`/ad/${publishedAdId}`)}>
+                شوف إعلانك
+              </Button>
+            )}
+            <Button fullWidth variant={publishedAdId ? "outline" : "primary"} onClick={() => router.push("/")}>
               الصفحة الرئيسية
             </Button>
             <Button
@@ -592,6 +616,7 @@ export default function CreateAdPage() {
                 setVideoFile(null);
                 setVoiceNote(null);
                 setPublished(false);
+                setPublishedAdId(null);
                 setErrors({});
               }}
             >
