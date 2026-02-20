@@ -23,16 +23,25 @@ import PointsDisplay from "@/components/loyalty/PointsDisplay";
 import ReferralCard from "@/components/loyalty/ReferralCard";
 import PointsHistory from "@/components/loyalty/PointsHistory";
 import ReferralDashboard from "@/components/ReferralDashboard";
+import AchievementCard from "@/components/gamification/AchievementCard";
+import StreakCounter from "@/components/gamification/StreakCounter";
+import Leaderboard from "@/components/gamification/Leaderboard";
+import { getGamificationProfile, updateStreak, type GamificationProfile } from "@/lib/gamification";
 
 export default function RewardsPage() {
   const router = useRouter();
   const { user, isLoading, requireAuth } = useAuth();
   const [profile, setProfile] = useState<UserLoyaltyProfile | null>(null);
-  const [tab, setTab] = useState<"overview" | "referrals" | "history" | "earn">("overview");
+  const [gamification, setGamification] = useState<GamificationProfile | null>(null);
+  const [tab, setTab] = useState<"overview" | "referrals" | "achievements" | "leaderboard" | "history" | "earn">("overview");
 
   useEffect(() => {
     if (user?.id) {
       setProfile(getUserLoyaltyProfile(user.id));
+      // Load gamification data + update streak
+      updateStreak(user.id).then(() => {
+        getGamificationProfile(user.id).then(setGamification);
+      });
     }
   }, [user?.id]);
 
@@ -97,9 +106,11 @@ export default function RewardsPage() {
       </header>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-light">
+      <div className="flex border-b border-gray-light overflow-x-auto no-scrollbar">
         {([
           { id: "overview", label: "نظرة عامة" },
+          { id: "achievements", label: "الإنجازات" },
+          { id: "leaderboard", label: "المتصدرين" },
           { id: "referrals", label: "الدعوات" },
           { id: "history", label: "السجل" },
           { id: "earn", label: "اكسب نقاط" },
@@ -107,7 +118,7 @@ export default function RewardsPage() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-3 text-xs font-bold transition-colors ${
+            className={`flex-shrink-0 px-3 py-3 text-xs font-bold transition-colors ${
               tab === t.id
                 ? "text-brand-green border-b-2 border-brand-green"
                 : "text-gray-text"
@@ -128,6 +139,40 @@ export default function RewardsPage() {
               referralCount={profile.referralCount}
             />
           </>
+        )}
+
+        {/* ── Achievements Tab ─────────────────── */}
+        {tab === "achievements" && gamification && (
+          <div className="space-y-4">
+            <StreakCounter streak={gamification.streak} />
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-dark">الإنجازات</h3>
+                <span className="text-[10px] text-gray-text">
+                  {gamification.unlockedIds.length}/{gamification.achievements.length} مفتوح
+                </span>
+              </div>
+              <div className="space-y-2">
+                {gamification.achievements.map((achievement) => (
+                  <AchievementCard
+                    key={achievement.id}
+                    achievement={achievement}
+                    unlocked={gamification.unlockedIds.includes(achievement.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Leaderboard Tab ────────────────────── */}
+        {tab === "leaderboard" && gamification && (
+          <Leaderboard
+            entries={gamification.leaderboard}
+            currentUserId={user?.id}
+            userRank={gamification.userRank}
+          />
         )}
 
         {/* ── Referrals Tab ────────────────────── */}

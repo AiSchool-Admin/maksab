@@ -10,8 +10,15 @@ import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
 import GoogleAnalytics from "@/components/providers/GoogleAnalytics";
 import MetaPixel from "@/components/providers/MetaPixel";
 import TikTokPixel from "@/components/providers/TikTokPixel";
+import PostHogProvider from "@/components/providers/PostHogProvider";
 import EmailCapture from "@/components/EmailCapture";
 import { validateEnv } from "@/lib/env-check";
+import {
+  getWebsiteSchema,
+  getOrganizationSchema,
+  getDefaultFAQ,
+  serializeJsonLd,
+} from "@/lib/structured-data";
 import "./globals.css";
 
 // Validate environment variables at startup (server-side only)
@@ -93,6 +100,21 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('maksab_theme');if(t==='dark'){document.documentElement.classList.add('dark')}else{document.documentElement.classList.remove('dark')}}catch(e){}})()`,
           }}
         />
+        {/* JSON-LD: WebSite schema with sitelinks search box */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(getWebsiteSchema()) }}
+        />
+        {/* JSON-LD: Organization schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(getOrganizationSchema()) }}
+        />
+        {/* JSON-LD: FAQ schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(getDefaultFAQ()) }}
+        />
       </head>
       <body className="font-cairo antialiased bg-white">
         <ServiceWorkerRegistration />
@@ -108,6 +130,7 @@ export default function RootLayout({
             <GoogleAnalytics />
             <MetaPixel />
             <TikTokPixel />
+            <PostHogProvider />
           </AuthProvider>
         </ThemeProvider>
       </body>
