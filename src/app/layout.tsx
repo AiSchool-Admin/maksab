@@ -10,6 +10,7 @@ import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
 import GoogleAnalytics from "@/components/providers/GoogleAnalytics";
 import MetaPixel from "@/components/providers/MetaPixel";
 import TikTokPixel from "@/components/providers/TikTokPixel";
+import EmailCapture from "@/components/EmailCapture";
 import { validateEnv } from "@/lib/env-check";
 import "./globals.css";
 
@@ -102,6 +103,7 @@ export default function RootLayout({
             <div className="min-h-screen pb-20">{children}</div>
             <InstallPrompt />
             <ChatbotWidget />
+            <EmailCapture />
             <AnalyticsProvider />
             <GoogleAnalytics />
             <MetaPixel />

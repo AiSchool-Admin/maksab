@@ -22,12 +22,13 @@ import type { UserLoyaltyProfile } from "@/lib/loyalty/types";
 import PointsDisplay from "@/components/loyalty/PointsDisplay";
 import ReferralCard from "@/components/loyalty/ReferralCard";
 import PointsHistory from "@/components/loyalty/PointsHistory";
+import ReferralDashboard from "@/components/ReferralDashboard";
 
 export default function RewardsPage() {
   const router = useRouter();
   const { user, isLoading, requireAuth } = useAuth();
   const [profile, setProfile] = useState<UserLoyaltyProfile | null>(null);
-  const [tab, setTab] = useState<"overview" | "history" | "earn">("overview");
+  const [tab, setTab] = useState<"overview" | "referrals" | "history" | "earn">("overview");
 
   useEffect(() => {
     if (user?.id) {
@@ -99,6 +100,7 @@ export default function RewardsPage() {
       <div className="flex border-b border-gray-light">
         {([
           { id: "overview", label: "نظرة عامة" },
+          { id: "referrals", label: "الدعوات" },
           { id: "history", label: "السجل" },
           { id: "earn", label: "اكسب نقاط" },
         ] as const).map((t) => (
@@ -127,6 +129,9 @@ export default function RewardsPage() {
             />
           </>
         )}
+
+        {/* ── Referrals Tab ────────────────────── */}
+        {tab === "referrals" && <ReferralDashboard />}
 
         {/* ── History Tab ───────────────────────── */}
         {tab === "history" && (

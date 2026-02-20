@@ -3,14 +3,19 @@
 import { useState } from "react";
 import { Share2, Copy, Check, X } from "lucide-react";
 import toast from "react-hot-toast";
+import { shareAd, type SharePlatform } from "@/lib/share";
 
 interface ShareButtonsProps {
+  /** Ad ID for tracking */
+  adId?: string;
   /** Ad title for sharing */
   title: string;
   /** Full URL to share (defaults to current page) */
   url?: string;
   /** Price text to include in share */
   priceText?: string;
+  /** Numeric price for share message */
+  price?: number;
   /** Show as modal overlay or inline */
   variant?: "modal" | "inline";
   /** Called when modal is closed (only for modal variant) */
@@ -18,74 +23,43 @@ interface ShareButtonsProps {
 }
 
 /**
- * Share buttons for ads — WhatsApp, Facebook, Copy Link
- * Egyptian-friendly sharing with Arabic text
+ * Share buttons for ads — WhatsApp, Facebook, Twitter, Copy Link, Native
+ * Egyptian-friendly sharing with Arabic text and full analytics tracking
  */
 export default function ShareButtons({
+  adId,
   title,
   url,
   priceText,
+  price,
   variant = "modal",
   onClose,
 }: ShareButtonsProps) {
   const [copied, setCopied] = useState(false);
 
   const shareUrl = url || (typeof window !== "undefined" ? window.location.href : "");
-  const shareText = priceText
-    ? `${title}\n💰 ${priceText}\n\nشوف الإعلان على مكسب 👇`
-    : `${title}\n\nشوف الإعلان على مكسب 👇`;
 
-  const handleWhatsApp = () => {
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`;
-    window.open(waUrl, "_blank", "noopener,noreferrer");
-  };
+  const handleShare = async (platform: SharePlatform) => {
+    const id = adId || "unknown";
 
-  const handleFacebook = () => {
-    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`;
-    window.open(fbUrl, "_blank", "noopener,noreferrer,width=600,height=400");
-  };
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      toast.success("تم نسخ رابط الإعلان");
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback for older browsers
-      const textArea = document.createElement("textarea");
-      textArea.value = shareUrl;
-      textArea.style.position = "fixed";
-      textArea.style.opacity = "0";
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textArea);
-      setCopied(true);
-      toast.success("تم نسخ رابط الإعلان");
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const handleNativeShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title,
-          text: shareText,
-          url: shareUrl,
-        });
-      } catch {
-        // User cancelled
+    if (platform === "copy") {
+      const success = await shareAd(platform, { adId: id, title, price, url: shareUrl });
+      if (success) {
+        setCopied(true);
+        toast.success("تم نسخ رابط الإعلان");
+        setTimeout(() => setCopied(false), 2000);
       }
+      return;
     }
+
+    await shareAd(platform, { adId: id, title, price, url: shareUrl });
   };
 
   const buttons = (
     <div className="space-y-2">
       {/* WhatsApp */}
       <button
-        onClick={handleWhatsApp}
+        onClick={() => handleShare("whatsapp")}
         className="w-full flex items-center gap-3 p-3 rounded-xl bg-[#25D366]/10 hover:bg-[#25D366]/20 transition-colors"
       >
         <div className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center flex-shrink-0">
@@ -101,7 +75,7 @@ export default function ShareButtons({
 
       {/* Facebook */}
       <button
-        onClick={handleFacebook}
+        onClick={() => handleShare("facebook")}
         className="w-full flex items-center gap-3 p-3 rounded-xl bg-[#1877F2]/10 hover:bg-[#1877F2]/20 transition-colors"
       >
         <div className="w-10 h-10 rounded-full bg-[#1877F2] flex items-center justify-center flex-shrink-0">
@@ -115,9 +89,25 @@ export default function ShareButtons({
         </div>
       </button>
 
+      {/* Twitter / X */}
+      <button
+        onClick={() => handleShare("twitter")}
+        className="w-full flex items-center gap-3 p-3 rounded-xl bg-black/5 hover:bg-black/10 transition-colors"
+      >
+        <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center flex-shrink-0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+          </svg>
+        </div>
+        <div className="flex-1 text-right">
+          <p className="text-sm font-bold text-dark">مشاركة على X</p>
+          <p className="text-xs text-gray-text">غرّد عن الإعلان</p>
+        </div>
+      </button>
+
       {/* Copy Link */}
       <button
-        onClick={handleCopyLink}
+        onClick={() => handleShare("copy")}
         className="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-light hover:bg-gray-200 transition-colors"
       >
         <div className="w-10 h-10 rounded-full bg-gray-400 flex items-center justify-center flex-shrink-0">
@@ -138,7 +128,7 @@ export default function ShareButtons({
       {/* Native Share (if supported) */}
       {typeof navigator !== "undefined" && "share" in navigator && (
         <button
-          onClick={handleNativeShare}
+          onClick={() => handleShare("native")}
           className="w-full flex items-center gap-3 p-3 rounded-xl bg-brand-green-light hover:bg-green-100 transition-colors"
         >
           <div className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">

@@ -60,6 +60,9 @@ import MarkAsSoldButton from "@/components/ad/MarkAsSoldButton";
 import SmartPriceDrop from "@/components/ad/SmartPriceDrop";
 import PriceMeter from "@/components/ai/PriceMeter";
 import ShareButtons from "@/components/ad/ShareButtons";
+import StickyContactBar from "@/components/ad/StickyContactBar";
+import SocialProof from "@/components/ad/SocialProof";
+import UrgencyBadge from "@/components/ad/UrgencyBadge";
 import UserBadges from "@/components/badges/UserBadges";
 import { useAnalytics } from "@/lib/analytics/useAnalytics";
 import dynamic from "next/dynamic";
@@ -551,6 +554,14 @@ export default function AdDetailClient({ id }: { id: string }) {
           />
         )}
 
+        {/* Social Proof & Urgency */}
+        <SocialProof
+          viewsCount={ad.viewsCount}
+          favoritesCount={ad.favoritesCount}
+          createdAt={ad.createdAt}
+        />
+        <UrgencyBadge createdAt={ad.createdAt} />
+
         {/* Reactions Bar */}
         <ReactionsBar adId={ad.id} />
 
@@ -853,7 +864,7 @@ export default function AdDetailClient({ id }: { id: string }) {
 
       {/* Bottom contact bar — only for buyers, not the seller */}
       {currentUserId !== ad.seller.id && (
-        <ContactBar
+        <StickyContactBar
           sellerPhone={ad.seller.phone}
           adTitle={ad.title}
           adId={ad.id}
@@ -864,7 +875,9 @@ export default function AdDetailClient({ id }: { id: string }) {
       {/* Share Buttons Modal */}
       {showShareModal && (
         <ShareButtons
+          adId={ad.id}
           title={resolvedTitle}
+          price={ad.price ?? undefined}
           priceText={ad.price ? formatPrice(ad.price) : undefined}
           variant="modal"
           onClose={() => setShowShareModal(false)}
