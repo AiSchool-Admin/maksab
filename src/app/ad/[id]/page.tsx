@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { createServerClient } from "@/lib/supabase/server";
+import { getBreadcrumbSchema, serializeJsonLd } from "@/lib/structured-data";
+import { categoriesConfig } from "@/lib/categories/categories-config";
 import AdDetailClient from "./AdDetailClient";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://maksab.app";
@@ -179,10 +181,31 @@ export default async function AdDetailPage({
   // Fetch minimal ad data for structured data (non-blocking for client)
   const adForSeo = await getAdForMetadata(id);
 
+  // Build breadcrumb data
+  const categoryName = adForSeo
+    ? categoriesConfig.find((c) => c.id === adForSeo.categoryId)?.name || "إعلانات"
+    : "إعلانات";
+
+  const breadcrumbData = adForSeo
+    ? getBreadcrumbSchema([
+        { name: "الرئيسية", url: SITE_URL },
+        { name: categoryName, url: `${SITE_URL}/search?category=${adForSeo.categoryId}` },
+        { name: adForSeo.title, url: `${SITE_URL}/ad/${adForSeo.id}` },
+      ])
+    : null;
+
   return (
     <>
       {/* JSON-LD Structured Data for search engines */}
       {adForSeo && <AdStructuredData ad={adForSeo} />}
+
+      {/* JSON-LD Breadcrumb */}
+      {breadcrumbData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbData) }}
+        />
+      )}
 
       {/* Client-side interactive ad detail page */}
       <AdDetailClient id={id} />
