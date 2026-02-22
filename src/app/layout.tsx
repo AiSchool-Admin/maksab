@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { Toaster } from "react-hot-toast";
 import AuthProvider from "@/components/auth/AuthProvider";
 import ThemeProvider from "@/components/theme/ThemeProvider";
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration";
@@ -117,6 +118,14 @@ export default function RootLayout({
         />
       </head>
       <body className="font-cairo antialiased bg-white">
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: { fontFamily: "var(--font-cairo)", zIndex: 99999 },
+            duration: 3000,
+          }}
+          containerStyle={{ zIndex: 99999 }}
+        />
         <ServiceWorkerRegistration />
         <UpdateBanner />
         <ThemeProvider>
