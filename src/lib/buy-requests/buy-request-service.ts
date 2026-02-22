@@ -7,6 +7,50 @@
 import { supabase } from "@/lib/supabase/client";
 import type { AdSummary } from "@/lib/ad-data";
 
+// ── Table availability guard ────────────────────────────
+// Prevents repeated 404 calls when the table doesn't exist yet.
+// Caches result in memory + localStorage so only ONE probe per session.
+
+const TABLE_CACHE_KEY = "maksab_buy_requests_available";
+let tableAvailable: boolean | null = null;
+
+async function isTableReady(): Promise<boolean> {
+  // Memory cache (fastest)
+  if (tableAvailable !== null) return tableAvailable;
+
+  // localStorage cache (survives page reloads, expires after 1 hour)
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem(TABLE_CACHE_KEY);
+      if (cached) {
+        const { available, ts } = JSON.parse(cached) as { available: boolean; ts: number };
+        // If table was available → trust cache indefinitely
+        // If table was unavailable → re-check after 1 hour
+        if (available || Date.now() - ts < 3_600_000) {
+          tableAvailable = available;
+          return available;
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // First call: probe the table with a minimal query
+  const { error } = await supabase
+    .from("buy_requests" as never)
+    .select("id" as never)
+    .limit(1);
+
+  tableAvailable = !error;
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify({ available: tableAvailable, ts: Date.now() }));
+    } catch { /* ignore */ }
+  }
+
+  return tableAvailable;
+}
+
 // ── Types ──────────────────────────────────────────────
 
 export type PurchaseType = "cash" | "exchange" | "both";
@@ -67,6 +111,10 @@ export async function createBuyRequest(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "يجب تسجيل الدخول أولاً" };
 
+    if (!(await isTableReady())) {
+      return { success: false, error: "الخدمة مش متاحة دلوقتي — جاري التجهيز" };
+    }
+
     const { data, error } = await supabase
       .from("buy_requests" as never)
       .insert({
@@ -108,6 +156,7 @@ export async function createBuyRequest(
 }
 
 export async function fetchMyBuyRequests(): Promise<BuyRequest[]> {
+  if (!(await isTableReady())) return [];
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -127,6 +176,7 @@ export async function fetchActiveBuyRequests(
   limit = 20,
   categoryId?: string,
 ): Promise<BuyRequest[]> {
+  if (!(await isTableReady())) return [];
   let query = supabase
     .from("buy_requests" as never)
     .select("*" as never)
@@ -264,6 +314,7 @@ export async function getMatchesForRequest(
  * Find buy requests that match a sell ad (for seller notifications).
  */
 export async function findBuyersForAd(adId: string): Promise<BuyRequest[]> {
+  if (!(await isTableReady())) return [];
   // Get the ad
   const { data: adData } = await supabase
     .from("ads" as never)
