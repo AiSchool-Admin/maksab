@@ -88,7 +88,13 @@ export async function createBuyRequest(
       .select("id" as never)
       .single();
 
-    if (error) return { success: false, error: "حصل مشكلة — جرب تاني" };
+    if (error) {
+      // 404 = table doesn't exist in Supabase yet
+      if (error.code === "PGRST204" || error.message?.includes("404") || (error as { code?: string }).code === "42P01") {
+        return { success: false, error: "الخدمة مش متاحة دلوقتي — جاري التجهيز" };
+      }
+      return { success: false, error: "حصل مشكلة — جرب تاني" };
+    }
 
     const id = (data as unknown as { id: string }).id;
 
