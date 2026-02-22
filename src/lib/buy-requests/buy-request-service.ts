@@ -112,7 +112,7 @@ export async function createBuyRequest(
     if (!user) return { success: false, error: "يجب تسجيل الدخول أولاً" };
 
     if (!(await isTableReady())) {
-      return { success: false, error: "الخدمة مش متاحة دلوقتي — جاري التجهيز" };
+      return { success: false, error: "الخدمة محتاجة إعداد — افتح صفحة /setup عشان تفعّلها" };
     }
 
     const { data, error } = await supabase
