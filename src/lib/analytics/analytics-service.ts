@@ -120,8 +120,8 @@ export function trackEvent(
   queue.push(event);
   saveQueue(queue);
 
-  // Auto-flush if batch is full
-  if (queue.length >= BATCH_SIZE) {
+  // Auto-flush if batch is full (skip if table is known to be missing)
+  if (queue.length >= BATCH_SIZE && !isFlushDisabled()) {
     flushQueue();
   }
 }
@@ -171,11 +171,21 @@ export function trackAdFunnel(
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 const FLUSH_DISABLED_KEY = "maksab_analytics_flush_disabled";
 
-/** When true, stop trying to flush (table doesn't exist yet) */
+/** When true, stop trying to flush (table doesn't exist yet).
+ *  Uses a timestamp so the disable expires after 1 hour and re-checks. */
 function isFlushDisabled(): boolean {
   if (typeof window === "undefined") return true;
   try {
-    return localStorage.getItem(FLUSH_DISABLED_KEY) === "1";
+    const val = localStorage.getItem(FLUSH_DISABLED_KEY);
+    if (!val) return false;
+    // If it's the old "1" format, treat as disabled (will re-check after clear)
+    if (val === "1") return true;
+    // Timestamp format: disabled for 1 hour
+    const ts = Number(val);
+    if (Date.now() - ts < 3_600_000) return true;
+    // Expired — clear and allow re-check
+    localStorage.removeItem(FLUSH_DISABLED_KEY);
+    return false;
   } catch {
     return false;
   }
@@ -184,13 +194,13 @@ function isFlushDisabled(): boolean {
 function setFlushDisabled(): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(FLUSH_DISABLED_KEY, "1");
+    localStorage.setItem(FLUSH_DISABLED_KEY, String(Date.now()));
   } catch {
     // ignore
   }
 }
 
-/** Guard to prevent concurrent flush calls (race condition → multiple 404s) */
+/** Guard to prevent concurrent flush calls */
 let flushing = false;
 
 /**
@@ -208,7 +218,7 @@ async function flushQueue(): Promise<void> {
     return;
   }
 
-  // Take a batch
+  // Take ONE batch only — don't loop, to avoid multiple 404s if table is missing
   const batch = queue.splice(0, BATCH_SIZE);
   saveQueue(queue);
 
@@ -229,19 +239,13 @@ async function flushQueue(): Promise<void> {
       .insert(rows as never) as { error: { code?: string; message?: string } | null };
 
     if (error) {
-      // Table doesn't exist (404) or RLS/permission issue — stop retrying
-      if (error.code === "42P01" || error.message?.includes("not found") || error.message?.includes("404")) {
-        console.warn("[analytics] Table analytics_events not found — disabling flush. Events stored locally.");
-        setFlushDisabled();
-        // Put batch back
-        const currentQueue = getQueue();
-        saveQueue([...batch, ...currentQueue]);
-        flushing = false;
-        return;
-      }
-      // Other errors — put back and retry later
+      // Table doesn't exist or permission issue — disable flushing
+      setFlushDisabled();
+      // Put batch back
       const currentQueue = getQueue();
       saveQueue([...batch, ...currentQueue]);
+      flushing = false;
+      return;
     }
   } catch {
     // Network error — put events back silently
@@ -258,6 +262,9 @@ async function flushQueue(): Promise<void> {
 export function startAnalyticsFlush(): void {
   if (typeof window === "undefined") return;
   if (flushTimer) return;
+
+  // Don't even start the timer if table is known to be missing
+  if (isFlushDisabled()) return;
 
   flushTimer = setInterval(flushQueue, FLUSH_INTERVAL);
 
