@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import toast from "react-hot-toast";
-import Link from "next/link";
 import { categoriesConfig } from "@/lib/categories/categories-config";
 import {
   createBuyRequest,
@@ -138,14 +137,7 @@ export default function CreateBuyRequest({ onClose, onCreated }: CreateBuyReques
               </div>
 
               {errorMsg && (
-                <div className="text-sm text-error font-bold text-center bg-red-50 rounded-xl py-2 px-3">
-                  <p>{errorMsg}</p>
-                  {errorMsg.includes("/setup") && (
-                    <Link href="/setup" onClick={onClose} className="text-brand-green underline text-xs mt-1 block">
-                      افتح صفحة الإعداد
-                    </Link>
-                  )}
-                </div>
+                <p className="text-sm text-error font-bold text-center bg-red-50 rounded-xl py-2 px-3">{errorMsg}</p>
               )}
 
               <button
@@ -269,14 +261,7 @@ export default function CreateBuyRequest({ onClose, onCreated }: CreateBuyReques
               </div>
 
               {errorMsg && (
-                <div className="text-sm text-error font-bold text-center bg-red-50 rounded-xl py-2 px-3">
-                  <p>{errorMsg}</p>
-                  {errorMsg.includes("/setup") && (
-                    <Link href="/setup" onClick={onClose} className="text-brand-green underline text-xs mt-1 block">
-                      افتح صفحة الإعداد
-                    </Link>
-                  )}
-                </div>
+                <p className="text-sm text-error font-bold text-center bg-red-50 rounded-xl py-2 px-3">{errorMsg}</p>
               )}
 
               <div className="flex gap-2 pb-4">
