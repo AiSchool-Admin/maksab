@@ -43,26 +43,30 @@ export default function CreateBuyRequest({ onClose, onCreated }: CreateBuyReques
     }
 
     setIsSubmitting(true);
-    const result = await createBuyRequest({
-      categoryId,
-      title: title.trim(),
-      description: description.trim() || undefined,
-      purchaseType,
-      budgetMin: budgetMin ? Number(budgetMin) : undefined,
-      budgetMax: budgetMax ? Number(budgetMax) : undefined,
-      exchangeOffer: exchangeOffer.trim() || undefined,
-      exchangeCategoryId: exchangeCategoryId || undefined,
-      governorate: governorate || undefined,
-    });
+    try {
+      const result = await createBuyRequest({
+        categoryId,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        purchaseType,
+        budgetMin: budgetMin ? Number(budgetMin) : undefined,
+        budgetMax: budgetMax ? Number(budgetMax) : undefined,
+        exchangeOffer: exchangeOffer.trim() || undefined,
+        exchangeCategoryId: exchangeCategoryId || undefined,
+        governorate: governorate || undefined,
+      });
 
-    setIsSubmitting(false);
-
-    if (result.success && result.id) {
-      toast.success("تم نشر طلب الشراء! هنلاقيلك عروض مناسبة");
-      onCreated?.(result.id);
-      onClose();
-    } else {
-      toast.error(result.error || "حصل مشكلة — جرب تاني");
+      if (result.success && result.id) {
+        toast.success("تم نشر طلبك! هنلاقيلك عروض مناسبة");
+        onCreated?.(result.id);
+        onClose();
+      } else {
+        toast.error(result.error || "حصل مشكلة — جرب تاني");
+      }
+    } catch {
+      toast.error("حصل مشكلة — جرب تاني");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

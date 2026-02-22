@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { Home, Store, MessageCircle, User, Plus, LayoutDashboard, DollarSign } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Home, Store, MessageCircle, User, Plus, LayoutDashboard } from "lucide-react";
 
 interface TabConfig {
   href: string;
@@ -10,13 +10,12 @@ interface TabConfig {
   label: string;
   isAdd?: boolean;
   hasBadge?: boolean;
-  matchTab?: string;
 }
 
 const defaultTabs: TabConfig[] = [
   { href: "/", icon: Home, label: "الرئيسية" },
   { href: "/stores", icon: Store, label: "المتاجر" },
-  { href: "/?tab=sell", icon: DollarSign, label: "بيع", matchTab: "sell" },
+  { href: "/ad/create", icon: Plus, label: "أضف إعلانك", isAdd: true },
   { href: "/chat", icon: MessageCircle, label: "الرسائل", hasBadge: true },
   { href: "/profile", icon: User, label: "حسابي" },
 ];
@@ -36,24 +35,16 @@ interface BottomNavProps {
 
 export default function BottomNav({ unreadMessages = 0, isMerchant = false }: BottomNavProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const tabs = isMerchant ? merchantTabs : defaultTabs;
-  const currentTab = searchParams.get("tab");
 
   return (
     <nav className="fixed bottom-0 inset-x-0 bg-white dark:bg-[#0f1117] border-t border-gray-light safe-bottom z-50">
       <div className="flex items-center justify-around h-16">
         {tabs.map((tab) => {
-          let isActive: boolean;
-          if (tab.matchTab) {
-            // "بيع" tab: active when on home page with ?tab=sell
-            isActive = pathname === "/" && currentTab === tab.matchTab;
-          } else if (tab.href === "/") {
-            // Home tab: active on "/" without ?tab=sell
-            isActive = pathname === "/" && currentTab !== "sell";
-          } else {
-            isActive = pathname.startsWith(tab.href);
-          }
+          const isActive =
+            tab.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(tab.href);
           const Icon = tab.icon;
 
           // Prominent add button — elevated pill

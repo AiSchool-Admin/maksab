@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Search, Plus, ShoppingCart, DollarSign } from "lucide-react";
+import { Search, Plus, ShoppingCart } from "lucide-react";
 import InstaPayLogo from "@/components/ui/InstaPayLogo";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -32,10 +31,6 @@ const RecentlyViewed = dynamic(
 );
 const PushPromptBanner = dynamic(
   () => import("@/components/notifications/PushPromptBanner"),
-  { ssr: false },
-);
-const SellTab = dynamic(
-  () => import("@/components/home/SellTab"),
   { ssr: false },
 );
 const CreateBuyRequest = dynamic(
@@ -78,8 +73,6 @@ const categories = [
   { name: "جمال وصحة", slug: "beauty" },
 ];
 
-type HomeTab = "buy" | "sell";
-
 export default function HomePage() {
   const {
     items: feedAds,
@@ -91,19 +84,6 @@ export default function HomePage() {
 
   const { requireAuth, user } = useAuth();
   const { track } = useTrackSignal();
-
-  // Tab state — syncs with ?tab= query param from BottomNav
-  const searchParams = useSearchParams();
-  const tabParam = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState<HomeTab>(
-    tabParam === "sell" ? "sell" : "buy"
-  );
-
-  // Sync tab state when URL query changes (e.g. from BottomNav click)
-  useEffect(() => {
-    if (tabParam === "sell") setActiveTab("sell");
-    else if (tabParam === "buy" || !tabParam) setActiveTab("buy");
-  }, [tabParam]);
 
   // Personalized recommendation state
   const [personalizedAds, setPersonalizedAds] = useState<AdSummary[]>([]);
@@ -244,42 +224,9 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* ═══ Buy / Sell Tabs ═══════════════════════════════════ */}
-        <div className="flex border-b-2 border-gray-light">
-          <button
-            onClick={() => setActiveTab("buy")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors relative ${
-              activeTab === "buy"
-                ? "text-brand-green"
-                : "text-gray-text"
-            }`}
-          >
-            <ShoppingCart size={18} />
-            اشتري
-            {activeTab === "buy" && (
-              <span className="absolute bottom-0 inset-x-4 h-[3px] bg-brand-green rounded-t-full" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("sell")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors relative ${
-              activeTab === "sell"
-                ? "text-brand-green"
-                : "text-gray-text"
-            }`}
-          >
-            <DollarSign size={18} />
-            بيع
-            {activeTab === "sell" && (
-              <span className="absolute bottom-0 inset-x-4 h-[3px] bg-brand-green rounded-t-full" />
-            )}
-          </button>
-        </div>
       </div>
 
-      {/* ═══ Buy Tab Content ═══════════════════════════════════ */}
-      {activeTab === "buy" && (
-        <PullToRefresh onRefresh={handlePullRefresh}>
+      <PullToRefresh onRefresh={handlePullRefresh}>
           {/* Quick search chips */}
           <div className="relative">
             <div className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-hide">
@@ -311,8 +258,8 @@ export default function HomePage() {
                 <ShoppingCart size={20} className="text-blue-600" />
               </div>
               <div className="text-start">
-                <p className="text-sm font-bold text-dark">عايز تشتري حاجة معينة؟</p>
-                <p className="text-xs text-gray-text">أضف طلب شراء وهنلاقيلك عروض مناسبة</p>
+                <p className="text-sm font-bold text-dark">عايز تشتري او تبدل حاجة معينة؟</p>
+                <p className="text-xs text-gray-text">أضف طلبك وهنلاقيلك عروض مناسبة</p>
               </div>
             </button>
           </section>
@@ -509,10 +456,6 @@ export default function HomePage() {
             </section>
           )}
         </PullToRefresh>
-      )}
-
-      {/* ═══ Sell Tab Content ═══════════════════════════════════ */}
-      {activeTab === "sell" && <SellTab />}
 
       {/* ═══ Create Buy Request Modal ══════════════════════════ */}
       {showCreateBuyRequest && (
