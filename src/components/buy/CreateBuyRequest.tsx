@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { X, ShoppingCart, ArrowLeftRight } from "lucide-react";
+import { X } from "lucide-react";
 import toast from "react-hot-toast";
 import { categoriesConfig } from "@/lib/categories/categories-config";
 import {
   createBuyRequest,
   type PurchaseType,
 } from "@/lib/buy-requests/buy-request-service";
-import { useAuth } from "@/components/auth/AuthProvider";
 
 interface CreateBuyRequestProps {
   onClose: () => void;
@@ -16,9 +15,9 @@ interface CreateBuyRequestProps {
 }
 
 export default function CreateBuyRequest({ onClose, onCreated }: CreateBuyRequestProps) {
-  const { requireAuth } = useAuth();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   // Form state
   const [categoryId, setCategoryId] = useState("");
@@ -34,11 +33,10 @@ export default function CreateBuyRequest({ onClose, onCreated }: CreateBuyReques
   const selectedCategory = categoriesConfig.find((c) => c.id === categoryId);
 
   const handleSubmit = async () => {
-    const user = await requireAuth();
-    if (!user) return;
+    setErrorMsg("");
 
     if (!categoryId || !title.trim()) {
-      toast.error("اختار القسم واكتب اللي عايزه");
+      setErrorMsg("اختار القسم واكتب اللي عايزه");
       return;
     }
 
@@ -61,10 +59,10 @@ export default function CreateBuyRequest({ onClose, onCreated }: CreateBuyReques
         onCreated?.(result.id);
         onClose();
       } else {
-        toast.error(result.error || "حصل مشكلة — جرب تاني");
+        setErrorMsg(result.error || "حصل مشكلة — جرب تاني");
       }
     } catch {
-      toast.error("حصل مشكلة — جرب تاني");
+      setErrorMsg("حصل مشكلة — جرب تاني");
     } finally {
       setIsSubmitting(false);
     }
@@ -138,14 +136,19 @@ export default function CreateBuyRequest({ onClose, onCreated }: CreateBuyReques
                 />
               </div>
 
+              {errorMsg && (
+                <p className="text-sm text-error font-bold text-center bg-red-50 rounded-xl py-2 px-3">{errorMsg}</p>
+              )}
+
               <button
                 onClick={() => {
+                  setErrorMsg("");
                   if (!categoryId) {
-                    toast.error("اختار القسم الأول");
+                    setErrorMsg("اختار القسم الأول");
                     return;
                   }
                   if (!title.trim()) {
-                    toast.error("اكتب اللي عايز تشتريه");
+                    setErrorMsg("اكتب اللي عايز تشتريه");
                     return;
                   }
                   setStep(2);
@@ -257,9 +260,13 @@ export default function CreateBuyRequest({ onClose, onCreated }: CreateBuyReques
                 </p>
               </div>
 
-              <div className="flex gap-2">
+              {errorMsg && (
+                <p className="text-sm text-error font-bold text-center bg-red-50 rounded-xl py-2 px-3">{errorMsg}</p>
+              )}
+
+              <div className="flex gap-2 pb-4">
                 <button
-                  onClick={() => setStep(1)}
+                  onClick={() => { setErrorMsg(""); setStep(1); }}
                   className="flex-1 py-3 border-2 border-gray-200 text-dark font-bold rounded-xl text-sm"
                 >
                   → رجوع
