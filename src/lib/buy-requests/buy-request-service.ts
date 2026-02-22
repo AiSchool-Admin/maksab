@@ -1,55 +1,13 @@
 /**
  * Buy Request Service — مكسب
  *
- * CRUD operations for buy requests + smart matching with sell ads.
+ * Stores buy requests as ads in the existing `ads` table
+ * using category_fields._type = "buy_request" as a marker.
+ * This avoids needing a separate buy_requests table.
  */
 
 import { supabase } from "@/lib/supabase/client";
 import type { AdSummary } from "@/lib/ad-data";
-
-// ── Table availability guard ────────────────────────────
-// Prevents repeated 404 calls when the table doesn't exist yet.
-// Caches result in memory + localStorage so only ONE probe per session.
-
-const TABLE_CACHE_KEY = "maksab_buy_requests_available";
-let tableAvailable: boolean | null = null;
-
-async function isTableReady(): Promise<boolean> {
-  // Memory cache (fastest)
-  if (tableAvailable !== null) return tableAvailable;
-
-  // localStorage cache (survives page reloads, expires after 1 hour)
-  if (typeof window !== "undefined") {
-    try {
-      const cached = localStorage.getItem(TABLE_CACHE_KEY);
-      if (cached) {
-        const { available, ts } = JSON.parse(cached) as { available: boolean; ts: number };
-        // If table was available → trust cache indefinitely
-        // If table was unavailable → re-check after 1 hour
-        if (available || Date.now() - ts < 3_600_000) {
-          tableAvailable = available;
-          return available;
-        }
-      }
-    } catch { /* ignore */ }
-  }
-
-  // First call: probe the table with a minimal query
-  const { error } = await supabase
-    .from("buy_requests" as never)
-    .select("id" as never)
-    .limit(1);
-
-  tableAvailable = !error;
-
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify({ available: tableAvailable, ts: Date.now() }));
-    } catch { /* ignore */ }
-  }
-
-  return tableAvailable;
-}
 
 // ── Types ──────────────────────────────────────────────
 
@@ -102,6 +60,26 @@ export interface CreateBuyRequestInput {
   desiredSpecs?: Record<string, unknown>;
 }
 
+// ── Buy request marker in category_fields ─────────────
+// We store buy requests in the `ads` table with this marker
+const BUY_REQUEST_MARKER = { _type: "buy_request" };
+
+// Map purchase type → ads sale_type
+function toSaleType(pt: PurchaseType): "cash" | "exchange" {
+  return pt === "exchange" ? "exchange" : "cash";
+}
+
+// Map ads status → buy request status
+function toBuyRequestStatus(adsStatus: string): BuyRequestStatus {
+  switch (adsStatus) {
+    case "active": return "active";
+    case "sold": return "fulfilled";
+    case "expired": return "expired";
+    case "deleted": return "deleted";
+    default: return "active";
+  }
+}
+
 // ── CRUD ───────────────────────────────────────────────
 
 export async function createBuyRequest(
@@ -111,202 +89,169 @@ export async function createBuyRequest(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "يجب تسجيل الدخول أولاً" };
 
-    if (!(await isTableReady())) {
-      return { success: false, error: "الخدمة محتاجة إعداد — افتح صفحة /setup عشان تفعّلها" };
+    // Build category_fields with buy request marker + extra data
+    const categoryFields = {
+      ...BUY_REQUEST_MARKER,
+      purchase_type: input.purchaseType,
+      budget_min: input.budgetMin || null,
+      budget_max: input.budgetMax || null,
+      exchange_offer: input.exchangeOffer || null,
+      exchange_category_id: input.exchangeCategoryId || null,
+      exchange_description: input.exchangeDescription || null,
+      desired_specs: input.desiredSpecs || {},
+    };
+
+    // Build description that includes exchange info
+    let fullDescription = input.description || "";
+    if (input.exchangeOffer) {
+      fullDescription += (fullDescription ? "\n" : "") + "عايز يبدل بـ: " + input.exchangeOffer;
     }
 
     const { data, error } = await supabase
-      .from("buy_requests" as never)
+      .from("ads")
       .insert({
         user_id: user.id,
         category_id: input.categoryId,
         subcategory_id: input.subcategoryId || null,
         title: input.title,
-        description: input.description || null,
-        purchase_type: input.purchaseType,
-        budget_min: input.budgetMin || null,
-        budget_max: input.budgetMax || null,
-        exchange_offer: input.exchangeOffer || null,
-        exchange_category_id: input.exchangeCategoryId || null,
-        exchange_description: input.exchangeDescription || null,
+        description: fullDescription || null,
+        sale_type: toSaleType(input.purchaseType),
+        price: input.budgetMax || null,
+        is_negotiable: true,
         governorate: input.governorate || null,
         city: input.city || null,
-        desired_specs: input.desiredSpecs || {},
+        category_fields: categoryFields,
+        status: "active",
+        images: [],
       } as never)
-      .select("id" as never)
+      .select("id")
       .single();
 
     if (error) {
-      // 404 = table doesn't exist in Supabase yet
-      if (error.code === "PGRST204" || error.message?.includes("404") || (error as { code?: string }).code === "42P01") {
-        return { success: false, error: "الخدمة مش متاحة دلوقتي — جاري التجهيز" };
-      }
+      console.error("[createBuyRequest]", error.message);
       return { success: false, error: "حصل مشكلة — جرب تاني" };
     }
 
     const id = (data as unknown as { id: string }).id;
-
-    // Trigger matching in background (fire-and-forget)
-    findAndSaveMatches(id).catch(() => {});
-
     return { success: true, id };
-  } catch {
+  } catch (err) {
+    console.error("[createBuyRequest] catch", err);
     return { success: false, error: "حصل مشكلة — جرب تاني" };
   }
 }
 
 export async function fetchMyBuyRequests(): Promise<BuyRequest[]> {
-  if (!(await isTableReady())) return [];
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
   const { data, error } = await supabase
-    .from("buy_requests" as never)
-    .select("*" as never)
-    .eq("user_id" as never, user.id as never)
-    .neq("status" as never, "deleted" as never)
-    .order("created_at" as never, { ascending: false } as never);
+    .from("ads")
+    .select("*")
+    .eq("user_id", user.id)
+    .contains("category_fields", BUY_REQUEST_MARKER)
+    .neq("status", "deleted")
+    .order("created_at", { ascending: false });
 
   if (error || !data) return [];
 
-  return (data as unknown as Record<string, unknown>[]).map(mapRowToBuyRequest);
+  return (data as unknown as Record<string, unknown>[]).map(mapAdRowToBuyRequest);
 }
 
 export async function fetchActiveBuyRequests(
   limit = 20,
   categoryId?: string,
 ): Promise<BuyRequest[]> {
-  if (!(await isTableReady())) return [];
   let query = supabase
-    .from("buy_requests" as never)
-    .select("*" as never)
-    .eq("status" as never, "active" as never)
-    .order("created_at" as never, { ascending: false } as never)
+    .from("ads")
+    .select("*")
+    .eq("status", "active")
+    .contains("category_fields", BUY_REQUEST_MARKER)
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (categoryId) {
-    query = query.eq("category_id" as never, categoryId as never);
+    query = query.eq("category_id", categoryId);
   }
 
   const { data, error } = await query;
   if (error || !data) return [];
 
-  return (data as unknown as Record<string, unknown>[]).map(mapRowToBuyRequest);
+  return (data as unknown as Record<string, unknown>[]).map(mapAdRowToBuyRequest);
 }
 
 export async function deleteBuyRequest(id: string): Promise<boolean> {
   const { error } = await supabase
-    .from("buy_requests" as never)
+    .from("ads")
     .update({ status: "deleted" } as never)
-    .eq("id" as never, id as never);
+    .eq("id", id)
+    .contains("category_fields", BUY_REQUEST_MARKER);
 
   return !error;
 }
 
 export async function markFulfilled(id: string): Promise<boolean> {
   const { error } = await supabase
-    .from("buy_requests" as never)
-    .update({ status: "fulfilled" } as never)
-    .eq("id" as never, id as never);
+    .from("ads")
+    .update({ status: "sold" } as never)
+    .eq("id", id)
+    .contains("category_fields", BUY_REQUEST_MARKER);
 
   return !error;
 }
 
-// ── Smart Matching ─────────────────────────────────────
-
-async function findAndSaveMatches(requestId: string): Promise<void> {
-  try {
-    const { data } = await supabase
-      .rpc("find_matches_for_buy_request" as never, {
-        p_request_id: requestId,
-        p_limit: 20,
-      } as never);
-
-    if (!data || (data as unknown[]).length === 0) return;
-
-    const matches = (data as unknown as Array<{
-      ad_id: string;
-      match_score: number;
-      match_type: string;
-    }>);
-
-    // Insert matches
-    const inserts = matches.map((m) => ({
-      buy_request_id: requestId,
-      ad_id: m.ad_id,
-      match_score: m.match_score,
-      match_type: m.match_type,
-    }));
-
-    await supabase
-      .from("buy_request_matches" as never)
-      .upsert(inserts as never, { onConflict: "buy_request_id,ad_id" } as never);
-
-    // Update matches_count
-    await supabase
-      .from("buy_requests" as never)
-      .update({
-        matches_count: matches.length,
-        last_matched_at: new Date().toISOString(),
-      } as never)
-      .eq("id" as never, requestId as never);
-  } catch {
-    // Silently fail — matching is not critical
-  }
-}
+// ── Smart Matching (simplified — uses existing ads) ───
 
 export async function getMatchesForRequest(
   requestId: string,
 ): Promise<BuyRequestMatch[]> {
-  const { data, error } = await supabase
-    .from("buy_request_matches" as never)
-    .select("id, ad_id, match_score, match_type" as never)
-    .eq("buy_request_id" as never, requestId as never)
-    .eq("is_dismissed" as never, false as never)
-    .order("match_score" as never, { ascending: false } as never)
+  // Get the buy request (which is an ad)
+  const { data: reqData } = await supabase
+    .from("ads")
+    .select("*")
+    .eq("id", requestId)
+    .single();
+
+  if (!reqData) return [];
+
+  const req = reqData as unknown as Record<string, unknown>;
+  const categoryId = req.category_id as string;
+  const cf = (req.category_fields as Record<string, unknown>) || {};
+  const budgetMax = cf.budget_max ? Number(cf.budget_max) : null;
+
+  // Find matching sell ads in the same category
+  let query = supabase
+    .from("ads")
+    .select("id, title, price, sale_type, images, governorate, city, category_id, views_count, favorites_count, created_at")
+    .eq("status", "active")
+    .eq("category_id", categoryId)
+    .not("category_fields", "cs", JSON.stringify(BUY_REQUEST_MARKER))
+    .neq("id", requestId)
+    .order("created_at", { ascending: false })
     .limit(20);
 
-  if (error || !data) return [];
-
-  const matches = (data as unknown as Array<{
-    id: string;
-    ad_id: string;
-    match_score: number;
-    match_type: string;
-  }>);
-
-  // Fetch the actual ads
-  const adIds = matches.map((m) => m.ad_id);
-  if (adIds.length === 0) return [];
-
-  const { data: adsData } = await supabase
-    .from("ads" as never)
-    .select("id, title, price, sale_type, images, governorate, city, category_id, views_count, favorites_count, created_at" as never)
-    .in("id" as never, adIds as never);
-
-  const adsMap = new Map<string, AdSummary>();
-  if (adsData) {
-    for (const row of adsData as unknown as Record<string, unknown>[]) {
-      adsMap.set(row.id as string, {
-        id: row.id as string,
-        title: row.title as string,
-        price: row.price ? Number(row.price) : null,
-        saleType: row.sale_type as "cash" | "auction" | "exchange",
-        image: ((row.images as string[]) ?? [])[0] ?? null,
-        governorate: (row.governorate as string) ?? null,
-        city: (row.city as string) ?? null,
-        categoryId: (row.category_id as string) ?? null,
-        createdAt: row.created_at as string,
-      });
-    }
+  if (budgetMax) {
+    query = query.lte("price", budgetMax);
   }
 
-  return matches.map((m) => ({
-    id: m.id,
-    adId: m.ad_id,
-    matchScore: m.match_score,
-    matchType: m.match_type as BuyRequestMatch["matchType"],
-    ad: adsMap.get(m.ad_id),
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  return (data as unknown as Record<string, unknown>[]).map((row, i) => ({
+    id: `match-${i}`,
+    adId: row.id as string,
+    matchScore: 70,
+    matchType: "category" as const,
+    ad: {
+      id: row.id as string,
+      title: row.title as string,
+      price: row.price ? Number(row.price) : null,
+      saleType: row.sale_type as "cash" | "auction" | "exchange",
+      image: ((row.images as string[]) ?? [])[0] ?? null,
+      governorate: (row.governorate as string) ?? null,
+      city: (row.city as string) ?? null,
+      categoryId: (row.category_id as string) ?? null,
+      createdAt: row.created_at as string,
+    },
   }));
 }
 
@@ -314,12 +259,11 @@ export async function getMatchesForRequest(
  * Find buy requests that match a sell ad (for seller notifications).
  */
 export async function findBuyersForAd(adId: string): Promise<BuyRequest[]> {
-  if (!(await isTableReady())) return [];
   // Get the ad
   const { data: adData } = await supabase
-    .from("ads" as never)
-    .select("category_id, price, title, sale_type" as never)
-    .eq("id" as never, adId as never)
+    .from("ads")
+    .select("category_id, price, title, sale_type")
+    .eq("id", adId)
     .single();
 
   if (!adData) return [];
@@ -331,18 +275,19 @@ export async function findBuyersForAd(adId: string): Promise<BuyRequest[]> {
     sale_type: string;
   };
 
-  // Find matching buy requests
-  let query = supabase
-    .from("buy_requests" as never)
-    .select("*" as never)
-    .eq("status" as never, "active" as never)
-    .eq("category_id" as never, ad.category_id as never);
+  // Find buy requests in the same category
+  const { data, error } = await supabase
+    .from("ads")
+    .select("*")
+    .eq("status", "active")
+    .eq("category_id", ad.category_id)
+    .contains("category_fields", BUY_REQUEST_MARKER)
+    .limit(10);
 
-  const { data, error } = await query.limit(10);
   if (error || !data) return [];
 
   return (data as unknown as Record<string, unknown>[])
-    .map(mapRowToBuyRequest)
+    .map(mapAdRowToBuyRequest)
     .filter((req) => {
       // Filter by budget if applicable
       if (req.purchaseType === "cash" || req.purchaseType === "both") {
@@ -355,7 +300,8 @@ export async function findBuyersForAd(adId: string): Promise<BuyRequest[]> {
 
 // ── Helpers ────────────────────────────────────────────
 
-function mapRowToBuyRequest(row: Record<string, unknown>): BuyRequest {
+function mapAdRowToBuyRequest(row: Record<string, unknown>): BuyRequest {
+  const cf = (row.category_fields as Record<string, unknown>) || {};
   return {
     id: row.id as string,
     userId: row.user_id as string,
@@ -363,19 +309,19 @@ function mapRowToBuyRequest(row: Record<string, unknown>): BuyRequest {
     subcategoryId: (row.subcategory_id as string) || undefined,
     title: row.title as string,
     description: (row.description as string) || undefined,
-    purchaseType: row.purchase_type as PurchaseType,
-    budgetMin: row.budget_min ? Number(row.budget_min) : undefined,
-    budgetMax: row.budget_max ? Number(row.budget_max) : undefined,
-    exchangeOffer: (row.exchange_offer as string) || undefined,
-    exchangeCategoryId: (row.exchange_category_id as string) || undefined,
-    exchangeDescription: (row.exchange_description as string) || undefined,
+    purchaseType: (cf.purchase_type as PurchaseType) || "cash",
+    budgetMin: cf.budget_min ? Number(cf.budget_min) : undefined,
+    budgetMax: cf.budget_max ? Number(cf.budget_max) : undefined,
+    exchangeOffer: (cf.exchange_offer as string) || undefined,
+    exchangeCategoryId: (cf.exchange_category_id as string) || undefined,
+    exchangeDescription: (cf.exchange_description as string) || undefined,
     governorate: (row.governorate as string) || undefined,
     city: (row.city as string) || undefined,
-    desiredSpecs: (row.desired_specs as Record<string, unknown>) || {},
-    status: row.status as BuyRequestStatus,
-    matchesCount: Number(row.matches_count) || 0,
+    desiredSpecs: (cf.desired_specs as Record<string, unknown>) || {},
+    status: toBuyRequestStatus(row.status as string),
+    matchesCount: 0,
     createdAt: row.created_at as string,
-    expiresAt: row.expires_at as string,
+    expiresAt: (row.expires_at as string) || "",
   };
 }
 

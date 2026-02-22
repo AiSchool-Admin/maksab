@@ -147,7 +147,8 @@ function buildFallbackQuery(
   let q = supabase
     .from("ads" as never)
     .select("*", { count: "exact" })
-    .eq("status", "active");
+    .eq("status", "active")
+    .not("category_fields", "cs", '{"_type":"buy_request"}');
 
   if (includeTextSearch && body.query) {
     // Sanitize query for PostgREST .or() filter — escape special chars

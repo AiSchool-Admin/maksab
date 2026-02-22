@@ -84,6 +84,7 @@ export async function fetchFeedAds(page: number): Promise<{ ads: AdSummary[]; ha
       .from("ads" as never)
       .select("*")
       .eq("status", "active")
+      .not("category_fields", "cs", '{"_type":"buy_request"}')
       .order("created_at", { ascending: false })
       .range(from, to);
 
@@ -107,6 +108,7 @@ export async function fetchRecommendedAds(): Promise<AdSummary[]> {
       .from("ads" as never)
       .select("*")
       .eq("status", "active")
+      .not("category_fields", "cs", '{"_type":"buy_request"}')
       .order("created_at", { ascending: false })
       .limit(10);
 
