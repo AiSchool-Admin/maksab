@@ -63,38 +63,42 @@ export interface CreateBuyRequestInput {
 export async function createBuyRequest(
   input: CreateBuyRequestInput,
 ): Promise<{ success: boolean; id?: string; error?: string }> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "يجب تسجيل الدخول أولاً" };
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "يجب تسجيل الدخول أولاً" };
 
-  const { data, error } = await supabase
-    .from("buy_requests" as never)
-    .insert({
-      user_id: user.id,
-      category_id: input.categoryId,
-      subcategory_id: input.subcategoryId || null,
-      title: input.title,
-      description: input.description || null,
-      purchase_type: input.purchaseType,
-      budget_min: input.budgetMin || null,
-      budget_max: input.budgetMax || null,
-      exchange_offer: input.exchangeOffer || null,
-      exchange_category_id: input.exchangeCategoryId || null,
-      exchange_description: input.exchangeDescription || null,
-      governorate: input.governorate || null,
-      city: input.city || null,
-      desired_specs: input.desiredSpecs || {},
-    } as never)
-    .select("id" as never)
-    .single();
+    const { data, error } = await supabase
+      .from("buy_requests" as never)
+      .insert({
+        user_id: user.id,
+        category_id: input.categoryId,
+        subcategory_id: input.subcategoryId || null,
+        title: input.title,
+        description: input.description || null,
+        purchase_type: input.purchaseType,
+        budget_min: input.budgetMin || null,
+        budget_max: input.budgetMax || null,
+        exchange_offer: input.exchangeOffer || null,
+        exchange_category_id: input.exchangeCategoryId || null,
+        exchange_description: input.exchangeDescription || null,
+        governorate: input.governorate || null,
+        city: input.city || null,
+        desired_specs: input.desiredSpecs || {},
+      } as never)
+      .select("id" as never)
+      .single();
 
-  if (error) return { success: false, error: "حصل مشكلة — جرب تاني" };
+    if (error) return { success: false, error: "حصل مشكلة — جرب تاني" };
 
-  const id = (data as unknown as { id: string }).id;
+    const id = (data as unknown as { id: string }).id;
 
-  // Trigger matching in background
-  findAndSaveMatches(id).then();
+    // Trigger matching in background (fire-and-forget)
+    findAndSaveMatches(id).catch(() => {});
 
-  return { success: true, id };
+    return { success: true, id };
+  } catch {
+    return { success: false, error: "حصل مشكلة — جرب تاني" };
+  }
 }
 
 export async function fetchMyBuyRequests(): Promise<BuyRequest[]> {
