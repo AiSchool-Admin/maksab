@@ -55,11 +55,12 @@ export default function BuyRequestCard({ request, showChat = false, compact = fa
           <span className="text-[9px] text-gray-text">{formatTimeAgo(request.createdAt)}</span>
           {showChat && (
             <Link
-              href={`/chat?buy_request=${request.id}`}
+              href={`/buy-requests/${request.id}`}
+              onClick={(e) => e.stopPropagation()}
               className="flex items-center gap-0.5 text-[10px] text-brand-green font-bold"
             >
               <MessageCircle size={10} />
-              تواصل
+              قدّم عرض
             </Link>
           )}
         </div>
@@ -123,11 +124,11 @@ export default function BuyRequestCard({ request, showChat = false, compact = fa
           )}
           {showChat && (
             <Link
-              href={`/chat?buy_request=${request.id}`}
+              href={`/buy-requests/${request.id}`}
               className="flex items-center gap-0.5 text-brand-green font-bold"
             >
               <MessageCircle size={10} />
-              تواصل
+              قدّم عرض
             </Link>
           )}
         </div>

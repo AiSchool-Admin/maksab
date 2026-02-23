@@ -103,6 +103,26 @@ export async function createBuyRequest(
     }
 
     const id = (data as unknown as { id: string }).id;
+
+    // Fire notification webhook (fire and forget — don't block the user)
+    fetch("/api/notifications/on-buy-request-created", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        buyRequest: {
+          id,
+          title: input.title,
+          category_id: input.categoryId,
+          subcategory_id: input.subcategoryId || null,
+          purchase_type: input.purchaseType,
+          budget_min: input.budgetMin || null,
+          budget_max: input.budgetMax || null,
+          governorate: input.governorate || null,
+          user_id: user.id,
+        },
+      }),
+    }).catch(() => {}); // Non-critical
+
     return { success: true, id };
   } catch (err) {
     console.error("[createBuyRequest] catch", err);

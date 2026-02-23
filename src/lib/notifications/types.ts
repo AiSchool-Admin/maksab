@@ -11,6 +11,9 @@ export type NotificationType =
   | "new_match"
   | "exchange_match"
   | "seller_interest"
+  | "buy_request_match"
+  | "buyer_looking"
+  | "buy_request_offer"
   | "system";
 
 export interface AppNotification {
@@ -40,5 +43,8 @@ export const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   new_match: "🎯",
   exchange_match: "🔄",
   seller_interest: "👥",
+  buy_request_match: "🎯",
+  buyer_looking: "🛒",
+  buy_request_offer: "💼",
   system: "📢",
 };

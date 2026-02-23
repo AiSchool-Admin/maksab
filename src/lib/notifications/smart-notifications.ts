@@ -856,3 +856,257 @@ export async function notifySellerInterest(): Promise<number> {
     return 0;
   }
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// 8. NEW AD → NOTIFY BUYERS WITH MATCHING BUY REQUESTS
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * When a new ad is created, find active buy requests that match it
+ * and notify the buyers proactively.
+ */
+export async function notifyBuyRequestMatches(ad: NewAdData): Promise<number> {
+  const client = getServiceClient();
+  if (!client) return 0;
+
+  try {
+    // Try RPC function first
+    const { data: matches, error: rpcError } = await client.rpc(
+      "find_buy_requests_for_ad",
+      { p_ad_id: ad.id, p_limit: 20 },
+    );
+
+    let buyerMatches: { buy_request_id: string; buyer_id: string; match_score: number; title?: string }[] = [];
+
+    if (rpcError || !matches || (matches as unknown[]).length === 0) {
+      // Fallback: simple category match
+      const { data: fallbackRequests } = await client
+        .from("buy_requests")
+        .select("id, user_id, title, budget_max")
+        .eq("status", "active")
+        .eq("category_id", ad.category_id)
+        .neq("user_id", ad.user_id)
+        .limit(20);
+
+      if (!fallbackRequests || (fallbackRequests as unknown[]).length === 0) return 0;
+
+      buyerMatches = (fallbackRequests as Record<string, unknown>[])
+        .filter((br) => {
+          // Check price fits budget
+          if (br.budget_max && ad.price && Number(ad.price) > Number(br.budget_max) * 1.2) return false;
+          return true;
+        })
+        .map((br) => ({
+          buy_request_id: br.id as string,
+          buyer_id: br.user_id as string,
+          match_score: 50,
+          title: br.title as string,
+        }));
+    } else {
+      buyerMatches = (matches as Record<string, unknown>[]).map((m) => ({
+        buy_request_id: m.buy_request_id as string,
+        buyer_id: m.buyer_id as string,
+        match_score: Number(m.match_score),
+      }));
+
+      // Fetch request titles for notification body
+      if (buyerMatches.length > 0) {
+        const reqIds = buyerMatches.map((m) => m.buy_request_id);
+        const { data: reqTitles } = await client
+          .from("buy_requests")
+          .select("id, title")
+          .in("id", reqIds);
+
+        if (reqTitles) {
+          const titleMap = new Map<string, string>();
+          for (const r of reqTitles as Record<string, unknown>[]) {
+            titleMap.set(r.id as string, r.title as string);
+          }
+          buyerMatches = buyerMatches.map((m) => ({
+            ...m,
+            title: titleMap.get(m.buy_request_id) || "",
+          }));
+        }
+      }
+    }
+
+    if (buyerMatches.length === 0) return 0;
+
+    const notifications = [];
+    const saleTypeLabel =
+      ad.sale_type === "auction" ? "🔨 مزاد"
+        : ad.sale_type === "exchange" ? "🔄 للتبديل"
+          : "💰 للبيع";
+
+    const priceText = ad.price ? ` — ${Number(ad.price).toLocaleString("en-US")} جنيه` : "";
+
+    for (const match of buyerMatches) {
+      // Dedup: don't notify same buyer for same ad
+      const dup = await isDuplicate(client, match.buyer_id, "buy_request_match", ad.id, 24);
+      if (dup) continue;
+
+      notifications.push({
+        user_id: match.buyer_id,
+        type: "buy_request_match",
+        title: "فيه بائع عنده اللي بتدور عليه! 🎯",
+        body: match.title
+          ? `"${ad.title}" ${saleTypeLabel}${priceText}\nمتوافق مع طلبك "${match.title}"`
+          : `${ad.title} ${saleTypeLabel}${priceText}`,
+        ad_id: ad.id,
+        data: {
+          ad_id: ad.id,
+          buy_request_id: match.buy_request_id,
+          match_score: match.match_score,
+          sale_type: ad.sale_type,
+        },
+      });
+
+      // Also insert into buy_request_matches table (non-critical)
+      try {
+        await client
+          .from("buy_request_matches")
+          .upsert({
+            buy_request_id: match.buy_request_id,
+            ad_id: ad.id,
+            match_score: match.match_score,
+            match_type: match.match_score >= 70 ? "exact" : "category",
+          }, { onConflict: "buy_request_id,ad_id" });
+      } catch {
+        // Non-critical
+      }
+    }
+
+    if (notifications.length > 0) {
+      await client.from("notifications").insert(notifications);
+
+      // Push notifications (max 20)
+      for (const notif of notifications.slice(0, 20)) {
+        sendPushToUser(
+          client,
+          notif.user_id,
+          notif.title,
+          notif.body,
+          `/buy-requests/${(notif.data as Record<string, unknown>).buy_request_id}`,
+        );
+      }
+
+      // WhatsApp to first 5 buyers
+      for (const notif of notifications.slice(0, 5)) {
+        const phone = await getUserPhone(client, notif.user_id);
+        if (phone) {
+          sendWhatsAppMatchNotification(
+            phone,
+            "buy_request",
+            ad.title,
+            notif.body,
+          ).catch(() => {});
+        }
+      }
+    }
+
+    return notifications.length;
+  } catch (err) {
+    console.error("notifyBuyRequestMatches error:", err);
+    return 0;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 9. NEW BUY REQUEST → NOTIFY SELLERS WITH MATCHING ADS
+// ────────────────────────────────────────────────────────────────────────
+
+interface BuyRequestData {
+  id: string;
+  title: string;
+  category_id: string;
+  subcategory_id?: string | null;
+  purchase_type: string;
+  budget_min?: number | null;
+  budget_max?: number | null;
+  governorate?: string | null;
+  user_id: string;
+}
+
+/**
+ * When a new buy request is created, find sellers with matching ads
+ * and notify them about a potential buyer.
+ */
+export async function notifyMatchingSellers(request: BuyRequestData): Promise<number> {
+  const client = getServiceClient();
+  if (!client) return 0;
+
+  try {
+    // Find active ads in the same category
+    let query = client
+      .from("ads")
+      .select("id, title, user_id, price, sale_type, governorate")
+      .eq("status", "active")
+      .eq("category_id", request.category_id)
+      .neq("user_id", request.user_id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    // Filter by price if budget is specified
+    if (request.budget_max) {
+      query = query.lte("price", Number(request.budget_max) * 1.3); // 30% flexibility
+    }
+
+    const { data: ads } = await query;
+    if (!ads || (ads as unknown[]).length === 0) return 0;
+
+    const notifications = [];
+    const budgetText = request.budget_max
+      ? `ميزانية حتى ${Number(request.budget_max).toLocaleString("en-US")} جنيه`
+      : "";
+    const purchaseLabel =
+      request.purchase_type === "exchange" ? "عايز يبدّل"
+        : request.purchase_type === "both" ? "عايز يشتري أو يبدّل"
+          : "عايز يشتري";
+
+    // Deduplicate by seller (one notification per seller)
+    const notifiedSellers = new Set<string>();
+
+    for (const ad of ads as Record<string, unknown>[]) {
+      const sellerId = ad.user_id as string;
+      if (notifiedSellers.has(sellerId)) continue;
+      notifiedSellers.add(sellerId);
+
+      // Dedup in DB
+      const dup = await isDuplicate(client, sellerId, "buyer_looking", request.id, 24);
+      if (dup) continue;
+
+      notifications.push({
+        user_id: sellerId,
+        type: "buyer_looking",
+        title: "فيه مشتري بيدور على اللي عندك! 🛒",
+        body: `${purchaseLabel}: "${request.title}"${budgetText ? ` — ${budgetText}` : ""}`,
+        ad_id: ad.id as string,
+        data: {
+          buy_request_id: request.id,
+          ad_id: ad.id,
+          purchase_type: request.purchase_type,
+        },
+      });
+    }
+
+    if (notifications.length > 0) {
+      await client.from("notifications").insert(notifications);
+
+      // Push to first 15 sellers
+      for (const notif of notifications.slice(0, 15)) {
+        sendPushToUser(
+          client,
+          notif.user_id,
+          notif.title,
+          notif.body,
+          `/buy-requests/${request.id}`,
+        );
+      }
+    }
+
+    return notifications.length;
+  } catch (err) {
+    console.error("notifyMatchingSellers error:", err);
+    return 0;
+  }
+}
