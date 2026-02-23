@@ -44,7 +44,6 @@ export default function BuyRequestDetailPage() {
   const [request, setRequest] = useState<BuyRequest | null>(null);
   const [offers, setOffers] = useState<BuyRequestOffer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"matches" | "offers">("matches");
 
   // Offer form state
   const [showOfferForm, setShowOfferForm] = useState(false);
@@ -262,27 +261,9 @@ export default function BuyRequestDetailPage() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
-          <button
-            onClick={() => setActiveTab("matches")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-colors ${
-              activeTab === "matches"
-                ? "bg-white text-brand-green shadow-sm"
-                : "text-gray-text"
-            }`}
-          >
-            <Sparkles size={14} />
-            🏷️ إعلانات مشابهة
-          </button>
-          <button
-            onClick={() => setActiveTab("offers")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-colors ${
-              activeTab === "offers"
-                ? "bg-white text-brand-green shadow-sm"
-                : "text-gray-text"
-            }`}
-          >
+        {/* Seller Offers Section */}
+        <div className="mb-6">
+          <h3 className="flex items-center gap-1.5 text-sm font-bold text-dark mb-3">
             <Send size={14} />
             عروض البائعين
             {offers.filter((o) => o.status === "pending").length > 0 && (
@@ -290,17 +271,11 @@ export default function BuyRequestDetailPage() {
                 {offers.filter((o) => o.status === "pending").length}
               </span>
             )}
-          </button>
-        </div>
-
-        {/* Tab content */}
-        {activeTab === "matches" ? (
-          <MatchResults requestId={requestId} requestTitle={request.title} />
-        ) : (
+          </h3>
           <div className="space-y-3">
             {offers.length === 0 ? (
-              <div className="text-center py-8">
-                <Send size={36} className="text-gray-300 mx-auto mb-3" />
+              <div className="text-center py-6 bg-gray-50 rounded-xl">
+                <Send size={32} className="text-gray-300 mx-auto mb-2" />
                 <p className="text-sm text-gray-text">لسه مفيش عروض من بائعين</p>
                 {!isOwner && (
                   <p className="text-xs text-gray-text mt-1">كن أول بائع يقدم عرض!</p>
@@ -402,7 +377,16 @@ export default function BuyRequestDetailPage() {
               })
             )}
           </div>
-        )}
+        </div>
+
+        {/* Similar Ads Section */}
+        <div>
+          <h3 className="flex items-center gap-1.5 text-sm font-bold text-dark mb-3">
+            <Sparkles size={14} />
+            إعلانات مشابهة
+          </h3>
+          <MatchResults requestId={requestId} requestTitle={request.title} />
+        </div>
       </div>
 
       {/* Fixed bottom: Submit offer button (for sellers) */}
