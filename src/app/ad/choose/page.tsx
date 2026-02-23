@@ -46,12 +46,9 @@ export default function ChooseActionPage() {
         {/* Options */}
         <div className="space-y-4">
           {/* Sell option */}
-          <button
-            onClick={handleSell}
-            className="w-full text-start bg-gradient-to-l from-green-50 to-emerald-50 border-2 border-brand-green/30 rounded-2xl p-5 hover:border-brand-green/60 active:scale-[0.98] transition-all group"
-          >
+          <div className="bg-gradient-to-l from-green-50 to-emerald-50 border-2 border-brand-green/30 rounded-2xl p-5">
             <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-brand-green flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-green/20 group-hover:shadow-brand-green/40 transition-shadow">
+              <div className="w-14 h-14 rounded-2xl bg-brand-green flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-green/20">
                 <Tag size={28} className="text-white" />
               </div>
               <div className="flex-1">
@@ -68,15 +65,19 @@ export default function ChooseActionPage() {
                 </div>
               </div>
             </div>
-          </button>
+            <button
+              onClick={handleSell}
+              className="w-full mt-4 py-3 bg-brand-green hover:bg-brand-green-dark text-white font-bold rounded-xl text-sm active:scale-[0.98] transition-all shadow-md shadow-brand-green/20 flex items-center justify-center gap-2"
+            >
+              <Tag size={18} />
+              نزّل إعلان بيع
+            </button>
+          </div>
 
           {/* Buy option */}
-          <button
-            onClick={handleBuy}
-            className="w-full text-start bg-gradient-to-l from-amber-50 to-yellow-50 border-2 border-brand-gold/30 rounded-2xl p-5 hover:border-brand-gold/60 active:scale-[0.98] transition-all group"
-          >
+          <div className="bg-gradient-to-l from-amber-50 to-yellow-50 border-2 border-brand-gold/30 rounded-2xl p-5">
             <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-brand-gold flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-gold/20 group-hover:shadow-brand-gold/40 transition-shadow">
+              <div className="w-14 h-14 rounded-2xl bg-brand-gold flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-gold/20">
                 <ShoppingCart size={28} className="text-white" />
               </div>
               <div className="flex-1">
@@ -92,7 +93,14 @@ export default function ChooseActionPage() {
                 </div>
               </div>
             </div>
-          </button>
+            <button
+              onClick={handleBuy}
+              className="w-full mt-4 py-3 bg-brand-gold hover:brightness-110 text-white font-bold rounded-xl text-sm active:scale-[0.98] transition-all shadow-md shadow-brand-gold/20 flex items-center justify-center gap-2"
+            >
+              <ShoppingCart size={18} />
+              اعمل إعلان شراء
+            </button>
+          </div>
         </div>
 
         {/* Browse buy requests CTA for sellers */}
