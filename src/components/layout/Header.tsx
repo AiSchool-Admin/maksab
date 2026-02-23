@@ -124,11 +124,11 @@ export default function Header({
               </Link>
             ) : (
               <Link
-                href="/ad/create"
+                href="/ad/choose"
                 className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white px-3 py-1.5 rounded-full transition-all shadow-sm"
               >
                 <Plus size={18} strokeWidth={2.5} />
-                <span className="text-sm font-bold">أضف إعلان</span>
+                <span className="text-sm font-bold">أضف إعلانك</span>
               </Link>
             )
           )}

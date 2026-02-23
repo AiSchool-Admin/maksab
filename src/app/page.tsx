@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus, ShoppingCart } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import InstaPayLogo from "@/components/ui/InstaPayLogo";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -31,10 +31,6 @@ const RecentlyViewed = dynamic(
 );
 const PushPromptBanner = dynamic(
   () => import("@/components/notifications/PushPromptBanner"),
-  { ssr: false },
-);
-const CreateBuyRequest = dynamic(
-  () => import("@/components/buy/CreateBuyRequest"),
   { ssr: false },
 );
 const BuyRequestCard = dynamic(
@@ -92,7 +88,6 @@ export default function HomePage() {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
   // Buy requests state
-  const [showCreateBuyRequest, setShowCreateBuyRequest] = useState(false);
   const [myBuyRequests, setMyBuyRequests] = useState<BuyRequest[]>([]);
   const [recentBuyRequests, setRecentBuyRequests] = useState<BuyRequest[]>([]);
 
@@ -180,10 +175,6 @@ export default function HomePage() {
     return acc;
   }, {});
 
-  const handleBuyRequestCreated = () => {
-    if (user) fetchMyBuyRequests().then(setMyBuyRequests);
-    fetchActiveBuyRequests(10).then(setRecentBuyRequests);
-  };
 
   return (
     <main className="bg-white">
@@ -244,70 +235,6 @@ export default function HomePage() {
               <span className="text-gray-text text-sm font-bold animate-pulse">&#x203A;</span>
             </div>
           </div>
-
-          {/* Add Buy Request CTA */}
-          <section className="px-4 pt-2 pb-1.5">
-            <button
-              onClick={async () => {
-                const authed = await requireAuth();
-                if (authed) setShowCreateBuyRequest(true);
-              }}
-              className="w-full flex items-center gap-3 bg-gradient-to-l from-blue-50 to-purple-50 border-2 border-dashed border-blue-200 rounded-2xl p-3.5 hover:border-blue-400 transition-colors active:scale-[0.99]"
-            >
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <ShoppingCart size={20} className="text-blue-600" />
-              </div>
-              <div className="text-start">
-                <p className="text-sm font-bold text-dark">عايز تشتري او تبدل حاجة معينة؟</p>
-                <p className="text-xs text-gray-text">أضف طلبك وهنلاقيلك عروض مناسبة</p>
-              </div>
-            </button>
-          </section>
-
-          {/* My Buy Requests */}
-          {myBuyRequests.length > 0 && (
-            <section className="px-4 pb-1.5">
-              <h3 className="text-sm font-bold text-dark mb-2">طلبات الشراء بتاعتك</h3>
-              <div className="space-y-2">
-                {myBuyRequests.slice(0, 3).map((req) => (
-                  <BuyRequestCard key={req.id} request={req} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Recent Buy Requests from others — horizontal scroll */}
-          {recentBuyRequests.filter((r) => r.userId !== user?.id).length > 0 && (
-            <section className="pb-2">
-              <div className="mx-4 mb-3 bg-gradient-to-l from-amber-50 to-yellow-50 border border-brand-gold/20 rounded-2xl p-3.5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-dark flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-brand-gold text-white">مطلوب 🛒</span>
-                      ناس عايزة تشتري
-                    </h2>
-                    <p className="text-xs text-gray-text mt-1">عندك حاجة من دي؟ تواصل معاهم وقدّم عرضك!</p>
-                  </div>
-                  <Link href="/buy-requests" className="text-xs text-brand-gold font-bold hover:underline whitespace-nowrap">
-                    عرض الكل ←
-                  </Link>
-                </div>
-              </div>
-              <div
-                className="flex gap-3 overflow-x-auto px-4 scrollbar-hide snap-x snap-mandatory"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                {recentBuyRequests
-                  .filter((r) => r.userId !== user?.id)
-                  .slice(0, 10)
-                  .map((req) => (
-                    <div key={req.id} className="flex-shrink-0 w-[200px] snap-start">
-                      <BuyRequestCard request={req} showChat compact />
-                    </div>
-                  ))}
-              </div>
-            </section>
-          )}
 
           {/* Categories Grid */}
           <section className="px-4 pb-1.5 pt-1">
@@ -458,6 +385,52 @@ export default function HomePage() {
             );
           })}
 
+          {/* ═══ Buy Requests Section — bottom of page ═══ */}
+          {/* My Buy Requests */}
+          {myBuyRequests.length > 0 && (
+            <section className="px-4 pb-1.5">
+              <h3 className="text-sm font-bold text-dark mb-2">طلبات الشراء بتاعتك</h3>
+              <div className="space-y-2">
+                {myBuyRequests.slice(0, 3).map((req) => (
+                  <BuyRequestCard key={req.id} request={req} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Recent Buy Requests from others — horizontal scroll */}
+          {recentBuyRequests.filter((r) => r.userId !== user?.id).length > 0 && (
+            <section className="pb-2">
+              <div className="mx-4 mb-3 bg-gradient-to-l from-amber-50 to-yellow-50 border border-brand-gold/20 rounded-2xl p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-dark flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-brand-gold text-white">مطلوب 🛒</span>
+                      ناس عايزة تشتري
+                    </h2>
+                    <p className="text-xs text-gray-text mt-1">عندك حاجة من دي؟ تواصل معاهم وقدّم عرضك!</p>
+                  </div>
+                  <Link href="/buy-requests" className="text-xs text-brand-gold font-bold hover:underline whitespace-nowrap">
+                    عرض الكل ←
+                  </Link>
+                </div>
+              </div>
+              <div
+                className="flex gap-3 overflow-x-auto px-4 scrollbar-hide snap-x snap-mandatory"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+                {recentBuyRequests
+                  .filter((r) => r.userId !== user?.id)
+                  .slice(0, 10)
+                  .map((req) => (
+                    <div key={req.id} className="flex-shrink-0 w-[200px] snap-start">
+                      <BuyRequestCard request={req} showChat compact />
+                    </div>
+                  ))}
+              </div>
+            </section>
+          )}
+
           {user?.seller_type === "store" && user?.store_id && (
             <section className="px-4 pb-2">
               <Link href="/ad/create" className="block">
@@ -469,14 +442,6 @@ export default function HomePage() {
             </section>
           )}
         </PullToRefresh>
-
-      {/* ═══ Create Buy Request Modal ══════════════════════════ */}
-      {showCreateBuyRequest && (
-        <CreateBuyRequest
-          onClose={() => setShowCreateBuyRequest(false)}
-          onCreated={handleBuyRequestCreated}
-        />
-      )}
 
       <ShoppingAssistantFab />
       <BottomNavWithBadge />
