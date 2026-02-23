@@ -276,21 +276,29 @@ export default function HomePage() {
             </section>
           )}
 
-          {/* Recent Buy Requests from others */}
-          {recentBuyRequests.length > 0 && (
-            <section className="px-4 pb-1.5">
-              <h3 className="text-sm font-bold text-dark mb-1">
-                🛒 ناس بتدور على...
-              </h3>
-              <p className="text-xs text-gray-text mb-2">
-                عندك حاجة من دي؟ تواصل معاهم!
-              </p>
-              <div className="space-y-2">
+          {/* Recent Buy Requests from others — horizontal scroll */}
+          {recentBuyRequests.filter((r) => r.userId !== user?.id).length > 0 && (
+            <section className="pb-2">
+              <div className="flex items-center justify-between px-4 mb-2">
+                <div>
+                  <h2 className="text-lg font-bold text-dark flex items-center gap-1.5">
+                    <span>🛒</span>
+                    ناس بتدور على...
+                  </h2>
+                  <p className="text-[11px] text-gray-text mt-0.5">عندك حاجة من دي؟ تواصل معاهم!</p>
+                </div>
+              </div>
+              <div
+                className="flex gap-3 overflow-x-auto px-4 scrollbar-hide snap-x snap-mandatory"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
                 {recentBuyRequests
                   .filter((r) => r.userId !== user?.id)
-                  .slice(0, 5)
+                  .slice(0, 10)
                   .map((req) => (
-                    <BuyRequestCard key={req.id} request={req} showChat />
+                    <div key={req.id} className="flex-shrink-0 w-[200px] snap-start">
+                      <BuyRequestCard request={req} showChat compact />
+                    </div>
                   ))}
               </div>
             </section>
