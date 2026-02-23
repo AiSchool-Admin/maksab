@@ -1,6 +1,3 @@
-[project]
-id = ""  # Fill with your Supabase project ref (e.g., "abcdefghijklmnop")
-
 [api]
 port = 54321
 schemas = ["public"]
