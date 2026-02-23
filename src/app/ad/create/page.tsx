@@ -598,6 +598,33 @@ export default function CreateAdPage() {
             />
           )}
 
+          {/* Voluntary Commission Message */}
+          {(() => {
+            const adPrice = draft.saleType === "cash" && draft.priceData.price
+              ? Number(draft.priceData.price)
+              : draft.saleType === "auction" && draft.priceData.auctionStartPrice
+                ? Number(draft.priceData.auctionStartPrice)
+                : 0;
+            const suggested = adPrice > 0
+              ? Math.min(Math.max(Math.round(adPrice * 0.01), 10), 200)
+              : 50;
+            return (
+              <div className="bg-brand-gold-light border border-brand-gold/30 rounded-2xl p-4 text-center space-y-2">
+                <p className="text-sm font-bold text-dark">
+                  لا تنسى دعمنا بـ {suggested.toLocaleString("en-US")} جنيه
+                </p>
+                <p className="text-xs text-gray-text leading-relaxed">
+                  عمولة مكسب 1% بحد أقصى 200 جنيه — تطوعية وغير ملزمة.
+                  <br />
+                  دعمك بيساعدنا نكبر ونخدمك أحسن
+                </p>
+                <p className="text-sm text-brand-green font-bold">
+                  نتمنى لك حظ سعيد! 🍀
+                </p>
+              </div>
+            );
+          })()}
+
           <div className="flex flex-col gap-2 pt-2">
             {publishedAdId && (
               <Button fullWidth onClick={() => router.push(`/ad/${publishedAdId}`)}>

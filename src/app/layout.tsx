@@ -130,8 +130,8 @@ export default function RootLayout({
         <UpdateBanner />
         <ThemeProvider>
           <AuthProvider>
-            {/* Main content with bottom padding to avoid BottomNav overlap */}
-            <div className="min-h-screen pb-20">{children}</div>
+            {/* Main content centered with max mobile width */}
+            <div className="min-h-screen pb-20 max-w-lg mx-auto">{children}</div>
             <InstallPrompt />
             <ChatbotWidget />
             <EmailCapture />
