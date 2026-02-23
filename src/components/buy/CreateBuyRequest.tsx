@@ -260,6 +260,15 @@ export default function CreateBuyRequest({ onClose, onCreated }: CreateBuyReques
                 </p>
               </div>
 
+              {/* Voluntary Commission Message */}
+              <div className="bg-brand-gold-light border border-brand-gold/30 rounded-xl p-3.5 text-center space-y-1.5">
+                <p className="text-xs text-gray-text leading-relaxed">
+                  عمولة مكسب 1% بحد أقصى 200 جنيه — تطوعية وغير ملزمة.
+                  <br />
+                  لا تنسى دعمنا — نتمنى لك حظ سعيد! 🍀
+                </p>
+              </div>
+
               {errorMsg && (
                 <p className="text-sm text-error font-bold text-center bg-red-50 rounded-xl py-2 px-3">{errorMsg}</p>
               )}
