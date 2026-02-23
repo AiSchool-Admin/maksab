@@ -1,9 +1,7 @@
 /**
  * Buy Request Service — مكسب
  *
- * Stores buy requests as ads in the existing `ads` table
- * using category_fields._type = "buy_request" as a marker.
- * This avoids needing a separate buy_requests table.
+ * Uses the dedicated `buy_requests` table.
  */
 
 import { supabase } from "@/lib/supabase/client";
@@ -60,26 +58,6 @@ export interface CreateBuyRequestInput {
   desiredSpecs?: Record<string, unknown>;
 }
 
-// ── Buy request marker in category_fields ─────────────
-// We store buy requests in the `ads` table with this marker
-const BUY_REQUEST_MARKER = { _type: "buy_request" };
-
-// Map purchase type → ads sale_type
-function toSaleType(pt: PurchaseType): "cash" | "exchange" {
-  return pt === "exchange" ? "exchange" : "cash";
-}
-
-// Map ads status → buy request status
-function toBuyRequestStatus(adsStatus: string): BuyRequestStatus {
-  switch (adsStatus) {
-    case "active": return "active";
-    case "sold": return "fulfilled";
-    case "expired": return "expired";
-    case "deleted": return "deleted";
-    default: return "active";
-  }
-}
-
 // ── CRUD ───────────────────────────────────────────────
 
 export async function createBuyRequest(
@@ -89,40 +67,24 @@ export async function createBuyRequest(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "يجب تسجيل الدخول أولاً" };
 
-    // Build category_fields with buy request marker + extra data
-    const categoryFields = {
-      ...BUY_REQUEST_MARKER,
-      purchase_type: input.purchaseType,
-      budget_min: input.budgetMin || null,
-      budget_max: input.budgetMax || null,
-      exchange_offer: input.exchangeOffer || null,
-      exchange_category_id: input.exchangeCategoryId || null,
-      exchange_description: input.exchangeDescription || null,
-      desired_specs: input.desiredSpecs || {},
-    };
-
-    // Build description that includes exchange info
-    let fullDescription = input.description || "";
-    if (input.exchangeOffer) {
-      fullDescription += (fullDescription ? "\n" : "") + "عايز يبدل بـ: " + input.exchangeOffer;
-    }
-
     const { data, error } = await supabase
-      .from("ads")
+      .from("buy_requests")
       .insert({
         user_id: user.id,
         category_id: input.categoryId,
         subcategory_id: input.subcategoryId || null,
         title: input.title,
-        description: fullDescription || null,
-        sale_type: toSaleType(input.purchaseType),
-        price: input.budgetMax || null,
-        is_negotiable: true,
+        description: input.description || null,
+        purchase_type: input.purchaseType,
+        budget_min: input.budgetMin || null,
+        budget_max: input.budgetMax || null,
+        exchange_offer: input.exchangeOffer || null,
+        exchange_category_id: input.exchangeCategoryId || null,
+        exchange_description: input.exchangeDescription || null,
         governorate: input.governorate || null,
         city: input.city || null,
-        category_fields: categoryFields,
+        desired_specs: input.desiredSpecs || {},
         status: "active",
-        images: [],
       } as never)
       .select("id")
       .single();
@@ -145,16 +107,15 @@ export async function fetchMyBuyRequests(): Promise<BuyRequest[]> {
   if (!user) return [];
 
   const { data, error } = await supabase
-    .from("ads")
+    .from("buy_requests")
     .select("*")
     .eq("user_id", user.id)
-    .contains("category_fields", BUY_REQUEST_MARKER)
     .neq("status", "deleted")
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];
 
-  return (data as unknown as Record<string, unknown>[]).map(mapAdRowToBuyRequest);
+  return (data as unknown as Record<string, unknown>[]).map(mapRowToBuyRequest);
 }
 
 export async function fetchActiveBuyRequests(
@@ -162,10 +123,9 @@ export async function fetchActiveBuyRequests(
   categoryId?: string,
 ): Promise<BuyRequest[]> {
   let query = supabase
-    .from("ads")
+    .from("buy_requests")
     .select("*")
     .eq("status", "active")
-    .contains("category_fields", BUY_REQUEST_MARKER)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -176,37 +136,89 @@ export async function fetchActiveBuyRequests(
   const { data, error } = await query;
   if (error || !data) return [];
 
-  return (data as unknown as Record<string, unknown>[]).map(mapAdRowToBuyRequest);
+  return (data as unknown as Record<string, unknown>[]).map(mapRowToBuyRequest);
 }
 
 export async function deleteBuyRequest(id: string): Promise<boolean> {
   const { error } = await supabase
-    .from("ads")
+    .from("buy_requests")
     .update({ status: "deleted" } as never)
-    .eq("id", id)
-    .contains("category_fields", BUY_REQUEST_MARKER);
+    .eq("id", id);
 
   return !error;
 }
 
 export async function markFulfilled(id: string): Promise<boolean> {
   const { error } = await supabase
-    .from("ads")
-    .update({ status: "sold" } as never)
-    .eq("id", id)
-    .contains("category_fields", BUY_REQUEST_MARKER);
+    .from("buy_requests")
+    .update({ status: "fulfilled" } as never)
+    .eq("id", id);
 
   return !error;
 }
 
-// ── Smart Matching (simplified — uses existing ads) ───
+// ── Smart Matching ─────────────────────────────────────
 
 export async function getMatchesForRequest(
   requestId: string,
 ): Promise<BuyRequestMatch[]> {
-  // Get the buy request (which is an ad)
-  const { data: reqData } = await supabase
+  // Use the DB function for scored matching
+  const { data, error } = await supabase.rpc(
+    "find_matches_for_buy_request" as never,
+    { p_request_id: requestId, p_limit: 20 } as never,
+  );
+
+  if (error || !data) {
+    // Fallback: simple category match
+    return fallbackMatches(requestId);
+  }
+
+  const rows = data as unknown as { ad_id: string; match_score: number; match_type: string }[];
+
+  if (rows.length === 0) return fallbackMatches(requestId);
+
+  // Fetch the matched ads' summary data
+  const adIds = rows.map((r) => r.ad_id);
+  const { data: adsData } = await supabase
     .from("ads")
+    .select("id, title, price, sale_type, images, governorate, city, category_id, created_at")
+    .in("id", adIds);
+
+  const adsMap = new Map<string, Record<string, unknown>>();
+  if (adsData) {
+    for (const ad of adsData as unknown as Record<string, unknown>[]) {
+      adsMap.set(ad.id as string, ad);
+    }
+  }
+
+  return rows.map((row, i) => {
+    const ad = adsMap.get(row.ad_id);
+    return {
+      id: `match-${i}`,
+      adId: row.ad_id,
+      matchScore: Number(row.match_score),
+      matchType: row.match_type as BuyRequestMatch["matchType"],
+      ad: ad
+        ? {
+            id: ad.id as string,
+            title: ad.title as string,
+            price: ad.price ? Number(ad.price) : null,
+            saleType: ad.sale_type as "cash" | "auction" | "exchange",
+            image: ((ad.images as string[]) ?? [])[0] ?? null,
+            governorate: (ad.governorate as string) ?? null,
+            city: (ad.city as string) ?? null,
+            categoryId: (ad.category_id as string) ?? null,
+            createdAt: ad.created_at as string,
+          }
+        : undefined,
+    };
+  });
+}
+
+/** Fallback: find ads in the same category if the RPC function fails */
+async function fallbackMatches(requestId: string): Promise<BuyRequestMatch[]> {
+  const { data: reqData } = await supabase
+    .from("buy_requests")
     .select("*")
     .eq("id", requestId)
     .single();
@@ -215,17 +227,13 @@ export async function getMatchesForRequest(
 
   const req = reqData as unknown as Record<string, unknown>;
   const categoryId = req.category_id as string;
-  const cf = (req.category_fields as Record<string, unknown>) || {};
-  const budgetMax = cf.budget_max ? Number(cf.budget_max) : null;
+  const budgetMax = req.budget_max ? Number(req.budget_max) : null;
 
-  // Find matching sell ads in the same category
   let query = supabase
     .from("ads")
-    .select("id, title, price, sale_type, images, governorate, city, category_id, views_count, favorites_count, created_at")
+    .select("id, title, price, sale_type, images, governorate, city, category_id, created_at")
     .eq("status", "active")
     .eq("category_id", categoryId)
-    .not("category_fields", "cs", JSON.stringify(BUY_REQUEST_MARKER))
-    .neq("id", requestId)
     .order("created_at", { ascending: false })
     .limit(20);
 
@@ -259,7 +267,6 @@ export async function getMatchesForRequest(
  * Find buy requests that match a sell ad (for seller notifications).
  */
 export async function findBuyersForAd(adId: string): Promise<BuyRequest[]> {
-  // Get the ad
   const { data: adData } = await supabase
     .from("ads")
     .select("category_id, price, title, sale_type")
@@ -275,21 +282,18 @@ export async function findBuyersForAd(adId: string): Promise<BuyRequest[]> {
     sale_type: string;
   };
 
-  // Find buy requests in the same category
   const { data, error } = await supabase
-    .from("ads")
+    .from("buy_requests")
     .select("*")
     .eq("status", "active")
     .eq("category_id", ad.category_id)
-    .contains("category_fields", BUY_REQUEST_MARKER)
     .limit(10);
 
   if (error || !data) return [];
 
   return (data as unknown as Record<string, unknown>[])
-    .map(mapAdRowToBuyRequest)
+    .map(mapRowToBuyRequest)
     .filter((req) => {
-      // Filter by budget if applicable
       if (req.purchaseType === "cash" || req.purchaseType === "both") {
         if (req.budgetMax && ad.price && ad.price > req.budgetMax) return false;
         if (req.budgetMin && ad.price && ad.price < req.budgetMin) return false;
@@ -300,8 +304,7 @@ export async function findBuyersForAd(adId: string): Promise<BuyRequest[]> {
 
 // ── Helpers ────────────────────────────────────────────
 
-function mapAdRowToBuyRequest(row: Record<string, unknown>): BuyRequest {
-  const cf = (row.category_fields as Record<string, unknown>) || {};
+function mapRowToBuyRequest(row: Record<string, unknown>): BuyRequest {
   return {
     id: row.id as string,
     userId: row.user_id as string,
@@ -309,17 +312,17 @@ function mapAdRowToBuyRequest(row: Record<string, unknown>): BuyRequest {
     subcategoryId: (row.subcategory_id as string) || undefined,
     title: row.title as string,
     description: (row.description as string) || undefined,
-    purchaseType: (cf.purchase_type as PurchaseType) || "cash",
-    budgetMin: cf.budget_min ? Number(cf.budget_min) : undefined,
-    budgetMax: cf.budget_max ? Number(cf.budget_max) : undefined,
-    exchangeOffer: (cf.exchange_offer as string) || undefined,
-    exchangeCategoryId: (cf.exchange_category_id as string) || undefined,
-    exchangeDescription: (cf.exchange_description as string) || undefined,
+    purchaseType: (row.purchase_type as PurchaseType) || "cash",
+    budgetMin: row.budget_min ? Number(row.budget_min) : undefined,
+    budgetMax: row.budget_max ? Number(row.budget_max) : undefined,
+    exchangeOffer: (row.exchange_offer as string) || undefined,
+    exchangeCategoryId: (row.exchange_category_id as string) || undefined,
+    exchangeDescription: (row.exchange_description as string) || undefined,
     governorate: (row.governorate as string) || undefined,
     city: (row.city as string) || undefined,
-    desiredSpecs: (cf.desired_specs as Record<string, unknown>) || {},
-    status: toBuyRequestStatus(row.status as string),
-    matchesCount: 0,
+    desiredSpecs: (row.desired_specs as Record<string, unknown>) || {},
+    status: (row.status as BuyRequestStatus) || "active",
+    matchesCount: row.matches_count ? Number(row.matches_count) : 0,
     createdAt: row.created_at as string,
     expiresAt: (row.expires_at as string) || "",
   };
