@@ -56,11 +56,10 @@ export default function ChooseActionPage() {
               </div>
               <div className="flex-1">
                 <h2 className="text-lg font-bold text-dark mb-1">
-                  🏷️ عايز أبيع أو أبدّل
+                  🏷️ عايز تبيع أو تبدّل؟
                 </h2>
                 <p className="text-sm text-gray-text leading-relaxed">
-                  اعرض حاجتك للبيع أو المزاد أو التبديل.
-                  أوصف المنتج وحدد السعر وهنوصلك للمشترين المهتمين
+                  نزّل إعلان بيع وأوصف المنتج وحدد السعر وهنوصلك للمشترين المهتمين
                 </p>
                 <div className="flex items-center gap-3 mt-3">
                   <span className="text-[10px] font-bold text-brand-green bg-white px-2 py-1 rounded-full border border-brand-green/20">💵 بيع نقدي</span>
@@ -82,11 +81,10 @@ export default function ChooseActionPage() {
               </div>
               <div className="flex-1">
                 <h2 className="text-lg font-bold text-dark mb-1">
-                  🛒 عايز أشتري حاجة
+                  🛒 دوّرت على مكسب ومش لاقي؟
                 </h2>
                 <p className="text-sm text-gray-text leading-relaxed">
-                  قولنا بتدور على إيه وهنلاقيلك عروض مناسبة من البائعين.
-                  البائعين هيتواصلوا معاك بعروضهم مباشرة
+                  اعمل إعلان شراء وقولنا بتدور على إيه وهنلاقيلك عروض مناسبة من البائعين
                 </p>
                 <div className="flex items-center gap-3 mt-3">
                   <span className="text-[10px] font-bold text-brand-gold bg-white px-2 py-1 rounded-full border border-brand-gold/20">🔍 توافق ذكي</span>
