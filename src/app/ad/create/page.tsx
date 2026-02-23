@@ -245,7 +245,7 @@ export default function CreateAdPage() {
           if (!draft.priceData.exchangeWantedCategoryId)
             errs.exchangeWantedCategory = "اختار قسم البديل المطلوب";
         }
-        if (images.length === 0) errs.images = "أضف صورة واحدة على الأقل";
+        // Images are optional — no validation needed
         // Location validation (merged from old step 4)
         if (!draft.governorate) errs.governorate = "اختار المحافظة";
         if (!draft.title.trim()) errs.title = "العنوان مطلوب";

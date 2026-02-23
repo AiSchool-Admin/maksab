@@ -183,9 +183,7 @@ export default function EditAdPage({
         if (draft.saleType === "exchange" && !draft.priceData.exchangeWantedCategoryId) {
           errs.exchangeWantedCategory = "اختار قسم البديل المطلوب";
         }
-        if (images.length === 0 && draft.existingImages.length === 0) {
-          errs.images = "أضف صورة واحدة على الأقل";
-        }
+        // Images are optional
       }
 
       if (step === 3) {
