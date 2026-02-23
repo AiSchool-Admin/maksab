@@ -2,11 +2,16 @@
  * POST /api/notifications/on-ad-created
  *
  * Triggered after a new ad is created.
- * Finds buyers who searched for similar items and notifies them.
+ * 1. Finds users who searched for similar items and notifies them.
+ * 2. Finds buy requests matching this ad and notifies the buyers.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { notifyMatchingBuyers } from "@/lib/notifications/smart-notifications";
+import {
+  notifyMatchingBuyers,
+  notifyBuyRequestMatches,
+  notifyExchangeMatch,
+} from "@/lib/notifications/smart-notifications";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,8 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
 
-    // Fire and forget — don't block the response
-    const count = await notifyMatchingBuyers({
+    const adData = {
       id: ad.id,
       title: ad.title || "",
       category_id: ad.category_id,
@@ -28,9 +32,21 @@ export async function POST(request: NextRequest) {
       governorate: ad.governorate || null,
       user_id: ad.user_id,
       category_fields: ad.category_fields || {},
-    });
+    };
 
-    return NextResponse.json({ success: true, notified: count });
+    // Run all notifications in parallel
+    const [signalMatchCount, buyRequestMatchCount, exchangeMatchCount] = await Promise.all([
+      notifyMatchingBuyers(adData),
+      notifyBuyRequestMatches(adData),
+      ad.sale_type === "exchange" ? notifyExchangeMatch(adData) : Promise.resolve(0),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      signalMatches: signalMatchCount,
+      buyRequestMatches: buyRequestMatchCount,
+      exchangeMatches: exchangeMatchCount,
+    });
   } catch (err) {
     console.error("on-ad-created notification error:", err);
     return NextResponse.json({ error: "خطأ في الإشعارات" }, { status: 500 });

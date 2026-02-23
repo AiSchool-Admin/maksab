@@ -287,6 +287,9 @@ export default function HomePage() {
                   </h2>
                   <p className="text-[11px] text-gray-text mt-0.5">عندك حاجة من دي؟ تواصل معاهم!</p>
                 </div>
+                <Link href="/buy-requests" className="text-xs text-brand-green font-bold hover:underline">
+                  عرض الكل ←
+                </Link>
               </div>
               <div
                 className="flex gap-3 overflow-x-auto px-4 scrollbar-hide snap-x snap-mandatory"
