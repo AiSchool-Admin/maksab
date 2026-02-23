@@ -185,6 +185,9 @@ export default function BuyRequestDetailPage() {
         {/* Category & status */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-brand-gold text-white shadow-sm">
+              مطلوب شراء 🛒
+            </span>
             <span className="text-2xl">{category?.icon || "📦"}</span>
             <span className="text-sm font-bold text-gray-text">{category?.name}</span>
           </div>
@@ -270,7 +273,7 @@ export default function BuyRequestDetailPage() {
             }`}
           >
             <Sparkles size={14} />
-            إعلانات متوافقة
+            🏷️ إعلانات مشابهة
           </button>
           <button
             onClick={() => setActiveTab("offers")}

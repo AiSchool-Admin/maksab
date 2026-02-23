@@ -71,6 +71,7 @@ const ReactionsBar = dynamic(() => import("@/components/social/ReactionsBar"), {
 const CommentsSection = dynamic(() => import("@/components/social/CommentsSection"), { ssr: false });
 const SellerRankBadge = dynamic(() => import("@/components/social/SellerRankBadge"), { ssr: false });
 const AddToCollectionButton = dynamic(() => import("@/components/collections/AddToCollectionButton"), { ssr: false });
+const MatchingBuyRequests = dynamic(() => import("@/components/ad/MatchingBuyRequests"), { ssr: false });
 
 /** Convert AdDetail to AuctionState for the auction component */
 function toAuctionState(ad: AdDetail): AuctionState {
@@ -830,6 +831,13 @@ export default function AdDetailClient({ id }: { id: string }) {
 
         {/* Comments Section */}
         <CommentsSection adId={ad.id} adOwnerId={ad.seller.id} />
+
+        {/* Matching buy requests — "ناس بتدور على كده" */}
+        <MatchingBuyRequests
+          adId={ad.id}
+          categoryId={ad.categoryId}
+          adTitle={resolvedTitle}
+        />
 
         {/* Similar ads section */}
         {similarAds.length > 0 && (
