@@ -21,9 +21,13 @@ export default function BuyRequestCard({ request, showChat = false, compact = fa
 
   if (compact) {
     return (
-      <div className="bg-white border border-gray-200 rounded-2xl p-3 h-full flex flex-col hover:shadow-sm transition-shadow">
+      <div className="bg-gradient-to-b from-amber-50 to-white border-2 border-brand-gold/30 rounded-2xl p-3 h-full flex flex-col hover:shadow-sm transition-shadow relative">
+        {/* "مطلوب" badge */}
+        <span className="absolute top-2 start-2 text-[9px] font-bold px-2 py-0.5 rounded-lg bg-brand-gold text-white shadow-sm">
+          مطلوب 🛒
+        </span>
         {/* Category icon + purchase badge */}
-        <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center justify-between mb-1.5 mt-5">
           <span className="text-xl">{category?.icon || "📦"}</span>
           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
             request.purchaseType === "cash"
@@ -69,10 +73,13 @@ export default function BuyRequestCard({ request, showChat = false, compact = fa
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-3.5 hover:shadow-sm transition-shadow">
-      {/* Top: category + purchase type */}
+    <div className="bg-gradient-to-l from-amber-50/50 to-white border-2 border-brand-gold/20 rounded-2xl p-3.5 hover:shadow-sm transition-shadow">
+      {/* Top: "مطلوب شراء" badge + category + purchase type */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-brand-gold text-white shadow-sm">
+            مطلوب 🛒
+          </span>
           <span className="text-lg">{category?.icon || "📦"}</span>
           <span className="text-[10px] font-bold text-gray-text">{category?.name}</span>
         </div>

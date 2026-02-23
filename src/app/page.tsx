@@ -279,17 +279,19 @@ export default function HomePage() {
           {/* Recent Buy Requests from others — horizontal scroll */}
           {recentBuyRequests.filter((r) => r.userId !== user?.id).length > 0 && (
             <section className="pb-2">
-              <div className="flex items-center justify-between px-4 mb-2">
-                <div>
-                  <h2 className="text-lg font-bold text-dark flex items-center gap-1.5">
-                    <span>🛒</span>
-                    ناس بتدور على...
-                  </h2>
-                  <p className="text-[11px] text-gray-text mt-0.5">عندك حاجة من دي؟ تواصل معاهم!</p>
+              <div className="mx-4 mb-3 bg-gradient-to-l from-amber-50 to-yellow-50 border border-brand-gold/20 rounded-2xl p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-dark flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-brand-gold text-white">مطلوب 🛒</span>
+                      ناس عايزة تشتري
+                    </h2>
+                    <p className="text-xs text-gray-text mt-1">عندك حاجة من دي؟ تواصل معاهم وقدّم عرضك!</p>
+                  </div>
+                  <Link href="/buy-requests" className="text-xs text-brand-gold font-bold hover:underline whitespace-nowrap">
+                    عرض الكل ←
+                  </Link>
                 </div>
-                <Link href="/buy-requests" className="text-xs text-brand-green font-bold hover:underline">
-                  عرض الكل ←
-                </Link>
               </div>
               <div
                 className="flex gap-3 overflow-x-auto px-4 scrollbar-hide snap-x snap-mandatory"

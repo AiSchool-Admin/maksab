@@ -32,10 +32,10 @@ interface AdCardProps {
 }
 
 const saleTypeBadge = {
-  cash: { label: "للبيع", icon: "💰", color: "bg-brand-green-light text-brand-green-dark" },
-  auction: { label: "مزاد", icon: "🔥", color: "bg-gradient-to-l from-amber-100 to-orange-100 text-orange-700 border border-orange-200" },
-  live_auction: { label: "مزاد لايف", icon: "📡", color: "bg-red-50 text-red-600 border border-red-200 animate-pulse" },
-  exchange: { label: "للتبديل", icon: "🔄", color: "bg-gradient-to-l from-purple-50 to-indigo-50 text-purple-700 border border-purple-200" },
+  cash: { label: "للبيع 💵", icon: "", color: "bg-brand-green text-white" },
+  auction: { label: "مزاد 🔨", icon: "", color: "bg-gradient-to-l from-amber-500 to-orange-500 text-white" },
+  live_auction: { label: "مزاد لايف 📡", icon: "", color: "bg-red-500 text-white animate-pulse" },
+  exchange: { label: "للتبديل 🔄", icon: "", color: "bg-gradient-to-l from-purple-500 to-indigo-500 text-white" },
 };
 
 function AuctionTimer({ endsAt }: { endsAt: string }) {
@@ -114,15 +114,15 @@ function AdCard({
 
           {/* Sale type badge */}
           <span
-            className={`absolute top-2 start-2 text-[11px] font-bold px-2.5 py-1 rounded-lg backdrop-blur-sm flex items-center gap-1 shadow-sm ${badge.color}`}
+            className={`absolute top-2 start-2 text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-md ${badge.color}`}
           >
             {isLiveAuction && saleType === "auction" && (
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
               </span>
             )}
-            {badge.icon} {badge.label}
+            {badge.label}
           </span>
 
           {/* Price drop badge */}
