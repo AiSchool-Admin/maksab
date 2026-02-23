@@ -90,8 +90,16 @@ export async function createBuyRequest(
       .single();
 
     if (error) {
-      console.error("[createBuyRequest]", error.message);
-      return { success: false, error: "حصل مشكلة — جرب تاني" };
+      console.error("[createBuyRequest]", error.message, error.code, error.details);
+      // Show actual DB error for debugging
+      const dbMsg = error.message || "";
+      if (dbMsg.includes("violates foreign key")) {
+        return { success: false, error: "مشكلة في الحساب — جرب سجل خروج وادخل تاني" };
+      }
+      if (dbMsg.includes("permission denied") || error.code === "42501") {
+        return { success: false, error: "مفيش صلاحية — تأكد إنك مسجل دخول" };
+      }
+      return { success: false, error: `خطأ: ${dbMsg || "حصل مشكلة — جرب تاني"}` };
     }
 
     const id = (data as unknown as { id: string }).id;
