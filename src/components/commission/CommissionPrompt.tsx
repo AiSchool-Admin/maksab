@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Heart, X, Clock, Copy, Smartphone } from "lucide-react";
+import { Check, Heart, X, Clock, Copy, ExternalLink } from "lucide-react";
 import Button from "@/components/ui/Button";
 import InstaPayLogo from "@/components/ui/InstaPayLogo";
-import QRCodeDisplay from "@/components/ui/QRCodeDisplay";
 import {
   calculateSuggestedCommission,
   declineCommission,
@@ -238,7 +237,7 @@ export default function CommissionPrompt({
                 <p className="text-[11px] text-gray-text">{method.description}</p>
               </div>
               {method.paymentLink && (
-                <Smartphone size={16} className="text-purple-500 flex-shrink-0" />
+                <ExternalLink size={16} className="text-purple-500 flex-shrink-0" />
               )}
             </button>
           ))}
@@ -287,30 +286,23 @@ export default function CommissionPrompt({
             </p>
           </div>
         ) : selectedMethod === "instapay" && methodInfo?.paymentLink ? (
-          /* ── InstaPay with QR code + manual transfer ── */
+          /* ── InstaPay with direct link + manual transfer ── */
           <div className="space-y-3">
             <div className="bg-gradient-to-bl from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4 text-center space-y-3">
               <p className="text-sm text-dark font-semibold">
                 حوّل <span className="font-bold text-purple-700">{finalAmount} جنيه</span>
               </p>
 
-              {/* QR Code — scan with InstaPay app */}
-              <div className="flex flex-col items-center gap-2">
-                <QRCodeDisplay value={methodInfo.paymentLink} size={180} />
-                <div className="flex items-center gap-1.5 text-xs text-purple-600 font-semibold">
-                  <Smartphone size={14} />
-                  <span>امسح الكود من تطبيق إنستاباي</span>
-                </div>
-              </div>
-
-              {/* Steps */}
-              <div className="bg-white/70 rounded-lg p-3 text-start space-y-1.5">
-                <p className="text-[11px] text-gray-text font-bold">الخطوات:</p>
-                <p className="text-[11px] text-gray-text">1. افتح تطبيق إنستاباي على موبايلك</p>
-                <p className="text-[11px] text-gray-text">2. اختار &quot;مسح QR&quot; من الشاشة الرئيسية</p>
-                <p className="text-[11px] text-gray-text">3. وجّه الكاميرا على الكود اللي فوق</p>
-                <p className="text-[11px] text-gray-text">4. اكتب المبلغ: <span className="font-bold text-dark">{finalAmount} جنيه</span> وأكّد</p>
-              </div>
+              {/* Direct InstaPay link */}
+              <a
+                href={methodInfo.paymentLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-l from-purple-600 to-blue-600 text-white font-bold rounded-xl text-sm active:scale-[0.98] transition-transform"
+              >
+                <InstaPayLogo size={22} />
+                افتح إنستاباي وادفع {finalAmount} جنيه
+              </a>
 
               {/* Manual transfer fallback */}
               <div className="border-t border-purple-100 pt-3 mt-2">

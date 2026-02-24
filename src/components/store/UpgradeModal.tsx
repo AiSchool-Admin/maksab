@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { X, Copy, Check, Smartphone } from "lucide-react";
+import { X, Copy, Check, ExternalLink } from "lucide-react";
 import type { SubscriptionPlan } from "@/types";
 import { PLANS, PAYMENT_METHODS, type PaymentMethodId } from "@/lib/stores/subscription-plans";
 import Button from "@/components/ui/Button";
 import InstaPayLogo from "@/components/ui/InstaPayLogo";
-import QRCodeDisplay from "@/components/ui/QRCodeDisplay";
 
 interface UpgradeModalProps {
   targetPlan: SubscriptionPlan;
@@ -129,23 +128,17 @@ export default function UpgradeModal({
                       )}
                     </button>
                   </button>
-                  {/* InstaPay QR code — scan with InstaPay app */}
+                  {/* InstaPay direct link */}
                   {method.id === "instapay" && selectedMethod === "instapay" && "link" in method && (
-                    <div className="mt-2 bg-gradient-to-bl from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4 space-y-3">
-                      <div className="flex flex-col items-center gap-2">
-                        <QRCodeDisplay value={method.link} size={160} />
-                        <div className="flex items-center gap-1.5 text-xs text-purple-600 font-semibold">
-                          <Smartphone size={14} />
-                          <span>امسح الكود من تطبيق إنستاباي</span>
-                        </div>
-                      </div>
-                      <div className="bg-white/70 rounded-lg p-2.5 text-start space-y-1">
-                        <p className="text-[11px] text-gray-text">1. افتح تطبيق إنستاباي على موبايلك</p>
-                        <p className="text-[11px] text-gray-text">2. اختار &quot;مسح QR&quot; من الشاشة الرئيسية</p>
-                        <p className="text-[11px] text-gray-text">3. وجّه الكاميرا على الكود</p>
-                        <p className="text-[11px] text-gray-text">4. اكتب المبلغ: <span className="font-bold text-dark">{price.toLocaleString("ar-EG")} جنيه</span> وأكّد</p>
-                      </div>
-                    </div>
+                    <a
+                      href={method.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 w-full mt-2 py-2.5 bg-gradient-to-l from-purple-600 to-blue-600 text-white font-bold rounded-xl text-xs active:scale-[0.98] transition-transform"
+                    >
+                      <ExternalLink size={14} />
+                      افتح إنستاباي وادفع
+                    </a>
                   )}
                 </div>
               ))}
