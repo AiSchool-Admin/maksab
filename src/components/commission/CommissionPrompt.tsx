@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Heart, X, Clock, Copy, ExternalLink } from "lucide-react";
+import { Check, Heart, X, Clock, Copy } from "lucide-react";
 import Button from "@/components/ui/Button";
 import {
   calculateSuggestedCommission,
-  submitCommission,
   declineCommission,
 } from "@/lib/commission/commission-service";
 import {
@@ -39,6 +38,7 @@ export default function CommissionPrompt({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [fawryRef, setFawryRef] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const paymentMethods = getAvailablePaymentMethods();
 
@@ -55,6 +55,7 @@ export default function CommissionPrompt({
 
   const handleOnlinePayment = async (method: PaymentMethod) => {
     setIsSubmitting(true);
+    setPaymentError(null);
     const result = await processPayment({
       amount: finalAmount,
       method,
@@ -74,19 +75,32 @@ export default function CommissionPrompt({
       } else {
         setStep("thanks");
       }
+    } else {
+      setPaymentError(result.error || "حصل مشكلة، جرب تاني");
+      setStep("select_method");
     }
   };
 
   const handleConfirmManualPayment = async () => {
     setIsSubmitting(true);
-    await submitCommission({
+    // For Fawry: record already created in handleOnlinePayment, just go to thanks
+    if (fawryRef) {
+      setIsSubmitting(false);
+      setStep("thanks");
+      return;
+    }
+    // For manual payments (Vodafone/InstaPay): record via server API
+    const result = await processPayment({
+      amount: finalAmount,
+      method: selectedMethod || "vodafone_cash",
       adId,
       payerId: userId,
-      amount: finalAmount,
-      paymentMethod: selectedMethod || "vodafone_cash",
+      description: `عمولة مكسب — ${adTitle}`,
     });
     setIsSubmitting(false);
-    setStep("thanks");
+    if (result.success) {
+      setStep("thanks");
+    }
   };
 
   const handleLater = async () => {
@@ -191,11 +205,20 @@ export default function CommissionPrompt({
           المبلغ: <span className="font-bold text-brand-green">{finalAmount} جنيه</span>
         </p>
 
+        {paymentError && (
+          <p className="text-sm text-error text-center bg-red-50 rounded-xl py-2 px-3">
+            {paymentError}
+          </p>
+        )}
+
         <div className="space-y-2">
           {paymentMethods.map((method) => (
             <button
               key={method.id}
-              onClick={() => handleSelectMethod(method.id)}
+              onClick={() => {
+                setPaymentError(null);
+                handleSelectMethod(method.id);
+              }}
               disabled={isSubmitting}
               className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green-light active:scale-[0.98] transition-all text-start"
             >

@@ -477,7 +477,8 @@ export type Database = {
           payer_id: string;
           amount: number;
           payment_method: string | null;
-          status: "pending" | "paid" | "cancelled";
+          payment_ref: string | null;
+          status: "pending" | "paid" | "cancelled" | "declined" | "later";
           created_at: string;
         };
         Insert: {
@@ -485,11 +486,13 @@ export type Database = {
           payer_id: string;
           amount: number;
           payment_method?: string | null;
+          payment_ref?: string | null;
           status?: string;
         };
         Update: {
           status?: string;
           payment_method?: string;
+          payment_ref?: string;
         };
       };
       notifications: {

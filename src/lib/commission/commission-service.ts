@@ -12,7 +12,7 @@ export function calculateSuggestedCommission(transactionAmount: number): number 
   return Math.min(Math.max(Math.round(percentage), min), max);
 }
 
-export type CommissionStatus = "pending" | "paid" | "declined" | "later";
+export type CommissionStatus = "pending" | "paid" | "declined" | "later" | "cancelled";
 
 export interface CommissionRecord {
   id: string;
@@ -25,7 +25,7 @@ export interface CommissionRecord {
 }
 
 /**
- * Submit a voluntary commission payment.
+ * Submit a voluntary commission payment via server API route.
  */
 export async function submitCommission(params: {
   adId: string;
@@ -34,15 +34,19 @@ export async function submitCommission(params: {
   paymentMethod: string;
 }): Promise<{ success: boolean }> {
   try {
-    const { supabase } = await import("@/lib/supabase/client");
-    const { error } = await supabase.from("commissions").insert({
-      ad_id: params.adId,
-      payer_id: params.payerId,
-      amount: params.amount,
-      payment_method: params.paymentMethod,
-      status: "paid",
-    } as never);
-    return { success: !error };
+    const res = await fetch("/api/payment/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: params.amount,
+        method: params.paymentMethod,
+        adId: params.adId,
+        payerId: params.payerId,
+        description: "عمولة مكسب",
+      }),
+    });
+    const data = await res.json();
+    return { success: data.success === true };
   } catch {
     return { success: false };
   }
@@ -50,6 +54,7 @@ export async function submitCommission(params: {
 
 /**
  * Record that user declined or deferred commission.
+ * Uses amount=0 which is now allowed by the updated DB constraint.
  */
 export async function declineCommission(params: {
   adId: string;
@@ -62,10 +67,11 @@ export async function declineCommission(params: {
       ad_id: params.adId,
       payer_id: params.payerId,
       amount: 0,
+      payment_method: null,
       status: params.status,
     } as never);
   } catch {
-    // silent
+    // silent — declining is non-critical
   }
 }
 
