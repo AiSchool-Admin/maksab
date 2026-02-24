@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { X, Copy, Check } from "lucide-react";
+import { X, Copy, Check, ExternalLink } from "lucide-react";
 import type { SubscriptionPlan } from "@/types";
 import { PLANS, PAYMENT_METHODS, type PaymentMethodId } from "@/lib/stores/subscription-plans";
 import Button from "@/components/ui/Button";
+import InstaPayLogo from "@/components/ui/InstaPayLogo";
 
 interface UpgradeModalProps {
   targetPlan: SubscriptionPlan;
@@ -87,40 +88,59 @@ export default function UpgradeModal({
             </h3>
             <div className="space-y-2">
               {PAYMENT_METHODS.map((method) => (
-                <button
-                  key={method.id}
-                  onClick={() => setSelectedMethod(method.id)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl border text-right transition-colors ${
-                    selectedMethod === method.id
-                      ? "border-brand-green bg-brand-green-light"
-                      : "border-gray-light hover:border-gray-300"
-                  }`}
-                >
-                  <span className="text-xl">{method.icon}</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-dark">
-                      {method.label}
-                    </p>
-                    <p className="text-xs text-gray-text">{method.number}</p>
-                  </div>
-                  {selectedMethod === method.id && (
-                    <Check size={16} className="text-brand-green" />
-                  )}
+                <div key={method.id}>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopy(method.number, method.id);
-                    }}
-                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                    title="نسخ"
+                    onClick={() => setSelectedMethod(method.id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border text-right transition-colors ${
+                      selectedMethod === method.id
+                        ? method.id === "instapay"
+                          ? "border-purple-400 bg-gradient-to-l from-purple-50 to-blue-50"
+                          : "border-brand-green bg-brand-green-light"
+                        : "border-gray-light hover:border-gray-300"
+                    }`}
                   >
-                    {copiedId === method.id ? (
-                      <Check size={14} className="text-brand-green" />
+                    {method.id === "instapay" ? (
+                      <InstaPayLogo size={28} />
                     ) : (
-                      <Copy size={14} className="text-gray-text" />
+                      <span className="text-xl">{method.icon}</span>
                     )}
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-dark">
+                        {method.label}
+                      </p>
+                      <p className="text-xs text-gray-text">{method.number}</p>
+                    </div>
+                    {selectedMethod === method.id && (
+                      <Check size={16} className="text-brand-green" />
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy(method.number, method.id);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                      title="نسخ"
+                    >
+                      {copiedId === method.id ? (
+                        <Check size={14} className="text-brand-green" />
+                      ) : (
+                        <Copy size={14} className="text-gray-text" />
+                      )}
+                    </button>
                   </button>
-                </button>
+                  {/* InstaPay direct link */}
+                  {method.id === "instapay" && selectedMethod === "instapay" && "link" in method && (
+                    <a
+                      href={method.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 w-full mt-2 py-2.5 bg-gradient-to-l from-purple-600 to-blue-600 text-white font-bold rounded-xl text-xs active:scale-[0.98] transition-transform"
+                    >
+                      <ExternalLink size={14} />
+                      افتح إنستاباي وادفع
+                    </a>
+                  )}
+                </div>
               ))}
             </div>
           </div>

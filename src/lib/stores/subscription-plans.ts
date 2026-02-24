@@ -174,8 +174,8 @@ export function isUpgrade(
 
 /** Payment methods available */
 export const PAYMENT_METHODS = [
-  { id: "vodafone_cash", label: "فودافون كاش", icon: "📱", number: "01012345678" },
-  { id: "instapay", label: "إنستاباي", icon: "🏦", number: "maksab@instapay" },
+  { id: "instapay", label: "إنستاباي", icon: "🏦", number: "01064348782", link: "https://ipn.eg/S/mamdouhragab1707/instapay/0i4IIx" },
+  { id: "vodafone_cash", label: "فودافون كاش", icon: "📱", number: "01064348782" },
   { id: "bank_transfer", label: "تحويل بنكي", icon: "🏛️", number: "1234567890 — البنك الأهلي" },
 ] as const;
 

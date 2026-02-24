@@ -15,6 +15,8 @@ export interface PaymentMethodInfo {
   description: string;
   /** Static details to show (e.g., phone number for Vodafone Cash) */
   details?: string;
+  /** Direct payment link (e.g., InstaPay ipn.eg link) */
+  paymentLink?: string;
   /** Whether this method is currently available */
   enabled: boolean;
 }
