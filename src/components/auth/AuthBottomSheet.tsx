@@ -7,11 +7,9 @@ import Button from "@/components/ui/Button";
 import {
   sendOTP,
   verifyOTP,
-  verifyOTPViaFirebase,
   type UserProfile,
 } from "@/lib/supabase/auth";
 import { egyptianPhoneSchema, normalizeEgyptianPhone, otpSchema } from "@/lib/utils/validators";
-import { isFirebaseConfigured } from "@/lib/firebase/config";
 
 export type AccountType = "individual" | "merchant";
 
@@ -79,15 +77,6 @@ export default function AuthBottomSheet({
     return () => clearInterval(interval);
   }, [resendTimer]);
 
-  // ── Cleanup Firebase reCAPTCHA on unmount ──────────────────────
-  useEffect(() => {
-    return () => {
-      import("@/lib/firebase/phone-auth").then(({ cleanupRecaptcha }) => {
-        cleanupRecaptcha();
-      }).catch(() => {});
-    };
-  }, []);
-
   // ── Send OTP ────────────────────────────────────────────────────
   const handlePhoneSubmit = async () => {
     setError(null);
@@ -101,47 +90,20 @@ export default function AuthBottomSheet({
     const normalizedPhone = normalizeEgyptianPhone(phone);
     setPhone(normalizedPhone);
 
+    // Send OTP
     setIsSubmitting(true);
     const otpResult = await sendOTP(normalizedPhone);
 
     if (otpResult.error) {
       setIsSubmitting(false);
       setError(otpResult.error);
-      // If rate limited, set a longer resend timer
       if (otpResult.retry_after) {
         setResendTimer(otpResult.retry_after);
       }
       return;
     }
 
-    // Firebase channel: send OTP via Firebase client SDK
-    if (otpResult.channel === "firebase" && isFirebaseConfigured()) {
-      try {
-        const { setupRecaptcha, sendFirebaseOTP } = await import(
-          "@/lib/firebase/phone-auth"
-        );
-        const recaptchaReady = await setupRecaptcha("recaptcha-container-sheet");
-        if (!recaptchaReady) {
-          setIsSubmitting(false);
-          setError("فشل تحميل reCAPTCHA. جرب تاني");
-          return;
-        }
-        const firebaseResult = await sendFirebaseOTP(normalizedPhone);
-        setIsSubmitting(false);
-        if (!firebaseResult.success) {
-          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
-          return;
-        }
-      } catch (err) {
-        setIsSubmitting(false);
-        console.error("[Auth] Firebase SMS error:", err);
-        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
-        return;
-      }
-    } else {
-      setIsSubmitting(false);
-    }
-
+    setIsSubmitting(false);
     setOtpToken(otpResult.token || "");
     setOtpChannel(otpResult.channel || null);
     setDevCode(otpResult.dev_code || null);
@@ -153,7 +115,7 @@ export default function AuthBottomSheet({
     // Auto-fill OTP in dev mode with typing animation
     if (otpResult.dev_code) {
       autoFillOTP(otpResult.dev_code);
-    } else if (otpResult.channel !== "firebase") {
+    } else {
       tryWebOTP();
     }
   };
@@ -262,37 +224,8 @@ export default function AuthBottomSheet({
 
       setIsSubmitting(true);
 
-      let response: { user: UserProfile | null; error: string | null };
-
-      // Firebase channel: verify via Firebase, then exchange for our session
-      if (otpChannel === "firebase") {
-        try {
-          const { verifyFirebaseOTP } = await import("@/lib/firebase/phone-auth");
-          const fbResult = await verifyFirebaseOTP(code);
-
-          if (!fbResult.success || !fbResult.idToken) {
-            setIsSubmitting(false);
-            setError(fbResult.error || "الكود غلط. جرب تاني");
-            setOtp(["", "", "", "", "", ""]);
-            otpInputsRef.current[0]?.focus();
-            return;
-          }
-
-          response = await verifyOTPViaFirebase(
-            fbResult.idToken,
-            displayName.trim() || undefined,
-          );
-        } catch {
-          setIsSubmitting(false);
-          setError("حصلت مشكلة في التحقق. جرب تاني");
-          setOtp(["", "", "", "", "", ""]);
-          otpInputsRef.current[0]?.focus();
-          return;
-        }
-      } else {
-        // Standard HMAC verification
-        response = await verifyOTP(phone, code, otpToken, displayName.trim() || undefined);
-      }
+      // HMAC verification
+      const response = await verifyOTP(phone, code, otpToken, displayName.trim() || undefined);
 
       setIsSubmitting(false);
 
@@ -315,7 +248,7 @@ export default function AuthBottomSheet({
 
       onSuccess(response.user, accountType);
     },
-    [otp, phone, otpToken, otpChannel, displayName, onSuccess, accountType],
+    [otp, phone, otpToken, displayName, onSuccess, accountType],
   );
 
   // ── Resend OTP ──────────────────────────────────────────────────
@@ -336,34 +269,7 @@ export default function AuthBottomSheet({
       return;
     }
 
-    // Firebase channel: re-send via Firebase
-    if (resendResult.channel === "firebase" && isFirebaseConfigured()) {
-      try {
-        const { setupRecaptcha, sendFirebaseOTP } = await import(
-          "@/lib/firebase/phone-auth"
-        );
-        const recaptchaReady = await setupRecaptcha("recaptcha-container-sheet");
-        if (!recaptchaReady) {
-          setIsSubmitting(false);
-          setError("فشل تحميل reCAPTCHA. جرب تاني");
-          return;
-        }
-        const firebaseResult = await sendFirebaseOTP(phone);
-        setIsSubmitting(false);
-        if (!firebaseResult.success) {
-          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
-          return;
-        }
-      } catch (err) {
-        setIsSubmitting(false);
-        console.error("[Auth] Firebase resend error:", err);
-        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
-        return;
-      }
-    } else {
-      setIsSubmitting(false);
-    }
-
+    setIsSubmitting(false);
     setOtpToken(resendResult.token || "");
     setOtpChannel(resendResult.channel || null);
     setDevCode(resendResult.dev_code || null);
@@ -371,7 +277,9 @@ export default function AuthBottomSheet({
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
 
-    if (resendResult.channel !== "firebase") {
+    if (resendResult.dev_code) {
+      autoFillOTP(resendResult.dev_code);
+    } else {
       tryWebOTP();
     }
   };
@@ -517,7 +425,7 @@ export default function AuthBottomSheet({
               <Smartphone size={24} className="text-brand-green" />
             </div>
             <p className="text-sm text-gray-text">
-              {otpChannel === "whatsapp" ? "أدخل الكود اللي وصلك على واتساب" : otpChannel === "firebase" ? "أدخل الكود اللي وصلك SMS على" : otpChannel === "dev" ? "كود التأكيد" : "أدخل الكود اللي وصلك على"}{" "}
+              {otpChannel === "whatsapp" ? "أدخل الكود اللي وصلك على واتساب" : otpChannel === "dev" ? "كود التأكيد" : "أدخل الكود اللي وصلك على"}{" "}
               {otpChannel !== "dev" && (
                 <span className="font-bold text-dark" dir="ltr">
                   {formatPhone(phone)}
@@ -613,8 +521,6 @@ export default function AuthBottomSheet({
         </div>
       )}
 
-      {/* Invisible reCAPTCHA container for Firebase Phone Auth */}
-      <div id="recaptcha-container-sheet" />
     </Modal>
   );
 }
