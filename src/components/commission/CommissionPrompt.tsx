@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Heart, X, Clock, Copy } from "lucide-react";
+import { Check, Heart, X, Clock, Copy, ExternalLink } from "lucide-react";
 import Button from "@/components/ui/Button";
+import InstaPayLogo from "@/components/ui/InstaPayLogo";
 import {
   calculateSuggestedCommission,
   declineCommission,
@@ -220,13 +221,24 @@ export default function CommissionPrompt({
                 handleSelectMethod(method.id);
               }}
               disabled={isSubmitting}
-              className="w-full flex items-center gap-3 p-4 bg-gray-light rounded-xl hover:bg-brand-green-light active:scale-[0.98] transition-all text-start"
+              className={`w-full flex items-center gap-3 p-4 rounded-xl active:scale-[0.98] transition-all text-start ${
+                method.id === "instapay"
+                  ? "bg-gradient-to-l from-purple-50 to-blue-50 border-2 border-purple-200 hover:border-purple-400"
+                  : "bg-gray-light hover:bg-brand-green-light"
+              }`}
             >
-              <span className="text-2xl">{method.icon}</span>
+              {method.id === "instapay" ? (
+                <InstaPayLogo size={32} />
+              ) : (
+                <span className="text-2xl">{method.icon}</span>
+              )}
               <div className="flex-1">
                 <p className="text-sm font-bold text-dark">{method.name}</p>
                 <p className="text-[11px] text-gray-text">{method.description}</p>
               </div>
+              {method.paymentLink && (
+                <ExternalLink size={16} className="text-purple-500 flex-shrink-0" />
+              )}
             </button>
           ))}
         </div>
@@ -247,9 +259,14 @@ export default function CommissionPrompt({
 
     return (
       <div className="bg-white rounded-2xl p-6 space-y-4 max-w-sm mx-auto">
-        <h2 className="text-2xl font-bold text-dark text-center">
-          {methodInfo?.icon} {methodInfo?.name}
-        </h2>
+        <div className="flex items-center justify-center gap-2">
+          {selectedMethod === "instapay" ? (
+            <InstaPayLogo size={36} />
+          ) : null}
+          <h2 className="text-2xl font-bold text-dark text-center">
+            {selectedMethod !== "instapay" && methodInfo?.icon} {methodInfo?.name}
+          </h2>
+        </div>
 
         {fawryRef ? (
           <div className="bg-brand-gold-light rounded-xl p-4 text-center">
@@ -268,7 +285,51 @@ export default function CommissionPrompt({
               ادفع {finalAmount} جنيه بالكود ده في أي منفذ فوري
             </p>
           </div>
+        ) : selectedMethod === "instapay" && methodInfo?.paymentLink ? (
+          /* ── InstaPay with direct payment link ── */
+          <div className="space-y-3">
+            <div className="bg-gradient-to-bl from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4 text-center space-y-3">
+              <p className="text-sm text-dark font-semibold">
+                حوّل <span className="font-bold text-purple-700">{finalAmount} جنيه</span>
+              </p>
+
+              {/* Direct InstaPay payment link — primary CTA */}
+              <a
+                href={methodInfo.paymentLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-3.5 bg-gradient-to-l from-purple-600 to-blue-600 text-white font-bold rounded-xl text-sm active:scale-[0.98] transition-transform shadow-md"
+              >
+                <ExternalLink size={16} />
+                افتح إنستاباي وادفع
+              </a>
+
+              <p className="text-[11px] text-gray-text">
+                هيفتح تطبيق إنستاباي على موبايلك مباشرة
+              </p>
+
+              {/* Account details as fallback */}
+              <div className="border-t border-purple-100 pt-3 mt-2">
+                <p className="text-[11px] text-gray-text mb-1.5">
+                  أو حوّل يدوي على الرقم:
+                </p>
+                <div className="flex items-center justify-center gap-2 bg-white rounded-lg p-2.5">
+                  <p className="text-sm font-bold text-dark" dir="ltr">
+                    {methodInfo.details}
+                  </p>
+                  <button
+                    onClick={() => copyToClipboard(methodInfo.details!)}
+                    className="flex items-center gap-1 text-xs text-purple-600 font-semibold btn-icon-sm"
+                  >
+                    <Copy size={12} />
+                    {copied ? "تم!" : "نسخ"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
+          /* ── Manual payment (Vodafone Cash) ── */
           <div className="bg-gray-light rounded-xl p-4">
             <p className="text-sm text-gray-text mb-2 text-center">
               حوّل <span className="font-bold text-dark">{finalAmount} جنيه</span> على:

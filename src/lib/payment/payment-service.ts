@@ -22,25 +22,29 @@ import type {
 // ── Payment Methods Configuration ─────────────────────────────────────
 
 const VODAFONE_CASH_NUMBER =
-  process.env.NEXT_PUBLIC_VODAFONE_CASH_NUMBER || "01012345678";
-const INSTAPAY_ACCOUNT =
-  process.env.NEXT_PUBLIC_INSTAPAY_ACCOUNT || "maksab@instapay";
+  process.env.NEXT_PUBLIC_VODAFONE_CASH_NUMBER || "01064348782";
+const INSTAPAY_PHONE =
+  process.env.NEXT_PUBLIC_INSTAPAY_PHONE || "01064348782";
+const INSTAPAY_LINK =
+  process.env.NEXT_PUBLIC_INSTAPAY_LINK ||
+  "https://ipn.eg/S/mamdouhragab1707/instapay/0i4IIx";
 
 export const PAYMENT_METHODS: PaymentMethodInfo[] = [
+  {
+    id: "instapay",
+    name: "إنستاباي",
+    icon: "🏦",
+    description: "ادفع فوراً بإنستاباي — أسرع وأسهل طريقة",
+    details: INSTAPAY_PHONE,
+    paymentLink: INSTAPAY_LINK,
+    enabled: true,
+  },
   {
     id: "vodafone_cash",
     name: "فودافون كاش",
     icon: "📱",
     description: `حوّل المبلغ على رقم ${VODAFONE_CASH_NUMBER}`,
     details: VODAFONE_CASH_NUMBER,
-    enabled: true,
-  },
-  {
-    id: "instapay",
-    name: "إنستاباي",
-    icon: "🏦",
-    description: `حوّل على حساب ${INSTAPAY_ACCOUNT}`,
-    details: INSTAPAY_ACCOUNT,
     enabled: true,
   },
   {
