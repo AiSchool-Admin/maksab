@@ -61,8 +61,6 @@ async function handleAddComment(body: Record<string, unknown>) {
       return NextResponse.json({ error: tokenResult.error }, { status: 401 });
     }
     resolvedUserId = tokenResult.userId;
-  } else if (user_id && typeof user_id === "string") {
-    resolvedUserId = user_id;
   }
 
   if (!resolvedUserId) {
@@ -75,9 +73,6 @@ async function handleAddComment(body: Record<string, unknown>) {
   // Sanitize content: strip HTML tags to prevent XSS
   const sanitized = (content as string)
     .replace(/<[^>]*>/g, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
     .trim();
 
   const trimmed = sanitized;
@@ -197,8 +192,6 @@ async function handleToggleLike(body: Record<string, unknown>) {
       return NextResponse.json({ error: tokenResult.error }, { status: 401 });
     }
     resolvedUserId = tokenResult.userId;
-  } else if (user_id && typeof user_id === "string") {
-    resolvedUserId = user_id;
   }
 
   if (!resolvedUserId) {
@@ -403,7 +396,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const commentId = searchParams.get("comment_id");
-    const userId = searchParams.get("user_id");
+    const sessionToken = searchParams.get("session_token");
 
     if (!commentId) {
       return NextResponse.json(
@@ -412,12 +405,18 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    if (!userId) {
+    if (!sessionToken) {
       return NextResponse.json(
         { error: "لازم تسجل دخول الأول" },
         { status: 401 },
       );
     }
+
+    const tokenResult = verifySessionToken(sessionToken);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const userId = tokenResult.userId;
 
     const client = getServiceClient();
     if (!client) {

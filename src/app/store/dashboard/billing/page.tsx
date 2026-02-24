@@ -146,8 +146,13 @@ export default function BillingPage() {
     );
   }
 
+  useEffect(() => {
+    if (!isLoading && !store) {
+      router.push("/store/create");
+    }
+  }, [isLoading, store, router]);
+
   if (!store) {
-    router.push("/store/create");
     return null;
   }
 

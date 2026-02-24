@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { generateSessionToken } from "@/lib/auth/session-token";
 
 function getSecret(): string {
@@ -102,7 +102,9 @@ function verifyOTPToken(
       .update(`${phone}:${code}:${decoded.expiresAt}`)
       .digest("hex");
 
-    if (expectedHmac !== decoded.hmac) {
+    const expectedBuf = Buffer.from(expectedHmac, "hex");
+    const actualBuf = Buffer.from(decoded.hmac || "", "hex");
+    if (expectedBuf.length !== actualBuf.length || !timingSafeEqual(expectedBuf, actualBuf)) {
       return { valid: false, error: "الكود غلط" };
     }
 
@@ -117,77 +119,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const displayName = body.display_name?.trim() || null;
 
-    // ── Firebase ID Token verification path ─────────────────────────
-    if (body.firebase_id_token) {
-      const { verifyFirebaseToken } = await import("@/lib/firebase/admin");
-      const { phone: firebasePhone, error: fbError } = await verifyFirebaseToken(
-        body.firebase_id_token,
-      );
-
-      if (!firebasePhone || fbError) {
-        return NextResponse.json(
-          { error: fbError || "التحقق من Firebase فشل" },
-          { status: 400 },
-        );
-      }
-
-      // Validate phone format after Firebase verification
-      const phoneClean = firebasePhone.replace(/^\+2/, "").replace(/\D/g, "");
-      if (!/^01[0125]\d{8}$/.test(phoneClean)) {
-        return NextResponse.json(
-          { error: "رقم الموبايل من Firebase مش صالح" },
-          { status: 400 },
-        );
-      }
-
-      const supabase = getServiceClient();
-
-      if (!supabase) {
-        console.warn("[verify-otp] No SUPABASE_SERVICE_ROLE_KEY — using dev session for Firebase user", phoneClean);
-        const devProfile = createDevProfile(phoneClean, displayName);
-        const devToken = generateSessionToken(devProfile.id);
-        return NextResponse.json({
-          user: devProfile,
-          session_token: devToken,
-          magic_link_token: null,
-          virtual_email: `${phoneClean}@maksab.auth`,
-        });
-      }
-
-      const profile = await findOrCreateUser(supabase, firebasePhone, displayName);
-
-      if (!profile) {
-        return NextResponse.json(
-          { error: "حصلت مشكلة في إنشاء الحساب. جرب تاني" },
-          { status: 500 },
-        );
-      }
-
-      const virtualEmail = `${firebasePhone}@maksab.auth`;
-      let fbMagicToken: string | null = null;
-      try {
-        const {
-          data: { properties },
-        } = await supabase.auth.admin.generateLink({
-          type: "magiclink",
-          email: virtualEmail,
-        });
-        fbMagicToken = properties?.hashed_token || null;
-      } catch (linkErr) {
-        console.warn("[verify-otp] Magic link generation failed:", linkErr);
-      }
-
-      const firebaseSessionToken = generateSessionToken(profile.id);
-
-      return NextResponse.json({
-        user: profile,
-        session_token: firebaseSessionToken,
-        magic_link_token: fbMagicToken,
-        virtual_email: virtualEmail,
-      });
-    }
-
-    // ── Standard HMAC OTP verification path ─────────────────────────
+    // ── HMAC OTP verification ─────────────────────────────────────────
     let phone = body.phone?.replace(/\D/g, "") || "";
     const code = body.code?.replace(/\D/g, "");
     const token = body.token;
@@ -229,48 +161,62 @@ export async function POST(req: NextRequest) {
     // ── Find or create user ──────────────────────────────────────────
     const supabase = getServiceClient();
 
-    // If Supabase service client is unavailable (no SUPABASE_SERVICE_ROLE_KEY),
-    // fall back to dev-mode session. Without this key, user creation is impossible
-    // anyway, so a dev session is always better than a 500 error.
     if (!supabase) {
-      console.warn("[verify-otp] No SUPABASE_SERVICE_ROLE_KEY — using dev session for", phone);
-      const devProfile = createDevProfile(phone, displayName);
-      const devSessionToken = generateSessionToken(devProfile.id);
-      return NextResponse.json({
-        user: devProfile,
-        session_token: devSessionToken,
-        magic_link_token: null,
-        virtual_email: `${phone}@maksab.auth`,
-      });
+      if (isNonProduction()) {
+        console.warn("[verify-otp] No SUPABASE_SERVICE_ROLE_KEY — using dev session for", phone);
+        const devProfile = createDevProfile(phone, displayName);
+        const devSessionToken = generateSessionToken(devProfile.id);
+        return NextResponse.json({
+          user: devProfile,
+          session_token: devSessionToken,
+          magic_link_token: null,
+          virtual_email: `${phone}@maksab.auth`,
+        });
+      }
+      return NextResponse.json(
+        { error: "حصلت مشكلة في الخادم. جرب تاني" },
+        { status: 500 }
+      );
     }
 
     let profile;
     try {
       profile = await findOrCreateUser(supabase, phone, displayName);
     } catch (dbErr) {
-      // Supabase call failed (missing table, bad key, etc.) — fall back to dev session
-      console.warn("[verify-otp] Supabase findOrCreateUser failed, using dev session:", dbErr);
-      const devProfile = createDevProfile(phone, displayName);
-      const devSessionToken = generateSessionToken(devProfile.id);
-      return NextResponse.json({
-        user: devProfile,
-        session_token: devSessionToken,
-        magic_link_token: null,
-        virtual_email: `${phone}@maksab.auth`,
-      });
+      if (isNonProduction()) {
+        console.warn("[verify-otp] Supabase findOrCreateUser failed, using dev session:", dbErr);
+        const devProfile = createDevProfile(phone, displayName);
+        const devSessionToken = generateSessionToken(devProfile.id);
+        return NextResponse.json({
+          user: devProfile,
+          session_token: devSessionToken,
+          magic_link_token: null,
+          virtual_email: `${phone}@maksab.auth`,
+        });
+      }
+      console.error("[verify-otp] findOrCreateUser error:", dbErr);
+      return NextResponse.json(
+        { error: "حصلت مشكلة في إنشاء الحساب. جرب تاني" },
+        { status: 500 }
+      );
     }
 
     if (!profile) {
-      // findOrCreateUser returned null — also fall back to dev session
-      console.warn("[verify-otp] findOrCreateUser returned null, using dev session for", phone);
-      const devProfile = createDevProfile(phone, displayName);
-      const devSessionToken = generateSessionToken(devProfile.id);
-      return NextResponse.json({
-        user: devProfile,
-        session_token: devSessionToken,
-        magic_link_token: null,
-        virtual_email: `${phone}@maksab.auth`,
-      });
+      if (isNonProduction()) {
+        console.warn("[verify-otp] findOrCreateUser returned null, using dev session for", phone);
+        const devProfile = createDevProfile(phone, displayName);
+        const devSessionToken = generateSessionToken(devProfile.id);
+        return NextResponse.json({
+          user: devProfile,
+          session_token: devSessionToken,
+          magic_link_token: null,
+          virtual_email: `${phone}@maksab.auth`,
+        });
+      }
+      return NextResponse.json(
+        { error: "حصلت مشكلة في إنشاء الحساب. جرب تاني" },
+        { status: 500 }
+      );
     }
 
     // ── Generate session ─────────────────────────────────────────────

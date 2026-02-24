@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 /**
  * POST /api/payment/process
@@ -16,15 +17,28 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { amount, method, adId, payerId, description } = body as {
+    const { amount, method, adId, payerId, session_token, description } = body as {
       amount: number;
       method: string;
       adId: string;
       payerId: string;
+      session_token?: string;
       description: string;
     };
 
-    if (!amount || amount <= 0 || !method || !payerId) {
+    // Authentication
+    let authenticatedPayerId = payerId;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      authenticatedPayerId = tokenResult.userId;
+    } else if (!payerId) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+
+    if (!amount || amount <= 0 || !method || !authenticatedPayerId) {
       return NextResponse.json({ error: "البيانات ناقصة" }, { status: 400 });
     }
 
@@ -38,7 +52,7 @@ export async function POST(request: Request) {
         .from("commissions")
         .insert({
           ad_id: adId || null,
-          payer_id: payerId,
+          payer_id: authenticatedPayerId,
           amount,
           payment_method: method,
           status: "pending",

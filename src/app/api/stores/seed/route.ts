@@ -113,7 +113,18 @@ const DEMO_STORES = [
   },
 ];
 
-export async function POST() {
+export async function POST(request: Request) {
+  // Protect in production — require admin secret
+  const isProduction = process.env.NODE_ENV === "production" && process.env.VERCEL_ENV === "production";
+  if (isProduction) {
+    const adminSecret = process.env.ADMIN_SETUP_SECRET;
+    const url = new URL(request.url);
+    const providedSecret = url.searchParams.get("secret");
+    if (!adminSecret || providedSecret !== adminSecret) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    }
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

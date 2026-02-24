@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -17,13 +18,25 @@ function getServiceClient() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { blocker_id, blocked_id } = await req.json();
+    const { blocker_id, blocked_id, session_token } = await req.json();
 
-    if (!blocker_id || !blocked_id) {
+    // Authentication
+    let authenticatedBlockerId = blocker_id;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      authenticatedBlockerId = tokenResult.userId;
+    } else if (!blocker_id) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+
+    if (!authenticatedBlockerId || !blocked_id) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
 
-    if (blocker_id === blocked_id) {
+    if (authenticatedBlockerId === blocked_id) {
       return NextResponse.json({ error: "مش ممكن تحظر نفسك" }, { status: 400 });
     }
 
@@ -32,7 +45,7 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase
       .from("blocked_users")
       .upsert(
-        { blocker_id, blocked_id },
+        { blocker_id: authenticatedBlockerId, blocked_id },
         { onConflict: "blocker_id,blocked_id" },
       );
 
@@ -50,9 +63,21 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { blocker_id, blocked_id } = await req.json();
+    const { blocker_id, blocked_id, session_token } = await req.json();
 
-    if (!blocker_id || !blocked_id) {
+    // Authentication
+    let authenticatedBlockerId = blocker_id;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      authenticatedBlockerId = tokenResult.userId;
+    } else if (!blocker_id) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+
+    if (!authenticatedBlockerId || !blocked_id) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
 
@@ -61,7 +86,7 @@ export async function DELETE(req: NextRequest) {
     const { error } = await supabase
       .from("blocked_users")
       .delete()
-      .eq("blocker_id", blocker_id)
+      .eq("blocker_id", authenticatedBlockerId)
       .eq("blocked_id", blocked_id);
 
     if (error) {

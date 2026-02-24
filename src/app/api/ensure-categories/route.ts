@@ -11,7 +11,17 @@ import { categoriesConfig } from "@/lib/categories/categories-config";
  *
  * Also cleans up old mismatched subcategory IDs (e.g., cars_passenger → passenger).
  */
-export async function POST() {
+export async function POST(request: Request) {
+  // Protect in production — require admin secret
+  const isProduction = process.env.NODE_ENV === "production" && process.env.VERCEL_ENV === "production";
+  if (isProduction) {
+    const adminSecret = process.env.ADMIN_SETUP_SECRET;
+    const url = new URL(request.url);
+    const providedSecret = url.searchParams.get("secret");
+    if (!adminSecret || providedSecret !== adminSecret) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    }
+  }
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) {
     return NextResponse.json(
@@ -148,7 +158,7 @@ export async function POST() {
   }
 }
 
-// Also support GET for easy browser testing
-export async function GET() {
-  return POST();
+// Also support GET for easy browser/admin testing
+export async function GET(request: Request) {
+  return POST(request);
 }
