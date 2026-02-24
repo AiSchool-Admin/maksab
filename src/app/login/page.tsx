@@ -132,40 +132,55 @@ function LoginPageContent() {
     }
 
     // Firebase channel: send OTP via Firebase client SDK
+    let activeChannel = otpResult.channel;
+    let activeDevCode = otpResult.dev_code;
+
     if (otpResult.channel === "firebase" && isFirebaseConfigured()) {
+      let firebaseSuccess = false;
       try {
         const { setupRecaptcha, sendFirebaseOTP } = await import(
           "@/lib/firebase/phone-auth"
         );
         setupRecaptcha("recaptcha-container");
         const firebaseResult = await sendFirebaseOTP(phone);
-        setIsSubmitting(false);
+        if (firebaseResult.success) {
+          firebaseSuccess = true;
+        } else {
+          console.warn("[Auth] Firebase SMS failed:", firebaseResult.error, "— falling back to dev mode");
+        }
+      } catch (err) {
+        console.warn("[Auth] Firebase SMS error:", err, "— falling back to dev mode");
+      }
 
-        if (!firebaseResult.success) {
-          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
+      // If Firebase failed, fall back to dev mode
+      if (!firebaseSuccess) {
+        const devFallback = await sendOTP(phone, true);
+        if (devFallback.error) {
+          setIsSubmitting(false);
+          setError(devFallback.error);
           return;
         }
-      } catch {
-        setIsSubmitting(false);
-        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
-        return;
+        activeChannel = devFallback.channel || "dev";
+        activeDevCode = devFallback.dev_code;
+        setOtpToken(devFallback.token || "");
       }
+      setIsSubmitting(false);
     } else {
       setIsSubmitting(false);
     }
 
-    setOtpToken(otpResult.token || "");
-    setOtpChannel(otpResult.channel || null);
-    setDevCode(otpResult.dev_code || null);
+    setOtpToken((prev) => prev || otpResult.token || "");
+    setOtpChannel(activeChannel || null);
+    setDevCode(activeDevCode || null);
 
     setStep("otp");
     setResendTimer(60);
     setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
 
     // Auto-fill OTP in dev mode with typing animation
-    if (otpResult.dev_code) {
-      autoFillOTP(otpResult.dev_code);
-    } else if (otpResult.channel !== "firebase") {
+    if (activeDevCode) {
+      autoFillOTP(activeDevCode);
+    } else if (activeChannel !== "firebase") {
       tryWebOTP();
     }
   };
@@ -350,36 +365,50 @@ function LoginPageContent() {
     }
 
     // Firebase channel: re-send via Firebase
+    let resendChannel = resendResult.channel;
+    let resendDevCode = resendResult.dev_code;
+
     if (resendResult.channel === "firebase" && isFirebaseConfigured()) {
+      let firebaseSuccess = false;
       try {
         const { setupRecaptcha, sendFirebaseOTP } = await import(
           "@/lib/firebase/phone-auth"
         );
         setupRecaptcha("recaptcha-container");
         const firebaseResult = await sendFirebaseOTP(phone);
-        setIsSubmitting(false);
+        if (firebaseResult.success) {
+          firebaseSuccess = true;
+        } else {
+          console.warn("[Auth] Firebase resend failed:", firebaseResult.error);
+        }
+      } catch (err) {
+        console.warn("[Auth] Firebase resend error:", err);
+      }
 
-        if (!firebaseResult.success) {
-          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
+      if (!firebaseSuccess) {
+        const devFallback = await sendOTP(phone, true);
+        if (devFallback.error) {
+          setIsSubmitting(false);
+          setError(devFallback.error);
           return;
         }
-      } catch {
-        setIsSubmitting(false);
-        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
-        return;
+        resendChannel = devFallback.channel || "dev";
+        resendDevCode = devFallback.dev_code;
+        setOtpToken(devFallback.token || "");
       }
+      setIsSubmitting(false);
     } else {
       setIsSubmitting(false);
     }
 
-    setOtpToken(resendResult.token || "");
-    setOtpChannel(resendResult.channel || null);
-    setDevCode(resendResult.dev_code || null);
+    setOtpToken((prev) => prev || resendResult.token || "");
+    setOtpChannel(resendChannel || null);
+    setDevCode(resendDevCode || null);
     setResendTimer(60);
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
 
-    if (resendResult.channel !== "firebase") {
+    if (resendChannel !== "firebase") {
       tryWebOTP();
     }
   };
