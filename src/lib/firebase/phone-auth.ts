@@ -2,7 +2,7 @@
  * Firebase Phone Auth Helper
  *
  * Handles the client-side Firebase Phone Auth flow:
- * 1. Setup invisible reCAPTCHA
+ * 1. Setup invisible reCAPTCHA (with pre-render)
  * 2. Send OTP via Firebase (signInWithPhoneNumber)
  * 3. Verify OTP code
  * 4. Get Firebase ID token for server verification
@@ -19,31 +19,53 @@ let recaptchaVerifier: RecaptchaVerifier | null = null;
 let confirmationResult: ConfirmationResult | null = null;
 
 /**
- * Setup invisible reCAPTCHA verifier.
- * Must be called once before sending OTP.
+ * Setup invisible reCAPTCHA verifier and pre-render it.
+ * Must be called (and awaited) before sending OTP.
  * @param containerId - ID of the DOM element for reCAPTCHA (invisible)
  */
-export function setupRecaptcha(containerId: string): boolean {
+export async function setupRecaptcha(containerId: string): Promise<boolean> {
   const auth = getFirebaseAuth();
-  if (!auth) return false;
+  if (!auth) {
+    console.error("[Firebase] Auth not initialized — cannot setup reCAPTCHA");
+    return false;
+  }
 
   try {
     // Clear existing verifier
     if (recaptchaVerifier) {
-      recaptchaVerifier.clear();
+      try {
+        recaptchaVerifier.clear();
+      } catch {
+        // Ignore clear errors
+      }
       recaptchaVerifier = null;
+    }
+
+    // Check that DOM element exists
+    const container = document.getElementById(containerId);
+    if (!container) {
+      console.error("[Firebase] reCAPTCHA container not found:", containerId);
+      return false;
     }
 
     recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
       size: "invisible",
       callback: () => {
-        // reCAPTCHA solved — will proceed with phone auth
+        console.log("[Firebase] reCAPTCHA solved");
+      },
+      "expired-callback": () => {
+        console.warn("[Firebase] reCAPTCHA expired — will re-verify on next send");
       },
     });
+
+    // Pre-render the reCAPTCHA so it's ready when signInWithPhoneNumber is called
+    await recaptchaVerifier.render();
+    console.log("[Firebase] reCAPTCHA rendered successfully");
 
     return true;
   } catch (err) {
     console.error("[Firebase] reCAPTCHA setup error:", err);
+    recaptchaVerifier = null;
     return false;
   }
 }
@@ -58,13 +80,18 @@ export async function sendFirebaseOTP(phone: string): Promise<{
   error?: string;
 }> {
   const auth = getFirebaseAuth();
-  if (!auth || !recaptchaVerifier) {
-    return { success: false, error: "Firebase مش متفعّل" };
+  if (!auth) {
+    return { success: false, error: "Firebase Auth مش متفعّل" };
+  }
+
+  if (!recaptchaVerifier) {
+    return { success: false, error: "reCAPTCHA مش جاهز — جرب تاني" };
   }
 
   try {
     // Convert to international format: +201XXXXXXXXX
     const intlPhone = `+2${phone}`;
+    console.log("[Firebase] Sending OTP to", intlPhone);
 
     confirmationResult = await signInWithPhoneNumber(
       auth,
@@ -72,11 +99,17 @@ export async function sendFirebaseOTP(phone: string): Promise<{
       recaptchaVerifier,
     );
 
+    console.log("[Firebase] OTP sent successfully");
     return { success: true };
   } catch (err: unknown) {
     console.error("[Firebase] Send OTP error:", err);
 
     const errorCode = (err as { code?: string })?.code;
+    const errorMessage = (err as { message?: string })?.message;
+    console.error("[Firebase] Error code:", errorCode, "Message:", errorMessage);
+
+    // After an error, reCAPTCHA verifier is consumed — clear it
+    recaptchaVerifier = null;
 
     // User-friendly Arabic error messages
     if (errorCode === "auth/too-many-requests") {
@@ -88,8 +121,14 @@ export async function sendFirebaseOTP(phone: string): Promise<{
     if (errorCode === "auth/quota-exceeded") {
       return { success: false, error: "الحد المجاني خلص. جرب وقت تاني" };
     }
+    if (errorCode === "auth/captcha-check-failed") {
+      return { success: false, error: "فشل التحقق من reCAPTCHA — جرب تاني" };
+    }
+    if (errorCode === "auth/network-request-failed") {
+      return { success: false, error: "مشكلة في الاتصال. تأكد من الإنترنت" };
+    }
 
-    return { success: false, error: "حصلت مشكلة في إرسال الكود. جرب تاني" };
+    return { success: false, error: `حصلت مشكلة: ${errorCode || errorMessage || "خطأ غير معروف"}` };
   }
 }
 
@@ -111,6 +150,7 @@ export async function verifyFirebaseOTP(code: string): Promise<{
     const result = await confirmationResult.confirm(code);
     const idToken = await result.user.getIdToken();
 
+    console.log("[Firebase] OTP verified successfully");
     return { success: true, idToken };
   } catch (err: unknown) {
     console.error("[Firebase] Verify OTP error:", err);
@@ -131,7 +171,11 @@ export async function verifyFirebaseOTP(code: string): Promise<{
 /** Cleanup reCAPTCHA on unmount */
 export function cleanupRecaptcha(): void {
   if (recaptchaVerifier) {
-    recaptchaVerifier.clear();
+    try {
+      recaptchaVerifier.clear();
+    } catch {
+      // Ignore clear errors
+    }
     recaptchaVerifier = null;
   }
   confirmationResult = null;
