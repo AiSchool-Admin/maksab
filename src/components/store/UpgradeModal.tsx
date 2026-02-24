@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Copy, Check, ExternalLink } from "lucide-react";
+import { X, Copy, Check } from "lucide-react";
 import type { SubscriptionPlan } from "@/types";
 import { PLANS, PAYMENT_METHODS, type PaymentMethodId } from "@/lib/stores/subscription-plans";
 import Button from "@/components/ui/Button";
@@ -128,17 +128,24 @@ export default function UpgradeModal({
                       )}
                     </button>
                   </button>
-                  {/* InstaPay direct link */}
-                  {method.id === "instapay" && selectedMethod === "instapay" && "link" in method && (
-                    <a
-                      href={method.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full mt-2 py-2.5 bg-gradient-to-l from-purple-600 to-blue-600 text-white font-bold rounded-xl text-xs active:scale-[0.98] transition-transform"
-                    >
-                      <ExternalLink size={14} />
-                      افتح إنستاباي وادفع
-                    </a>
+                  {/* InstaPay — show transfer instructions */}
+                  {method.id === "instapay" && selectedMethod === "instapay" && (
+                    <div className="mt-2 bg-purple-50 border border-purple-200 rounded-xl p-3 text-center space-y-2">
+                      <p className="text-xs text-purple-600 font-bold">حوّل على الرقم ده من إنستاباي:</p>
+                      <div className="bg-white rounded-lg p-2 flex items-center justify-between">
+                        <p className="text-base font-bold text-dark" dir="ltr">{method.number}</p>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopy(method.number, "instapay-num");
+                          }}
+                          className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-[10px] font-bold active:scale-95 transition-transform"
+                        >
+                          {copiedId === "instapay-num" ? "تم!" : "انسخ"}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-gray-text">افتح تطبيق البنك ← تحويل ← إنستاباي ← اكتب الرقم</p>
+                    </div>
                   )}
                 </div>
               ))}
