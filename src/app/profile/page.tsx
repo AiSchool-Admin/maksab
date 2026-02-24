@@ -405,21 +405,9 @@ export default function ProfilePage() {
   );
 }
 
-const INSTAPAY_ACCOUNT = "maksab@instapay";
+const INSTAPAY_LINK = "https://ipn.eg/S/mamdouhragab1707/instapay/0i4IIx";
 
 function InstaPayBanner() {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(INSTAPAY_ACCOUNT);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback
-    }
-  };
-
   return (
     <section className="px-4 pb-5">
       <div className="bg-gradient-to-l from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
@@ -432,25 +420,14 @@ function InstaPayBanner() {
             <p className="text-xs text-gray-text mb-2">
               مكسب تطبيق مجاني. لو عجبك، ساهم بعمولة بسيطة عن طريق إنستاباي
             </p>
-            <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2">
-              <span className="text-sm font-bold text-dark flex-1" dir="ltr">
-                {INSTAPAY_ACCOUNT}
-              </span>
-              <button
-                onClick={handleCopy}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                aria-label="نسخ"
-              >
-                {copied ? (
-                  <Check size={16} className="text-green-600" />
-                ) : (
-                  <Copy size={16} className="text-gray-text" />
-                )}
-              </button>
-            </div>
-            {copied && (
-              <p className="text-[11px] text-green-600 mt-1">تم النسخ!</p>
-            )}
+            <a
+              href={INSTAPAY_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-2.5 bg-gradient-to-l from-purple-600 to-blue-600 text-white font-bold rounded-xl text-xs active:scale-[0.98] transition-transform"
+            >
+              ادفع عبر إنستاباي
+            </a>
           </div>
         </div>
       </div>

@@ -46,8 +46,22 @@ export default function CommissionPrompt({
   const handleSelectMethod = (method: PaymentMethod) => {
     setSelectedMethod(method);
 
-    // Fawry and card redirect are processed immediately
-    if (method === "fawry" || method === "paymob_card") {
+    if (method === "instapay") {
+      // InstaPay: open the payment link directly then record & go to thanks
+      const methodInfo = paymentMethods.find((m) => m.id === "instapay");
+      if (methodInfo?.paymentLink) {
+        window.open(methodInfo.paymentLink, "_blank");
+      }
+      // Record the payment in background
+      processPayment({
+        amount: finalAmount,
+        method: "instapay",
+        adId,
+        payerId: userId,
+        description: `عمولة مكسب — ${adTitle}`,
+      });
+      setStep("thanks");
+    } else if (method === "fawry" || method === "paymob_card") {
       handleOnlinePayment(method);
     } else {
       setStep("method_details");
@@ -284,44 +298,6 @@ export default function CommissionPrompt({
             <p className="text-[11px] text-gray-text mt-3">
               ادفع {finalAmount} جنيه بالكود ده في أي منفذ فوري
             </p>
-          </div>
-        ) : selectedMethod === "instapay" ? (
-          /* ── InstaPay — transfer by phone number ── */
-          <div className="space-y-3">
-            <div className="bg-white border-2 border-purple-300 rounded-2xl p-5 text-center space-y-4">
-              <div className="bg-purple-100 rounded-full w-14 h-14 flex items-center justify-center mx-auto">
-                <InstaPayLogo size={32} />
-              </div>
-              <p className="text-base text-dark font-bold">
-                حوّل <span className="text-purple-700">{finalAmount} جنيه</span> عبر إنستاباي
-              </p>
-
-              {/* Phone number — primary action */}
-              <div className="bg-purple-50 rounded-xl p-4">
-                <p className="text-xs text-purple-600 font-semibold mb-2">حوّل على الرقم ده:</p>
-                <div className="bg-white rounded-lg p-3 flex items-center justify-between">
-                  <p className="text-xl font-bold text-dark tracking-wide" dir="ltr">
-                    {methodInfo?.details}
-                  </p>
-                  <button
-                    onClick={() => copyToClipboard(methodInfo?.details || "")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-bold active:scale-95 transition-transform"
-                  >
-                    <Copy size={12} />
-                    {copied ? "تم النسخ!" : "انسخ الرقم"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Steps */}
-              <div className="text-start space-y-2 px-1">
-                <p className="text-xs text-dark font-bold">الخطوات:</p>
-                <p className="text-xs text-gray-text">1. افتح تطبيق البنك أو إنستاباي</p>
-                <p className="text-xs text-gray-text">2. اختار &quot;تحويل&quot; ← &quot;إنستاباي&quot;</p>
-                <p className="text-xs text-gray-text">3. اكتب الرقم: <span className="font-bold text-dark" dir="ltr">{methodInfo?.details}</span></p>
-                <p className="text-xs text-gray-text">4. المبلغ: <span className="font-bold text-purple-700">{finalAmount} جنيه</span> وأكّد</p>
-              </div>
-            </div>
           </div>
         ) : (
           /* ── Manual payment (Vodafone Cash) ── */
