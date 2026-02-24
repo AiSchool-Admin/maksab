@@ -141,12 +141,16 @@ function LoginPageContent() {
         const { setupRecaptcha, sendFirebaseOTP } = await import(
           "@/lib/firebase/phone-auth"
         );
-        setupRecaptcha("recaptcha-container");
-        const firebaseResult = await sendFirebaseOTP(phone);
-        if (firebaseResult.success) {
-          firebaseSuccess = true;
+        const recaptchaReady = await setupRecaptcha("recaptcha-container");
+        if (!recaptchaReady) {
+          console.warn("[Auth] reCAPTCHA setup failed — falling back to dev mode");
         } else {
-          console.warn("[Auth] Firebase SMS failed:", firebaseResult.error, "— falling back to dev mode");
+          const firebaseResult = await sendFirebaseOTP(phone);
+          if (firebaseResult.success) {
+            firebaseSuccess = true;
+          } else {
+            console.warn("[Auth] Firebase SMS failed:", firebaseResult.error, "— falling back to dev mode");
+          }
         }
       } catch (err) {
         console.warn("[Auth] Firebase SMS error:", err, "— falling back to dev mode");
@@ -374,12 +378,16 @@ function LoginPageContent() {
         const { setupRecaptcha, sendFirebaseOTP } = await import(
           "@/lib/firebase/phone-auth"
         );
-        setupRecaptcha("recaptcha-container");
-        const firebaseResult = await sendFirebaseOTP(phone);
-        if (firebaseResult.success) {
-          firebaseSuccess = true;
+        const recaptchaReady = await setupRecaptcha("recaptcha-container");
+        if (!recaptchaReady) {
+          console.warn("[Auth] reCAPTCHA setup failed on resend");
         } else {
-          console.warn("[Auth] Firebase resend failed:", firebaseResult.error);
+          const firebaseResult = await sendFirebaseOTP(phone);
+          if (firebaseResult.success) {
+            firebaseSuccess = true;
+          } else {
+            console.warn("[Auth] Firebase resend failed:", firebaseResult.error);
+          }
         }
       } catch (err) {
         console.warn("[Auth] Firebase resend error:", err);
