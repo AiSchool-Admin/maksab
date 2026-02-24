@@ -1,15 +1,12 @@
 /**
  * POST /api/auth/send-otp
  *
- * Generates a 6-digit OTP for phone verification.
- * Uses HMAC-signed tokens — completely stateless, NO database table needed.
+ * Handles OTP delivery for phone verification.
  *
- * Flow:
- * 1. Validate phone + check rate limit
- * 2. Generate 6-digit code
- * 3. Create HMAC signature: HMAC(phone:code:expiry, SECRET)
- * 4. Send via WhatsApp (primary) → Firebase (fallback) → Dev mode
- * 5. Return signed token to client
+ * Channels (in priority order):
+ * 1. WhatsApp Cloud API (if configured)
+ * 2. Firebase Phone Auth — SMS sent client-side, server just signals the channel
+ * 3. Dev mode — code shown on screen (non-production only)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -22,8 +19,6 @@ const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
 function getSecret(): string {
   const secret = process.env.OTP_SECRET;
   if (!secret) {
-    // In non-production environments (dev, preview, staging), use a dev-only secret.
-    // In production, OTP_SECRET MUST be set for security.
     if (process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV !== "production") {
       return "maksab-dev-otp-secret-not-for-production";
     }
@@ -66,7 +61,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Rate limit check (Supabase-based, persistent) ───────────────
-    // Wrapped in try-catch so OTP still works if Supabase service key is missing
     try {
       const rateCheck = await checkRateLimit(phone, "otp_send");
       if (!rateCheck.allowed) {
@@ -79,29 +73,26 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch (rateLimitErr) {
-      // Rate limiting unavailable (e.g. missing service role key) — continue without it
       console.warn("[send-otp] Rate limit check skipped:", rateLimitErr);
     }
 
-    // Record this OTP request (fire-and-forget, don't block OTP delivery)
+    // Record this OTP request (fire-and-forget)
     recordRateLimit(phone, "otp_send").catch((err) => {
       console.warn("[send-otp] Rate limit record skipped:", err);
     });
 
-    // Generate OTP
-    const code = generateOTP();
-    const expiresAt = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
-
-    // Create signed token
-    const hmac = signOTP(phone, code, expiresAt);
-    const token = Buffer.from(
-      JSON.stringify({ phone, expiresAt, hmac })
-    ).toString("base64url");
-
-    // ── Send OTP via configured channel ─────────────────────────────
+    // ── Check channels BEFORE generating HMAC ─────────────────────
+    // Firebase doesn't need HMAC (it does its own verification client-side)
 
     // Channel 1: WhatsApp Cloud API (1,000 free service conversations/month)
     if (WHATSAPP_BOT_NUMBER) {
+      const code = generateOTP();
+      const expiresAt = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
+      const hmac = signOTP(phone, code, expiresAt);
+      const token = Buffer.from(
+        JSON.stringify({ phone, expiresAt, hmac })
+      ).toString("base64url");
+
       const whatsappResult = await sendViaWhatsApp(phone, code);
       if (whatsappResult.success) {
         return NextResponse.json({
@@ -111,24 +102,30 @@ export async function POST(req: NextRequest) {
           expires_at: expiresAt,
         });
       }
-      // Log failure but continue to fallback
       console.warn("[send-otp] WhatsApp failed, trying fallback:", whatsappResult.error);
     }
 
-    // Channel 2: Firebase Phone Auth (10,000 free/month)
+    // Channel 2: Firebase Phone Auth (10,000 free SMS/month)
+    // Firebase handles SMS + verification entirely client-side.
+    // No OTP_SECRET needed — no HMAC token generated.
     const firebaseConfigured = !!(
       process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
       process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
     );
     if (firebaseConfigured) {
-      // Firebase sends SMS client-side — server just needs to tell client to use Firebase
       return NextResponse.json({
         success: true,
-        token, // Still provide HMAC token as fallback identifier
         channel: "firebase",
-        expires_at: expiresAt,
       });
     }
+
+    // ── Non-Firebase channels need HMAC token ─────────────────────
+    const code = generateOTP();
+    const expiresAt = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
+    const hmac = signOTP(phone, code, expiresAt);
+    const token = Buffer.from(
+      JSON.stringify({ phone, expiresAt, hmac })
+    ).toString("base64url");
 
     // Channel 3: SMS (if configured)
     const smsEnabled = process.env.NEXT_PUBLIC_PHONE_AUTH_ENABLED === "true";
@@ -143,7 +140,6 @@ export async function POST(req: NextRequest) {
 
     // No real delivery channel configured
     if (process.env.NODE_ENV === "production" && process.env.VERCEL_ENV === "production") {
-      // In production, refuse to send OTP without a real delivery channel
       console.error("[send-otp] CRITICAL: No OTP delivery channel configured in production!");
       return NextResponse.json(
         { error: "خدمة الرسائل مش متاحة حالياً. جرب تاني بعد شوية" },
@@ -172,8 +168,6 @@ export async function POST(req: NextRequest) {
 
 /**
  * Send OTP via WhatsApp Cloud API (Meta Business)
- * Uses v21.0 of the Graph API.
- * First 1,000 service conversations per month are FREE.
  */
 async function sendViaWhatsApp(
   phone: string,
@@ -230,7 +224,6 @@ async function sendViaWhatsApp(
     const errorMsg = errorData?.error?.message || `HTTP ${response.status}`;
     console.error("[WhatsApp] Send failed:", errorMsg, errorData);
 
-    // Token expired — log specific message
     if (response.status === 401) {
       console.error("[WhatsApp] Access token expired! Renew at developers.facebook.com");
     }
