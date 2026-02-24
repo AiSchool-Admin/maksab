@@ -80,12 +80,12 @@ export function getSessionToken(): string | null {
 }
 
 // ── Send OTP (Custom API — Free) ────────────────────────────────────
-export async function sendOTP(phone: string): Promise<SendOtpResult> {
+export async function sendOTP(phone: string, forceDevMode?: boolean): Promise<SendOtpResult> {
   try {
     const res = await fetch("/api/auth/send-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({ phone, force_dev: forceDevMode || undefined }),
     });
 
     const data = await res.json();
