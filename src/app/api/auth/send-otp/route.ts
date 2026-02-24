@@ -100,18 +100,6 @@ export async function POST(req: NextRequest) {
 
     // ── Send OTP via configured channel ─────────────────────────────
 
-    // Force dev mode (used when Firebase SMS fails client-side as fallback)
-    if (body.force_dev && process.env.NODE_ENV !== "production") {
-      console.log(`[DEV OTP - fallback] Phone: ${phone}, Code: ${code}`);
-      return NextResponse.json({
-        success: true,
-        token,
-        channel: "dev",
-        expires_at: expiresAt,
-        dev_code: code,
-      });
-    }
-
     // Channel 1: WhatsApp Cloud API (1,000 free service conversations/month)
     if (WHATSAPP_BOT_NUMBER) {
       const whatsappResult = await sendViaWhatsApp(phone, code);
