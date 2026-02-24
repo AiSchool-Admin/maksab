@@ -10,11 +10,9 @@ import { useAuth, setPendingMerchant } from "@/components/auth/AuthProvider";
 import {
   sendOTP,
   verifyOTP,
-  verifyOTPViaFirebase,
   type UserProfile,
 } from "@/lib/supabase/auth";
 import { egyptianPhoneSchema, normalizeEgyptianPhone, otpSchema } from "@/lib/utils/validators";
-import { isFirebaseConfigured } from "@/lib/firebase/config";
 
 type Step = "phone" | "otp";
 type AccountType = "individual" | "merchant";
@@ -131,34 +129,7 @@ function LoginPageContent() {
       return;
     }
 
-    // Firebase channel: send OTP via Firebase client SDK
-    if (otpResult.channel === "firebase" && isFirebaseConfigured()) {
-      try {
-        const { setupRecaptcha, sendFirebaseOTP } = await import(
-          "@/lib/firebase/phone-auth"
-        );
-        const recaptchaReady = await setupRecaptcha("recaptcha-container");
-        if (!recaptchaReady) {
-          setIsSubmitting(false);
-          setError("فشل تحميل reCAPTCHA. جرب تاني");
-          return;
-        }
-        const firebaseResult = await sendFirebaseOTP(phone);
-        setIsSubmitting(false);
-        if (!firebaseResult.success) {
-          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
-          return;
-        }
-      } catch (err) {
-        setIsSubmitting(false);
-        console.error("[Auth] Firebase SMS error:", err);
-        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
-        return;
-      }
-    } else {
-      setIsSubmitting(false);
-    }
-
+    setIsSubmitting(false);
     setOtpToken(otpResult.token || "");
     setOtpChannel(otpResult.channel || null);
     setDevCode(otpResult.dev_code || null);
@@ -167,10 +138,9 @@ function LoginPageContent() {
     setResendTimer(60);
     setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
 
-    // Auto-fill OTP in dev mode with typing animation
     if (otpResult.dev_code) {
       autoFillOTP(otpResult.dev_code);
-    } else if (otpResult.channel !== "firebase") {
+    } else {
       tryWebOTP();
     }
   };
@@ -278,43 +248,7 @@ function LoginPageContent() {
 
       setIsSubmitting(true);
 
-      // Firebase channel: verify via Firebase, then exchange for our session
-      if (otpChannel === "firebase") {
-        try {
-          const { verifyFirebaseOTP } = await import("@/lib/firebase/phone-auth");
-          const fbResult = await verifyFirebaseOTP(code);
-
-          if (!fbResult.success || !fbResult.idToken) {
-            setIsSubmitting(false);
-            setError(fbResult.error || "الكود غلط. جرب تاني");
-            setOtp(["", "", "", "", "", ""]);
-            otpInputsRef.current[0]?.focus();
-            return;
-          }
-
-          // Exchange Firebase token for our session
-          const response = await verifyOTPViaFirebase(fbResult.idToken);
-          setIsSubmitting(false);
-
-          if (response.error || !response.user) {
-            setError(response.error || "حصلت مشكلة. جرب تاني");
-            setOtp(["", "", "", "", "", ""]);
-            otpInputsRef.current[0]?.focus();
-            return;
-          }
-
-          handleSuccess(response.user);
-          return;
-        } catch {
-          setIsSubmitting(false);
-          setError("حصلت مشكلة في التحقق. جرب تاني");
-          setOtp(["", "", "", "", "", ""]);
-          otpInputsRef.current[0]?.focus();
-          return;
-        }
-      }
-
-      // Standard HMAC verification
+      // HMAC verification
       const response = await verifyOTP(phone, code, otpToken);
 
       setIsSubmitting(false);
@@ -328,17 +262,9 @@ function LoginPageContent() {
 
       handleSuccess(response.user);
     },
-    [otp, phone, otpToken, otpChannel, accountType],
+    [otp, phone, otpToken, accountType],
   );
 
-  // ── Cleanup Firebase reCAPTCHA on unmount ────────────────────────
-  useEffect(() => {
-    return () => {
-      import("@/lib/firebase/phone-auth").then(({ cleanupRecaptcha }) => {
-        cleanupRecaptcha();
-      }).catch(() => {});
-    };
-  }, []);
 
   // ── Resend OTP ────────────────────────────────────────────────────
   const handleResend = async () => {
@@ -354,34 +280,7 @@ function LoginPageContent() {
       return;
     }
 
-    // Firebase channel: re-send via Firebase
-    if (resendResult.channel === "firebase" && isFirebaseConfigured()) {
-      try {
-        const { setupRecaptcha, sendFirebaseOTP } = await import(
-          "@/lib/firebase/phone-auth"
-        );
-        const recaptchaReady = await setupRecaptcha("recaptcha-container");
-        if (!recaptchaReady) {
-          setIsSubmitting(false);
-          setError("فشل تحميل reCAPTCHA. جرب تاني");
-          return;
-        }
-        const firebaseResult = await sendFirebaseOTP(phone);
-        setIsSubmitting(false);
-        if (!firebaseResult.success) {
-          setError(firebaseResult.error || "حصلت مشكلة في إرسال الكود");
-          return;
-        }
-      } catch (err) {
-        setIsSubmitting(false);
-        console.error("[Auth] Firebase resend error:", err);
-        setError("حصلت مشكلة في إرسال الكود. جرب تاني");
-        return;
-      }
-    } else {
-      setIsSubmitting(false);
-    }
-
+    setIsSubmitting(false);
     setOtpToken(resendResult.token || "");
     setOtpChannel(resendResult.channel || null);
     setDevCode(resendResult.dev_code || null);
@@ -389,7 +288,9 @@ function LoginPageContent() {
     setOtp(["", "", "", "", "", ""]);
     otpInputsRef.current[0]?.focus();
 
-    if (resendResult.channel !== "firebase") {
+    if (resendResult.dev_code) {
+      autoFillOTP(resendResult.dev_code);
+    } else {
       tryWebOTP();
     }
   };
@@ -563,7 +464,7 @@ function LoginPageContent() {
               </div>
               <h2 className="text-2xl font-bold text-dark mb-2">أدخل كود التأكيد</h2>
               <p className="text-sm text-gray-text">
-                {otpChannel === "whatsapp" ? "بعتنالك كود على واتساب" : otpChannel === "firebase" ? "بعتنالك كود SMS على" : otpChannel === "dev" ? "كود التأكيد" : "بعتنالك كود على"}{" "}
+                {otpChannel === "whatsapp" ? "بعتنالك كود على واتساب" : otpChannel === "dev" ? "كود التأكيد" : "بعتنالك كود على"}{" "}
                 {otpChannel !== "dev" && (
                   <span className="font-bold text-dark" dir="ltr">
                     {formatPhone(phone)}
@@ -659,8 +560,6 @@ function LoginPageContent() {
         )}
       </div>
 
-      {/* Invisible reCAPTCHA container for Firebase Phone Auth */}
-      <div id="recaptcha-container" />
     </main>
   );
 }
