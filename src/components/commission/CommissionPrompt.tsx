@@ -285,42 +285,41 @@ export default function CommissionPrompt({
               ادفع {finalAmount} جنيه بالكود ده في أي منفذ فوري
             </p>
           </div>
-        ) : selectedMethod === "instapay" && methodInfo?.paymentLink ? (
-          /* ── InstaPay with direct link + manual transfer ── */
+        ) : selectedMethod === "instapay" ? (
+          /* ── InstaPay — transfer by phone number ── */
           <div className="space-y-3">
-            <div className="bg-gradient-to-bl from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4 text-center space-y-3">
-              <p className="text-sm text-dark font-semibold">
-                حوّل <span className="font-bold text-purple-700">{finalAmount} جنيه</span>
+            <div className="bg-white border-2 border-purple-300 rounded-2xl p-5 text-center space-y-4">
+              <div className="bg-purple-100 rounded-full w-14 h-14 flex items-center justify-center mx-auto">
+                <InstaPayLogo size={32} />
+              </div>
+              <p className="text-base text-dark font-bold">
+                حوّل <span className="text-purple-700">{finalAmount} جنيه</span> عبر إنستاباي
               </p>
 
-              {/* Direct InstaPay link */}
-              <a
-                href={methodInfo.paymentLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-l from-purple-600 to-blue-600 text-white font-bold rounded-xl text-sm active:scale-[0.98] transition-transform"
-              >
-                <InstaPayLogo size={22} />
-                افتح إنستاباي وادفع {finalAmount} جنيه
-              </a>
-
-              {/* Manual transfer fallback */}
-              <div className="border-t border-purple-100 pt-3 mt-2">
-                <p className="text-[11px] text-gray-text mb-1.5">
-                  أو حوّل يدوي من إنستاباي على الرقم:
-                </p>
-                <div className="flex items-center justify-center gap-2 bg-white rounded-lg p-2.5">
-                  <p className="text-sm font-bold text-dark" dir="ltr">
-                    {methodInfo.details}
+              {/* Phone number — primary action */}
+              <div className="bg-purple-50 rounded-xl p-4">
+                <p className="text-xs text-purple-600 font-semibold mb-2">حوّل على الرقم ده:</p>
+                <div className="bg-white rounded-lg p-3 flex items-center justify-between">
+                  <p className="text-xl font-bold text-dark tracking-wide" dir="ltr">
+                    {methodInfo?.details}
                   </p>
                   <button
-                    onClick={() => copyToClipboard(methodInfo.details!)}
-                    className="flex items-center gap-1 text-xs text-purple-600 font-semibold btn-icon-sm"
+                    onClick={() => copyToClipboard(methodInfo?.details || "")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-bold active:scale-95 transition-transform"
                   >
                     <Copy size={12} />
-                    {copied ? "تم!" : "نسخ"}
+                    {copied ? "تم النسخ!" : "انسخ الرقم"}
                   </button>
                 </div>
+              </div>
+
+              {/* Steps */}
+              <div className="text-start space-y-2 px-1">
+                <p className="text-xs text-dark font-bold">الخطوات:</p>
+                <p className="text-xs text-gray-text">1. افتح تطبيق البنك أو إنستاباي</p>
+                <p className="text-xs text-gray-text">2. اختار &quot;تحويل&quot; ← &quot;إنستاباي&quot;</p>
+                <p className="text-xs text-gray-text">3. اكتب الرقم: <span className="font-bold text-dark" dir="ltr">{methodInfo?.details}</span></p>
+                <p className="text-xs text-gray-text">4. المبلغ: <span className="font-bold text-purple-700">{finalAmount} جنيه</span> وأكّد</p>
               </div>
             </div>
           </div>
