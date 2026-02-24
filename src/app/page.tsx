@@ -258,7 +258,7 @@ export default function HomePage() {
           {/* Commission / InstaPay */}
           <div className="px-4 pb-1">
             <a
-              href="https://ipn.eg/S/maksab/instapay/QR"
+              href="https://ipn.eg/S/mamdouhragab1707/instapay/0i4IIx"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2.5 active:opacity-70 transition-opacity"
