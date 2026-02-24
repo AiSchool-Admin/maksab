@@ -6,9 +6,7 @@
  *
  * Channels (in priority order):
  * 1. WhatsApp Cloud API (if configured)
- * 2. Dev mode — HMAC-verified OTP, code shown in UI
- *
- * Firebase Phone Auth is disabled until Blaze plan is activated.
+ * 2. Dev mode — HMAC-verified OTP, code shown in UI (non-production only)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -18,10 +16,18 @@ import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-ser
 const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
 
+/** Check if we're in a non-production environment */
+function isNonProduction(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV !== "production";
+}
+
 function getSecret(): string {
   const secret = process.env.OTP_SECRET;
   if (!secret) {
-    return "maksab-dev-otp-secret-not-for-production";
+    if (isNonProduction()) {
+      return "maksab-dev-otp-secret-not-for-production";
+    }
+    throw new Error("Missing OTP_SECRET environment variable. Set it in production.");
   }
   return secret;
 }
@@ -100,14 +106,25 @@ export async function POST(req: NextRequest) {
       console.warn("[send-otp] WhatsApp failed, trying fallback:", whatsappResult.error);
     }
 
-    // Channel 2: Dev mode — OTP code shown in UI, verified via HMAC
-    console.log(`[OTP] Phone: ${phone}, Code: ${code}`);
+    // Channel 2: Dev mode — OTP code shown in UI (non-production only)
+    if (isNonProduction()) {
+      console.log(`[OTP-DEV] Phone: ${phone}, Code: ${code}`);
+      return NextResponse.json({
+        success: true,
+        token,
+        channel: "dev",
+        expires_at: expiresAt,
+        dev_code: code,
+      });
+    }
+
+    // Production without WhatsApp configured — still send token but NOT the code
+    console.warn("[send-otp] No delivery channel available in production for", phone);
     return NextResponse.json({
       success: true,
       token,
-      channel: "dev",
+      channel: "pending",
       expires_at: expiresAt,
-      dev_code: code,
     });
 
   } catch (err) {

@@ -93,8 +93,13 @@ export default function MyRequestsPage() {
     );
   }
 
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login?redirect=/my-requests");
+    }
+  }, [authLoading, user, router]);
+
   if (!user) {
-    router.push("/login?redirect=/my-requests");
     return null;
   }
 

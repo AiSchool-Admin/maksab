@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -9,6 +10,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       user_id,
+      session_token,
       name,
       description,
       main_category,
@@ -26,8 +28,20 @@ export async function POST(request: Request) {
       address_detail,
     } = body;
 
+    // ── Authentication ────────────────────────────────────────────
+    let authenticatedUserId = user_id;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      authenticatedUserId = tokenResult.userId;
+    } else if (!user_id) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+
     // ── Validation ──────────────────────────────────────────────
-    if (!user_id || !name || !main_category) {
+    if (!authenticatedUserId || !name || !main_category) {
       return NextResponse.json(
         { error: "الاسم والقسم مطلوبين" },
         { status: 400 },
@@ -56,7 +70,7 @@ export async function POST(request: Request) {
     const { data: profile } = await adminClient
       .from("profiles")
       .select("id, seller_type, store_id")
-      .eq("id", user_id)
+      .eq("id", authenticatedUserId)
       .maybeSingle();
 
     if (!profile) {
@@ -111,7 +125,7 @@ export async function POST(request: Request) {
     // ── Create store ────────────────────────────────────────────
     // Use only columns that exist in the original migration (00012)
     const insertData: Record<string, unknown> = {
-      user_id,
+      user_id: authenticatedUserId,
       name: name.trim(),
       slug,
       description: description || null,
@@ -175,21 +189,21 @@ export async function POST(request: Request) {
         store_id: store.id,
         seller_type: "store",
       })
-      .eq("id", user_id);
+      .eq("id", authenticatedUserId);
 
     // ── Migrate unassigned products to new store ─────────────────
     // Only migrate ads that don't already belong to another store
     const { count: migratedCount } = await adminClient
       .from("ads")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user_id)
+      .eq("user_id", authenticatedUserId)
       .is("store_id", null)
       .neq("status", "deleted");
 
     await adminClient
       .from("ads")
       .update({ store_id: store.id } as never)
-      .eq("user_id", user_id)
+      .eq("user_id", authenticatedUserId)
       .is("store_id", null)
       .neq("status", "deleted");
 

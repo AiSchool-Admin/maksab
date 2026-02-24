@@ -20,22 +20,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { ad_id, buyer_id: bodyBuyerId, buyer_name, session_token } = body;
 
-    // Authenticate via session token
-    let buyer_id: string;
-    if (session_token) {
-      const tokenResult = verifySessionToken(session_token);
-      if (!tokenResult.valid) {
-        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
-      }
-      buyer_id = tokenResult.userId;
-      if (bodyBuyerId && bodyBuyerId !== buyer_id) {
-        return NextResponse.json({ error: "بيانات المصادقة مش متطابقة" }, { status: 403 });
-      }
-    } else if (bodyBuyerId) {
-      buyer_id = bodyBuyerId;
-    } else {
+    // Authenticate via session token (required)
+    if (!session_token) {
       return NextResponse.json({ error: "مطلوب توكن الجلسة" }, { status: 401 });
     }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const buyer_id = tokenResult.userId;
 
     if (!ad_id) {
       return NextResponse.json(

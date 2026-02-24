@@ -61,12 +61,6 @@ const ENV_VARS: EnvVar[] = [
     description: "رابط Sentry لمراقبة الأخطاء",
   },
 
-  // ── Firebase (Optional — OTP fallback) ──
-  {
-    name: "NEXT_PUBLIC_FIREBASE_API_KEY",
-    required: false,
-    description: "مفتاح Firebase API — لإرسال OTP عبر Firebase",
-  },
 ];
 
 export function validateEnv(): { valid: boolean; missing: string[]; warnings: string[] } {

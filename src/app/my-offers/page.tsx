@@ -82,8 +82,13 @@ export default function MyOffersPage() {
     );
   }
 
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login?redirect=/my-offers");
+    }
+  }, [authLoading, user, router]);
+
   if (!user) {
-    router.push("/login?redirect=/my-offers");
     return null;
   }
 

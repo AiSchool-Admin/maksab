@@ -36,8 +36,13 @@ export default function SellerAnalyticsPage() {
       .finally(() => setLoading(false));
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/");
+    }
+  }, [isLoading, user, router]);
+
   if (!isLoading && !user) {
-    router.push("/");
     return null;
   }
 

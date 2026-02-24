@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -23,10 +24,22 @@ const VALID_REASONS = [
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { reporter_id, target_type, target_ad_id, target_user_id, reason, details } = body;
+    const { reporter_id, session_token, target_type, target_ad_id, target_user_id, reason, details } = body;
+
+    // Authentication
+    let authenticatedReporterId = reporter_id;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      authenticatedReporterId = tokenResult.userId;
+    } else if (!reporter_id) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
 
     // Validation
-    if (!reporter_id || !target_type || !reason) {
+    if (!authenticatedReporterId || !target_type || !reason) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
 
@@ -47,7 +60,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Cannot report yourself
-    if (target_type === "user" && target_user_id === reporter_id) {
+    if (target_type === "user" && target_user_id === authenticatedReporterId) {
       return NextResponse.json({ error: "مش ممكن تبلّغ عن نفسك" }, { status: 400 });
     }
 
@@ -57,7 +70,7 @@ export async function POST(req: NextRequest) {
     const { data: recentReports } = await supabase
       .from("reports")
       .select("id", { count: "exact", head: true })
-      .eq("reporter_id", reporter_id)
+      .eq("reporter_id", authenticatedReporterId)
       .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
     if ((recentReports as unknown as number) >= 10) {
@@ -71,7 +84,7 @@ export async function POST(req: NextRequest) {
     const dupQuery = supabase
       .from("reports")
       .select("id", { count: "exact", head: true })
-      .eq("reporter_id", reporter_id)
+      .eq("reporter_id", authenticatedReporterId)
       .eq("target_type", target_type);
 
     if (target_type === "ad") {
@@ -92,7 +105,7 @@ export async function POST(req: NextRequest) {
     const { error: insertError } = await supabase
       .from("reports")
       .insert({
-        reporter_id,
+        reporter_id: authenticatedReporterId,
         target_type,
         target_ad_id: target_ad_id || null,
         target_user_id: target_user_id || null,

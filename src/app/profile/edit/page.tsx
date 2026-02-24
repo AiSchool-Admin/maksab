@@ -34,8 +34,13 @@ export default function EditProfilePage() {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (!user) {
+      router.push("/profile");
+    }
+  }, [user, router]);
+
   if (!user) {
-    router.push("/profile");
     return null;
   }
 
