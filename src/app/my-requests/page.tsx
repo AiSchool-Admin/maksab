@@ -37,11 +37,6 @@ export default function MyRequestsPage() {
   const [offersMap, setOffersMap] = useState<Record<string, BuyRequestOffer[]>>({});
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user) return;
-    loadData();
-  }, [user]);
-
   const loadData = async () => {
     setIsLoading(true);
     const reqs = await fetchMyBuyRequests();
@@ -58,6 +53,18 @@ export default function MyRequestsPage() {
     setOffersMap(oMap);
     setIsLoading(false);
   };
+
+  useEffect(() => {
+    if (!user) return;
+    loadData();
+  }, [user]);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login?redirect=/my-requests");
+    }
+  }, [authLoading, user, router]);
 
   const handleDelete = async (id: string) => {
     const ok = await deleteBuyRequest(id);
@@ -92,12 +99,6 @@ export default function MyRequestsPage() {
       </main>
     );
   }
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login?redirect=/my-requests");
-    }
-  }, [authLoading, user, router]);
 
   if (!user) {
     return null;

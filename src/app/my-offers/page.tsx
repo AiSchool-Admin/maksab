@@ -34,6 +34,13 @@ export default function MyOffersPage() {
 
   const [chattingOfferId, setChattingOfferId] = useState<string | null>(null);
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login?redirect=/my-offers");
+    }
+  }, [authLoading, user, router]);
+
   const handleChatWithSeller = async (offer: PriceOffer) => {
     setChattingOfferId(offer.id);
     try {
@@ -81,12 +88,6 @@ export default function MyOffersPage() {
       </main>
     );
   }
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login?redirect=/my-offers");
-    }
-  }, [authLoading, user, router]);
 
   if (!user) {
     return null;
