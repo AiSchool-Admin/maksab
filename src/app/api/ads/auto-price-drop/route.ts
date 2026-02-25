@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { calculateSmartPriceDrop } from "@/lib/ai/chat-intelligence";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getSupabase() {
   return createClient(
@@ -19,11 +20,21 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase();
     const body = await req.json();
-    const { ad_id, apply } = body;
+    const { ad_id, apply, session_token } = body;
 
     if (!ad_id) {
       return NextResponse.json({ error: "ad_id مطلوب" }, { status: 400 });
     }
+
+    // Authentication (session_token required)
+    if (!session_token) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const authenticatedUserId = tokenResult.userId;
 
     // Fetch ad data
     const { data: ad, error: adErr } = await supabase
@@ -36,6 +47,11 @@ export async function POST(req: NextRequest) {
 
     if (adErr || !ad) {
       return NextResponse.json({ error: "الإعلان مش موجود أو مش نقدي" }, { status: 404 });
+    }
+
+    // Verify ad ownership
+    if (ad.user_id !== authenticatedUserId) {
+      return NextResponse.json({ error: "مش مسموحلك تعدل على الإعلان ده" }, { status: 403 });
     }
 
     if (!ad.price || ad.price <= 0) {
@@ -116,7 +132,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[auto-price-drop] Error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "حصل مشكلة" },
+      { error: "حصل مشكلة. جرب تاني" },
       { status: 500 },
     );
   }

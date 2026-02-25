@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { PLANS, isUpgrade } from "@/lib/stores/subscription-plans";
 import type { SubscriptionPlan } from "@/types";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 /**
  * POST /api/stores/subscription/upgrade
@@ -13,16 +14,26 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { store_id, user_id, plan, billing_cycle, payment_method, payment_ref } = body as {
+    const { store_id, session_token, plan, billing_cycle, payment_method, payment_ref } = body as {
       store_id: string;
-      user_id: string;
+      session_token?: string;
       plan: SubscriptionPlan;
       billing_cycle: "monthly" | "yearly";
       payment_method: string;
       payment_ref: string;
     };
 
-    if (!store_id || !user_id || !plan || !payment_method) {
+    // Authentication (session_token required)
+    if (!session_token) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const user_id = tokenResult.userId;
+
+    if (!store_id || !plan || !payment_method) {
       return NextResponse.json(
         { error: "البيانات ناقصة" },
         { status: 400 },
@@ -118,7 +129,7 @@ export async function POST(request: Request) {
 
     if (insertError) {
       return NextResponse.json(
-        { error: "فشل ترقية الاشتراك: " + insertError.message },
+        { error: "فشل ترقية الاشتراك. جرب تاني" },
         { status: 500 },
       );
     }
@@ -147,10 +158,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     return NextResponse.json(
-      {
-        error: "خطأ غير متوقع",
-        details: err instanceof Error ? err.message : String(err),
-      },
+      { error: "حصل مشكلة. جرب تاني" },
       { status: 500 },
     );
   }

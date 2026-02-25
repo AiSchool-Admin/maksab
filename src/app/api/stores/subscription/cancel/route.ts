@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 /**
  * POST /api/stores/subscription/cancel
@@ -11,12 +12,22 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { store_id, user_id } = body as {
+    const { store_id, session_token } = body as {
       store_id: string;
-      user_id: string;
+      session_token?: string;
     };
 
-    if (!store_id || !user_id) {
+    // Authentication (session_token required)
+    if (!session_token) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const user_id = tokenResult.userId;
+
+    if (!store_id) {
       return NextResponse.json(
         { error: "البيانات ناقصة" },
         { status: 400 },
@@ -101,10 +112,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     return NextResponse.json(
-      {
-        error: "خطأ غير متوقع",
-        details: err instanceof Error ? err.message : String(err),
-      },
+      { error: "حصل مشكلة. جرب تاني" },
       { status: 500 },
     );
   }

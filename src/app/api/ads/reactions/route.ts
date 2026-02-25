@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,7 +33,7 @@ type ReactionType = (typeof VALID_REACTIONS)[number];
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ad_id, reaction_type, user_id } = body;
+    const { ad_id, reaction_type, session_token } = body;
 
     if (!ad_id || !reaction_type) {
       return NextResponse.json(
@@ -48,14 +49,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve user ID — from body or try to infer
-    const resolvedUserId = user_id || null;
-    if (!resolvedUserId) {
-      return NextResponse.json(
-        { error: "لازم تسجل دخول الأول" },
-        { status: 401 },
-      );
+    // Authentication (session_token required)
+    if (!session_token) {
+      return NextResponse.json({ error: "لازم تسجل دخول الأول" }, { status: 401 });
     }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const resolvedUserId = tokenResult.userId;
 
     const client = getServiceClient();
     if (!client) {

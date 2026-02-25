@@ -9,17 +9,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { awardPoints } from "@/lib/loyalty/loyalty-service";
 import { POINT_ACTIONS, type PointAction } from "@/lib/loyalty/types";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, action, referenceId } = body as {
-      userId: string;
+    const { session_token, action, referenceId } = body as {
+      session_token?: string;
       action: string;
       referenceId?: string;
     };
 
-    if (!userId || !action) {
+    // Authentication (session_token required)
+    if (!session_token) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const userId = tokenResult.userId;
+
+    if (!action) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
 

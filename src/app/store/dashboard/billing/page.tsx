@@ -74,12 +74,13 @@ export default function BillingPage() {
     setIsUpgrading(true);
 
     try {
+      const { getSessionToken } = await import("@/lib/supabase/auth");
       const res = await fetch("/api/stores/subscription/upgrade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           store_id: store.id,
-          user_id: user.id,
+          session_token: getSessionToken(),
           plan: upgradeTarget,
           billing_cycle: billingCycle,
           payment_method: paymentMethod,
@@ -108,12 +109,13 @@ export default function BillingPage() {
     setIsCancelling(true);
 
     try {
+      const { getSessionToken } = await import("@/lib/supabase/auth");
       const res = await fetch("/api/stores/subscription/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           store_id: store.id,
-          user_id: user.id,
+          session_token: getSessionToken(),
         }),
       });
 
