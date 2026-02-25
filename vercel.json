@@ -63,7 +63,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://ui-avatars.com https://lh3.googleusercontent.com https://www.facebook.com; connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://ui-avatars.com https://lh3.googleusercontent.com https://www.facebook.com; connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com https://vercel.live wss://vercel.live; frame-src https://vercel.live; object-src 'none'; base-uri 'self'; form-action 'self'"
         }
       ]
     }
