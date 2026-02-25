@@ -22,12 +22,11 @@ import type {
 // ── Payment Methods Configuration ─────────────────────────────────────
 
 const VODAFONE_CASH_NUMBER =
-  process.env.NEXT_PUBLIC_VODAFONE_CASH_NUMBER || "01064348782";
+  process.env.NEXT_PUBLIC_VODAFONE_CASH_NUMBER || "";
 const INSTAPAY_PHONE =
-  process.env.NEXT_PUBLIC_INSTAPAY_PHONE || "01064348782";
+  process.env.NEXT_PUBLIC_INSTAPAY_PHONE || "";
 const INSTAPAY_LINK =
-  process.env.NEXT_PUBLIC_INSTAPAY_LINK ||
-  "https://ipn.eg/S/mamdouhragab1707/instapay/0i4IIx";
+  process.env.NEXT_PUBLIC_INSTAPAY_LINK || "";
 
 export const PAYMENT_METHODS: PaymentMethodInfo[] = [
   {

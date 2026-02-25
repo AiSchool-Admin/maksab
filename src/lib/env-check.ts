@@ -1,7 +1,8 @@
 /**
  * Environment variable validation.
  * Called at startup to ensure all required variables are set.
- * Logs warnings for missing variables — does NOT throw to avoid breaking the app.
+ * In production: throws if critical vars are missing (fail-fast).
+ * In development: logs warnings so the app can still start.
  */
 
 interface EnvVar {
@@ -80,17 +81,30 @@ export function validateEnv(): { valid: boolean; missing: string[]; warnings: st
   }
 
   if (missing.length > 0) {
-    console.error("╔══════════════════════════════════════════════════════════╗");
-    console.error("║  ⛔  مكسب — متغيرات بيئية مطلوبة مفقودة                 ║");
-    console.error("╠══════════════════════════════════════════════════════════╣");
+    const header = "⛔  مكسب — متغيرات بيئية مطلوبة مفقودة";
+    const lines = [
+      "╔══════════════════════════════════════════════════════════╗",
+      `║  ${header}                 ║`,
+      "╠══════════════════════════════════════════════════════════╣",
+    ];
     for (const name of missing) {
       const v = ENV_VARS.find((e) => e.name === name)!;
-      console.error(`║  ❌  ${name}`);
-      console.error(`║      ${v.description}`);
+      lines.push(`║  ❌  ${name}`);
+      lines.push(`║      ${v.description}`);
     }
-    console.error("╠══════════════════════════════════════════════════════════╣");
-    console.error("║  📄  راجع .env.local.example لكل التفاصيل               ║");
-    console.error("╚══════════════════════════════════════════════════════════╝");
+    lines.push("╠══════════════════════════════════════════════════════════╣");
+    lines.push("║  📄  راجع .env.local.example لكل التفاصيل               ║");
+    lines.push("╚══════════════════════════════════════════════════════════╝");
+
+    const message = lines.join("\n");
+    console.error(message);
+
+    // In production runtime, fail fast — don't start with missing critical vars.
+    // Skip during build phase (NEXT_PHASE=phase-production-build).
+    const isBuild = process.env.NEXT_PHASE === "phase-production-build";
+    if (process.env.NODE_ENV === "production" && !isBuild) {
+      throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
+    }
   }
 
   if (warnings.length > 0) {
