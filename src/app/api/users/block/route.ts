@@ -18,19 +18,17 @@ function getServiceClient() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { blocker_id, blocked_id, session_token } = await req.json();
+    const { blocked_id, session_token } = await req.json();
 
-    // Authentication
-    let authenticatedBlockerId = blocker_id;
-    if (session_token) {
-      const tokenResult = verifySessionToken(session_token);
-      if (!tokenResult.valid) {
-        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
-      }
-      authenticatedBlockerId = tokenResult.userId;
-    } else if (!blocker_id) {
+    // Authentication (session_token required)
+    if (!session_token) {
       return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
     }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const authenticatedBlockerId = tokenResult.userId;
 
     if (!authenticatedBlockerId || !blocked_id) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
@@ -63,19 +61,17 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { blocker_id, blocked_id, session_token } = await req.json();
+    const { blocked_id, session_token } = await req.json();
 
-    // Authentication
-    let authenticatedBlockerId = blocker_id;
-    if (session_token) {
-      const tokenResult = verifySessionToken(session_token);
-      if (!tokenResult.valid) {
-        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
-      }
-      authenticatedBlockerId = tokenResult.userId;
-    } else if (!blocker_id) {
+    // Authentication (session_token required)
+    if (!session_token) {
       return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
     }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const authenticatedBlockerId = tokenResult.userId;
 
     if (!authenticatedBlockerId || !blocked_id) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });

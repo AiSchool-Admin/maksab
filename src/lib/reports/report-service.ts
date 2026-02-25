@@ -43,11 +43,13 @@ export interface ReportParams {
  */
 export async function submitReport(params: ReportParams): Promise<{ success: boolean; error?: string }> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const response = await fetch("/api/reports/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         reporter_id: params.reporterId,
+        session_token: getSessionToken(),
         target_type: params.targetType,
         target_ad_id: params.targetAdId || null,
         target_user_id: params.targetUserId || null,

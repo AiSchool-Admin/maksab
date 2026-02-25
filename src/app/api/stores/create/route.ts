@@ -28,17 +28,15 @@ export async function POST(request: Request) {
       address_detail,
     } = body;
 
-    // ── Authentication ────────────────────────────────────────────
-    let authenticatedUserId = user_id;
-    if (session_token) {
-      const tokenResult = verifySessionToken(session_token);
-      if (!tokenResult.valid) {
-        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
-      }
-      authenticatedUserId = tokenResult.userId;
-    } else if (!user_id) {
+    // ── Authentication (session_token required) ────────────────────
+    if (!session_token) {
       return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
     }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const authenticatedUserId = tokenResult.userId;
 
     // ── Validation ──────────────────────────────────────────────
     if (!authenticatedUserId || !name || !main_category) {

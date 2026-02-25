@@ -79,6 +79,7 @@ export async function processPayment(
   request: PaymentRequest,
 ): Promise<PaymentResult> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const res = await fetch("/api/payment/process", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -87,6 +88,7 @@ export async function processPayment(
         method: request.method,
         adId: request.adId,
         payerId: request.payerId,
+        session_token: getSessionToken(),
         description: request.description,
       }),
     });

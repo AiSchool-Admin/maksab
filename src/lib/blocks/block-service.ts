@@ -7,10 +7,11 @@
  */
 export async function blockUser(blockerId: string, blockedId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const response = await fetch("/api/users/block", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ blocker_id: blockerId, blocked_id: blockedId }),
+      body: JSON.stringify({ blocker_id: blockerId, blocked_id: blockedId, session_token: getSessionToken() }),
     });
 
     const data = await response.json();
@@ -28,10 +29,11 @@ export async function blockUser(blockerId: string, blockedId: string): Promise<{
  */
 export async function unblockUser(blockerId: string, blockedId: string): Promise<{ success: boolean }> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const response = await fetch("/api/users/block", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ blocker_id: blockerId, blocked_id: blockedId }),
+      body: JSON.stringify({ blocker_id: blockerId, blocked_id: blockedId, session_token: getSessionToken() }),
     });
 
     return { success: response.ok };
