@@ -64,12 +64,12 @@ export function middleware(request: NextRequest) {
   // its own inline scripts for hydration/chunking that we cannot nonce.
   const cspEnforced = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com",
+    "script-src 'self' 'unsafe-inline' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com https://vercel.live",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://ui-avatars.com https://lh3.googleusercontent.com https://www.facebook.com",
-    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com",
-    "frame-src 'none'",
+    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com https://vercel.live wss://vercel.live",
+    "frame-src https://vercel.live",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -80,12 +80,12 @@ export function middleware(request: NextRequest) {
   // when we fully migrate away from 'unsafe-inline' in the future.
   const cspReport = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com`,
+    `script-src 'self' 'nonce-${nonce}' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com https://vercel.live`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://ui-avatars.com https://lh3.googleusercontent.com https://www.facebook.com",
-    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com",
-    "frame-src 'none'",
+    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com https://vercel.live wss://vercel.live",
+    "frame-src https://vercel.live",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
