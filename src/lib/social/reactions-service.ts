@@ -217,10 +217,11 @@ export async function addComment(
   }
 
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const res = await fetch("/api/ads/comments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ad_id: adId, content: trimmed, user_id: userId }),
+      body: JSON.stringify({ ad_id: adId, content: trimmed, session_token: getSessionToken() }),
     });
 
     const data = await res.json();
@@ -278,11 +279,13 @@ export async function getComments(
  */
 export async function deleteComment(
   commentId: string,
-  userId?: string,
+  _userId?: string,
 ): Promise<{ success: boolean; error: string | null }> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const params = new URLSearchParams({ comment_id: commentId });
-    if (userId) params.set("user_id", userId);
+    const token = getSessionToken();
+    if (token) params.set("session_token", token);
     const res = await fetch(
       `/api/ads/comments?${params}`,
       { method: "DELETE" },
@@ -305,13 +308,14 @@ export async function deleteComment(
  */
 export async function toggleCommentLike(
   commentId: string,
-  userId?: string,
+  _userId?: string,
 ): Promise<{ liked: boolean; error: string | null }> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const res = await fetch("/api/ads/comments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "toggle_like", comment_id: commentId, user_id: userId }),
+      body: JSON.stringify({ action: "toggle_like", comment_id: commentId, session_token: getSessionToken() }),
     });
 
     const data = await res.json();

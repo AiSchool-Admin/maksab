@@ -286,9 +286,14 @@ export default function LiveBroadcastPage() {
 
     setIsBidding(true);
     try {
+      const { getSessionToken } = await import("@/lib/supabase/auth");
+      const sessionToken = getSessionToken();
       const res = await fetch("/api/auctions/bid", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+        },
         body: JSON.stringify({
           ad_id: adId,
           bidder_id: authed.id,
@@ -829,10 +834,11 @@ export default function LiveBroadcastPage() {
                     const authed = await requireAuth();
                     if (!authed) return;
                     try {
+                      const { getSessionToken } = await import("@/lib/supabase/auth");
                       const res = await fetch("/api/auctions/buy-now", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ ad_id: adId, buyer_id: authed.id }),
+                        body: JSON.stringify({ ad_id: adId, buyer_id: authed.id, session_token: getSessionToken() }),
                       });
                       if (res.ok) {
                         toast.success("تم الشراء!");

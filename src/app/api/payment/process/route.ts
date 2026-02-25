@@ -26,17 +26,15 @@ export async function POST(request: Request) {
       description: string;
     };
 
-    // Authentication
-    let authenticatedPayerId = payerId;
-    if (session_token) {
-      const tokenResult = verifySessionToken(session_token);
-      if (!tokenResult.valid) {
-        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
-      }
-      authenticatedPayerId = tokenResult.userId;
-    } else if (!payerId) {
+    // Authentication (session_token required)
+    if (!session_token) {
       return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
     }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const authenticatedPayerId = tokenResult.userId;
 
     if (!amount || amount <= 0 || !method || !authenticatedPayerId) {
       return NextResponse.json({ error: "البيانات ناقصة" }, { status: 400 });
@@ -94,7 +92,7 @@ export async function POST(request: Request) {
       // Record in DB
       await adminClient.from("commissions").insert({
         ad_id: adId || null,
-        payer_id: payerId,
+        payer_id: authenticatedPayerId,
         amount,
         payment_method: "fawry",
         status: "pending",
@@ -132,7 +130,7 @@ export async function POST(request: Request) {
       // Record pending in DB
       await adminClient.from("commissions").insert({
         ad_id: adId || null,
-        payer_id: payerId,
+        payer_id: authenticatedPayerId,
         amount,
         payment_method: "paymob_card",
         status: "pending",

@@ -26,17 +26,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { reporter_id, session_token, target_type, target_ad_id, target_user_id, reason, details } = body;
 
-    // Authentication
-    let authenticatedReporterId = reporter_id;
-    if (session_token) {
-      const tokenResult = verifySessionToken(session_token);
-      if (!tokenResult.valid) {
-        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
-      }
-      authenticatedReporterId = tokenResult.userId;
-    } else if (!reporter_id) {
+    // Authentication (session_token required)
+    if (!session_token) {
       return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
     }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const authenticatedReporterId = tokenResult.userId;
 
     // Validation
     if (!authenticatedReporterId || !target_type || !reason) {

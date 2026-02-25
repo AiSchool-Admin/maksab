@@ -33,9 +33,14 @@ async function placeBidImpl(
   amount: number,
 ): Promise<PlaceBidResult> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
+    const token = getSessionToken();
     const res = await fetch("/api/auctions/bid", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({
         ad_id: adId,
         bidder_id: bidderId,
@@ -85,6 +90,7 @@ async function buyNowImpl(
   buyerName: string,
 ): Promise<BuyNowResult> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const res = await fetch("/api/auctions/buy-now", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -92,6 +98,7 @@ async function buyNowImpl(
         ad_id: adId,
         buyer_id: buyerId,
         buyer_name: buyerName,
+        session_token: getSessionToken(),
       }),
     });
 

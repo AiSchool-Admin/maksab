@@ -215,11 +215,13 @@ export default function CreateStorePage() {
         }
       }
 
+      const { getSessionToken } = await import("@/lib/supabase/auth");
       const res = await fetch("/api/stores/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: authedUser.id,
+          session_token: getSessionToken(),
           name: name.trim(),
           description: description.trim() || null,
           main_category: mainCategory,

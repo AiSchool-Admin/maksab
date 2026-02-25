@@ -34,6 +34,7 @@ export async function submitCommission(params: {
   paymentMethod: string;
 }): Promise<{ success: boolean }> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const res = await fetch("/api/payment/process", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,6 +43,7 @@ export async function submitCommission(params: {
         method: params.paymentMethod,
         adId: params.adId,
         payerId: params.payerId,
+        session_token: getSessionToken(),
         description: "عمولة مكسب",
       }),
     });
