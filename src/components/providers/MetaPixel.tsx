@@ -8,11 +8,11 @@ const FB_PIXEL_ID = process.env.NEXT_PUBLIC_FB_PIXEL_ID;
  * Meta (Facebook) Pixel script loader.
  * Only loads if NEXT_PUBLIC_FB_PIXEL_ID is set.
  */
-export default function MetaPixel({ nonce }: { nonce?: string }) {
+export default function MetaPixel() {
   if (!FB_PIXEL_ID) return null;
 
   return (
-    <Script id="meta-pixel" strategy="afterInteractive" nonce={nonce}>
+    <Script id="meta-pixel" strategy="afterInteractive">
       {`
         !function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?

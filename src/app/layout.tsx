@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { headers } from "next/headers";
 import localFont from "next/font/local";
 import { Toaster } from "react-hot-toast";
 import AuthProvider from "@/components/auth/AuthProvider";
@@ -83,16 +82,12 @@ export const viewport: Viewport = {
   themeColor: "#1B7A3D",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-
-  // Read CSP nonce from middleware
-  const hdrs = await headers();
-  const nonce = hdrs.get("x-nonce") || "";
 
   return (
     <html lang="ar" dir="rtl" className={`${cairo.variable}`}>
@@ -102,7 +97,6 @@ export default async function RootLayout({
         {supabaseUrl && <link rel="dns-prefetch" href={supabaseUrl} />}
         {/* Prevent theme flash: check localStorage before React hydrates */}
         <script
-          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('maksab_theme');if(t==='dark'){document.documentElement.classList.add('dark')}else{document.documentElement.classList.remove('dark')}}catch(e){}})()`,
           }}
@@ -142,9 +136,9 @@ export default async function RootLayout({
             <ChatbotWidget />
             <EmailCapture />
             <AnalyticsProvider />
-            <GoogleAnalytics nonce={nonce} />
-            <MetaPixel nonce={nonce} />
-            <TikTokPixel nonce={nonce} />
+            <GoogleAnalytics />
+            <MetaPixel />
+            <TikTokPixel />
             <PostHogProvider />
           </AuthProvider>
         </ThemeProvider>

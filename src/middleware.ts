@@ -38,16 +38,7 @@ const RATE_LIMITS: Record<string, { max: number; windowSecs: number }> = {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  // Generate a cryptographic nonce for CSP inline scripts
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-nonce", nonce);
-
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
+  const response = NextResponse.next();
 
   // ── 1. Security Headers ──────────────────────────────────
   response.headers.set("X-Content-Type-Options", "nosniff");
@@ -58,39 +49,6 @@ export function middleware(request: NextRequest) {
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=(self), interest-cohort=()"
   );
-
-  // ── CSP ─────────────────────────────────────────────────
-  // Enforced policy: 'unsafe-inline' required because Next.js injects
-  // its own inline scripts for hydration/chunking that we cannot nonce.
-  const cspEnforced = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com https://vercel.live",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://ui-avatars.com https://lh3.googleusercontent.com https://www.facebook.com",
-    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com https://vercel.live wss://vercel.live",
-    "frame-src https://vercel.live",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join("; ");
-  response.headers.set("Content-Security-Policy", cspEnforced);
-
-  // Report-Only policy: strict nonce-based — monitors what would break
-  // when we fully migrate away from 'unsafe-inline' in the future.
-  const cspReport = [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com https://vercel.live`,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://ui-avatars.com https://lh3.googleusercontent.com https://www.facebook.com",
-    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com https://vercel.live wss://vercel.live",
-    "frame-src https://vercel.live",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join("; ");
-  response.headers.set("Content-Security-Policy-Report-Only", cspReport);
 
   // ── 2. API Route Protection ──────────────────────────────
   if (pathname.startsWith("/api/")) {

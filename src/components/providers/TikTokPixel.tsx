@@ -8,11 +8,11 @@ const TT_PIXEL_ID = process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID;
  * TikTok Pixel script loader.
  * Only loads if NEXT_PUBLIC_TIKTOK_PIXEL_ID is set.
  */
-export default function TikTokPixel({ nonce }: { nonce?: string }) {
+export default function TikTokPixel() {
   if (!TT_PIXEL_ID) return null;
 
   return (
-    <Script id="tiktok-pixel" strategy="afterInteractive" nonce={nonce}>
+    <Script id="tiktok-pixel" strategy="afterInteractive">
       {`
         !function (w, d, t) {
           w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];
