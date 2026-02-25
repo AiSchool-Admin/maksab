@@ -148,12 +148,13 @@ export async function savePushSubscription(
   subscription: PushSubscription,
 ): Promise<void> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const subJson = subscription.toJSON();
     await fetch("/api/notifications/push-subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: userId,
+        session_token: getSessionToken(),
         subscription: {
           endpoint: subJson.endpoint,
           keys: subJson.keys,

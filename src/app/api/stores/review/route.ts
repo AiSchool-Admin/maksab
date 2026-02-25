@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       store_id,
-      reviewer_id,
+      session_token,
       transaction_id,
       overall_rating,
       quality_rating,
@@ -30,7 +31,17 @@ export async function POST(request: Request) {
       comment,
     } = body;
 
-    if (!store_id || !reviewer_id || !transaction_id || !overall_rating) {
+    // Authentication (session_token required)
+    if (!session_token) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const reviewer_id = tokenResult.userId;
+
+    if (!store_id || !transaction_id || !overall_rating) {
       return NextResponse.json(
         { error: "البيانات الأساسية مطلوبة" },
         { status: 400 },
@@ -90,7 +101,7 @@ export async function POST(request: Request) {
         );
       }
       return NextResponse.json(
-        { error: "فشل إضافة التقييم: " + error.message },
+        { error: "فشل إضافة التقييم. جرب تاني" },
         { status: 500 },
       );
     }
@@ -102,10 +113,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     return NextResponse.json(
-      {
-        error: "خطأ غير متوقع",
-        details: err instanceof Error ? err.message : String(err),
-      },
+      { error: "حصل مشكلة. جرب تاني" },
       { status: 500 },
     );
   }

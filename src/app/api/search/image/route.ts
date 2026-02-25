@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await q;
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "حصل مشكلة في البحث بالصورة" }, { status: 500 });
     }
 
     const results = ((data || []) as Record<string, unknown>[]).map((row) => ({

@@ -40,10 +40,11 @@ export default function SmartPriceDrop({
   const fetchSuggestion = useCallback(async () => {
     setIsLoading(true);
     try {
+      const { getSessionToken } = await import("@/lib/supabase/auth");
       const res = await fetch("/api/ads/auto-price-drop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ad_id: adId, apply: false }),
+        body: JSON.stringify({ ad_id: adId, apply: false, session_token: getSessionToken() }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -64,10 +65,11 @@ export default function SmartPriceDrop({
     if (!suggestion?.shouldDrop) return;
     setIsApplying(true);
     try {
+      const { getSessionToken } = await import("@/lib/supabase/auth");
       const res = await fetch("/api/ads/auto-price-drop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ad_id: adId, apply: true }),
+        body: JSON.stringify({ ad_id: adId, apply: true, session_token: getSessionToken() }),
       });
       if (res.ok) {
         const data = await res.json();

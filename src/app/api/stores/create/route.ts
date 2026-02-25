@@ -227,10 +227,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     return NextResponse.json(
-      {
-        error: "خطأ غير متوقع",
-        details: err instanceof Error ? err.message : String(err),
-      },
+      { error: "حصل مشكلة. جرب تاني" },
       { status: 500 },
     );
   }

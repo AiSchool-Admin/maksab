@@ -142,10 +142,11 @@ export async function toggleReaction(
   reactionType: ReactionType,
 ): Promise<{ userReaction: ReactionType | null; error: string | null }> {
   try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
     const res = await fetch("/api/ads/reactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ad_id: adId, reaction_type: reactionType }),
+      body: JSON.stringify({ ad_id: adId, reaction_type: reactionType, session_token: getSessionToken() }),
     });
 
     const data = await res.json();

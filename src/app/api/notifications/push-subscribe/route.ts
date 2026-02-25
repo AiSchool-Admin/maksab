@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,9 +19,19 @@ function getServiceClient() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_id, subscription } = body;
+    const { session_token, subscription } = body;
 
-    if (!user_id || !subscription || !subscription.endpoint) {
+    // Authentication (session_token required)
+    if (!session_token) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    }
+    const tokenResult = verifySessionToken(session_token);
+    if (!tokenResult.valid) {
+      return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+    }
+    const user_id = tokenResult.userId;
+
+    if (!subscription || !subscription.endpoint) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
 
