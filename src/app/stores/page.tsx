@@ -24,6 +24,7 @@ export default function StoresDirectoryPage() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedGov, setSelectedGov] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [page, setPage] = useState(1);
   const hasFilters = !!(search || selectedCategory || selectedGov);
 
@@ -31,22 +32,28 @@ export default function StoresDirectoryPage() {
     const currentPage = reset ? 1 : page;
     if (reset) setPage(1);
     setIsLoading(true);
+    setFetchError(false);
 
-    const result = await getStores({
-      search: search || undefined,
-      category: selectedCategory || undefined,
-      governorate: selectedGov || undefined,
-      page: currentPage,
-      limit: 20,
-    });
+    try {
+      const result = await getStores({
+        search: search || undefined,
+        category: selectedCategory || undefined,
+        governorate: selectedGov || undefined,
+        page: currentPage,
+        limit: 20,
+      });
 
-    if (reset) {
-      setStores(result.stores);
-    } else {
-      setStores((prev) => [...prev, ...result.stores]);
+      if (reset) {
+        setStores(result.stores);
+      } else {
+        setStores((prev) => [...prev, ...result.stores]);
+      }
+      setTotal(result.total);
+    } catch {
+      setFetchError(true);
+    } finally {
+      setIsLoading(false);
     }
-    setTotal(result.total);
-    setIsLoading(false);
   }, [search, selectedCategory, selectedGov, page]);
 
   useEffect(() => {
@@ -193,7 +200,15 @@ export default function StoresDirectoryPage() {
           </p>
         )}
 
-        {isLoading && stores.length === 0 ? (
+        {fetchError ? (
+          <EmptyState
+            icon="⚠️"
+            title="حصل مشكلة"
+            description="مقدرناش نحمّل المتاجر. جرب تاني"
+            actionLabel="إعادة المحاولة"
+            onAction={() => loadStores(true)}
+          />
+        ) : isLoading && stores.length === 0 ? (
           <StoresGridSkeleton count={6} />
         ) : stores.length > 0 ? (
           <>
