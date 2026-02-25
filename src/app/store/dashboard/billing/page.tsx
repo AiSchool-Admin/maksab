@@ -69,6 +69,13 @@ export default function BillingPage() {
     loadData();
   }, [user, router, loadData]);
 
+  // Redirect to store creation if store not found after loading
+  useEffect(() => {
+    if (!isLoading && !store) {
+      router.push("/store/create");
+    }
+  }, [isLoading, store, router]);
+
   const handleUpgrade = async (paymentMethod: PaymentMethodId, paymentRef: string) => {
     if (!store || !user || !upgradeTarget) return;
     setIsUpgrading(true);
@@ -147,12 +154,6 @@ export default function BillingPage() {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (!isLoading && !store) {
-      router.push("/store/create");
-    }
-  }, [isLoading, store, router]);
 
   if (!store) {
     return null;
