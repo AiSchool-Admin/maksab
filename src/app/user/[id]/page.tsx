@@ -47,6 +47,7 @@ export default function PublicProfilePage({
   const [ads, setAds] = useState<AdSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [adsError, setAdsError] = useState(false);
   const [verificationLevel, setVerificationLevel] = useState<"basic" | "verified" | "premium">("basic");
   const [isTrusted, setIsTrusted] = useState(false);
   const [loyaltyLevel, setLoyaltyLevel] = useState<"member" | "silver" | "gold" | "diamond">("member");
@@ -83,7 +84,7 @@ export default function PublicProfilePage({
         });
 
         // Fetch user's active ads
-        const { data: adsData } = await supabase
+        const { data: adsData, error: adsError } = await supabase
           .from("ads" as never)
           .select("*")
           .eq("user_id", id)
@@ -91,7 +92,9 @@ export default function PublicProfilePage({
           .order("created_at", { ascending: false })
           .limit(20);
 
-        if (adsData) {
+        if (adsError) {
+          setAdsError(true);
+        } else if (adsData) {
           setAds(
             (adsData as Record<string, unknown>[]).map((row) => ({
               id: row.id as string,
@@ -285,7 +288,12 @@ export default function PublicProfilePage({
             إعلانات {profile.displayName}
           </h3>
 
-          {ads.length > 0 ? (
+          {adsError ? (
+            <div className="text-center py-8">
+              <p className="text-3xl mb-2">⚠️</p>
+              <p className="text-sm text-gray-text">حصل مشكلة في تحميل الإعلانات. جرب تاني</p>
+            </div>
+          ) : ads.length > 0 ? (
             <div className="grid grid-cols-2 gap-3">
               {ads.map((ad) => (
                 <AdCard key={ad.id} {...ad} />
