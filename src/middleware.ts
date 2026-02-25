@@ -38,7 +38,16 @@ const RATE_LIMITS: Record<string, { max: number; windowSecs: number }> = {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const response = NextResponse.next();
+
+  // Generate a cryptographic nonce for CSP inline scripts
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 
   // ── 1. Security Headers ──────────────────────────────────
   response.headers.set("X-Content-Type-Options", "nosniff");
@@ -49,6 +58,21 @@ export function middleware(request: NextRequest) {
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=(self), interest-cohort=()"
   );
+
+  // ── CSP with nonce for inline scripts ──────────────────
+  const csp = [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://ui-avatars.com https://lh3.googleusercontent.com https://www.facebook.com",
+    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; ");
+  response.headers.set("Content-Security-Policy", csp);
 
   // ── 2. API Route Protection ──────────────────────────────
   if (pathname.startsWith("/api/")) {
