@@ -358,6 +358,9 @@ export default function CreateAdPage() {
 
           const uploadRes = await fetch("/api/upload", {
             method: "POST",
+            headers: {
+              Authorization: `Bearer ${getSessionToken()}`,
+            },
             body: formData,
           });
 
@@ -380,7 +383,7 @@ export default function CreateAdPage() {
           vf.append("file", videoFile.file);
           vf.append("bucket", "ad-videos");
           vf.append("path", `ads/${authedUser.id}/${Date.now()}_video.${videoFile.file.name.split(".").pop() || "mp4"}`);
-          const vRes = await fetch("/api/upload", { method: "POST", body: vf });
+          const vRes = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${getSessionToken()}` }, body: vf });
           if (vRes.ok) {
             const vData = await vRes.json();
             if (vData.url) videoUrl = vData.url;
@@ -396,7 +399,7 @@ export default function CreateAdPage() {
           af.append("file", voiceNote.file);
           af.append("bucket", "ad-audio");
           af.append("path", `ads/${authedUser.id}/${Date.now()}_voice.${voiceNote.file.name.split(".").pop() || "webm"}`);
-          const aRes = await fetch("/api/upload", { method: "POST", body: af });
+          const aRes = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${getSessionToken()}` }, body: af });
           if (aRes.ok) {
             const aData = await aRes.json();
             if (aData.url) voiceNoteUrl = aData.url;

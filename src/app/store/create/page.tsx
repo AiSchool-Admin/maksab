@@ -171,8 +171,10 @@ export default function CreateStorePage() {
       formData.append("bucket", "store-logos");
       formData.append("path", `${userId}/${Date.now()}-logo${ext}`);
 
+      const { getSessionToken } = await import("@/lib/supabase/auth");
       const res = await fetch("/api/upload", {
         method: "POST",
+        headers: { Authorization: `Bearer ${getSessionToken()}` },
         body: formData,
       });
 
