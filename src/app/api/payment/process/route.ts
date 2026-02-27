@@ -17,13 +17,14 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { amount, method, adId, payerId, session_token, description } = body as {
+    const { amount, method, adId, payerId, session_token, description, commission_type } = body as {
       amount: number;
       method: string;
       adId: string;
       payerId: string;
       session_token?: string;
       description: string;
+      commission_type?: string;
     };
 
     // Authentication (session_token required)
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
           amount,
           payment_method: method,
           status: "pending",
+          commission_type: commission_type || "post_transaction",
         })
         .select("id")
         .single();
@@ -96,6 +98,7 @@ export async function POST(request: Request) {
         amount,
         payment_method: "fawry",
         status: "pending",
+        commission_type: commission_type || "post_transaction",
       });
 
       return NextResponse.json({
@@ -134,6 +137,7 @@ export async function POST(request: Request) {
         amount,
         payment_method: "paymob_card",
         status: "pending",
+        commission_type: commission_type || "post_transaction",
       });
 
       return NextResponse.json({

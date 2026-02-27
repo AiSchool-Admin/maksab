@@ -265,8 +265,8 @@ export default function HomePage() {
             >
               <InstaPayLogo size={30} />
               <p className="text-xs text-gray-text">
-                <span className="font-bold text-emerald-600">عمولة 1% بس.. وبمزاجك</span>
-                {" · "}لو الصفقة عجبتك ادعمنا عبر إنستاباي
+                <span className="font-bold text-emerald-600">ادفع 0.5% مقدماً</span>
+                {" · "}واحصل على شارة موثوق + أولوية ظهور | أو 1% بعد الصفقة
               </p>
             </a>
           </div>
