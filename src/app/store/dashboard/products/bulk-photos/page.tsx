@@ -161,6 +161,7 @@ export default function BulkPhotosPage() {
         let imageUrl = "";
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
+          headers: { Authorization: `Bearer ${getSessionToken()}` },
           body: formData,
         });
 

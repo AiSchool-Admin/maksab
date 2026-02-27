@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Ensure categories exist
+    // Ensure category (and subcategory if provided) exist in DB
     try {
       const { data: catCheck } = await supabase
         .from("categories")
@@ -125,27 +125,46 @@ export async function POST(req: NextRequest) {
         .eq("id", ad_data.category_id)
         .maybeSingle();
 
-      if (!catCheck) {
-        // Try to seed categories
+      let subCatOk = true;
+      if (ad_data.subcategory_id) {
+        const { data: subCheck } = await supabase
+          .from("subcategories")
+          .select("id")
+          .eq("id", ad_data.subcategory_id)
+          .maybeSingle();
+        subCatOk = !!subCheck;
+      }
+
+      if (!catCheck || !subCatOk) {
+        // Seed ALL categories and subcategories
         const categoriesModule = await import("@/lib/categories/categories-config");
         const allCategories = categoriesModule.categoriesConfig || [];
 
-        for (const cat of allCategories) {
-          await supabase
+        // Batch upsert categories first
+        const catRows = allCategories.map((cat: { id: string; name: string; icon: string; slug: string }, idx: number) => ({
+          id: cat.id, name: cat.name, icon: cat.icon, slug: cat.slug, sort_order: idx, is_active: true,
+        }));
+        if (catRows.length > 0) {
+          const { error: catSeedErr } = await supabase
             .from("categories")
-            .upsert(
-              { id: cat.id, name: cat.name, icon: cat.icon, slug: cat.slug, sort_order: 0, is_active: true },
-              { onConflict: "id" },
-            );
+            .upsert(catRows, { onConflict: "id" });
+          if (catSeedErr) console.warn("[ads/create] Category seed error:", catSeedErr.message);
+        }
 
-          for (const sub of cat.subcategories || []) {
-            await supabase
-              .from("subcategories")
-              .upsert(
-                { id: sub.id, category_id: cat.id, name: sub.name, slug: sub.slug, sort_order: 0, is_active: true },
-                { onConflict: "id" },
-              );
+        // Then batch upsert subcategories
+        const subRows: { id: string; category_id: string; name: string; slug: string; sort_order: number; is_active: boolean }[] = [];
+        for (const cat of allCategories) {
+          for (const sub of (cat as { subcategories?: { id: string; name: string; slug: string }[] }).subcategories || []) {
+            subRows.push({
+              id: sub.id, category_id: cat.id, name: sub.name, slug: sub.slug, sort_order: subRows.length, is_active: true,
+            });
           }
+        }
+        if (subRows.length > 0) {
+          const { error: subSeedErr } = await supabase
+            .from("subcategories")
+            .upsert(subRows, { onConflict: "id" });
+          if (subSeedErr) console.warn("[ads/create] Subcategory seed error:", subSeedErr.message);
         }
       }
     } catch (e) {
@@ -237,7 +256,8 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (insertError) {
-      console.error("[ads/create] Insert error:", insertError);
+      console.error("[ads/create] Insert error:", insertError.code, insertError.message, insertError.details);
+      console.error("[ads/create] Ad record:", JSON.stringify({ category_id: adRecord.category_id, subcategory_id: adRecord.subcategory_id, sale_type: adRecord.sale_type }));
       return NextResponse.json(
         {
           error: insertError.code === "23503"
