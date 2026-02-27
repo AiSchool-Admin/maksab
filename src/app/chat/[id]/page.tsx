@@ -17,6 +17,7 @@ import NegotiationAssistant from "@/components/chat/NegotiationAssistant";
 import ProductInsightsCard from "@/components/chat/ProductInsightsCard";
 import { ChatBubbleSkeleton } from "@/components/ui/SkeletonLoader";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { getSessionToken } from "@/lib/supabase/auth";
 import { useChatStore } from "@/stores/chat-store";
 import {
   fetchConversation,
@@ -158,18 +159,23 @@ export default function ChatPage({
         : conversation.buyerId);
     if (!recipientId || recipientId === currentUserId) return;
 
-    fetch("/api/notifications/on-message", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        conversation_id: conversationId,
-        sender_id: currentUserId,
-        sender_name: user?.display_name || "مستخدم",
-        recipient_id: recipientId,
-        message_content: messageContent,
-        ad_id: conversation.adId,
-      }),
-    }).catch(() => {});
+    const sessionToken = getSessionToken();
+    if (sessionToken) {
+      fetch("/api/notifications/on-message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          conversation_id: conversationId,
+          sender_name: user?.display_name || "مستخدم",
+          recipient_id: recipientId,
+          message_content: messageContent,
+          ad_id: conversation.adId,
+        }),
+      }).catch(() => {});
+    }
   };
 
   /* ── Send text message ─────────────────────────────────────────────── */

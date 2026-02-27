@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { User, Check, X, MessageCircle, Phone } from "lucide-react";
 import Button from "@/components/ui/Button";
+import { getSessionToken } from "@/lib/supabase/auth";
 import Modal from "@/components/ui/Modal";
 import {
   getAdOffers,
@@ -63,9 +64,10 @@ export default function OffersListSection({
       // Find the offer to get buyer info
       const offer = offers.find((o) => o.id === offerId);
       if (offer) {
-        fetch("/api/notifications/on-offer", {
+        const _offerToken = getSessionToken();
+        _offerToken && fetch("/api/notifications/on-offer", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${_offerToken}` },
           body: JSON.stringify({
             type: action,
             ad_id: adId,

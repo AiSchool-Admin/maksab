@@ -216,7 +216,7 @@ export async function findSmartExchangeMatches(params: {
         .select("*")
         .eq("status", "active")
         .neq("id", currentAdId)
-        .or(`title.ilike.%${exchangeDescription}%,exchange_description.ilike.%${params.adTitle}%`)
+        .or(`title.ilike.%${exchangeDescription.replace(/[%_\\]/g, "\\$&").replace(/[(),."']/g, "")}%,exchange_description.ilike.%${(params.adTitle || "").replace(/[%_\\]/g, "\\$&").replace(/[(),."']/g, "")}%`)
         .limit(6);
       textMatches = (textData as Record<string, unknown>[]) || [];
     }

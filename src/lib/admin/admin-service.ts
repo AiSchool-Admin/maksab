@@ -219,7 +219,11 @@ export async function getUsers(page = 1, limit = 20, search?: string): Promise<{
   let query = sb.from("profiles").select("*", { count: "exact" });
 
   if (search) {
-    query = query.or(`phone.ilike.%${search}%,display_name.ilike.%${search}%`);
+    // Escape SQL wildcards to prevent wildcard injection
+    const s = search.replace(/[%_\\]/g, "\\$&").replace(/[(),."']/g, "");
+    if (s.trim()) {
+      query = query.or(`phone.ilike.%${s}%,display_name.ilike.%${s}%`);
+    }
   }
 
   const { data, count } = await query
@@ -276,7 +280,10 @@ export async function getAds(page = 1, limit = 20, filters?: {
   if (filters?.status) query = query.eq("status", filters.status);
   if (filters?.sale_type) query = query.eq("sale_type", filters.sale_type);
   if (filters?.governorate) query = query.eq("governorate", filters.governorate);
-  if (filters?.search) query = query.ilike("title", `%${filters.search}%`);
+  if (filters?.search) {
+    const s = filters.search.replace(/[%_\\]/g, "\\$&").replace(/[(),."']/g, "");
+    if (s.trim()) query = query.ilike("title", `%${s}%`);
+  }
 
   const { data, count } = await query
     .order("created_at", { ascending: false })

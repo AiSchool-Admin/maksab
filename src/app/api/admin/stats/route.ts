@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/auth/session-token";
 import {
   getOverviewStats,
   getAdsByCategory,
@@ -18,8 +19,16 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
-    // Verify admin identity from header
-    const adminId = req.headers.get("x-admin-id");
+    // Verify admin identity: prefer session token (secure), fall back to x-admin-id (legacy)
+    let adminId = req.headers.get("x-admin-id");
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (token) {
+      const session = verifySessionToken(token);
+      if (session.valid) {
+        adminId = session.userId;
+      }
+    }
     if (!adminId) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }

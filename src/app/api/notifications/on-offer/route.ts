@@ -3,13 +3,26 @@
  *
  * Triggered after a price offer action (submit, accept, reject, counter).
  * Creates in-app notification + push notification for the recipient.
+ * Requires authentication via session token.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/auth/session-token";
 import { notifyPriceOffer } from "@/lib/notifications/smart-notifications";
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication — only logged-in users can trigger notifications
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    }
+    const session = verifySessionToken(token);
+    if (!session.valid) {
+      return NextResponse.json({ error: session.error }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       type,

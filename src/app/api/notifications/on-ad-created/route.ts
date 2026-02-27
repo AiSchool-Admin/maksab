@@ -4,9 +4,11 @@
  * Triggered after a new ad is created.
  * 1. Finds users who searched for similar items and notifies them.
  * 2. Finds buy requests matching this ad and notifies the buyers.
+ * Requires authentication via session token.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/auth/session-token";
 import {
   notifyMatchingBuyers,
   notifyBuyRequestMatches,
@@ -15,10 +17,21 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication — only logged-in users can trigger notifications
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    }
+    const session = verifySessionToken(token);
+    if (!session.valid) {
+      return NextResponse.json({ error: session.error }, { status: 401 });
+    }
+
     const body = await request.json();
     const { ad } = body;
 
-    if (!ad || !ad.id || !ad.category_id || !ad.user_id) {
+    if (!ad || !ad.id || !ad.category_id) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
 
@@ -30,7 +43,7 @@ export async function POST(request: NextRequest) {
       sale_type: ad.sale_type || "cash",
       price: ad.price ? Number(ad.price) : null,
       governorate: ad.governorate || null,
-      user_id: ad.user_id,
+      user_id: session.userId, // Use authenticated user ID, not from body
       category_fields: ad.category_fields || {},
     };
 

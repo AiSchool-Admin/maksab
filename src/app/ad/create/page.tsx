@@ -506,23 +506,28 @@ export default function CreateAdPage() {
 
       // Notify matching buyers (fire and forget)
       if (result.ad_id) {
-        fetch("/api/notifications/on-ad-created", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ad: {
-              id: result.ad_id,
-              title: draft.title,
-              category_id: draft.categoryId,
-              subcategory_id: draft.subcategoryId,
-              sale_type: draft.saleType === "live_auction" ? "auction" : draft.saleType,
-              price: draft.saleType === "cash" ? Number(draft.priceData.price) : null,
-              governorate: draft.governorate,
-              user_id: authedUser.id,
-              category_fields: draft.categoryFields,
+        const notifToken = getSessionToken();
+        if (notifToken) {
+          fetch("/api/notifications/on-ad-created", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${notifToken}`,
             },
-          }),
-        }).catch(() => {});
+            body: JSON.stringify({
+              ad: {
+                id: result.ad_id,
+                title: draft.title,
+                category_id: draft.categoryId,
+                subcategory_id: draft.subcategoryId,
+                sale_type: draft.saleType === "live_auction" ? "auction" : draft.saleType,
+                price: draft.saleType === "cash" ? Number(draft.priceData.price) : null,
+                governorate: draft.governorate,
+                category_fields: draft.categoryFields,
+              },
+            }),
+          }).catch(() => {});
+        }
       }
 
       // Success — award loyalty points

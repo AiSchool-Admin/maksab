@@ -40,7 +40,11 @@ export async function GET(request: Request) {
     query = query.eq("location_gov", governorate);
   }
   if (search) {
-    query = query.ilike("name", `%${search}%`);
+    // Escape SQL wildcards to prevent wildcard injection
+    const sanitized = search.replace(/[%_\\]/g, "\\$&").replace(/[(),."']/g, "");
+    if (sanitized.trim()) {
+      query = query.ilike("name", `%${sanitized}%`);
+    }
   }
 
   const { data, count, error } = await query;

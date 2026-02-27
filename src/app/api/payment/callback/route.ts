@@ -71,16 +71,28 @@ export async function POST(request: Request) {
         auth: { persistSession: false },
       });
 
-      // Find pending commission and update status
-      // We use the payment_method field to match paymob payments
-      if (isSuccess) {
-        await adminClient
+      // Find the matching commission by Paymob order_id and update its status.
+      // The order_id should have been stored in commissions.payment_reference
+      // when the payment was initiated.
+      if (isSuccess && orderId) {
+        const { data: updated, error: updateErr } = await adminClient
           .from("commissions")
-          .update({ status: "paid" })
-          .in("payment_method", ["fawry", "paymob_card"])
+          .update({ status: "paid", payment_reference: orderId } as never)
+          .eq("payment_reference", orderId)
           .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(1);
+          .select("id")
+          .maybeSingle();
+
+        // Fallback: if no commission matched by order_id (legacy data), match by method + pending
+        if (!updated && !updateErr) {
+          await adminClient
+            .from("commissions")
+            .update({ status: "paid", payment_reference: orderId } as never)
+            .in("payment_method", ["fawry", "paymob_card"])
+            .eq("status", "pending")
+            .order("created_at", { ascending: false })
+            .limit(1);
+        }
       }
     }
 
