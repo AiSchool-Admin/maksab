@@ -1,13 +1,14 @@
 /**
  * Badge System Types — شارات مكسب
  *
- * Three marketing badges:
+ * Four marketing badges:
  * - رائد مكسب (Pioneer) — early adopters (first 1000 users)
  * - داعم مكسب (Supporter) — users who paid voluntary commission
  * - سفير مكسب (Ambassador) — users with 5+ referrals
+ * - بائع موثوق (Trusted) — users who paid pre-payment commission (0.5%)
  */
 
-export type BadgeId = "pioneer" | "supporter" | "ambassador";
+export type BadgeId = "pioneer" | "supporter" | "ambassador" | "trusted";
 
 export interface BadgeConfig {
   id: BadgeId;
@@ -54,6 +55,17 @@ export const BADGES: Record<BadgeId, BadgeConfig> = {
     borderColor: "border-purple-200",
     description: "ساعد في نشر مكسب بين أصحابه",
     criteria: "دعا 5 أصدقاء أو أكتر وسجّلوا على مكسب",
+  },
+  trusted: {
+    id: "trusted",
+    nameAr: "بائع موثوق",
+    emoji: "🛡️",
+    icon: "🛡️",
+    color: "text-brand-green",
+    bgColor: "bg-brand-green-light",
+    borderColor: "border-brand-green/30",
+    description: "بائع دفع عمولة مسبقة — إعلاناته ليها أولوية",
+    criteria: "دفع عمولة مسبقة 0.5% مرة واحدة على الأقل",
   },
 };
 

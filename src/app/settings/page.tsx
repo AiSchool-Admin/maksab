@@ -16,9 +16,15 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useThemeStore } from "@/stores/theme-store";
 import { setupPushNotifications } from "@/lib/notifications/notification-service";
+
+const NotificationSettings = dynamic(
+  () => import("@/components/notifications/NotificationSettings"),
+  { ssr: false },
+);
 
 const SETTINGS_KEY = "maksab_settings";
 
@@ -131,7 +137,7 @@ export default function SettingsPage() {
       <Header title="الإعدادات" showBack />
 
       <div className="px-4 py-4 space-y-6">
-        {/* Notifications section */}
+        {/* Notifications section — enhanced with push preferences */}
         <section>
           <h2 className="text-lg font-bold text-dark mb-3 flex items-center gap-2">
             <Bell size={16} className="text-brand-green" />
@@ -176,6 +182,13 @@ export default function SettingsPage() {
               </>
             )}
           </div>
+
+          {/* External push notification preferences (synced to server) */}
+          {user && (
+            <div className="mt-4 bg-gray-light rounded-xl p-4">
+              <NotificationSettings />
+            </div>
+          )}
         </section>
 
         {/* Appearance */}

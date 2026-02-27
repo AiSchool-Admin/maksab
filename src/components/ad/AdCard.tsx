@@ -3,7 +3,7 @@
 import { useState, useEffect, memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Heart, MapPin, Clock, TrendingDown } from "lucide-react";
+import { Heart, MapPin, Clock, TrendingDown, Shield } from "lucide-react";
 import { formatPrice, formatTimeAgo, formatCountdown } from "@/lib/utils/format";
 
 interface AdCardProps {
@@ -29,6 +29,8 @@ interface AdCardProps {
   onToggleFavorite?: (id: string) => void;
   // Price drop indicator (percentage, e.g. 15 means 15% drop)
   priceDropPercent?: number;
+  // Boosted ad (pre-paid commission) — shows trusted badge
+  isBoosted?: boolean;
 }
 
 const saleTypeBadge = {
@@ -87,6 +89,7 @@ function AdCard({
   isFavorited = false,
   onToggleFavorite,
   priceDropPercent,
+  isBoosted = false,
 }: AdCardProps) {
   const badgeKey = isLiveAuction && saleType === "auction" ? "live_auction" : saleType;
   const badge = saleTypeBadge[badgeKey];
@@ -124,6 +127,14 @@ function AdCard({
             )}
             {badge.label}
           </span>
+
+          {/* Trusted badge (pre-paid commission) */}
+          {isBoosted && (
+            <span className="absolute top-2 end-10 z-10 flex items-center gap-0.5 bg-brand-green text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+              <Shield size={10} />
+              موثوق
+            </span>
+          )}
 
           {/* Price drop badge */}
           {priceDropPercent != null && priceDropPercent > 0 && (

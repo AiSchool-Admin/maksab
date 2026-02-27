@@ -50,15 +50,69 @@ async function isDuplicate(
   return (count ?? 0) > 0;
 }
 
-/** Send push notification to a user (if they have a subscription) */
+/**
+ * Check if user has push enabled for a given notification type.
+ * Maps notification type to user preference columns.
+ */
+async function isUserPushEnabled(
+  client: SupabaseClient,
+  userId: string,
+  notificationType?: string,
+): Promise<boolean> {
+  try {
+    const { data } = await client
+      .from("notification_preferences")
+      .select("push_enabled, push_new_message, push_price_offer, push_auction_updates, push_price_drops, push_new_match")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!data) return true; // No preferences → default to enabled
+
+    const prefs = data as Record<string, unknown>;
+    if (prefs.push_enabled === false) return false;
+
+    if (!notificationType) return true;
+
+    const typeMap: Record<string, string> = {
+      chat: "push_new_message",
+      price_offer_new: "push_price_offer",
+      price_offer_accepted: "push_price_offer",
+      price_offer_rejected: "push_price_offer",
+      price_offer_countered: "push_price_offer",
+      auction_bid: "push_auction_updates",
+      auction_outbid: "push_auction_updates",
+      auction_ending: "push_auction_updates",
+      auction_ended: "push_auction_updates",
+      favorite_price_drop: "push_price_drops",
+      new_match: "push_new_match",
+      exchange_match: "push_new_match",
+      buy_request_match: "push_new_match",
+      buyer_looking: "push_new_match",
+    };
+
+    const prefKey = typeMap[notificationType];
+    if (prefKey && prefs[prefKey] === false) return false;
+
+    return true;
+  } catch {
+    return true; // Fail open — send notification if we can't check
+  }
+}
+
+/** Send push notification to a user (if they have a subscription and preferences allow it) */
 async function sendPushToUser(
   client: SupabaseClient,
   userId: string,
   title: string,
   body: string,
   url?: string,
+  notificationType?: string,
 ): Promise<void> {
   try {
+    // Check user preferences before sending
+    const pushEnabled = await isUserPushEnabled(client, userId, notificationType);
+    if (!pushEnabled) return;
+
     const { data: subs } = await client
       .from("push_subscriptions")
       .select("endpoint, keys_p256dh, keys_auth")
@@ -281,6 +335,7 @@ export async function notifyMatchingBuyers(ad: NewAdData): Promise<number> {
           notif.title,
           notif.body,
           `/ad/${ad.id}`,
+          "new_match",
         );
       }
     }
@@ -417,13 +472,14 @@ export async function notifyChatMessage(params: {
       },
     });
 
-    // Push notification
+    // Push notification (checks user preferences)
     await sendPushToUser(
       client,
       params.recipientId,
       `رسالة من ${params.senderName}`,
       preview || "📷 صورة",
       `/chat/${params.conversationId}`,
+      "chat",
     );
 
     // WhatsApp notification (best effort — fire and forget)
@@ -488,6 +544,7 @@ export async function notifyAuctionBid(params: {
         "مزايدة جديدة! 🔥",
         `${params.bidderName} زايد بـ ${formattedAmount} جنيه`,
         `/ad/${params.adId}`,
+        "auction_bid",
       );
 
       // WhatsApp notification to seller
@@ -531,6 +588,7 @@ export async function notifyAuctionBid(params: {
           "حد زايد عليك! ⚠️",
           `المبلغ الجديد: ${formattedAmount} جنيه — زايد تاني!`,
           `/ad/${params.adId}`,
+          "auction_outbid",
         );
 
         // WhatsApp notification to outbid user
@@ -667,7 +725,7 @@ export async function notifyPriceDrop(params: {
 
     await client.from("notifications").insert(notifications);
 
-    // Push to first 20 users
+    // Push to first 20 users (checks preferences)
     for (const notif of notifications.slice(0, 20)) {
       sendPushToUser(
         client,
@@ -675,6 +733,7 @@ export async function notifyPriceDrop(params: {
         notif.title,
         notif.body,
         `/ad/${params.adId}`,
+        "favorite_price_drop",
       );
     }
   } catch (err) {
@@ -742,13 +801,14 @@ export async function notifyPriceOffer(params: {
       data: { amount: params.amount, counter_amount: params.counterAmount },
     });
 
-    // Push notification
+    // Push notification (checks user preferences)
     await sendPushToUser(
       client,
       params.recipientId,
       title,
       body,
       `/ad/${params.adId}`,
+      notifType,
     );
 
     // WhatsApp notification

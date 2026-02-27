@@ -366,6 +366,10 @@ export default function CommissionPrompt({
           مكسب بياخد عمولة بسيطة <span className="font-bold text-brand-green">1%</span> من
           قيمة كل إعلان عشان نقدر نكبر ونخدمك أحسن 💚
         </p>
+        <p className="text-[11px] text-gray-text text-center">
+          💡 المرة الجاية ادفع <span className="font-bold text-brand-gold">0.5% بس مقدماً</span> وخد
+          شارة "موثوق" + أولوية ظهور
+        </p>
 
         {/* Commission breakdown */}
         <div className="bg-white rounded-lg p-3 space-y-2">

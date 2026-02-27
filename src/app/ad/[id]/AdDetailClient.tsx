@@ -67,11 +67,15 @@ import UserBadges from "@/components/badges/UserBadges";
 import { useAnalytics } from "@/lib/analytics/useAnalytics";
 import dynamic from "next/dynamic";
 
+const TrustedBadge = dynamic(() => import("@/components/commission/TrustedBadge"), { ssr: false });
+
 const ReactionsBar = dynamic(() => import("@/components/social/ReactionsBar"), { ssr: false });
 const CommentsSection = dynamic(() => import("@/components/social/CommentsSection"), { ssr: false });
 const SellerRankBadge = dynamic(() => import("@/components/social/SellerRankBadge"), { ssr: false });
 const AddToCollectionButton = dynamic(() => import("@/components/collections/AddToCollectionButton"), { ssr: false });
 const MatchingBuyRequests = dynamic(() => import("@/components/ad/MatchingBuyRequests"), { ssr: false });
+const GoldValuationCard = dynamic(() => import("@/components/gold/GoldValuationCard"), { ssr: false });
+const GoldPriceWidget = dynamic(() => import("@/components/gold/GoldPriceWidget"), { ssr: false });
 
 /** Convert AdDetail to AuctionState for the auction component */
 function toAuctionState(ad: AdDetail): AuctionState {
@@ -540,6 +544,11 @@ export default function AdDetailClient({ id }: { id: string }) {
             </p>
           )}
           <span className="text-sm text-gray-text">{saleLabel}</span>
+
+          {/* Trusted badge for boosted ads */}
+          {Boolean((ad as unknown as Record<string, unknown>).is_boosted) && (
+            <TrustedBadge variant="card" />
+          )}
         </div>
 
         {/* Price Intelligence Badge */}
@@ -673,6 +682,25 @@ export default function AdDetailClient({ id }: { id: string }) {
           subcategoryId={ad.subcategoryId}
           categoryFields={ad.categoryFields}
         />
+
+        {/* Gold Valuation — only for gold/silver category */}
+        {ad.categoryId === "gold" && ad.price != null && ad.price > 0 &&
+          (() => {
+            const fields = ad.categoryFields as Record<string, unknown> | undefined;
+            const karat = (fields?.karat as string) || "";
+            const weight = Number(fields?.weight) || 0;
+            return karat && weight > 0 ? (
+              <div className="space-y-3">
+                <GoldValuationCard
+                  karat={karat}
+                  weightGrams={weight}
+                  listedPrice={ad.price!}
+                />
+                <GoldPriceWidget highlightKarat={karat} />
+              </div>
+            ) : null;
+          })()
+        }
 
         {/* AI Price Meter — full mode */}
         {ad.saleType === "cash" && ad.price != null && ad.price > 0 && (
