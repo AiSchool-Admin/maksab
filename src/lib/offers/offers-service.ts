@@ -253,27 +253,26 @@ export async function getAdOffers(adId: string): Promise<PriceOffer[]> {
 
 /**
  * Get offers summary for an ad (for display on ad card)
+ * Uses a SECURITY DEFINER RPC function so any viewer can see counts
+ * without needing direct SELECT on price_offers.
  */
 export async function getAdOffersSummary(adId: string): Promise<AdOffersSummary> {
   try {
-    const { data, error } = await supabase
-      .from("price_offers" as never)
-      .select("amount, status")
-      .eq("ad_id", adId)
-      .in("status", ["pending", "accepted", "countered"]);
+    // Use the secure RPC function that bypasses RLS for aggregate data
+    const { data, error } = await (supabase.rpc as Function)("get_ad_offer_summary", {
+      p_ad_id: adId,
+    });
 
-    if (error || !data || (data as unknown[]).length === 0) {
+    if (error || !data || (Array.isArray(data) && data.length === 0)) {
       return { totalOffers: 0, highestOffer: null, pendingOffers: 0 };
     }
 
-    const offers = data as Record<string, unknown>[];
-    const amounts = offers.map((o) => Number(o.amount));
-    const pending = offers.filter((o) => o.status === "pending").length;
-
+    // RPC returns a single row (or array with one row)
+    const row = Array.isArray(data) ? data[0] : data;
     return {
-      totalOffers: offers.length,
-      highestOffer: Math.max(...amounts),
-      pendingOffers: pending,
+      totalOffers: Number(row.total_offers) || 0,
+      highestOffer: row.highest_offer ? Number(row.highest_offer) : null,
+      pendingOffers: Number(row.pending_offers) || 0,
     };
   } catch {
     return { totalOffers: 0, highestOffer: null, pendingOffers: 0 };
