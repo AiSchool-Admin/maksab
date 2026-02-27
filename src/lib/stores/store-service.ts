@@ -169,7 +169,8 @@ export async function getStores(params?: {
       query = query.eq("location_gov", params.governorate);
     }
     if (params?.search) {
-      query = query.ilike("name", `%${params.search}%`);
+      const s = params.search.replace(/[%_\\]/g, "\\$&").replace(/[(),."']/g, "");
+      if (s.trim()) query = query.ilike("name", `%${s}%`);
     }
 
     const { data, count, error } = await query;

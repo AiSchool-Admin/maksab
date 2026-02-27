@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       .from("ads" as never)
       .select("title, category_id")
       .eq("status", "active")
-      .ilike("title", `%${query}%`)
+      .ilike("title", `%${query.replace(/[%_\\]/g, "\\$&").replace(/[(),."']/g, "")}%`)
       .order("created_at", { ascending: false })
       .limit(8);
 

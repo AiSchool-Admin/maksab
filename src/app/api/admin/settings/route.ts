@@ -2,10 +2,11 @@
  * GET/POST /api/admin/settings
  *
  * Manage app-level settings (API keys, configuration).
- * Requires admin authentication via x-admin-id header.
+ * Requires admin authentication via session token or x-admin-id header.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/auth/session-token";
 import { verifyAdmin } from "@/lib/admin/admin-service";
 import {
   getAllSettings,
@@ -15,7 +16,16 @@ import {
 } from "@/lib/admin/settings-service";
 
 async function checkAdmin(req: NextRequest): Promise<string | null> {
-  const adminId = req.headers.get("x-admin-id");
+  // Prefer session token (secure, signed) over plain x-admin-id header
+  let adminId = req.headers.get("x-admin-id");
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.replace("Bearer ", "");
+  if (token) {
+    const session = verifySessionToken(token);
+    if (session.valid) {
+      adminId = session.userId;
+    }
+  }
   if (!adminId) return null;
   const isAdmin = await verifyAdmin(adminId);
   return isAdmin ? adminId : null;

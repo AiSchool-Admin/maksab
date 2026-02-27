@@ -63,6 +63,17 @@ export function formatNumber(num: number): string {
 }
 
 /**
+ * Escape SQL LIKE/ILIKE wildcard characters (%, _) in user input.
+ * Prevents wildcard injection when using .ilike() or .or() with PostgREST.
+ * Also removes PostgREST control characters (, . ' " ( )).
+ */
+export function sanitizeLikeInput(input: string): string {
+  return input
+    .replace(/[%_\\]/g, "\\$&")   // escape LIKE wildcards
+    .replace(/[(),."']/g, "");     // remove PostgREST control chars
+}
+
+/**
  * Format countdown timer from remaining milliseconds
  * Example: 3661000 → "01:01:01"
  */

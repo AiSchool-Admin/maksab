@@ -5,6 +5,7 @@
  */
 
 import { supabase } from "@/lib/supabase/client";
+import { getSessionToken } from "@/lib/supabase/auth";
 import type { AdSummary } from "@/lib/ad-data";
 
 // ── Types ──────────────────────────────────────────────
@@ -105,23 +106,28 @@ export async function createBuyRequest(
     const id = (data as unknown as { id: string }).id;
 
     // Fire notification webhook (fire and forget — don't block the user)
-    fetch("/api/notifications/on-buy-request-created", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        buyRequest: {
-          id,
-          title: input.title,
-          category_id: input.categoryId,
-          subcategory_id: input.subcategoryId || null,
-          purchase_type: input.purchaseType,
-          budget_min: input.budgetMin || null,
-          budget_max: input.budgetMax || null,
-          governorate: input.governorate || null,
-          user_id: user.id,
+    const brToken = getSessionToken();
+    if (brToken) {
+      fetch("/api/notifications/on-buy-request-created", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${brToken}`,
         },
-      }),
-    }).catch(() => {}); // Non-critical
+        body: JSON.stringify({
+          buyRequest: {
+            id,
+            title: input.title,
+            category_id: input.categoryId,
+            subcategory_id: input.subcategoryId || null,
+            purchase_type: input.purchaseType,
+            budget_min: input.budgetMin || null,
+            budget_max: input.budgetMax || null,
+            governorate: input.governorate || null,
+          },
+        }),
+      }).catch(() => {});
+    }
 
     return { success: true, id };
   } catch (err) {

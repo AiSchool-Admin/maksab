@@ -5,6 +5,7 @@ import { DollarSign, TrendingUp } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { getSessionToken } from "@/lib/supabase/auth";
 import {
   submitOffer,
   getAdOffersSummary,
@@ -71,18 +72,24 @@ export default function PriceOfferButton({
       setSummary(updated);
 
       // Notify seller
-      fetch("/api/notifications/on-offer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "new_offer",
-          ad_id: adId,
-          ad_title: adTitle,
-          recipient_id: sellerId,
-          sender_name: user.display_name || "مشتري",
-          amount: offerAmount,
-        }),
-      }).catch(() => {});
+      const offerToken = getSessionToken();
+      if (offerToken) {
+        fetch("/api/notifications/on-offer", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${offerToken}`,
+          },
+          body: JSON.stringify({
+            type: "new_offer",
+            ad_id: adId,
+            ad_title: adTitle,
+            recipient_id: sellerId,
+            sender_name: user.display_name || "مشتري",
+            amount: offerAmount,
+          }),
+        }).catch(() => {});
+      }
     } else {
       toast.error(result.error || "حصل مشكلة، جرب تاني");
     }
