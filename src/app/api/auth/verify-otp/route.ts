@@ -12,38 +12,10 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
 import { generateSessionToken } from "@/lib/auth/session-token";
-
-function getSecret(): string {
-  const secret = process.env.OTP_SECRET;
-  if (!secret) {
-    // In non-production environments (dev, preview, staging), use a dev-only secret.
-    // Must match the same fallback in send-otp/route.ts.
-    if (process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV !== "production") {
-      return "maksab-dev-otp-secret-not-for-production";
-    }
-    throw new Error("Missing OTP_SECRET environment variable. Set it in production.");
-  }
-  return secret;
-}
-
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    return null; // Service client unavailable
-  }
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-/** Check if we're in a non-production environment (dev/preview/staging) */
-function isNonProduction(): boolean {
-  return process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV !== "production";
-}
+import { getOtpSecret, isNonProduction } from "@/lib/auth/otp-secret";
+import { getServiceClient } from "@/lib/supabase/server";
 
 /**
  * Generate a dev-mode user profile when Supabase admin API is unavailable.
@@ -98,7 +70,7 @@ function verifyOTPToken(
     }
 
     // Verify HMAC
-    const expectedHmac = createHmac("sha256", getSecret())
+    const expectedHmac = createHmac("sha256", getOtpSecret())
       .update(`${phone}:${code}:${decoded.expiresAt}`)
       .digest("hex");
 

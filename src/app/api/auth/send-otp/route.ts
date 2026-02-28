@@ -12,30 +12,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
+import { getOtpSecret, isNonProduction } from "@/lib/auth/otp-secret";
 
 const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
 
-/** Check if we're in a non-production environment */
-function isNonProduction(): boolean {
-  return process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV !== "production";
-}
-
-function getSecret(): string {
-  const secret = process.env.OTP_SECRET;
-  if (!secret) {
-    if (isNonProduction()) {
-      return "maksab-dev-otp-secret-not-for-production";
-    }
-    throw new Error("Missing OTP_SECRET environment variable. Set it in production.");
-  }
-  return secret;
-}
-
 /** Create HMAC-SHA256 signature */
 function signOTP(phone: string, code: string, expiresAt: number): string {
   const payload = `${phone}:${code}:${expiresAt}`;
-  return createHmac("sha256", getSecret()).update(payload).digest("hex");
+  return createHmac("sha256", getOtpSecret()).update(payload).digest("hex");
 }
 
 /** Generate a cryptographically random 6-digit code */
