@@ -779,11 +779,13 @@ export default function CreateAdPage() {
               images={images}
               videoFile={videoFile}
               voiceNote={voiceNote}
-              onPriceChange={(key, value) =>
-                updateDraft({
-                  priceData: { ...draft.priceData, [key]: value },
-                })
-              }
+              onPriceChange={(key, value) => {
+                setDraft((prev) => ({
+                  ...prev,
+                  priceData: { ...prev.priceData, [key]: value },
+                }));
+                setErrors({});
+              }}
               onImagesChange={setImages}
               onVideoChange={setVideoFile}
               onVoiceNoteChange={setVoiceNote}
