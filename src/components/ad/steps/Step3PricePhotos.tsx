@@ -32,6 +32,7 @@ export interface PriceData {
   // Cash
   price: string;
   isNegotiable: boolean;
+  useDayPrice: boolean;
   // Auction
   auctionStartPrice: string;
   auctionBuyNowPrice: string;
@@ -167,46 +168,95 @@ export default function Step3PricePhotos({
 
         {saleType === "cash" && (
           <div className="space-y-3">
-            <Input
-              label="السعر"
-              name="price"
-              type="number"
-              inputMode="numeric"
-              value={priceData.price}
-              onChange={(e) => onPriceChange("price", e.target.value)}
-              unit="جنيه"
-              placeholder="0"
-              error={errors.price}
-              required
-            />
-            <button
-              type="button"
-              onClick={() => onPriceChange("isNegotiable", !priceData.isNegotiable)}
-              className="flex items-center gap-2 text-sm"
-            >
-              <span
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                  priceData.isNegotiable ? "bg-brand-green border-brand-green" : "border-gray-300"
+            {/* Day price option for gold/silver category */}
+            {categoryId === "gold" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const newVal = !priceData.useDayPrice;
+                  onPriceChange("useDayPrice", newVal);
+                  if (newVal) {
+                    onPriceChange("price", "");
+                  }
+                }}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                  priceData.useDayPrice
+                    ? "border-brand-gold bg-brand-gold-light"
+                    : "border-gray-200 bg-gray-light hover:border-gray-300"
                 }`}
               >
-                {priceData.isNegotiable && (
-                  <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                    <path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <span className="text-dark font-medium">السعر فيه كلام</span>
-            </button>
+                <span
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+                    priceData.useDayPrice ? "border-brand-gold bg-brand-gold" : "border-gray-300"
+                  }`}
+                >
+                  {priceData.useDayPrice && (
+                    <span className="w-2 h-2 rounded-full bg-white" />
+                  )}
+                </span>
+                <div className="text-start">
+                  <span className={`text-sm font-bold ${priceData.useDayPrice ? "text-brand-gold" : "text-dark"}`}>
+                    💰 سعر يوم البيع
+                  </span>
+                  <p className="text-[11px] text-gray-text mt-0.5">
+                    السعر هيتحدد حسب سعر الذهب/الفضة يوم ما يتم البيع
+                  </p>
+                </div>
+              </button>
+            )}
 
-            {categoryId && (
-              <PriceSuggestionCard
-                categoryId={categoryId}
-                subcategoryId={subcategoryId}
-                brand={(categoryFields?.brand as string) || undefined}
-                model={(categoryFields?.model as string) || undefined}
-                condition={(categoryFields?.condition as string) || undefined}
-                onPriceSelect={(price) => onPriceChange("price", String(price))}
-              />
+            {!priceData.useDayPrice && (
+              <>
+                <Input
+                  label="السعر"
+                  name="price"
+                  type="number"
+                  inputMode="numeric"
+                  value={priceData.price}
+                  onChange={(e) => onPriceChange("price", e.target.value)}
+                  unit="جنيه"
+                  placeholder="0"
+                  error={errors.price}
+                  required={categoryId !== "gold"}
+                />
+                <button
+                  type="button"
+                  onClick={() => onPriceChange("isNegotiable", !priceData.isNegotiable)}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <span
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      priceData.isNegotiable ? "bg-brand-green border-brand-green" : "border-gray-300"
+                    }`}
+                  >
+                    {priceData.isNegotiable && (
+                      <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                        <path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="text-dark font-medium">السعر فيه كلام</span>
+                </button>
+
+                {categoryId && (
+                  <PriceSuggestionCard
+                    categoryId={categoryId}
+                    subcategoryId={subcategoryId}
+                    brand={(categoryFields?.brand as string) || undefined}
+                    model={(categoryFields?.model as string) || undefined}
+                    condition={(categoryFields?.condition as string) || undefined}
+                    onPriceSelect={(price) => onPriceChange("price", String(price))}
+                  />
+                )}
+              </>
+            )}
+
+            {priceData.useDayPrice && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  💡 الإعلان هيظهر بـ &quot;سعر يوم البيع&quot; بدل سعر محدد. المشتري هيتواصل معاك لمعرفة السعر.
+                </p>
+              </div>
             )}
           </div>
         )}

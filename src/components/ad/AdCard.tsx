@@ -31,6 +31,8 @@ interface AdCardProps {
   priceDropPercent?: number;
   // Boosted ad (pre-paid commission) — shows trusted badge
   isBoosted?: boolean;
+  // Day price (gold/silver — price determined on sale day)
+  useDayPrice?: boolean;
 }
 
 const saleTypeBadge = {
@@ -90,6 +92,7 @@ function AdCard({
   onToggleFavorite,
   priceDropPercent,
   isBoosted = false,
+  useDayPrice = false,
 }: AdCardProps) {
   const badgeKey = isLiveAuction && saleType === "auction" ? "live_auction" : saleType;
   const badge = saleTypeBadge[badgeKey];
@@ -181,6 +184,12 @@ function AdCard({
                 </span>
               )}
             </div>
+          )}
+
+          {saleType === "cash" && price == null && useDayPrice && (
+            <p className="text-brand-gold font-bold text-sm mb-1.5">
+              💰 سعر يوم البيع
+            </p>
           )}
 
           {saleType === "auction" && (

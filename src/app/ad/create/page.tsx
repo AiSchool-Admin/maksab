@@ -53,6 +53,7 @@ function getInitialPriceData(): PriceData {
   return {
     price: "",
     isNegotiable: false,
+    useDayPrice: false,
     auctionStartPrice: "",
     auctionBuyNowPrice: "",
     auctionDuration: 24,
@@ -232,7 +233,7 @@ export default function CreateAdPage() {
 
       if (step === 3) {
         if (draft.saleType === "cash") {
-          if (!draft.priceData.price) errs.price = "السعر مطلوب";
+          if (!draft.priceData.price && !draft.priceData.useDayPrice) errs.price = "السعر مطلوب";
         } else if (draft.saleType === "auction") {
           if (!draft.priceData.auctionStartPrice)
             errs.auctionStartPrice = "سعر الافتتاح مطلوب";
@@ -416,6 +417,7 @@ export default function CreateAdPage() {
         description: draft.description,
         category_fields: {
           ...draft.categoryFields,
+          ...(draft.priceData.useDayPrice ? { use_day_price: true } : {}),
           ...(videoUrl ? { _video_url: videoUrl } : {}),
           ...(voiceNoteUrl ? { _voice_note_url: voiceNoteUrl } : {}),
           ...(draft.saleType === "live_auction"
@@ -434,8 +436,12 @@ export default function CreateAdPage() {
         },
         governorate: draft.governorate,
         city: draft.city || null,
-        price: draft.saleType === "cash" ? Number(draft.priceData.price) : null,
-        is_negotiable: draft.saleType === "cash" ? draft.priceData.isNegotiable : false,
+        price: draft.saleType === "cash" && !draft.priceData.useDayPrice && draft.priceData.price
+          ? Number(draft.priceData.price)
+          : null,
+        is_negotiable: draft.saleType === "cash" && !draft.priceData.useDayPrice
+          ? draft.priceData.isNegotiable
+          : false,
         auction_start_price:
           draft.saleType === "auction" || draft.saleType === "live_auction"
             ? Number(draft.priceData.auctionStartPrice)
@@ -550,6 +556,9 @@ export default function CreateAdPage() {
 
   /* ── Price label for preview ───────────────────────── */
   const getPriceLabel = () => {
+    if (draft.saleType === "cash" && draft.priceData.useDayPrice) {
+      return "💰 سعر يوم البيع";
+    }
     if (draft.saleType === "cash" && draft.priceData.price) {
       const formatted = Number(draft.priceData.price).toLocaleString("en-US");
       return `${formatted} جنيه${draft.priceData.isNegotiable ? " (قابل للتفاوض)" : ""}`;

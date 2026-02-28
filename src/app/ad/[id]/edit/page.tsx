@@ -42,6 +42,7 @@ function getInitialPriceData(): PriceData {
   return {
     price: "",
     isNegotiable: false,
+    useDayPrice: false,
     auctionStartPrice: "",
     auctionBuyNowPrice: "",
     auctionDuration: 24,
@@ -103,6 +104,7 @@ export default function EditAdPage({
           ...getInitialPriceData(),
           price: row.price ? String(row.price) : "",
           isNegotiable: (row.is_negotiable as boolean) ?? false,
+          useDayPrice: !!(categoryFields.use_day_price),
           auctionStartPrice: row.auction_start_price ? String(row.auction_start_price) : "",
           auctionBuyNowPrice: row.auction_buy_now_price ? String(row.auction_buy_now_price) : "",
           auctionDuration: (row.auction_duration_hours as number) ?? 24,
@@ -175,7 +177,7 @@ export default function EditAdPage({
       }
 
       if (step === 2) {
-        if (draft.saleType === "cash" && !draft.priceData.price) {
+        if (draft.saleType === "cash" && !draft.priceData.price && !draft.priceData.useDayPrice) {
           errs.price = "السعر مطلوب";
         }
         if ((draft.saleType === "auction" || draft.saleType === "live_auction") && !draft.priceData.auctionStartPrice) {
@@ -270,6 +272,7 @@ export default function EditAdPage({
 
       const updatedCategoryFields = {
         ...draft.categoryFields,
+        use_day_price: draft.priceData.useDayPrice || undefined,
         ...(videoUrl ? { _video_url: videoUrl } : {}),
         ...(voiceNoteUrl ? { _voice_note_url: voiceNoteUrl } : {}),
       };
@@ -286,8 +289,13 @@ export default function EditAdPage({
 
       // Update price fields based on sale type
       if (draft.saleType === "cash") {
-        updateData.price = Number(draft.priceData.price);
-        updateData.is_negotiable = draft.priceData.isNegotiable;
+        if (draft.priceData.useDayPrice) {
+          updateData.price = null;
+          updateData.is_negotiable = false;
+        } else {
+          updateData.price = Number(draft.priceData.price);
+          updateData.is_negotiable = draft.priceData.isNegotiable;
+        }
       }
       if (draft.saleType === "auction" || draft.saleType === "live_auction") {
         updateData.auction_start_price = Number(draft.priceData.auctionStartPrice);
@@ -328,6 +336,9 @@ export default function EditAdPage({
   // Price label for preview
   const getPriceLabel = () => {
     if (!draft) return "";
+    if (draft.saleType === "cash" && draft.priceData.useDayPrice) {
+      return "💰 سعر يوم البيع";
+    }
     if (draft.saleType === "cash" && draft.priceData.price) {
       return `${Number(draft.priceData.price).toLocaleString("en-US")} جنيه${draft.priceData.isNegotiable ? " (قابل للتفاوض)" : ""}`;
     }
@@ -476,6 +487,9 @@ export default function EditAdPage({
             onVideoChange={setVideoFile}
             onVoiceNoteChange={setVoiceNote}
             errors={errors}
+            categoryId={draft.categoryId}
+            subcategoryId={draft.subcategoryId}
+            categoryFields={draft.categoryFields}
           />
         )}
 

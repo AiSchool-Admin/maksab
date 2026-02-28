@@ -16,7 +16,7 @@ async function getAdForMetadata(id: string) {
 
     const { data, error } = await supabase
       .from("ads" as never)
-      .select("id, title, description, price, sale_type, images, governorate, city, category_id, status")
+      .select("id, title, description, price, sale_type, images, governorate, city, category_id, category_fields, status")
       .eq("id", id)
       .maybeSingle();
 
@@ -33,6 +33,7 @@ async function getAdForMetadata(id: string) {
       governorate: (ad.governorate as string) || "",
       city: (ad.city as string) || null,
       categoryId: (ad.category_id as string) || "",
+      categoryFields: (ad.category_fields as Record<string, unknown>) || {},
       status: (ad.status as string) || "active",
     };
   } catch {
@@ -62,9 +63,12 @@ export async function generateMetadata({
     ad.saleType === "cash" ? "للبيع" :
     ad.saleType === "auction" ? "مزاد" : "للتبديل";
 
+  const categoryFields = (ad.categoryFields || {}) as Record<string, unknown>;
   const priceText = ad.price
     ? `${ad.price.toLocaleString("ar-EG")} جنيه`
-    : "";
+    : categoryFields.use_day_price
+      ? "سعر يوم البيع"
+      : "";
 
   const locationText = ad.city
     ? `${ad.governorate} — ${ad.city}`
