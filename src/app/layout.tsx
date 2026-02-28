@@ -12,7 +12,6 @@ import GoogleAnalytics from "@/components/providers/GoogleAnalytics";
 import MetaPixel from "@/components/providers/MetaPixel";
 import TikTokPixel from "@/components/providers/TikTokPixel";
 import PostHogProvider from "@/components/providers/PostHogProvider";
-import EmailCapture from "@/components/EmailCapture";
 import { validateEnv } from "@/lib/env-check";
 import {
   getWebsiteSchema,
@@ -134,7 +133,6 @@ export default function RootLayout({
             <div className="min-h-screen pb-20 max-w-lg mx-auto">{children}</div>
             <InstallPrompt />
             <ChatbotWidget />
-            <EmailCapture />
             <AnalyticsProvider />
             <GoogleAnalytics />
             <MetaPixel />
