@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCategoryById } from "@/lib/categories/categories-config";
 import { generateAutoTitle } from "@/lib/categories/generate";
+import { getClientIP } from "@/lib/auth/require-auth";
+import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -18,6 +20,16 @@ function getServiceClient() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP: 60 searches per hour (prevents scraping)
+    const ip = getClientIP(request);
+    const rateCheck = await checkRateLimit(`ip:${ip}`, "search");
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "عديت الحد المسموح للبحث. جرب تاني بعد شوية" },
+        { status: 429 },
+      );
+    }
+    await recordRateLimit(`ip:${ip}`, "search");
     const body = await request.json();
     const {
       query,

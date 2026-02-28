@@ -40,9 +40,9 @@ export default function SnapAndSell({ onAnalysisComplete, onCancel }: SnapAndSel
     setError(null);
 
     try {
-      const response = await fetch("/api/ai/analyze-image", {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
+      const response = await authFetch("/api/ai/analyze-image", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: dataUrls }),
       });
 

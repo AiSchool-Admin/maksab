@@ -49,9 +49,9 @@ export default function NegotiationAssistant({
     setIsOpen(true);
 
     try {
-      const res = await fetch("/api/chat/negotiation-assist", {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
+      const res = await authFetch("/api/chat/negotiation-assist", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category_id: categoryId,
           title,

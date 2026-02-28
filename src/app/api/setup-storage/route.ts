@@ -54,7 +54,18 @@ const BUCKETS: BucketConfig[] = [
   },
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Require admin secret via Authorization header
+  const adminSecret = process.env.ADMIN_SETUP_SECRET;
+  const authHeader = request.headers.get("authorization");
+  const providedSecret = authHeader?.replace("Bearer ", "");
+  if (!adminSecret || providedSecret !== adminSecret) {
+    return NextResponse.json(
+      { error: "غير مصرح — مطلوب ADMIN_SETUP_SECRET في Authorization header" },
+      { status: 403 },
+    );
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

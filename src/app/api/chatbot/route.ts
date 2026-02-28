@@ -11,6 +11,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/client";
+import { getClientIP } from "@/lib/auth/require-auth";
+import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -442,6 +444,16 @@ async function generateResponse(message: string, history?: ChatMessage[]): Promi
 // ═══════════════════════════════════════════
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP: 30 chatbot requests per hour
+    const ip = getClientIP(request);
+    const rateCheck = await checkRateLimit(`ip:${ip}`, "chatbot");
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "عديت الحد المسموح. جرب تاني بعد شوية" },
+        { status: 429 },
+      );
+    }
+
     const body = await request.json();
     const { message, history } = body as { message: string; history?: ChatMessage[] };
 
@@ -449,6 +461,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "الرسالة فاضية" }, { status: 400 });
     }
 
+    await recordRateLimit(`ip:${ip}`, "chatbot");
     const response = await generateResponse(message.trim(), history);
     return NextResponse.json({ response, timestamp: new Date().toISOString() });
   } catch {

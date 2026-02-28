@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getClientIP } from "@/lib/auth/require-auth";
+import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -16,6 +18,16 @@ function getServiceClient() {
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit by IP: 60 requests per hour (prevents enumeration)
+    const ip = getClientIP(request);
+    const rateCheck = await checkRateLimit(`ip:${ip}`, "search");
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "عديت الحد المسموح. جرب تاني بعد شوية" },
+        { status: 429 },
+      );
+    }
+    await recordRateLimit(`ip:${ip}`, "search");
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("q")?.trim();
 

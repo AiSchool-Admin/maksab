@@ -1,13 +1,31 @@
 /**
  * POST /api/chat/smart-questions
  * Generate AI-powered smart questions for a product in chat.
+ * Requires authentication + rate limited.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { generateSmartQuestions } from "@/lib/ai/chat-intelligence";
+import { requireAuth } from "@/lib/auth/require-auth";
+import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 
 export async function POST(req: NextRequest) {
   try {
+    // Auth required — AI endpoints cost money
+    const auth = requireAuth(req);
+    if (!auth.userId) {
+      return NextResponse.json({ error: auth.error }, { status: 401 });
+    }
+
+    // Rate limit: 20 AI requests per hour per user
+    const rateCheck = await checkRateLimit(auth.userId, "ai_request");
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "عديت الحد المسموح. جرب تاني بعد شوية" },
+        { status: 429 },
+      );
+    }
+
     const body = await req.json();
     const { category_id, category_fields, title, price, sale_type, description } = body;
 
@@ -23,6 +41,7 @@ export async function POST(req: NextRequest) {
       saleType: sale_type || "cash",
       description,
     });
+    await recordRateLimit(auth.userId, "ai_request");
 
     return NextResponse.json({ success: true, questions });
   } catch (err) {

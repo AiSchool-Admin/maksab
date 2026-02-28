@@ -45,9 +45,9 @@ export default function SmartQuestionsSection({
     setHasFetched(true);
 
     try {
-      const res = await fetch("/api/chat/smart-questions", {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
+      const res = await authFetch("/api/chat/smart-questions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category_id: categoryId,
           category_fields: categoryFields,

@@ -12,15 +12,15 @@ import { categoriesConfig } from "@/lib/categories/categories-config";
  * Also cleans up old mismatched subcategory IDs (e.g., cars_passenger → passenger).
  */
 export async function POST(request: Request) {
-  // Protect in production — require admin secret
-  const isProduction = process.env.NODE_ENV === "production" && process.env.VERCEL_ENV === "production";
-  if (isProduction) {
-    const adminSecret = process.env.ADMIN_SETUP_SECRET;
-    const url = new URL(request.url);
-    const providedSecret = url.searchParams.get("secret");
-    if (!adminSecret || providedSecret !== adminSecret) {
-      return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
-    }
+  // Require admin secret via Authorization header (all environments)
+  const adminSecret = process.env.ADMIN_SETUP_SECRET;
+  const authHeader = request.headers.get("authorization");
+  const providedSecret = authHeader?.replace("Bearer ", "");
+  if (!adminSecret || providedSecret !== adminSecret) {
+    return NextResponse.json(
+      { error: "غير مصرح — مطلوب ADMIN_SETUP_SECRET في Authorization header" },
+      { status: 403 },
+    );
   }
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) {

@@ -1,10 +1,12 @@
 /**
  * Seller Insights API — real data about potential buyers
  * "إعلانك ممكن يهم دول"
+ * Requires authentication — only sellers should see buyer interest data.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAuth } from "@/lib/auth/require-auth";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -16,6 +18,12 @@ function getServiceClient() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth required — seller insights contain user behavior data
+    const auth = requireAuth(request);
+    if (!auth.userId) {
+      return NextResponse.json({ error: auth.error }, { status: 401 });
+    }
+
     const body = await request.json();
     const { categoryId, subcategoryId, governorate, brand } = body;
 

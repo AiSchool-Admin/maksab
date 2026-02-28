@@ -14,7 +14,14 @@ function getServiceClient() {
   });
 }
 
-export type RateLimitAction = "otp_send" | "ad_create" | "report" | "message";
+export type RateLimitAction =
+  | "otp_send"
+  | "ad_create"
+  | "report"
+  | "message"
+  | "ai_request"
+  | "search"
+  | "chatbot";
 
 interface RateLimitConfig {
   maxCount: number;
@@ -26,6 +33,9 @@ const RATE_LIMITS: Record<RateLimitAction, RateLimitConfig> = {
   ad_create: { maxCount: 10, windowMinutes: 1440 },    // 10 ads per day
   report: { maxCount: 10, windowMinutes: 1440 },       // 10 reports per day
   message: { maxCount: 100, windowMinutes: 60 },       // 100 messages per hour
+  ai_request: { maxCount: 20, windowMinutes: 60 },     // 20 AI requests per hour
+  search: { maxCount: 60, windowMinutes: 60 },         // 60 searches per hour
+  chatbot: { maxCount: 30, windowMinutes: 60 },        // 30 chatbot requests per hour
 };
 
 /**

@@ -18,22 +18,36 @@ const PUBLIC_API_ROUTES = [
   "/api/search/image",
   "/api/auth/send-otp",
   "/api/auth/verify-otp",
-  "/api/ensure-categories",
   "/api/recommendations",
   "/api/price/analytics",
   "/api/stores/check-name",
+  "/api/chatbot",
+  "/api/og",
+];
+
+// Admin-only setup routes (require ADMIN_SETUP_SECRET)
+const ADMIN_SETUP_ROUTES = [
+  "/api/ensure-categories",
+  "/api/setup-storage",
 ];
 
 // Admin-only routes
 const ADMIN_ROUTES = ["/api/admin/"];
 
-// Rate limit config (requests per window)
+// Rate limit config (requests per window) — headers only, actual enforcement in route handlers
 const RATE_LIMITS: Record<string, { max: number; windowSecs: number }> = {
-  "/api/auth/send-otp": { max: 3, windowSecs: 3600 },     // 3 per hour
-  "/api/ads/create": { max: 10, windowSecs: 86400 },       // 10 per day
-  "/api/ads/bulk-create": { max: 3, windowSecs: 86400 },   // 3 per day
-  "/api/reports/create": { max: 5, windowSecs: 3600 },     // 5 per hour
-  "/api/upload": { max: 30, windowSecs: 3600 },            // 30 per hour
+  "/api/auth/send-otp": { max: 3, windowSecs: 3600 },       // 3 per hour
+  "/api/ads/create": { max: 10, windowSecs: 86400 },         // 10 per day
+  "/api/ads/bulk-create": { max: 3, windowSecs: 86400 },     // 3 per day
+  "/api/reports/create": { max: 5, windowSecs: 3600 },       // 5 per hour
+  "/api/upload": { max: 30, windowSecs: 3600 },              // 30 per hour
+  "/api/ai/": { max: 20, windowSecs: 3600 },                 // 20 AI requests per hour
+  "/api/chat/negotiation-assist": { max: 20, windowSecs: 3600 },
+  "/api/chat/product-insights": { max: 20, windowSecs: 3600 },
+  "/api/chat/shopping-assistant": { max: 20, windowSecs: 3600 },
+  "/api/chat/smart-questions": { max: 20, windowSecs: 3600 },
+  "/api/search": { max: 60, windowSecs: 3600 },              // 60 searches per hour
+  "/api/chatbot": { max: 30, windowSecs: 3600 },             // 30 chatbot per hour
 };
 
 export function middleware(request: NextRequest) {
