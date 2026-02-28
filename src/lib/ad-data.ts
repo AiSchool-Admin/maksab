@@ -24,6 +24,7 @@ export interface AdSummary {
   isFavorited?: boolean;
   isLiveAuction?: boolean;
   categoryId?: string;
+  useDayPrice?: boolean;
 }
 
 /**
@@ -63,6 +64,7 @@ function rowToAdSummary(row: Record<string, unknown>): AdSummary {
     exchangeDescription: (row.exchange_description as string) ?? undefined,
     isLiveAuction: Boolean(categoryFields.is_live_auction),
     categoryId: (row.category_id as string) ?? undefined,
+    useDayPrice: Boolean(categoryFields.use_day_price),
   };
 }
 

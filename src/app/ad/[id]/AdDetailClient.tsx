@@ -536,6 +536,11 @@ export default function AdDetailClient({ id }: { id: string }) {
               {formatPrice(ad.price)}
             </p>
           )}
+          {ad.saleType === "cash" && ad.price == null && Boolean((ad.categoryFields as Record<string, unknown>)?.use_day_price) && (
+            <p className="text-xl font-bold text-brand-gold mb-1">
+              💰 سعر يوم البيع
+            </p>
+          )}
           {ad.saleType === "exchange" && (
             <p className="text-xl font-bold text-purple-700 mb-1">
               🔄 تبدّل معايا؟
@@ -893,7 +898,7 @@ export default function AdDetailClient({ id }: { id: string }) {
           adId={ad.id}
           title={resolvedTitle}
           price={ad.price ?? undefined}
-          priceText={ad.price ? formatPrice(ad.price) : undefined}
+          priceText={ad.price ? formatPrice(ad.price) : (ad.categoryFields as Record<string, unknown>)?.use_day_price ? "سعر يوم البيع" : undefined}
           variant="modal"
           onClose={() => setShowShareModal(false)}
         />
