@@ -10,27 +10,15 @@
  */
 
 import { createHmac, timingSafeEqual } from "crypto";
+import { getOtpSecret } from "./otp-secret";
 
 const SESSION_TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-function getSecret(): string {
-  const secret = process.env.OTP_SECRET;
-  if (!secret) {
-    // In non-production environments (dev, preview, staging), use a dev-only secret.
-    // Must match the same fallback in send-otp/route.ts and verify-otp/route.ts.
-    if (process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV !== "production") {
-      return "maksab-dev-otp-secret-not-for-production";
-    }
-    throw new Error("Missing OTP_SECRET environment variable. Set it in production.");
-  }
-  return secret;
-}
 
 /** Generate a signed session token for a verified user */
 export function generateSessionToken(userId: string): string {
   const issuedAt = Date.now();
   const payload = `${userId}:${issuedAt}`;
-  const hmac = createHmac("sha256", getSecret()).update(payload).digest("hex");
+  const hmac = createHmac("sha256", getOtpSecret()).update(payload).digest("hex");
 
   return Buffer.from(
     JSON.stringify({ user_id: userId, issued_at: issuedAt, hmac }),
@@ -58,7 +46,7 @@ export function verifySessionToken(
     }
 
     // Verify HMAC
-    const expectedHmac = createHmac("sha256", getSecret())
+    const expectedHmac = createHmac("sha256", getOtpSecret())
       .update(`${user_id}:${issued_at}`)
       .digest("hex");
 
