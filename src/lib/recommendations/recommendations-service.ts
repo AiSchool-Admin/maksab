@@ -228,9 +228,9 @@ export async function getSellerInsights(params: {
   hasImages: boolean;
 }): Promise<SellerInsights> {
   try {
-    const response = await fetch("/api/recommendations/seller-insights", {
+    const { authFetch } = await import("@/lib/utils/auth-fetch");
+    const response = await authFetch("/api/recommendations/seller-insights", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         categoryId: params.categoryId,
         subcategoryId: params.subcategoryId,

@@ -98,9 +98,9 @@ export default function VoiceToListing({ onAnalysisComplete, onCancel }: VoiceTo
     setError(null);
 
     try {
-      const response = await fetch("/api/ai/parse-text", {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
+      const response = await authFetch("/api/ai/parse-text", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
 

@@ -15,9 +15,21 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Verify HMAC if configured
+    // Verify HMAC — mandatory in production to prevent webhook spoofing
     const hmacSecret = process.env.PAYMOB_HMAC_SECRET;
-    if (hmacSecret && body.hmac) {
+    const isProduction = process.env.NODE_ENV === "production";
+
+    if (isProduction && !hmacSecret) {
+      console.error("PAYMOB_HMAC_SECRET not configured — rejecting webhook");
+      return NextResponse.json({ error: "Webhook verification not configured" }, { status: 500 });
+    }
+
+    if (hmacSecret) {
+      if (!body.hmac || !body.obj) {
+        console.error("Paymob callback missing HMAC or obj");
+        return NextResponse.json({ error: "Missing HMAC signature" }, { status: 403 });
+      }
+
       const obj = body.obj;
       // Paymob HMAC concatenation order
       const concatenated = [

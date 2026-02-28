@@ -395,17 +395,16 @@ export default function VideoToListing({
     transcriptText: string,
   ) => {
     try {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
       // Run image analysis and text parsing in parallel
-      const imagePromise = fetch("/api/ai/analyze-image", {
+      const imagePromise = authFetch("/api/ai/analyze-image", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: frameDataUrls }),
       }).then((res) => res.json());
 
       const textPromise = transcriptText.trim().length > 5
-        ? fetch("/api/ai/parse-text", {
+        ? authFetch("/api/ai/parse-text", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text: transcriptText }),
           }).then((res) => res.json())
         : Promise.resolve(null);

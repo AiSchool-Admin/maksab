@@ -130,10 +130,10 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
     setError(null);
 
     try {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
       // Step 1: Analyze image to detect product
-      const imageRes = await fetch("/api/ai/analyze-image", {
+      const imageRes = await authFetch("/api/ai/analyze-image", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: photoDataUrls }),
       });
 
@@ -148,9 +148,8 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
       // Step 2: Get price estimate
       setState("analyzing_price");
 
-      const priceRes = await fetch("/api/ai/price-estimate", {
+      const priceRes = await authFetch("/api/ai/price-estimate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category_id: productAnalysis.category_id,
           category_fields: productAnalysis.category_fields,
@@ -186,10 +185,10 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
     setError(null);
 
     try {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
       // Step 1: Parse text to detect product
-      const parseRes = await fetch("/api/ai/parse-text", {
+      const parseRes = await authFetch("/api/ai/parse-text", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: textInput.trim() }),
       });
 
@@ -204,9 +203,8 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
       // Step 2: Get price estimate
       setState("analyzing_price");
 
-      const priceRes = await fetch("/api/ai/price-estimate", {
+      const priceRes = await authFetch("/api/ai/price-estimate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category_id: productAnalysis.category_id,
           category_fields: productAnalysis.category_fields,

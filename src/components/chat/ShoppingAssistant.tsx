@@ -53,9 +53,9 @@ export default function ShoppingAssistant({ onClose }: ShoppingAssistantProps) {
         .slice(-8)
         .map((m) => ({ role: m.role, content: m.content }));
 
-      const res = await fetch("/api/chat/shopping-assistant", {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
+      const res = await authFetch("/api/chat/shopping-assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
           conversation_history: conversationHistory,

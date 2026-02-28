@@ -2,13 +2,31 @@
  * POST /api/ai/analyze-image
  * Analyze product image(s) with AI vision → return structured listing data.
  * Supports: base64 images or image URLs.
+ * Requires authentication + rate limited.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeProductImages } from "@/lib/ai/ai-service";
+import { requireAuth } from "@/lib/auth/require-auth";
+import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 
 export async function POST(req: NextRequest) {
   try {
+    // Auth required — AI endpoints cost money
+    const auth = requireAuth(req);
+    if (!auth.userId) {
+      return NextResponse.json({ error: auth.error }, { status: 401 });
+    }
+
+    // Rate limit: 20 AI requests per hour per user
+    const rateCheck = await checkRateLimit(auth.userId, "ai_request");
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "عديت الحد المسموح. جرب تاني بعد شوية" },
+        { status: 429 },
+      );
+    }
+
     const body = await req.json();
     const { images, context } = body as {
       images: string[];  // base64 data URLs or https URLs
@@ -31,6 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     const analysis = await analyzeProductImages(images, context);
+    await recordRateLimit(auth.userId, "ai_request");
 
     return NextResponse.json({
       success: true,

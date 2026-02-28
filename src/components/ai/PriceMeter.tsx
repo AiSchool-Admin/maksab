@@ -196,9 +196,9 @@ export default function PriceMeter({
     }
 
     try {
-      const res = await fetch("/api/ai/price-estimate", {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
+      const res = await authFetch("/api/ai/price-estimate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category_id: categoryId,
           category_fields: categoryFields,

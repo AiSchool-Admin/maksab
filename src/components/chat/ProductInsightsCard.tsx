@@ -60,9 +60,9 @@ export default function ProductInsightsCard({
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/chat/product-insights", {
+      const { authFetch } = await import("@/lib/utils/auth-fetch");
+      const res = await authFetch("/api/chat/product-insights", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category_id: categoryId,
           category_fields: categoryFields,
