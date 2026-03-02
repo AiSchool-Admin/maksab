@@ -64,13 +64,12 @@ export function usePresence(currentUserId: string | null): UsePresenceReturn {
  * Uses the global presence channel without creating a new one.
  */
 export function useIsOnline(userId: string | null): boolean {
-  const [online, setOnline] = useState(false);
+  const [online, setOnline] = useState(() =>
+    userId ? checkOnline(userId) : false
+  );
 
   useEffect(() => {
     if (!userId) return;
-
-    // Check immediately
-    setOnline(checkOnline(userId));
 
     // Poll every 10 seconds (presence sync events will update this)
     const interval = setInterval(() => {

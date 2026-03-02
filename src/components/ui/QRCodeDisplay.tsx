@@ -40,6 +40,7 @@ export default function QRCodeDisplay({ value, size = 200, className = "" }: QRC
   }
 
   return (
+    // eslint-disable-next-line @next/next/no-img-element -- data URL from QR code generation
     <img
       src={dataUrl}
       alt="QR Code"

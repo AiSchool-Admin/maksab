@@ -22,25 +22,16 @@ export default function UpgradeToStoreBanner({
   variant,
 }: UpgradeToStoreBannerProps) {
   const router = useRouter();
-  const [dismissed, setDismissed] = useState(true);
-
-  useEffect(() => {
-    if (variant !== "home") {
-      setDismissed(false);
-      return;
-    }
-
-    // Check if banner was dismissed within the last 7 days
+  const [dismissed, setDismissed] = useState(() => {
+    if (variant !== "home") return false;
+    if (typeof window === "undefined") return true;
     const stored = localStorage.getItem(DISMISS_KEY);
     if (stored) {
-      const dismissedAt = parseInt(stored, 10);
-      const daysPassed =
-        (Date.now() - dismissedAt) / (1000 * 60 * 60 * 24);
-      setDismissed(daysPassed < DISMISS_DAYS);
-    } else {
-      setDismissed(false);
+      const daysPassed = (Date.now() - parseInt(stored, 10)) / (1000 * 60 * 60 * 24);
+      return daysPassed < DISMISS_DAYS;
     }
-  }, [variant]);
+    return false;
+  });
 
   const handleDismiss = () => {
     localStorage.setItem(DISMISS_KEY, Date.now().toString());

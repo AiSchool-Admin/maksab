@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Send, Heart, Trash2, MessageCircle, Loader2, ChevronDown } from "lucide-react";
 import { formatTimeAgo } from "@/lib/utils/format";
@@ -30,12 +31,11 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Map auth user to the shape we need
-  const currentUser = authUser ? {
-    id: authUser.id,
-    display_name: authUser.display_name,
-    avatar_url: authUser.avatar_url,
-  } : null;
+  // Map auth user to the shape we need — memoize to avoid triggering useCallback deps on every render
+  const currentUser = useMemo(
+    () => authUser ? { id: authUser.id, display_name: authUser.display_name, avatar_url: authUser.avatar_url } : null,
+    [authUser],
+  );
 
   // Comment input state
   const [inputValue, setInputValue] = useState("");
@@ -70,7 +70,7 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
     setHasMore(result.hasMore);
     setPage(nextPage);
     setIsLoadingMore(false);
-  }, [adId, page, hasMore, isLoadingMore]);
+  }, [adId, page, hasMore, isLoadingMore, authUser?.id]);
 
   // Submit comment
   const handleSubmit = useCallback(async () => {
@@ -119,7 +119,7 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       setTotalCount((prev) => Math.max(0, prev - 1));
     }
-  }, []);
+  }, [currentUser?.id]);
 
   // Toggle like
   const handleToggleLike = useCallback(async (commentId: string) => {
@@ -184,10 +184,13 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
         {/* User avatar */}
         <div className="w-9 h-9 rounded-full bg-brand-green-light flex items-center justify-center flex-shrink-0 overflow-hidden mt-0.5">
           {currentUser?.avatar_url ? (
-            <img
+            <Image
               src={currentUser.avatar_url}
               alt={currentUser.display_name || ""}
+              width={36}
+              height={36}
               className="w-full h-full object-cover"
+              unoptimized
             />
           ) : (
             <User size={16} className="text-brand-green" />
@@ -345,10 +348,13 @@ function CommentCard({
           ${isOwner ? "bg-brand-gold/15 ring-1 ring-brand-gold/30" : "bg-brand-green-light"}
         `}>
           {comment.userAvatar ? (
-            <img
+            <Image
               src={comment.userAvatar}
               alt={comment.userName}
+              width={32}
+              height={32}
               className="w-full h-full object-cover"
+              unoptimized
             />
           ) : (
             <User size={14} className={isOwner ? "text-brand-gold" : "text-brand-green"} />

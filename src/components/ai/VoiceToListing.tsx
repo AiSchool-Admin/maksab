@@ -24,7 +24,7 @@ export default function VoiceToListing({ onAnalysisComplete, onCancel }: VoiceTo
   const [isSupported, setIsSupported] = useState(true);
   const [textInput, setTextInput] = useState("");
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const totalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -157,7 +157,7 @@ export default function VoiceToListing({ onAnalysisComplete, onCancel }: VoiceTo
     setAnalysis(null);
     setError(null);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const recognition = new (SpeechRecognitionAPI as any)();
     recognition.lang = "ar-EG";
     recognition.continuous = true;
@@ -168,7 +168,7 @@ export default function VoiceToListing({ onAnalysisComplete, onCancel }: VoiceTo
       setState("listening");
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     recognition.onresult = (event: any) => {
       let finalText = "";
       let interimText = "";
@@ -192,7 +192,7 @@ export default function VoiceToListing({ onAnalysisComplete, onCancel }: VoiceTo
       resetSilenceTimer();
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     recognition.onerror = (event: any) => {
       stopRecognition();
 

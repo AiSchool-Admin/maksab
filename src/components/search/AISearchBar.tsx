@@ -54,45 +54,58 @@ export default function AISearchBar({
 
   // Load recent searches + trending on focus
   useEffect(() => {
-    if (isFocused) {
-      setRecentSearches(getRecentSearches());
-      if (!trendingLoaded) {
-        getTrendingSearches(10).then((trending) => {
+    if (!isFocused) return;
+
+    const recent = getRecentSearches();
+    setRecentSearches(recent);
+
+    if (!trendingLoaded) {
+      let cancelled = false;
+      getTrendingSearches(10).then((trending) => {
+        if (!cancelled) {
           setTrendingSearches(trending);
           setTrendingLoaded(true);
-        });
-      }
+        }
+      });
+      return () => { cancelled = true; };
     }
   }, [isFocused, trendingLoaded]);
 
   // Server-side autocomplete + AI parsing (debounced 250ms)
   useEffect(() => {
-    if (!query.trim() || query.trim().length < 2) {
+    const trimmed = query.trim();
+    if (!trimmed || trimmed.length < 2) {
       setAiPreview(null);
       setShowAiPreview(false);
       setServerSuggestions([]);
       return;
     }
 
+    let cancelled = false;
     setIsLoadingSuggestions(true);
 
     const timer = setTimeout(async () => {
       // AI parse preview (client-side, instant)
       const parsed = aiParseQuery(query);
-      if (parsed.confidence > 0.4) {
-        setAiPreview(parsed);
-        setShowAiPreview(true);
-      } else {
-        setShowAiPreview(false);
+      if (!cancelled) {
+        if (parsed.confidence > 0.4) {
+          setAiPreview(parsed);
+          setShowAiPreview(true);
+        } else {
+          setShowAiPreview(false);
+        }
       }
 
       // Server-side autocomplete (async)
-      const suggestions = await getAutocomplete(query.trim());
-      setServerSuggestions(suggestions);
-      setIsLoadingSuggestions(false);
+      const suggestions = await getAutocomplete(trimmed);
+      if (!cancelled) {
+        setServerSuggestions(suggestions);
+        setIsLoadingSuggestions(false);
+      }
     }, 250);
 
     return () => {
+      cancelled = true;
       clearTimeout(timer);
       setIsLoadingSuggestions(false);
     };

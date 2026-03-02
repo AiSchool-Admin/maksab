@@ -28,7 +28,7 @@ const REQUIRED_TABLES = [
 ];
 
 async function checkTable(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   client: ReturnType<typeof createClient<any>>,
   tableName: string,
 ): Promise<boolean> {

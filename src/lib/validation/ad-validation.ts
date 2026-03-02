@@ -6,7 +6,7 @@
 const VALID_SALE_TYPES = ["cash", "auction", "exchange", "live_auction"];
 const VALID_CATEGORIES = [
   "cars", "real_estate", "phones", "fashion", "scrap",
-  "gold", "luxury", "appliances", "furniture",
+  "gold", "gold_silver", "luxury", "appliances", "home_appliances", "furniture",
   "hobbies", "tools", "services",
   "computers", "kids_babies", "electronics", "beauty",
 ];

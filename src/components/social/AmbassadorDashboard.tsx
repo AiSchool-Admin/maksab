@@ -14,6 +14,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import {
   Copy,
   Check,
@@ -51,7 +52,8 @@ export default function AmbassadorDashboard({ userId }: AmbassadorDashboardProps
 
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
+    // Use startTransition-like approach: reset profile to trigger skeleton
+    setProfile(null);
     getAmbassadorProfile(userId)
       .then((p) => {
         if (!cancelled) setProfile(p);
@@ -473,10 +475,13 @@ function ReferralRow({ referral }: { referral: import("@/lib/social/ambassador-s
       {/* Avatar */}
       <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
         {referral.referredUserAvatar ? (
-          <img
+          <Image
             src={referral.referredUserAvatar}
             alt=""
+            width={40}
+            height={40}
             className="w-full h-full object-cover"
+            unoptimized
           />
         ) : (
           <Users size={18} className="text-gray-400" />

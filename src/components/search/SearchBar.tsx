@@ -184,6 +184,7 @@ export default function SearchBar({
             autoFocus={autoFocus}
             autoComplete="off"
             role="combobox"
+            aria-controls="search-listbox"
             aria-expanded={showDropdown}
             aria-autocomplete="list"
             aria-activedescendant={
@@ -208,6 +209,7 @@ export default function SearchBar({
         <div
           ref={dropdownRef}
           className="absolute top-full inset-x-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-light z-50 max-h-80 overflow-y-auto"
+          id="search-listbox"
           role="listbox"
         >
           {/* Auto-suggestions (when typing) */}
