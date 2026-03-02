@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
           p_category_id: category || null,
           p_results_count: totalCount,
         } as never)
-      ).catch(() => {});
+      ).catch((err) => console.warn("[search] log_search_query failed:", err));
     }
 
     return NextResponse.json({

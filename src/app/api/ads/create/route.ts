@@ -288,11 +288,11 @@ export async function POST(req: NextRequest) {
       };
 
       import("@/lib/notifications/smart-notifications").then(({ notifyMatchingBuyers, notifyExchangeMatch }) => {
-        notifyMatchingBuyers(adNotifData).catch(() => {});
+        notifyMatchingBuyers(adNotifData).catch((err) => console.warn("[ads/create] notifyMatchingBuyers failed:", err));
         if (ad_data.sale_type === "exchange") {
-          notifyExchangeMatch(adNotifData).catch(() => {});
+          notifyExchangeMatch(adNotifData).catch((err) => console.warn("[ads/create] notifyExchangeMatch failed:", err));
         }
-      }).catch(() => {});
+      }).catch((err) => console.warn("[ads/create] notification import failed:", err));
     }
 
     return NextResponse.json({

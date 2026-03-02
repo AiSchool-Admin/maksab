@@ -42,7 +42,7 @@ const saleTypeBadge = {
   exchange: { label: "للتبديل 🔄", icon: "", color: "bg-gradient-to-l from-purple-500 to-indigo-500 text-white" },
 };
 
-function AuctionTimer({ endsAt }: { endsAt: string }) {
+const AuctionTimer = memo(function AuctionTimer({ endsAt }: { endsAt: string }) {
   const [remaining, setRemaining] = useState(() => {
     return new Date(endsAt).getTime() - Date.now();
   });
@@ -71,7 +71,7 @@ function AuctionTimer({ endsAt }: { endsAt: string }) {
       {isUrgent && <span className="btn-icon-sm">🔥 الحق!</span>}
     </div>
   );
-}
+});
 
 function AdCard({
   id,

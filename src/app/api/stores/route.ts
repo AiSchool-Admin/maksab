@@ -53,61 +53,77 @@ export async function GET(request: Request) {
     return NextResponse.json({ stores: [], total: 0 });
   }
 
-  // Enrich with stats — errors must not prevent store display
-  const stores = await Promise.all(
-    data.map(async (store) => {
-      let totalFollowers = 0;
-      let totalReviews = 0;
-      let avgRating = 0;
-      let totalProducts = 0;
+  // Batch-fetch stats for all stores in 3 queries instead of 3×N
+  const storeIds = data.map((s) => s.id);
 
-      try {
-        const [followers, reviews, products] = await Promise.all([
-          client
-            .from("store_followers")
-            .select("id", { count: "exact", head: true })
-            .eq("store_id", store.id)
-            .then((r) => r, () => ({ count: 0 })),
-          client
-            .from("store_reviews")
-            .select("overall_rating")
-            .eq("store_id", store.id)
-            .then((r) => r, () => ({ data: [] })),
-          client
-            .from("ads")
-            .select("id", { count: "exact", head: true })
-            .eq("store_id", store.id)
-            .eq("status", "active")
-            .then((r) => r, () => ({ count: 0 })),
-        ]);
+  let followersMap = new Map<string, number>();
+  let reviewsMap = new Map<string, { count: number; avg: number }>();
+  let productsMap = new Map<string, number>();
 
-        totalFollowers = followers.count || 0;
-        totalProducts = products.count || 0;
+  try {
+    const [followersRes, reviewsRes, productsRes] = await Promise.all([
+      // Batch followers count
+      client
+        .from("store_followers")
+        .select("store_id")
+        .in("store_id", storeIds),
+      // Batch reviews with ratings
+      client
+        .from("store_reviews")
+        .select("store_id, overall_rating")
+        .in("store_id", storeIds),
+      // Batch product counts
+      client
+        .from("ads")
+        .select("store_id")
+        .in("store_id", storeIds)
+        .eq("status", "active"),
+    ]);
 
-        const reviewsData = (reviews.data || []) as { overall_rating: number }[];
-        totalReviews = reviewsData.length;
-        avgRating =
-          reviewsData.length > 0
-            ? reviewsData.reduce((sum: number, r) => sum + r.overall_rating, 0) /
-              reviewsData.length
-            : 0;
-      } catch {
-        // Stats failed — return store with zero stats
+    // Aggregate followers
+    if (followersRes.data) {
+      for (const row of followersRes.data as { store_id: string }[]) {
+        followersMap.set(row.store_id, (followersMap.get(row.store_id) || 0) + 1);
       }
+    }
 
-      return {
-        ...store,
-        avg_rating: Math.round(avgRating * 10) / 10,
-        total_reviews: totalReviews,
-        total_followers: totalFollowers,
-        total_products: totalProducts,
-        total_sales: 0,
-        avg_response_time: null,
-        is_following: false,
-        badges: [],
-      };
-    }),
-  );
+    // Aggregate reviews
+    if (reviewsRes.data) {
+      const reviewsByStore = new Map<string, number[]>();
+      for (const row of reviewsRes.data as { store_id: string; overall_rating: number }[]) {
+        if (!reviewsByStore.has(row.store_id)) reviewsByStore.set(row.store_id, []);
+        reviewsByStore.get(row.store_id)!.push(Number(row.overall_rating) || 0);
+      }
+      for (const [storeId, ratings] of reviewsByStore) {
+        const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+        reviewsMap.set(storeId, { count: ratings.length, avg });
+      }
+    }
+
+    // Aggregate products
+    if (productsRes.data) {
+      for (const row of productsRes.data as { store_id: string }[]) {
+        productsMap.set(row.store_id, (productsMap.get(row.store_id) || 0) + 1);
+      }
+    }
+  } catch {
+    // Stats failed — return stores with zero stats
+  }
+
+  const stores = data.map((store) => {
+    const review = reviewsMap.get(store.id);
+    return {
+      ...store,
+      avg_rating: review ? Math.round(review.avg * 10) / 10 : 0,
+      total_reviews: review?.count || 0,
+      total_followers: followersMap.get(store.id) || 0,
+      total_products: productsMap.get(store.id) || 0,
+      total_sales: 0,
+      avg_response_time: null,
+      is_following: false,
+      badges: [],
+    };
+  });
 
   return NextResponse.json({ stores, total: count || 0 });
 }

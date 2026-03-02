@@ -126,7 +126,7 @@ export async function createBuyRequest(
             governorate: input.governorate || null,
           },
         }),
-      }).catch(() => {});
+      }).catch((err) => console.warn("[createBuyRequest] notification failed:", err));
     }
 
     return { success: true, id };

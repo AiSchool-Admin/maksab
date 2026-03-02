@@ -115,8 +115,12 @@ export function subscribeToConversation(
   activeChannels.set(channelName, channel);
 
   return () => {
-    supabase.removeChannel(channel);
-    activeChannels.delete(channelName);
+    // Guard: only clean up if this channel is still the active one
+    // (prevents removing a newer channel created by a re-subscribe)
+    if (activeChannels.get(channelName) === channel) {
+      supabase.removeChannel(channel);
+      activeChannels.delete(channelName);
+    }
   };
 }
 
@@ -192,8 +196,11 @@ export function subscribeToConversationList(
   activeChannels.set(channelName, channel);
 
   return () => {
-    supabase.removeChannel(channel);
-    activeChannels.delete(channelName);
+    // Guard: only clean up if this channel is still the active one
+    if (activeChannels.get(channelName) === channel) {
+      supabase.removeChannel(channel);
+      activeChannels.delete(channelName);
+    }
   };
 }
 

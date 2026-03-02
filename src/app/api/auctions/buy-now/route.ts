@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       buyerId: buyer_id,
       buyerName: buyer_name || "مشتري",
       buyNowPrice: Number(ad.auction_buy_now_price),
-    }).catch(() => {});
+    }).catch((err) => console.warn("[auctions/buy-now] notifyBuyNow failed:", err));
 
     // Fetch bids for state
     const { data: bidsData } = await client

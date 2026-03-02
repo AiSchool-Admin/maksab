@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
       previousHighBidderId: topBid
         ? ((topBid as Record<string, unknown>).bidder_id as string)
         : null,
-    }).catch(() => {});
+    }).catch((err) => console.warn("[auctions/bid] notifyAuctionBid failed:", err));
 
     // Anti-sniping: extend auction if bid placed in last 5 minutes
     const timeRemaining = endsAt - now;
@@ -215,11 +215,15 @@ export async function POST(request: NextRequest) {
 
     if (timeRemaining <= ANTI_SNIPE_THRESHOLD_MS) {
       const newEndsAt = new Date(now + ANTI_SNIPE_THRESHOLD_MS).toISOString();
-      await client
+      // Atomic: only extend if auction is still active AND new time is later than current
+      const { data: extended } = await client
         .from("ads")
         .update({ auction_ends_at: newEndsAt } as never)
-        .eq("id", ad_id);
-      antiSnipeExtended = true;
+        .eq("id", ad_id)
+        .eq("auction_status", "active")
+        .lt("auction_ends_at", newEndsAt)
+        .select("id");
+      antiSnipeExtended = !!(extended && (extended as unknown[]).length > 0);
     }
 
     // Fetch updated state to return
