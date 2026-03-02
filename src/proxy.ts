@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Next.js Edge Middleware for مكسب
+ * Next.js Proxy for مكسب (migrated from middleware in Next.js 16)
  *
  * Handles:
  * 1. Security headers (applied to all responses)
@@ -50,7 +50,7 @@ const RATE_LIMITS: Record<string, { max: number; windowSecs: number }> = {
   "/api/chatbot": { max: 30, windowSecs: 3600 },             // 30 chatbot per hour
 };
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const response = NextResponse.next();
 
