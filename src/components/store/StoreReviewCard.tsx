@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Star } from "lucide-react";
 import type { StoreReview } from "@/types";
 import { formatTimeAgo } from "@/lib/utils/format";
@@ -41,10 +42,13 @@ export default function StoreReviewCard({ review }: StoreReviewCardProps) {
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-brand-green-light flex items-center justify-center text-sm">
             {review.reviewer?.avatar_url ? (
-              <img
+              <Image
                 src={review.reviewer.avatar_url}
                 alt=""
+                width={32}
+                height={32}
                 className="w-full h-full rounded-full object-cover"
+                unoptimized
               />
             ) : (
               "👤"

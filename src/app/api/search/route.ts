@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
 }
 
 /** Build a base fallback query with all filters except text search */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function buildFallbackQuery(
   supabase: any,
   body: Record<string, unknown>,
@@ -224,7 +224,7 @@ function buildFallbackQuery(
 }
 
 /** Fallback when RPC is not available — progressive relaxation */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 async function fallbackSearch(
   supabase: any,
   body: Record<string, unknown>,

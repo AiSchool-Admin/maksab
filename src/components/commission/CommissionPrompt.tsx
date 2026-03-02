@@ -368,7 +368,7 @@ export default function CommissionPrompt({
         </p>
         <p className="text-[11px] text-gray-text text-center">
           💡 المرة الجاية ادفع <span className="font-bold text-brand-gold">0.5% بس مقدماً</span> وخد
-          شارة "موثوق" + أولوية ظهور
+          شارة &quot;موثوق&quot; + أولوية ظهور
         </p>
 
         {/* Commission breakdown */}

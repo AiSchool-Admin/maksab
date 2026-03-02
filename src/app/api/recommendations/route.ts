@@ -131,7 +131,7 @@ function applyDiversityRule(rows: Record<string, unknown>[]): Record<string, unk
 }
 
 /** Fallback when RPC doesn't exist yet */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 async function fallbackRecommendations(
   supabase: any,
   userId: string,

@@ -453,6 +453,7 @@ export function useWebRTC({
 
   // ── Cleanup on unmount ──────────────────────────────────
   useEffect(() => {
+    const viewerPeers = viewerPeersRef.current;
     return () => {
       // Stop viewer retry
       stopViewerRetry();
@@ -462,8 +463,8 @@ export function useWebRTC({
         peerConnectionRef.current = null;
       }
       // Broadcaster cleanup
-      viewerPeersRef.current.forEach((pc) => pc.close());
-      viewerPeersRef.current.clear();
+      viewerPeers.forEach((pc) => pc.close());
+      viewerPeers.clear();
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((t) => t.stop());
         localStreamRef.current = null;

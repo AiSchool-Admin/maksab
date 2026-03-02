@@ -228,7 +228,7 @@ export async function POST(req: NextRequest) {
 /**
  * Find existing user by phone or create a new one.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 async function findOrCreateUser(
   supabase: any,
   phone: string,

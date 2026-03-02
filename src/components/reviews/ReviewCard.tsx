@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { User } from "lucide-react";
 import StarRating from "./StarRating";
 import { formatTimeAgo } from "@/lib/utils/format";
@@ -16,10 +17,13 @@ export default function ReviewCard({ review }: ReviewCardProps) {
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-full bg-brand-green-light flex items-center justify-center flex-shrink-0 overflow-hidden">
           {review.reviewerAvatar ? (
-            <img
+            <Image
               src={review.reviewerAvatar}
               alt={review.reviewerName}
+              width={36}
+              height={36}
               className="w-full h-full object-cover"
+              unoptimized
             />
           ) : (
             <User size={16} className="text-brand-green" />

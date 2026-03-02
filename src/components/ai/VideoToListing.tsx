@@ -50,7 +50,7 @@ export default function VideoToListing({
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const recognitionRef = useRef<any>(null);
   const recordedBlobRef = useRef<Blob | null>(null);
 
@@ -181,7 +181,7 @@ export default function VideoToListing({
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const recognition = new (SpeechRecognitionAPI as any)();
     recognition.lang = "ar-EG";
     recognition.continuous = true;
@@ -190,7 +190,7 @@ export default function VideoToListing({
 
     let finalTranscript = "";
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     recognition.onresult = (event: any) => {
       let interimText = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -205,7 +205,7 @@ export default function VideoToListing({
       setLiveTranscript(finalTranscript + interimText);
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     recognition.onerror = (event: any) => {
       // "no-speech" and "aborted" are expected, don't treat as errors
       if (event.error !== "no-speech" && event.error !== "aborted") {

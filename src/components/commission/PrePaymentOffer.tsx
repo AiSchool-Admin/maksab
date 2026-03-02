@@ -155,7 +155,7 @@ export default function PrePaymentOffer({
               <Shield size={18} className="text-brand-green" />
             </div>
             <div>
-              <p className="text-sm font-bold text-dark">شارة "موثوق"</p>
+              <p className="text-sm font-bold text-dark">شارة &quot;موثوق&quot;</p>
               <p className="text-xs text-gray-text">
                 إعلانك هيظهر بشارة موثوق — المشتريين بيثقوا فيه أكتر
               </p>

@@ -11,11 +11,13 @@ interface WishListProps {
 }
 
 export default function WishList({ onSearchWish, refreshTrigger }: WishListProps) {
-  const [wishes, setWishes] = useState<SearchWish[]>([]);
+  const [wishes, setWishes] = useState<SearchWish[]>(() => getWishes());
   const [isExpanded, setIsExpanded] = useState(true);
 
   useEffect(() => {
-    setWishes(getWishes());
+    if (refreshTrigger !== undefined && refreshTrigger > 0) {
+      setWishes(getWishes());
+    }
   }, [refreshTrigger]);
 
   if (wishes.length === 0) return null;

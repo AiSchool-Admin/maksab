@@ -40,7 +40,9 @@ export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
+  const [isIOS, setIsIOS] = useState(() =>
+    typeof navigator !== "undefined" ? isIOSSafari() : false
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -65,7 +67,6 @@ export default function InstallPrompt() {
 
     // iOS Safari path
     if (isIOSSafari()) {
-      setIsIOS(true);
       const timer = setTimeout(() => setShowPrompt(true), 3000);
       return () => clearTimeout(timer);
     }
