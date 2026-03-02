@@ -96,16 +96,16 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
-  // Suppress source map upload logs in CI
-  silent: true,
+// Only wrap with Sentry when credentials are available
+const finalConfig = process.env.SENTRY_AUTH_TOKEN
+  ? withSentryConfig(nextConfig, {
+      silent: true,
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      sourcemaps: {
+        disable: false,
+      },
+    })
+  : nextConfig;
 
-  // Upload source maps only when SENTRY_AUTH_TOKEN is set
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-
-  // Source map settings
-  sourcemaps: {
-    disable: !process.env.SENTRY_AUTH_TOKEN,
-  },
-});
+export default finalConfig;
