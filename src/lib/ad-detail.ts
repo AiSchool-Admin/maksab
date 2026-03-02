@@ -123,7 +123,7 @@ export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
     if (ad.sale_type === "auction") {
       const { data: bidsData } = await supabase
         .from("auction_bids" as never)
-        .select("*")
+        .select("*, bidder:profiles(display_name)")
         .eq("ad_id", id)
         .order("amount", { ascending: false })
         .limit(20);
@@ -131,7 +131,8 @@ export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
       if (bidsData && (bidsData as unknown[]).length > 0) {
         bids = (bidsData as Record<string, unknown>[]).map((b) => ({
           id: b.id as string,
-          bidderName: "مزايد",
+          bidderName:
+            ((b.bidder as Record<string, unknown>)?.display_name as string) || "مزايد",
           amount: Number(b.amount),
           createdAt: b.created_at as string,
         }));

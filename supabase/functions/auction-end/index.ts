@@ -52,18 +52,25 @@ Deno.serve(async (req) => {
         .eq("ad_id", auction.id)
         .order("amount", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (topBid) {
-        // Auction ended with winner
-        const { error: updateError } = await supabase
+        // Auction ended with winner — guard against race condition
+        const { data: updated, error: updateError } = await supabase
           .from("ads")
           .update({
             auction_status: "ended_winner",
             auction_winner_id: topBid.bidder_id,
             status: "sold",
           })
-          .eq("id", auction.id);
+          .eq("id", auction.id)
+          .eq("auction_status", "active")
+          .select("id");
+
+        // Skip if another process already finalized this auction
+        if (updateError || !updated || updated.length === 0) {
+          continue;
+        }
 
         if (!updateError) {
           // Notify winner
@@ -92,13 +99,20 @@ Deno.serve(async (req) => {
           });
         }
       } else {
-        // Auction ended with no bids
-        const { error: updateError } = await supabase
+        // Auction ended with no bids — guard against race condition
+        const { data: updated, error: updateError } = await supabase
           .from("ads")
           .update({
             auction_status: "ended_no_bids",
           })
-          .eq("id", auction.id);
+          .eq("id", auction.id)
+          .eq("auction_status", "active")
+          .select("id");
+
+        // Skip if another process already finalized this auction
+        if (updateError || !updated || updated.length === 0) {
+          continue;
+        }
 
         if (!updateError) {
           // Notify seller
