@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       .from("ads")
       .select("*")
       .eq("id", ad_id)
-      .single();
+      .maybeSingle();
 
     if (adError || !adData) {
       return NextResponse.json(

@@ -294,6 +294,7 @@ async function expireOldAds(): Promise<void> {
   if (!client) return;
 
   try {
+    // Expire non-auction ads that passed their expiry date
     const { data, error } = await client
       .from("ads")
       .update({ status: "expired" })
@@ -319,6 +320,23 @@ async function expireOldAds(): Promise<void> {
       await client.from("notifications").insert(notifications);
       console.log(
         `[${new Date().toISOString()}] Expired ${data.length} ads`,
+      );
+    }
+
+    // Also expire ended auction ads (ended_winner/ended_no_bids/cancelled) older than 7 days
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
+    const { data: expiredAuctions } = await client
+      .from("ads")
+      .update({ status: "expired" })
+      .eq("sale_type", "auction")
+      .eq("status", "active")
+      .in("auction_status", ["ended_winner", "ended_no_bids", "cancelled"])
+      .lte("updated_at", sevenDaysAgo)
+      .select("id");
+
+    if (expiredAuctions && expiredAuctions.length > 0) {
+      console.log(
+        `[${new Date().toISOString()}] Expired ${expiredAuctions.length} ended auction ads`,
       );
     }
   } catch (error) {

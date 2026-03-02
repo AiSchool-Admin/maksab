@@ -103,12 +103,14 @@ export default function AuctionsPage() {
       } else {
         let ads = (data as Record<string, unknown>[]).map(rowToAuctionAd);
 
-        // Client-side: fetch bid counts for each auction
+        // Batch-fetch bid data for all auctions in one query
         if (ads.length > 0) {
           const adIds = ads.map((a) => a.id);
+
+          // Single query to get all bids for all auctions, ordered by amount DESC
           const { data: bidsData } = await supabase
             .from("auction_bids" as never)
-            .select("ad_id, amount")
+            .select("ad_id, amount, bidder_id")
             .in("ad_id", adIds)
             .order("amount", { ascending: false });
 
@@ -137,7 +139,7 @@ export default function AuctionsPage() {
             });
           }
 
-          // Sort by most_bids client-side
+          // Sort by most_bids client-side (not available server-side)
           if (sortBy === "most_bids") {
             ads.sort(
               (a, b) => (b.auctionBidsCount ?? 0) - (a.auctionBidsCount ?? 0),

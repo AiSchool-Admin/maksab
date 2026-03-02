@@ -132,11 +132,14 @@ export type AuctionUnsubscribe = () => void;
 
 /**
  * Subscribe to real-time auction updates via Supabase Realtime.
+ * Includes fallback polling every 10 seconds in case Realtime connection drops.
  */
 export function subscribeToAuction(
   adId: string,
   onUpdate: (state: AuctionState) => void,
 ): AuctionUnsubscribe {
+  let isActive = true;
+
   // Subscribe to Supabase Realtime
   const channel = supabase
     .channel(`auction-${adId}`)
@@ -149,9 +152,9 @@ export function subscribeToAuction(
         filter: `ad_id=eq.${adId}`,
       } as never,
       () => {
-        // When a new bid arrives, fetch updated auction state
+        if (!isActive) return;
         fetchAuctionState(adId).then((state) => {
-          if (state) onUpdate(state);
+          if (state && isActive) onUpdate(state);
         });
       },
     )
@@ -164,15 +167,25 @@ export function subscribeToAuction(
         filter: `id=eq.${adId}`,
       } as never,
       () => {
-        // When ad is updated (auction_ends_at, auction_status change)
+        if (!isActive) return;
         fetchAuctionState(adId).then((state) => {
-          if (state) onUpdate(state);
+          if (state && isActive) onUpdate(state);
         });
       },
     )
     .subscribe();
 
+  // Fallback polling every 10 seconds in case Realtime connection drops
+  const pollInterval = setInterval(() => {
+    if (!isActive) return;
+    fetchAuctionState(adId).then((state) => {
+      if (state && isActive) onUpdate(state);
+    });
+  }, 10000);
+
   return () => {
+    isActive = false;
+    clearInterval(pollInterval);
     supabase.removeChannel(channel);
   };
 }
@@ -215,6 +228,16 @@ export async function fetchAuctionState(adId: string): Promise<AuctionState | nu
     status = bidsList.length > 0 ? "ended_winner" : "ended_no_bids";
   }
 
+  // Calculate original end time from created_at + duration to detect anti-snipe extensions
+  const durationHours = Number(adData.auction_duration_hours) || 72;
+  const createdAt = adData.created_at as string;
+  const originalEndsAt = createdAt
+    ? new Date(new Date(createdAt).getTime() + durationHours * 3600000).toISOString()
+    : endsAt;
+  const wasExtended = endsAt && originalEndsAt
+    ? new Date(endsAt).getTime() > new Date(originalEndsAt).getTime()
+    : false;
+
   return {
     adId,
     status,
@@ -228,10 +251,10 @@ export async function fetchAuctionState(adId: string): Promise<AuctionState | nu
     bidsCount: bidsList.length,
     minIncrement: Number(adData.auction_min_increment) || 50,
     endsAt,
-    originalEndsAt: endsAt,
+    originalEndsAt,
     bids: bidsList,
     winnerId: (adData.auction_winner_id as string) || null,
     winnerName: null,
-    wasExtended: false,
+    wasExtended,
   };
 }
