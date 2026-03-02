@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAdmin } from "../layout";
+import { useAdmin, getAdminHeaders } from "../layout";
 import { getCategoryById } from "@/lib/categories/categories-config";
 import type {
   CategoryBreakdown,
@@ -62,7 +62,7 @@ export default function AdminAnalyticsPage() {
 
     async function load() {
       setIsLoading(true);
-      const headers = { "x-admin-id": admin!.id };
+      const headers = getAdminHeaders();
 
       const [catRes, govRes, stRes] = await Promise.all([
         fetch("/api/admin/stats?type=categories", { headers }),

@@ -19,14 +19,14 @@ function getServiceClient() {
   });
 }
 
-// Allowed buckets with per-bucket size limits
-const BUCKET_CONFIG: Record<string, { maxSize: number; label: string }> = {
-  "ad-images": { maxSize: 5 * 1024 * 1024, label: "5MB" },
-  "ad-videos": { maxSize: 50 * 1024 * 1024, label: "50MB" },
-  "ad-audio": { maxSize: 10 * 1024 * 1024, label: "10MB" },
-  "store-logos": { maxSize: 5 * 1024 * 1024, label: "5MB" },
-  "chat-images": { maxSize: 5 * 1024 * 1024, label: "5MB" },
-  "avatars": { maxSize: 5 * 1024 * 1024, label: "5MB" },
+// Allowed buckets with per-bucket size limits and allowed MIME types
+const BUCKET_CONFIG: Record<string, { maxSize: number; label: string; allowedTypes: string[] }> = {
+  "ad-images": { maxSize: 5 * 1024 * 1024, label: "5MB", allowedTypes: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"] },
+  "ad-videos": { maxSize: 50 * 1024 * 1024, label: "50MB", allowedTypes: ["video/mp4", "video/quicktime", "video/webm"] },
+  "ad-audio": { maxSize: 10 * 1024 * 1024, label: "10MB", allowedTypes: ["audio/mpeg", "audio/mp4", "audio/ogg", "audio/webm", "audio/wav"] },
+  "store-logos": { maxSize: 5 * 1024 * 1024, label: "5MB", allowedTypes: ["image/jpeg", "image/png", "image/webp"] },
+  "chat-images": { maxSize: 5 * 1024 * 1024, label: "5MB", allowedTypes: ["image/jpeg", "image/png", "image/webp"] },
+  "avatars": { maxSize: 5 * 1024 * 1024, label: "5MB", allowedTypes: ["image/jpeg", "image/png", "image/webp"] },
 };
 
 export async function POST(req: NextRequest) {
@@ -62,9 +62,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Path traversal protection — reject paths with directory traversal sequences
+    if (path.includes("..") || path.includes("//") || /[<>|:*?"\\]/.test(path)) {
+      return NextResponse.json(
+        { error: "مسار الملف غير صالح" },
+        { status: 400 },
+      );
+    }
+
+    // File type validation — check MIME type against bucket's allowed types
+    const contentType = file.type || "application/octet-stream";
+    if (!bucketCfg.allowedTypes.includes(contentType)) {
+      return NextResponse.json(
+        { error: `نوع الملف مش مسموح. الأنواع المسموحة: ${bucketCfg.allowedTypes.join(", ")}` },
+        { status: 400 },
+      );
+    }
+
     if (file.size > bucketCfg.maxSize) {
       return NextResponse.json(
         { error: `حجم الملف أكبر من ${bucketCfg.label}` },
+        { status: 400 },
+      );
+    }
+
+    // Empty file check
+    if (file.size === 0) {
+      return NextResponse.json(
+        { error: "الملف فاضي" },
         { status: 400 },
       );
     }
@@ -84,9 +109,6 @@ export async function POST(req: NextRequest) {
     // Convert File to Buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-
-    // Determine content type
-    const contentType = file.type || "image/jpeg";
 
     // Upload
     const { error: uploadError } = await supabase.storage

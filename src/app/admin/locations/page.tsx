@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { MapPin } from "lucide-react";
-import { useAdmin } from "../layout";
+import { useAdmin, getAdminHeaders } from "../layout";
 import type { GovernorateBreakdown } from "@/lib/admin/admin-service";
 
 function formatNum(n: number): string {
@@ -20,7 +20,7 @@ export default function AdminLocationsPage() {
     async function load() {
       setIsLoading(true);
       const res = await fetch("/api/admin/stats?type=governorates", {
-        headers: { "x-admin-id": admin!.id },
+        headers: getAdminHeaders(),
       });
       if (res.ok) setGovernorates(await res.json());
       setIsLoading(false);

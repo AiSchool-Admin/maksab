@@ -1,8 +1,8 @@
 /**
- * GET /api/admin/setup-db?secret=XXX
+ * GET /api/admin/setup-db
  *
  * Checks which tables exist and seeds data (categories, governorates, etc.).
- * Requires service role key passed as ?secret= query param.
+ * Requires ADMIN_SETUP_SECRET header or env-configured service role key.
  *
  * Also GET /api/admin/setup-db?check=1
  * Just checks table existence (no auth needed).
@@ -28,7 +28,7 @@ const REQUIRED_TABLES = [
 ];
 
 async function checkTable(
-   
+
   client: ReturnType<typeof createClient<any>>,
   tableName: string,
 ): Promise<boolean> {
@@ -42,7 +42,6 @@ async function checkTable(
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const checkOnly = url.searchParams.get("check") === "1";
-  const secret = url.searchParams.get("secret");
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -77,12 +76,21 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // For seeding, require service role key
-  const serviceKey = secret || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // For seeding, authenticate via ADMIN_SETUP_SECRET header (never accept keys in URL)
+  const adminSecret = process.env.ADMIN_SETUP_SECRET;
+  const providedSecret = req.headers.get("x-admin-secret");
+  if (!adminSecret || !providedSecret || providedSecret !== adminSecret) {
+    return NextResponse.json(
+      { success: false, error: "غير مصرح بيه. ابعت X-Admin-Secret header" },
+      { status: 403 },
+    );
+  }
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
     return NextResponse.json(
-      { success: false, error: "Service role key مطلوب" },
-      { status: 403 },
+      { success: false, error: "Service role key مش متوفر في البيئة" },
+      { status: 500 },
     );
   }
 

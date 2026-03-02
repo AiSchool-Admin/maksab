@@ -30,6 +30,16 @@ export function useAdmin() {
   return useContext(AdminContext);
 }
 
+/** Build Authorization headers for admin API calls using session token */
+export function getAdminHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const token = localStorage.getItem("maksab_session_token");
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
+
 const navItems = [
   { href: "/admin", label: "لوحة التحكم", icon: LayoutDashboard },
   { href: "/admin/users", label: "المستخدمين", icon: Users },

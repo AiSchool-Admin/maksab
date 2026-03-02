@@ -61,8 +61,34 @@ export default function AdminLoginPage() {
   }, []);
 
   const verifyAdminAndLogin = async (userId: string, displayName: string, identifier: string) => {
+    // Get the session token (saved by verifyOTP or generate one via API for email login)
+    const { getSessionToken } = await import("@/lib/supabase/auth");
+    let sessionToken = getSessionToken();
+
+    // If no session token (email login), request one from the server
+    if (!sessionToken) {
+      const tokenRes = await fetch("/api/auth/admin-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        sessionToken = tokenData.session_token;
+        if (sessionToken) {
+          localStorage.setItem("maksab_session_token", sessionToken);
+        }
+      }
+    }
+
+    if (!sessionToken) {
+      setError("حصلت مشكلة في إنشاء الجلسة");
+      setIsLoading(false);
+      return;
+    }
+
     const checkRes = await fetch("/api/admin/stats?type=overview", {
-      headers: { "x-admin-id": userId },
+      headers: { Authorization: `Bearer ${sessionToken}` },
     });
 
     if (!checkRes.ok) {

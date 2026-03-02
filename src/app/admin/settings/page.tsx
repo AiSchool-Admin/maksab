@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Settings, Key, Eye, EyeOff, Save, Trash2, Plus, AlertCircle, CheckCircle } from "lucide-react";
-import { useAdmin } from "../layout";
+import { useAdmin, getAdminHeaders } from "../layout";
 
 interface AppSetting {
   key: string;
@@ -46,7 +46,7 @@ export default function AdminSettingsPage() {
     setIsLoading(true);
     try {
       const res = await fetch("/api/admin/settings", {
-        headers: { "x-admin-id": admin.id },
+        headers: getAdminHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
@@ -73,7 +73,7 @@ export default function AdminSettingsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-id": admin.id,
+          ...getAdminHeaders(),
         },
         body: JSON.stringify({
           key,
@@ -105,7 +105,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch(`/api/admin/settings?key=${encodeURIComponent(key)}`, {
         method: "DELETE",
-        headers: { "x-admin-id": admin.id },
+        headers: getAdminHeaders(),
       });
 
       if (res.ok) {
