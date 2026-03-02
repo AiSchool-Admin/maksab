@@ -8,6 +8,8 @@
  * Just checks table existence (no auth needed).
  */
 
+export const maxDuration = 30;
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { categoriesConfig } from "@/lib/categories/categories-config";
