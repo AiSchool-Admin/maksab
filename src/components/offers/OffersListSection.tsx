@@ -76,7 +76,7 @@ export default function OffersListSection({
             sender_name: "البائع",
             amount: offer.amount,
           }),
-        }).catch(() => {});
+        }).catch((err) => console.warn("[offers] respond notification failed:", err));
       }
     } else {
       toast.error(result.error || "حصل مشكلة");
@@ -100,19 +100,22 @@ export default function OffersListSection({
       toast.success("تم إرسال العرض المضاد");
 
       // Notify buyer about counter offer
-      fetch("/api/notifications/on-offer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "countered",
-          ad_id: adId,
-          ad_title: adTitle || "إعلان",
-          recipient_id: counterModal.buyerId,
-          sender_name: "البائع",
-          amount: counterModal.amount,
-          counter_amount: Number(counterAmount),
-        }),
-      }).catch(() => {});
+      const counterToken = getSessionToken();
+      if (counterToken) {
+        fetch("/api/notifications/on-offer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${counterToken}` },
+          body: JSON.stringify({
+            type: "countered",
+            ad_id: adId,
+            ad_title: adTitle || "إعلان",
+            recipient_id: counterModal.buyerId,
+            sender_name: "البائع",
+            amount: counterModal.amount,
+            counter_amount: Number(counterAmount),
+          }),
+        }).catch((err) => console.warn("[offers] counter notification failed:", err));
+      }
 
       setCounterModal(null);
       setCounterAmount("");

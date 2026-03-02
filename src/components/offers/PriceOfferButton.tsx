@@ -88,7 +88,7 @@ export default function PriceOfferButton({
             sender_name: user.display_name || "مشتري",
             amount: offerAmount,
           }),
-        }).catch(() => {});
+        }).catch((err) => console.warn("[offers] new offer notification failed:", err));
       }
     } else {
       toast.error(result.error || "حصل مشكلة، جرب تاني");

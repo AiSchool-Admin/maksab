@@ -170,7 +170,7 @@ async function finalizeExpiredAuctions(): Promise<void> {
           body: `فزت بمزاد "${auction.title}" بمبلغ ${topBid.amount.toLocaleString()} جنيه`,
           data: { ad_id: auction.id },
         });
-        await sendPushToUser(client, topBid.bidder_id, "مبروك! كسبت المزاد 🎉", `فزت بمزاد "${auction.title}" بمبلغ ${topBid.amount.toLocaleString()} جنيه`, `/ad/${auction.id}`).catch(() => {});
+        await sendPushToUser(client, topBid.bidder_id, "مبروك! كسبت المزاد 🎉", `فزت بمزاد "${auction.title}" بمبلغ ${topBid.amount.toLocaleString()} جنيه`, `/ad/${auction.id}`).catch((err) => console.warn("[auction-cron] push to winner failed:", err));
 
         // Notify seller (DB + push)
         await client.from("notifications").insert({
@@ -180,7 +180,7 @@ async function finalizeExpiredAuctions(): Promise<void> {
           body: `مزاد "${auction.title}" انتهى. الفائز زايد بـ ${topBid.amount.toLocaleString()} جنيه`,
           data: { ad_id: auction.id, winner_id: topBid.bidder_id },
         });
-        await sendPushToUser(client, auction.user_id, "المزاد انتهى — تم البيع! 💰", `مزاد "${auction.title}" انتهى وتم البيع بمبلغ ${topBid.amount.toLocaleString()} جنيه`, `/ad/${auction.id}`).catch(() => {});
+        await sendPushToUser(client, auction.user_id, "المزاد انتهى — تم البيع! 💰", `مزاد "${auction.title}" انتهى وتم البيع بمبلغ ${topBid.amount.toLocaleString()} جنيه`, `/ad/${auction.id}`).catch((err) => console.warn("[auction-cron] push to seller failed:", err));
       } else {
         // Auction ended with no bids — guard against race condition
         const { data: updated } = await client
@@ -200,7 +200,7 @@ async function finalizeExpiredAuctions(): Promise<void> {
           body: `مزاد "${auction.title}" انتهى ومحدش زايد. ممكن تعيد نشره.`,
           data: { ad_id: auction.id },
         });
-        await sendPushToUser(client, auction.user_id, "المزاد انتهى بدون مزايدات", `مزاد "${auction.title}" انتهى ومحدش زايد. ممكن تنزل إعلان جديد.`, `/ad/${auction.id}`).catch(() => {});
+        await sendPushToUser(client, auction.user_id, "المزاد انتهى بدون مزايدات", `مزاد "${auction.title}" انتهى ومحدش زايد. ممكن تنزل إعلان جديد.`, `/ad/${auction.id}`).catch((err) => console.warn("[auction-cron] push to seller (no bids) failed:", err));
       }
 
       console.log(

@@ -164,8 +164,8 @@ async function sendPushToUser(
         }
       }
     }
-  } catch {
-    // Push notification is best-effort
+  } catch (err) {
+    console.warn("[notification] Push send failed:", err);
   }
 }
 
@@ -181,7 +181,8 @@ async function getUserPhone(
       .eq("id", userId)
       .maybeSingle();
     return (data?.phone as string) || null;
-  } catch {
+  } catch (err) {
+    console.warn("[notification] getUserPhone failed:", err);
     return null;
   }
 }
@@ -500,7 +501,7 @@ export async function notifyChatMessage(params: {
         params.senderName,
         preview || "صورة",
         adTitle,
-      ).catch(() => {}); // fire and forget
+      ).catch((err) => console.warn("[notification] WhatsApp chat send failed:", err));
     }
   } catch (err) {
     console.error("notifyChatMessage error:", err);
@@ -556,7 +557,7 @@ export async function notifyAuctionBid(params: {
           params.adTitle,
           params.bidAmount,
           params.bidderName,
-        ).catch(() => {});
+        ).catch((err) => console.warn("[notification] WhatsApp auction bid send failed:", err));
       }
     }
 
@@ -599,7 +600,7 @@ export async function notifyAuctionBid(params: {
             "outbid",
             params.adTitle,
             params.bidAmount,
-          ).catch(() => {});
+          ).catch((err) => console.warn("[notification] WhatsApp outbid send failed:", err));
         }
       }
     }
@@ -653,7 +654,7 @@ export async function notifyBuyNow(params: {
         params.adTitle,
         params.buyNowPrice,
         params.buyerName,
-      ).catch(() => {});
+      ).catch((err) => console.warn("[notification] WhatsApp buy-now send failed:", err));
     }
 
     // Notify all other bidders that auction ended
@@ -821,7 +822,7 @@ export async function notifyPriceOffer(params: {
         params.amount,
         params.senderName,
         params.counterAmount,
-      ).catch(() => {});
+      ).catch((err) => console.warn("[notification] WhatsApp offer send failed:", err));
     }
   } catch (err) {
     console.error("notifyPriceOffer error:", err);
@@ -1031,8 +1032,8 @@ export async function notifyBuyRequestMatches(ad: NewAdData): Promise<number> {
             match_score: match.match_score,
             match_type: match.match_score >= 70 ? "exact" : "category",
           }, { onConflict: "buy_request_id,ad_id" });
-      } catch {
-        // Non-critical
+      } catch (err) {
+        console.warn("[notification] buy_request_matches upsert failed:", err);
       }
     }
 
@@ -1059,7 +1060,7 @@ export async function notifyBuyRequestMatches(ad: NewAdData): Promise<number> {
             "buy_request",
             ad.title,
             notif.body,
-          ).catch(() => {});
+          ).catch((err) => console.warn("[notification] WhatsApp match send failed:", err));
         }
       }
     }

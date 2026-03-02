@@ -161,7 +161,7 @@ export async function submitPrePaymentCommission(params: {
     const data = await res.json();
     if (data.success) {
       // Mark ad as boosted + trusted (fire and forget)
-      boostAd(params.adId).catch(() => {});
+      boostAd(params.adId).catch((err) => console.warn("[commission] boostAd failed:", err));
     }
     return { success: data.success === true, amount };
   } catch {

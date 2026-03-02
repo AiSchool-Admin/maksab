@@ -56,58 +56,96 @@ export async function fetchConversations(): Promise<ChatConversation[]> {
 
     if (error || !data) return [];
 
+    const rows = data as Record<string, unknown>[];
+    if (rows.length === 0) return [];
+
+    // Collect all unique IDs for batch queries
+    const otherUserIds = new Set<string>();
+    const adIds = new Set<string>();
+    const convIds = rows.map((r) => r.id as string);
+
+    for (const row of rows) {
+      const otherUserId = (
+        row.buyer_id === user.id ? row.seller_id : row.buyer_id
+      ) as string;
+      otherUserIds.add(otherUserId);
+      if (row.ad_id) adIds.add(row.ad_id as string);
+    }
+
+    // Batch fetch: profiles, ads, unread counts, last messages (4 queries instead of 4×N)
+    const [profilesRes, adsRes, unreadRes, lastMsgsRes] = await Promise.all([
+      supabase
+        .from("profiles" as never)
+        .select("id, display_name, avatar_url, phone")
+        .in("id", [...otherUserIds]),
+      adIds.size > 0
+        ? supabase
+            .from("ads" as never)
+            .select("id, title, images, price")
+            .in("id", [...adIds])
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("messages" as never)
+        .select("conversation_id")
+        .in("conversation_id", convIds)
+        .neq("sender_id", user.id)
+        .eq("is_read", false),
+      supabase
+        .from("messages" as never)
+        .select("conversation_id, content, image_url, created_at")
+        .in("conversation_id", convIds)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    // Build lookup maps
+    const profileMap = new Map<string, Record<string, unknown>>();
+    if (profilesRes.data) {
+      for (const p of profilesRes.data as Record<string, unknown>[]) {
+        profileMap.set(p.id as string, p);
+      }
+    }
+
+    const adMap = new Map<string, Record<string, unknown>>();
+    if (adsRes.data) {
+      for (const a of adsRes.data as Record<string, unknown>[]) {
+        adMap.set(a.id as string, a);
+      }
+    }
+
+    // Aggregate unread counts per conversation
+    const unreadMap = new Map<string, number>();
+    if (unreadRes.data) {
+      for (const m of unreadRes.data as Record<string, unknown>[]) {
+        const cid = m.conversation_id as string;
+        unreadMap.set(cid, (unreadMap.get(cid) || 0) + 1);
+      }
+    }
+
+    // Get first (most recent) message per conversation
+    const lastMsgMap = new Map<string, Record<string, unknown>>();
+    if (lastMsgsRes.data) {
+      for (const m of lastMsgsRes.data as Record<string, unknown>[]) {
+        const cid = m.conversation_id as string;
+        if (!lastMsgMap.has(cid)) lastMsgMap.set(cid, m);
+      }
+    }
+
+    // Assemble conversations
     const conversations: ChatConversation[] = [];
 
-    for (const row of data as Record<string, unknown>[]) {
+    for (const row of rows) {
       const otherUserId = (
         row.buyer_id === user.id ? row.seller_id : row.buyer_id
       ) as string;
 
-      // Fetch other user's profile
-      const { data: profileData } = await supabase
-        .from("profiles" as never)
-        .select("*")
-        .eq("id", otherUserId as never)
-        .maybeSingle();
+      const profile = profileMap.get(otherUserId) || null;
 
-      const profile = profileData as Record<string, unknown> | null;
+      const ad = row.ad_id ? adMap.get(row.ad_id as string) || null : null;
+      const adTitle = ad ? (ad.title as string) || "" : "";
+      const adImage = ad ? ((ad.images as string[]) ?? [])[0] ?? null : null;
+      const adPrice = ad && ad.price ? Number(ad.price) : null;
 
-      // Fetch the linked ad info
-      let adTitle = "";
-      let adImage: string | null = null;
-      let adPrice: number | null = null;
-      if (row.ad_id) {
-        const { data: adData } = await supabase
-          .from("ads" as never)
-          .select("title, images, price")
-          .eq("id", row.ad_id)
-          .maybeSingle();
-        if (adData) {
-          const ad = adData as Record<string, unknown>;
-          adTitle = (ad.title as string) || "";
-          adImage = ((ad.images as string[]) ?? [])[0] ?? null;
-          adPrice = ad.price ? Number(ad.price) : null;
-        }
-      }
-
-      // Count unread messages
-      const { count: unreadCount } = await supabase
-        .from("messages" as never)
-        .select("id", { count: "exact", head: true })
-        .eq("conversation_id", row.id as never)
-        .neq("sender_id", user.id)
-        .eq("is_read", false);
-
-      // Get last message
-      const { data: lastMsgData } = await supabase
-        .from("messages" as never)
-        .select("content, image_url")
-        .eq("conversation_id", row.id as never)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const lastMsg = lastMsgData as Record<string, unknown> | null;
+      const lastMsg = lastMsgMap.get(row.id as string) || null;
       let lastMessage: string | null = null;
       if (lastMsg) {
         lastMessage = lastMsg.image_url
@@ -138,7 +176,7 @@ export async function fetchConversations(): Promise<ChatConversation[]> {
         lastMessage,
         lastMessageAt:
           (row.last_message_at as string) || (row.created_at as string),
-        unreadCount: unreadCount ?? 0,
+        unreadCount: unreadMap.get(row.id as string) ?? 0,
       });
     }
 
