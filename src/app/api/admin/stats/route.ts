@@ -19,19 +19,17 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
-    // Verify admin identity: prefer session token (secure), fall back to x-admin-id (legacy)
-    let adminId = req.headers.get("x-admin-id");
+    // Verify admin identity: require session token authentication
     const authHeader = req.headers.get("authorization");
     const token = authHeader?.replace("Bearer ", "");
-    if (token) {
-      const session = verifySessionToken(token);
-      if (session.valid) {
-        adminId = session.userId;
-      }
+    if (!token) {
+      return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
     }
-    if (!adminId) {
-      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    const session = verifySessionToken(token);
+    if (!session.valid) {
+      return NextResponse.json({ error: session.error }, { status: 401 });
     }
+    const adminId = session.userId;
 
     const isAdmin = await verifyAdmin(adminId);
     if (!isAdmin) {

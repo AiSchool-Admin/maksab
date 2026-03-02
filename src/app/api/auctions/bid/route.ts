@@ -98,9 +98,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Check auction hasn't ended
+    if (!ad.auction_ends_at) {
+      return NextResponse.json(
+        { error: "المزاد مش موجود" },
+        { status: 400 },
+      );
+    }
     const endsAt = new Date(ad.auction_ends_at as string).getTime();
     const now = Date.now();
-    if (now >= endsAt) {
+    if (isNaN(endsAt) || now >= endsAt) {
       return NextResponse.json(
         { error: "المزاد انتهى" },
         { status: 400 },
@@ -116,9 +122,17 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .maybeSingle();
 
+    const startPrice = Number(ad.auction_start_price) || 0;
     const currentPrice = topBid
       ? Number((topBid as Record<string, unknown>).amount)
-      : Number(ad.auction_start_price);
+      : startPrice;
+
+    if (currentPrice <= 0 && !topBid) {
+      return NextResponse.json(
+        { error: "المزاد مالوش سعر افتتاح" },
+        { status: 400 },
+      );
+    }
 
     // Check bidder isn't already highest
     if (topBid && (topBid as Record<string, unknown>).bidder_id === bidder_id) {

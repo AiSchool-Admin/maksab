@@ -65,13 +65,13 @@ export async function POST(req: NextRequest) {
     const supabase = getServiceClient();
 
     // Rate limit: max 10 reports per day per user
-    const { data: recentReports } = await supabase
+    const { count: recentReportsCount } = await supabase
       .from("reports")
       .select("id", { count: "exact", head: true })
       .eq("reporter_id", authenticatedReporterId)
       .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
-    if ((recentReports as unknown as number) >= 10) {
+    if ((recentReportsCount ?? 0) >= 10) {
       return NextResponse.json(
         { error: "وصلت للحد الأقصى من البلاغات اليومية. جرب بكرة" },
         { status: 429 },

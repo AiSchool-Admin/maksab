@@ -95,15 +95,9 @@ export async function POST(request: Request) {
           .select("id")
           .maybeSingle();
 
-        // Fallback: if no commission matched by order_id (legacy data), match by method + pending
+        // Log unmatched payments for manual review — never blindly update random commissions
         if (!updated && !updateErr) {
-          await adminClient
-            .from("commissions")
-            .update({ status: "paid", payment_reference: orderId } as never)
-            .in("payment_method", ["fawry", "paymob_card"])
-            .eq("status", "pending")
-            .order("created_at", { ascending: false })
-            .limit(1);
+          console.warn(`[payment/callback] No commission matched for order_id=${orderId}. Manual review needed.`);
         }
       }
     }

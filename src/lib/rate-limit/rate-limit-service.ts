@@ -90,7 +90,12 @@ export async function checkRateLimit(
     };
   } catch (err) {
     console.error("[rate-limit] Check error:", err);
-    // Fail open — allow the request if rate limiting fails
+    // Fail closed for sensitive actions (OTP, ad creation) to prevent abuse
+    const sensitiveActions: RateLimitAction[] = ["otp_send", "ad_create", "report"];
+    if (sensitiveActions.includes(action)) {
+      return { allowed: false, remaining: 0, retryAfterSeconds: 60 };
+    }
+    // Fail open for non-sensitive actions (search, chatbot) to avoid blocking users
     return { allowed: true };
   }
 }

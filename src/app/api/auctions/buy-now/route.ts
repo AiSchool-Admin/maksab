@@ -83,6 +83,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check auction hasn't expired
+    if (ad.auction_ends_at) {
+      const endsAt = new Date(ad.auction_ends_at as string).getTime();
+      if (Date.now() >= endsAt) {
+        return NextResponse.json(
+          { error: "المزاد انتهى" },
+          { status: 400 },
+        );
+      }
+    }
+
     // Update ad: set status to bought_now, set winner
     const { error: updateError } = await client
       .from("ads")

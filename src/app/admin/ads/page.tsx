@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, ChevronLeft, ChevronRight, Eye, Heart, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { useAdmin } from "../layout";
+import { useAdmin, getAdminHeaders } from "../layout";
 import { getCategoryById } from "@/lib/categories/categories-config";
 import type { AdminAd } from "@/lib/admin/admin-service";
 
@@ -54,7 +54,7 @@ export default function AdminAdsPage() {
       if (saleTypeFilter) params.set("sale_type", saleTypeFilter);
 
       const res = await fetch(`/api/admin/stats?${params}`, {
-        headers: { "x-admin-id": admin.id },
+        headers: getAdminHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
