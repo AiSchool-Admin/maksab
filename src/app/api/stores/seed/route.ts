@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+export const maxDuration = 30;
+
 /**
  * POST /api/stores/seed
  *
