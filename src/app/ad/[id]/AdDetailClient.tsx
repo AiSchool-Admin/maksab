@@ -35,6 +35,8 @@ import type { AuctionState } from "@/lib/auction/types";
 import {
   placeBid,
   buyNow,
+  cancelAuction,
+  extendAuction,
   subscribeToAuction,
   checkAuctionEnd,
   fetchAuctionState,
@@ -128,6 +130,8 @@ export default function AdDetailClient({ id }: { id: string }) {
   const [auctionState, setAuctionState] = useState<AuctionState | null>(null);
   const [isBidding, setIsBidding] = useState(false);
   const [isBuyingNow, setIsBuyingNow] = useState(false);
+  const [isCancellingAuction, setIsCancellingAuction] = useState(false);
+  const [isExtendingAuction, setIsExtendingAuction] = useState(false);
 
   // Review & verification state
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -355,6 +359,28 @@ export default function AdDetailClient({ id }: { id: string }) {
       setAuctionState(result.updatedState);
     }
   }, [id, requireAuth]);
+
+  const handleCancelAuction = useCallback(async () => {
+    setIsCancellingAuction(true);
+    const result = await cancelAuction(id);
+    setIsCancellingAuction(false);
+
+    if (result.success) {
+      const fresh = await fetchAuctionState(id);
+      if (fresh) setAuctionState(fresh);
+    }
+  }, [id]);
+
+  const handleExtendAuction = useCallback(async (hours: number) => {
+    setIsExtendingAuction(true);
+    const result = await extendAuction(id, hours);
+    setIsExtendingAuction(false);
+
+    if (result.success) {
+      const fresh = await fetchAuctionState(id);
+      if (fresh) setAuctionState(fresh);
+    }
+  }, [id]);
 
   /* ── Not found state ──────────────────────────────────── */
   if (notFound && !isLoading) {
@@ -599,10 +625,15 @@ export default function AdDetailClient({ id }: { id: string }) {
           <AuctionSection
             auctionState={auctionState}
             currentUserId={currentUserId}
+            sellerId={ad.seller.id}
             onPlaceBid={handlePlaceBid}
             onBuyNow={handleBuyNow}
+            onCancelAuction={handleCancelAuction}
+            onExtendAuction={handleExtendAuction}
             isBidding={isBidding}
             isBuyingNow={isBuyingNow}
+            isCancelling={isCancellingAuction}
+            isExtending={isExtendingAuction}
             isLiveAuction={Boolean((ad.categoryFields as Record<string, unknown>)?.is_live_auction)}
           />
         )}

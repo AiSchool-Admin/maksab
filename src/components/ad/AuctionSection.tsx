@@ -12,6 +12,8 @@ import {
   Plus,
   Minus,
   Radio,
+  XCircle,
+  TimerReset,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import type { AuctionState, AuctionBid } from "@/lib/auction/types";
@@ -21,20 +23,30 @@ import { formatPrice, formatCountdown, formatTimeAgo } from "@/lib/utils/format"
 interface AuctionSectionProps {
   auctionState: AuctionState;
   currentUserId: string | null;
+  sellerId?: string;
   onPlaceBid: (amount: number) => void;
   onBuyNow: () => void;
+  onCancelAuction?: () => void;
+  onExtendAuction?: (hours: number) => void;
   isBidding?: boolean;
   isBuyingNow?: boolean;
+  isCancelling?: boolean;
+  isExtending?: boolean;
   isLiveAuction?: boolean;
 }
 
 export default function AuctionSection({
   auctionState,
   currentUserId,
+  sellerId,
   onPlaceBid,
   onBuyNow,
+  onCancelAuction,
+  onExtendAuction,
   isBidding = false,
   isBuyingNow = false,
+  isCancelling = false,
+  isExtending = false,
   isLiveAuction = false,
 }: AuctionSectionProps) {
   const {
@@ -57,8 +69,11 @@ export default function AuctionSection({
     () => new Date(endsAt).getTime() - Date.now(),
   );
   const [bidError, setBidError] = useState<string | null>(null);
+  const [showExtendOptions, setShowExtendOptions] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const isActive = status === "active";
+  const isSeller = !!currentUserId && currentUserId === sellerId;
   const currentPrice = currentHighestBid ?? startPrice;
   // Use seller-defined increment when set, otherwise 2% (min 50 EGP)
   const sellerIncrement = auctionState.minIncrement > 0 ? auctionState.minIncrement : undefined;
@@ -315,8 +330,8 @@ export default function AuctionSection({
       {/* Bid history */}
       <BidHistory bids={bids} />
 
-      {/* ── Quick Bid Stepper ─────────────────────────────── */}
-      {remaining > 0 && (
+      {/* ── Quick Bid Stepper (hidden for seller) ──────────── */}
+      {remaining > 0 && !isSeller && (
         <div className="space-y-3">
           {/* Next bid label */}
           <div className="text-center">
@@ -413,7 +428,7 @@ export default function AuctionSection({
       )}
 
       {/* Buy now */}
-      {remaining > 0 && buyNowPrice && (
+      {remaining > 0 && buyNowPrice && !isSeller && (
         <>
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-gray-200" />
@@ -434,6 +449,102 @@ export default function AuctionSection({
             ينهي المزاد فوراً
           </p>
         </>
+      )}
+
+      {/* Seller controls: extend & cancel */}
+      {isSeller && (
+        <div className="space-y-3 pt-2 border-t border-gray-200">
+          <p className="text-xs font-semibold text-gray-text text-center">تحكم في المزاد</p>
+
+          {/* Extend auction */}
+          {onExtendAuction && (
+            <>
+              {!showExtendOptions ? (
+                <Button
+                  fullWidth
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowExtendOptions(true)}
+                  disabled={isExtending}
+                >
+                  <TimerReset size={16} />
+                  مدد المزاد
+                </Button>
+              ) : (
+                <div className="bg-brand-gold-light rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-semibold text-dark text-center">مدد بكام ساعة؟</p>
+                  <div className="flex gap-2">
+                    {[12, 24, 48].map((h) => (
+                      <button
+                        key={h}
+                        onClick={() => {
+                          onExtendAuction(h);
+                          setShowExtendOptions(false);
+                        }}
+                        disabled={isExtending}
+                        className="flex-1 py-2 text-sm font-bold rounded-lg bg-brand-gold text-white hover:bg-brand-gold/90 active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        {h} ساعة
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setShowExtendOptions(false)}
+                    className="w-full text-xs text-gray-text py-1"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Cancel auction */}
+          {onCancelAuction && (
+            <>
+              {!showCancelConfirm ? (
+                <Button
+                  fullWidth
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCancelConfirm(true)}
+                  disabled={isCancelling}
+                  className="!border-error !text-error hover:!bg-error/5"
+                >
+                  <XCircle size={16} />
+                  إلغاء المزاد
+                </Button>
+              ) : (
+                <div className="bg-error/5 border border-error/20 rounded-xl p-3 space-y-2">
+                  <p className="text-sm font-bold text-error text-center">متأكد تلغي المزاد؟</p>
+                  {bidsCount > 0 && (
+                    <p className="text-xs text-gray-text text-center">
+                      فيه {bidsCount} مزايدة — هيتم إبلاغ المزايدين
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowCancelConfirm(false)}
+                      className="flex-1 py-2 text-sm font-medium rounded-lg bg-gray-light text-dark hover:bg-gray-200 transition-colors"
+                    >
+                      لا، رجوع
+                    </button>
+                    <button
+                      onClick={() => {
+                        onCancelAuction();
+                        setShowCancelConfirm(false);
+                      }}
+                      disabled={isCancelling}
+                      className="flex-1 py-2 text-sm font-bold rounded-lg bg-error text-white hover:bg-error/90 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {isCancelling ? "جاري الإلغاء..." : "أيوا، إلغي"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   );

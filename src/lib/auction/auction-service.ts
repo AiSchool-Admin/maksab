@@ -121,6 +121,70 @@ async function buyNowImpl(
   }
 }
 
+/* ── Cancel auction (seller only) ──────────────────────────────────── */
+
+export interface CancelAuctionResult {
+  success: boolean;
+  error?: string;
+}
+
+export async function cancelAuction(adId: string): Promise<CancelAuctionResult> {
+  try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
+    const token = getSessionToken();
+    const res = await fetch("/api/auctions/cancel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ ad_id: adId }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || "حصل مشكلة. جرب تاني" };
+    }
+    return { success: true };
+  } catch {
+    return { success: false, error: "حصل مشكلة في الاتصال. جرب تاني" };
+  }
+}
+
+/* ── Extend auction (seller only) ─────────────────────────────────── */
+
+export interface ExtendAuctionResult {
+  success: boolean;
+  error?: string;
+  newEndsAt?: string;
+}
+
+export async function extendAuction(
+  adId: string,
+  hours: number,
+): Promise<ExtendAuctionResult> {
+  try {
+    const { getSessionToken } = await import("@/lib/supabase/auth");
+    const token = getSessionToken();
+    const res = await fetch("/api/auctions/extend", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ ad_id: adId, hours }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || "حصل مشكلة. جرب تاني" };
+    }
+    return { success: true, newEndsAt: data.newEndsAt };
+  } catch {
+    return { success: false, error: "حصل مشكلة في الاتصال. جرب تاني" };
+  }
+}
+
 /* ── Check and finalize ended auctions ──────────────────────────────── */
 
 export async function checkAuctionEnd(adId: string): Promise<AuctionState | null> {
