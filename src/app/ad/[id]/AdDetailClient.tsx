@@ -234,9 +234,11 @@ export default function AdDetailClient({ id }: { id: string }) {
   useEffect(() => {
     if (!auctionState || auctionState.status !== "active") return;
 
-    const unsubscribe = subscribeToAuction(id, (updatedState) => {
-      setAuctionState(updatedState);
-    });
+    const unsubscribe = subscribeToAuction(
+      id,
+      (updatedState) => setAuctionState(updatedState),
+      auctionState,
+    );
 
     // Periodic check: re-fetch when timer expires client-side
     const endCheckInterval = setInterval(async () => {
