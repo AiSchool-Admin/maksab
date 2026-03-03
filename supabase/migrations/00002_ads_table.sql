@@ -26,7 +26,7 @@ CREATE TABLE ads (
   auction_min_increment DECIMAL(12,2),
   auction_ends_at TIMESTAMPTZ,
   auction_status VARCHAR(20) DEFAULT 'active'
-    CHECK (auction_status IN ('active', 'ended', 'bought_now', 'cancelled')),
+    CHECK (auction_status IN ('active', 'ended_winner', 'ended_no_bids', 'bought_now', 'cancelled')),
   auction_winner_id UUID REFERENCES public.profiles(id),
 
   -- Exchange specific
