@@ -94,21 +94,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update ad: set status to bought_now, set winner
-    const { error: updateError } = await client
+    // Atomic update: only succeeds if auction is still active (prevents race condition)
+    const { data: updatedRows, error: updateError } = await client
       .from("ads")
       .update({
         auction_status: "bought_now",
         auction_winner_id: buyer_id,
         status: "sold",
       } as never)
-      .eq("id", ad_id);
+      .eq("id", ad_id)
+      .eq("auction_status", "active")
+      .select("id");
 
     if (updateError) {
       console.error("Buy-now update error:", updateError);
       return NextResponse.json(
         { error: "حصل مشكلة. جرب تاني" },
         { status: 500 },
+      );
+    }
+
+    // If no rows matched, someone else already bought or auction ended
+    if (!updatedRows || (updatedRows as unknown[]).length === 0) {
+      return NextResponse.json(
+        { error: "المزاد خلص أو حد تاني اشترى قبلك" },
+        { status: 409 },
       );
     }
 
