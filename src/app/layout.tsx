@@ -29,6 +29,7 @@ const cairo = localFont({
   variable: "--font-cairo",
   display: "swap",
   weight: "200 1000",
+  preload: false,
   fallback: ["system-ui", "arial"],
 });
 
@@ -98,6 +99,12 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('maksab_theme');if(t==='dark'){document.documentElement.classList.add('dark')}else{document.documentElement.classList.remove('dark')}}catch(e){}})()`,
+          }}
+        />
+        {/* Capture PWA install prompt early, before React hydrates */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){window.__pwa_deferred_prompt=null;window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwa_deferred_prompt=e})})()`,
           }}
         />
         {/* JSON-LD: WebSite schema with sitelinks search box */}
