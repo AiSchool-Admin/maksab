@@ -133,15 +133,36 @@ export type AuctionUnsubscribe = () => void;
 
 /**
  * Subscribe to real-time auction updates via Supabase Realtime.
- * Includes fallback polling every 10 seconds in case Realtime connection drops.
+ *
+ * Optimizations:
+ * - New bid INSERT: merges incrementally (1 profile query) instead of
+ *   full refetch (3 queries).
+ * - Ads UPDATE (anti-sniping / finalization): full refetch (rare event).
+ * - Fallback polling only activates when no Realtime event received
+ *   in 30+ seconds, avoiding unnecessary queries when Realtime is healthy.
  */
 export function subscribeToAuction(
   adId: string,
   onUpdate: (state: AuctionState) => void,
+  initialState?: AuctionState | null,
 ): AuctionUnsubscribe {
   let isActive = true;
+  let cachedState: AuctionState | null = initialState ?? null;
+  let lastEventTime = Date.now();
 
-  // Subscribe to Supabase Realtime
+  const emitUpdate = (state: AuctionState) => {
+    if (!isActive) return;
+    cachedState = state;
+    onUpdate(state);
+  };
+
+  // Seed cache if no initial state provided
+  if (!cachedState) {
+    fetchAuctionState(adId).then((state) => {
+      if (state && isActive) emitUpdate(state);
+    });
+  }
+
   const channel = supabase
     .channel(`auction-${adId}`)
     .on(
@@ -152,11 +173,54 @@ export function subscribeToAuction(
         table: "auction_bids",
         filter: `ad_id=eq.${adId}`,
       } as never,
-      () => {
+      async (payload: { new: Record<string, unknown> }) => {
         if (!isActive) return;
-        fetchAuctionState(adId).then((state) => {
-          if (state && isActive) onUpdate(state);
-        });
+        lastEventTime = Date.now();
+
+        // Incremental merge: fetch only bidder name (1 query instead of 3)
+        if (cachedState) {
+          const newBid = payload.new;
+          const bidderId = newBid.bidder_id as string;
+
+          let bidderName = "مزايد";
+          if (bidderId) {
+            const { data: profile } = await supabase
+              .from("profiles" as never)
+              .select("display_name")
+              .eq("id", bidderId)
+              .maybeSingle();
+            if (profile) {
+              const p = profile as Record<string, unknown>;
+              bidderName = (p.display_name as string) || "مزايد";
+            }
+          }
+
+          const bid: AuctionBid = {
+            id: newBid.id as string,
+            adId: newBid.ad_id as string,
+            bidderId,
+            bidderName,
+            amount: Number(newBid.amount),
+            createdAt: newBid.created_at as string,
+          };
+
+          const updatedBids = [bid, ...cachedState.bids]
+            .sort((a, b) => b.amount - a.amount)
+            .slice(0, 20);
+
+          emitUpdate({
+            ...cachedState,
+            bids: updatedBids,
+            bidsCount: updatedBids.length,
+            currentHighestBid: updatedBids[0]?.amount ?? null,
+            highestBidderName: updatedBids[0]?.bidderName ?? null,
+            highestBidderId: updatedBids[0]?.bidderId ?? null,
+          });
+        } else {
+          // No cached state yet — full refetch
+          const state = await fetchAuctionState(adId);
+          if (state && isActive) emitUpdate(state);
+        }
       },
     )
     .on(
@@ -167,21 +231,25 @@ export function subscribeToAuction(
         table: "ads",
         filter: `id=eq.${adId}`,
       } as never,
-      () => {
+      async () => {
+        // Ad-level changes (anti-sniping extension, finalization) — full refetch
         if (!isActive) return;
-        fetchAuctionState(adId).then((state) => {
-          if (state && isActive) onUpdate(state);
-        });
+        lastEventTime = Date.now();
+        const state = await fetchAuctionState(adId);
+        if (state && isActive) emitUpdate(state);
       },
     )
     .subscribe();
 
-  // Fallback polling every 10 seconds in case Realtime connection drops
+  // Smart fallback polling: only when Realtime appears unhealthy
+  // Checks every 10s, but only fetches if no event in 30+ seconds
   const pollInterval = setInterval(() => {
     if (!isActive) return;
-    fetchAuctionState(adId).then((state) => {
-      if (state && isActive) onUpdate(state);
-    });
+    if (Date.now() - lastEventTime >= 30000) {
+      fetchAuctionState(adId).then((state) => {
+        if (state && isActive) emitUpdate(state);
+      });
+    }
   }, 10000);
 
   return () => {
