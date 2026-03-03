@@ -61,7 +61,7 @@ export default function PublicProfilePage({
           .from("profiles" as never)
           .select("*")
           .eq("id", id)
-          .single();
+          .maybeSingle();
 
         if (userError || !userData) {
           setNotFound(true);

@@ -255,7 +255,7 @@ async function fallbackMatches(requestId: string): Promise<BuyRequestMatch[]> {
     .from("buy_requests")
     .select("*")
     .eq("id", requestId)
-    .single();
+    .maybeSingle();
 
   if (!reqData) return [];
 
@@ -305,7 +305,7 @@ export async function findBuyersForAd(adId: string): Promise<BuyRequest[]> {
     .from("ads")
     .select("category_id, price, title, sale_type")
     .eq("id", adId)
-    .single();
+    .maybeSingle();
 
   if (!adData) return [];
 

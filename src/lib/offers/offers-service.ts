@@ -129,7 +129,7 @@ export async function respondToOffer(params: {
         .from("price_offers" as never)
         .select("ad_id")
         .eq("id", params.offerId)
-        .single();
+        .maybeSingle();
 
       if (offerData) {
         const adId = (offerData as Record<string, unknown>).ad_id as string;
@@ -163,7 +163,7 @@ export async function withdrawOffer(
       .select("ad_id, status")
       .eq("id", offerId)
       .eq("buyer_id", buyerId)
-      .single();
+      .maybeSingle();
 
     if (fetchError || !offerData) {
       return { success: false, error: "العرض غير موجود" };
