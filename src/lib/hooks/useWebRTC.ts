@@ -11,7 +11,7 @@
  *   4. Viewer receives offer → sets remote description, creates answer → sends back
  *   5. ICE candidates are exchanged per-viewer pair
  *   6. Broadcaster periodically re-announces for late joiners (every 3s)
- *   7. Viewer retries "viewer-join" every 2s until connected (max 15 attempts)
+ *   7. Viewer retries "viewer-join" every 2s until connected (max 60 attempts)
  *
  * Each signal has a `target` field so messages reach the right peer.
  */
@@ -29,7 +29,7 @@ const ICE_SERVERS: RTCConfiguration = {
 
 // Viewer retry config
 const VIEWER_JOIN_RETRY_INTERVAL_MS = 2000;
-const VIEWER_JOIN_MAX_RETRIES = 15;
+const VIEWER_JOIN_MAX_RETRIES = 60;
 
 // Broadcaster re-announce interval
 const BROADCASTER_REANNOUNCE_INTERVAL_MS = 3000;
@@ -84,6 +84,9 @@ export function useWebRTC({
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const channelReadyRef = useRef(false);
 
+  // ── Ref to track broadcaster role without causing channel re-creation ──
+  const isBroadcasterRef = useRef(isBroadcaster);
+
   // ── Stop viewer retry ─────────────────────────────────────
   const stopViewerRetry = useCallback(() => {
     if (viewerRetryRef.current) {
@@ -92,11 +95,21 @@ export function useWebRTC({
     }
   }, []);
 
+  // ── Keep isBroadcasterRef in sync; stop viewer retry when becoming broadcaster ──
+  useEffect(() => {
+    const wasBroadcaster = isBroadcasterRef.current;
+    isBroadcasterRef.current = isBroadcaster;
+    if (!wasBroadcaster && isBroadcaster) {
+      stopViewerRetry();
+      viewerConnectedRef.current = false;
+    }
+  }, [isBroadcaster, stopViewerRetry]);
+
   // ── Setup signaling channel ─────────────────────────────
   const getChannel = useCallback(() => {
     if (channelRef.current) return channelRef.current;
     const channel = supabase.channel(`live-rtc-${roomId}`, {
-      config: { broadcast: { self: false } },
+      config: { broadcast: { self: true, ack: true } },
     });
     channelRef.current = channel;
     return channel;
@@ -374,7 +387,7 @@ export function useWebRTC({
         // Skip messages targeted to someone else
         if (target && target !== userId) return;
 
-        if (isBroadcaster) {
+        if (isBroadcasterRef.current) {
           // ── BROADCASTER handles ──
           switch (type) {
             case "viewer-join":
@@ -392,10 +405,12 @@ export function useWebRTC({
           switch (type) {
             case "broadcaster-ready":
               setBroadcasterOnline(true);
-              // Stop retry and send a fresh viewer-join targeted to this broadcaster
-              viewerConnectedRef.current = false;
-              stopViewerRetry();
+              // If already connected via WebRTC, ignore re-announces
+              if (viewerConnectedRef.current) break;
+              // Send a fresh viewer-join targeted to this broadcaster
               sendSignal("viewer-join", "", from);
+              // Also send untargeted in case target routing fails
+              sendSignal("viewer-join", "");
               break;
             case "offer":
               setBroadcasterOnline(true);
@@ -424,7 +439,7 @@ export function useWebRTC({
 
         // If viewer, start retry loop to announce presence
         // This handles the case where broadcaster started before viewer connected
-        if (!isBroadcaster) {
+        if (!isBroadcasterRef.current) {
           startViewerRetry();
         }
       }
@@ -437,7 +452,7 @@ export function useWebRTC({
       channelRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, isBroadcaster, roomId]);
+  }, [userId, roomId]);
 
   // ── Broadcaster: re-announce periodically for late joiners ──
   useEffect(() => {
