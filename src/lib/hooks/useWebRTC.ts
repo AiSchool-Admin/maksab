@@ -67,6 +67,7 @@ export function useWebRTC({
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [connectionState, setConnectionState] = useState<string>("new");
   const [broadcasterOnline, setBroadcasterOnline] = useState(false);
+  const [viewerPc, setViewerPc] = useState<RTCPeerConnection | null>(null);
 
   // ── Viewer retry state ────────────────────────────────────
   const viewerRetryRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -234,6 +235,7 @@ export function useWebRTC({
 
       const pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnectionRef.current = pc;
+      setViewerPc(pc);
 
       // ICE candidates → targeted to broadcaster
       pc.onicecandidate = (event) => {
@@ -480,5 +482,7 @@ export function useWebRTC({
     startBroadcast,
     stopBroadcast,
     sendSignal,
+    // Expose viewer peer connection for connection quality monitoring
+    viewerPeerConnection: isBroadcaster ? null : viewerPc,
   };
 }
