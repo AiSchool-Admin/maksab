@@ -77,6 +77,15 @@ const MatchingBuyRequests = dynamic(() => import("@/components/ad/MatchingBuyReq
 
 /** Convert AdDetail to AuctionState for the auction component */
 function toAuctionState(ad: AdDetail): AuctionState {
+  const endsAt = ad.auctionEndsAt ?? new Date().toISOString();
+  const durationHours = ad.auctionDurationHours ?? 72;
+
+  // Calculate original end time from ad creation + duration to detect anti-snipe extensions
+  const originalEndsAt = ad.createdAt
+    ? new Date(new Date(ad.createdAt).getTime() + durationHours * 3600000).toISOString()
+    : endsAt;
+  const wasExtended = new Date(endsAt).getTime() > new Date(originalEndsAt).getTime();
+
   return {
     adId: ad.id,
     status: ad.auctionStatus ?? "active",
@@ -87,8 +96,8 @@ function toAuctionState(ad: AdDetail): AuctionState {
     highestBidderId: ad.auctionHighestBidderId ?? null,
     bidsCount: ad.auctionBidsCount,
     minIncrement: ad.auctionMinIncrement,
-    endsAt: ad.auctionEndsAt ?? new Date().toISOString(),
-    originalEndsAt: ad.auctionEndsAt ?? new Date().toISOString(),
+    endsAt,
+    originalEndsAt,
     bids: ad.bids.map((b) => ({
       id: b.id,
       adId: ad.id,
@@ -99,7 +108,7 @@ function toAuctionState(ad: AdDetail): AuctionState {
     })),
     winnerId: ad.auctionWinnerId ?? null,
     winnerName: ad.auctionWinnerName ?? null,
-    wasExtended: false,
+    wasExtended,
   };
 }
 

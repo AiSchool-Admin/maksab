@@ -50,6 +50,7 @@ export interface AdDetail {
   auctionBidsCount: number;
   auctionMinIncrement: number;
   auctionStatus: AuctionStatus | null;
+  auctionDurationHours: number | null;
   auctionWinnerId: string | null;
   auctionWinnerName: string | null;
   bids: BidInfo[];
@@ -188,6 +189,7 @@ export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
       auctionHighestBidderName: highestBidderName,
       auctionBidsCount: bids.length,
       auctionMinIncrement: Number(ad.auction_min_increment) || 50,
+      auctionDurationHours: ad.auction_duration_hours ? Number(ad.auction_duration_hours) : null,
       auctionStatus: (ad.auction_status as AuctionStatus) || null,
       auctionWinnerId: (ad.auction_winner_id as string) || null,
       auctionWinnerName: null,

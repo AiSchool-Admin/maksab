@@ -6,7 +6,8 @@
  */
 
 import { supabase } from "@/lib/supabase/client";
-import type { AuctionState, AuctionBid, AuctionStatus } from "./types";
+import type { AuctionState, AuctionBid } from "./types";
+import { resolveAuctionStatus, calcOriginalEndsAt, wasAuctionExtended } from "./finalize";
 
 /* ── Place a bid ────────────────────────────────────────────────────── */
 
@@ -239,22 +240,21 @@ export async function fetchAuctionState(adId: string): Promise<AuctionState | nu
     }),
   );
 
-  // Determine real-time status: check if auction ended
-  let status = adData.auction_status as AuctionStatus;
+  // Determine real-time status using shared logic
   const endsAt = adData.auction_ends_at as string;
-  if (status === "active" && endsAt && new Date(endsAt).getTime() <= Date.now()) {
-    status = bidsList.length > 0 ? "ended_winner" : "ended_no_bids";
-  }
+  const status = resolveAuctionStatus(
+    adData.auction_status as import("./types").AuctionStatus,
+    endsAt,
+    bidsList.length > 0,
+  );
 
-  // Calculate original end time from created_at + duration to detect anti-snipe extensions
+  // Detect anti-snipe extensions using shared logic
   const durationHours = Number(adData.auction_duration_hours) || 72;
   const createdAt = adData.created_at as string;
   const originalEndsAt = createdAt
-    ? new Date(new Date(createdAt).getTime() + durationHours * 3600000).toISOString()
+    ? calcOriginalEndsAt(createdAt, durationHours)
     : endsAt;
-  const wasExtended = endsAt && originalEndsAt
-    ? new Date(endsAt).getTime() > new Date(originalEndsAt).getTime()
-    : false;
+  const wasExtended = wasAuctionExtended(endsAt, createdAt, durationHours);
 
   return {
     adId,
