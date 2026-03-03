@@ -97,21 +97,25 @@ export default function LiveBroadcastPage() {
     userName: user?.display_name || "زائر",
   });
 
-  // Connection quality monitoring
-  const connectionStats = useConnectionQuality(null, broadcastState === "live");
-
   // ── WebRTC for real video streaming ────────────────────
   const {
     remoteStream,
     broadcasterOnline,
     startBroadcast,
     stopBroadcast: stopWebRTC,
+    viewerPeerConnection,
   } = useWebRTC({
     roomId: adId,
     userId: stableUserId,
     isBroadcaster: isOwner === true,
     onViewerCountChange: (count) => setViewerCount(count),
   });
+
+  // Connection quality monitoring (viewer uses actual peer connection, seller uses broadcast state)
+  const connectionStats = useConnectionQuality(
+    isOwner ? null : viewerPeerConnection,
+    isOwner ? false : broadcastState === "live",
+  );
 
   // Attach remote stream to viewer video element
   useEffect(() => {
@@ -480,10 +484,15 @@ export default function LiveBroadcastPage() {
           {/* Persistent live chat (when live) */}
           {broadcastState === "live" && (
             <div className="absolute bottom-36 inset-x-0 z-10 px-4">
-              {/* Connection quality indicator */}
+              {/* Broadcast status indicator */}
               <div className="flex items-center gap-1.5 mb-2">
-                <span className="text-xs">{connectionStats.emoji}</span>
-                <span className="text-white/70 text-[10px]">{connectionStats.qualityAr}</span>
+                <span className="text-xs">{broadcastState === "live" ? "🟢" : "⚫"}</span>
+                <span className="text-white/70 text-[10px]">
+                  {broadcastState === "live"
+                    ? viewerCount > 0 ? `يبث — ${viewerCount} مشاهد` : "يبث — في انتظار مشاهدين"
+                    : "غير متصل"
+                  }
+                </span>
                 {isChatConnected && <span className="text-green-400 text-[10px]">الشات متصل</span>}
               </div>
               <div className="max-h-40 overflow-y-auto space-y-1 scrollbar-hide">

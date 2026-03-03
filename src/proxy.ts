@@ -61,7 +61,7 @@ export function proxy(request: NextRequest) {
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(self), interest-cohort=()"
+    "camera=(self), microphone=(self), geolocation=(self), interest-cohort=()"
   );
 
   // ── 2. API Route Protection ──────────────────────────────
