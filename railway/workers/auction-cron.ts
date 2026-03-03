@@ -339,6 +339,66 @@ async function expireOldAds(): Promise<void> {
         `[${new Date().toISOString()}] Expired ${expiredAuctions.length} ended auction ads`,
       );
     }
+
+    // Safety net: forcefully finalize auctions that are still "active" but
+    // their auction_ends_at passed more than 24 hours ago (in case finalizeExpiredAuctions missed them)
+    const oneDayAgo = new Date(Date.now() - 24 * 3600000).toISOString();
+    const { data: stuckAuctions } = await client
+      .from("ads")
+      .select("id, title, user_id")
+      .eq("sale_type", "auction")
+      .eq("status", "active")
+      .eq("auction_status", "active")
+      .lte("auction_ends_at", oneDayAgo);
+
+    if (stuckAuctions && stuckAuctions.length > 0) {
+      for (const auction of stuckAuctions) {
+        const { data: topBid } = await client
+          .from("auction_bids")
+          .select("bidder_id, amount")
+          .eq("ad_id", auction.id)
+          .order("amount", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (topBid) {
+          await client
+            .from("ads")
+            .update({
+              auction_status: "ended_winner",
+              auction_winner_id: topBid.bidder_id,
+              status: "sold",
+            })
+            .eq("id", auction.id)
+            .eq("auction_status", "active");
+        } else {
+          await client
+            .from("ads")
+            .update({ auction_status: "ended_no_bids" })
+            .eq("id", auction.id)
+            .eq("auction_status", "active");
+        }
+      }
+      console.log(
+        `[${new Date().toISOString()}] Force-finalized ${stuckAuctions.length} stuck auction(s)`,
+      );
+    }
+
+    // Absolute expiry: auction ads (any auction_status) older than 30 days past their end time
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
+    const { data: ancientAuctions } = await client
+      .from("ads")
+      .update({ status: "expired" })
+      .eq("sale_type", "auction")
+      .eq("status", "active")
+      .lte("auction_ends_at", thirtyDaysAgo)
+      .select("id");
+
+    if (ancientAuctions && ancientAuctions.length > 0) {
+      console.log(
+        `[${new Date().toISOString()}] Expired ${ancientAuctions.length} ancient auction ad(s) (30+ days past end)`,
+      );
+    }
   } catch (error) {
     console.error(
       `[${new Date().toISOString()}] Error expiring ads:`,
