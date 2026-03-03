@@ -1,11 +1,24 @@
 import { ImageResponse } from "next/og";
 
-export const runtime = "nodejs";
+export const runtime = "edge";
 export const alt = "مكسب — كل صفقة مكسب";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OGImage() {
+// Prevent static prerendering — OG images are generated on demand
+export const dynamic = "force-dynamic";
+
+export default async function OGImage() {
+  // Fetch a static-weight Arabic font compatible with Satori
+  // (Cairo Variable font triggers unsupported GSUB lookupType 5 substFormat 3)
+  const fontData = await fetch(
+    new URL("https://fonts.gstatic.com/s/cairo/v28/SLXGc1nY6HkvamImRJqExst1.ttf")
+  ).then((res) => (res.ok ? res.arrayBuffer() : null));
+
+  const fonts = fontData
+    ? [{ name: "Cairo", data: fontData, style: "normal" as const, weight: 700 as const }]
+    : [];
+
   return new ImageResponse(
     (
       <div
@@ -17,7 +30,8 @@ export default function OGImage() {
           alignItems: "center",
           justifyContent: "center",
           background: "linear-gradient(135deg, #1B7A3D 0%, #145C2E 100%)",
-          fontFamily: "sans-serif",
+          fontFamily: fontData ? "Cairo" : "sans-serif",
+          direction: "rtl",
         }}
       >
         <div
@@ -68,6 +82,6 @@ export default function OGImage() {
         </div>
       </div>
     ),
-    { ...size }
+    { ...size, fonts }
   );
 }
