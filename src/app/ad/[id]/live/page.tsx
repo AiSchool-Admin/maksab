@@ -325,18 +325,32 @@ export default function LiveBroadcastPage() {
           table: "auction_bids",
           filter: `ad_id=eq.${adId}`,
         } as never,
-        (payload: { new: Record<string, unknown> }) => {
+        async (payload: { new: Record<string, unknown> }) => {
           const newBid = payload.new;
           const amount = Number(newBid.amount);
+          const bidderId = newBid.bidder_id as string;
+
+          // Fetch bidder name from profiles
+          let bidderName = "مزايد";
+          if (bidderId) {
+            const { data: profile } = await supabase
+              .from("profiles" as never)
+              .select("display_name")
+              .eq("id", bidderId)
+              .maybeSingle();
+            if (profile) {
+              bidderName = (profile as Record<string, unknown>).display_name as string || "مزايد";
+            }
+          }
 
           setCurrentHighestBid((prev) => (prev === null || amount > prev ? amount : prev));
           setBidsCount((prev) => prev + 1);
           setLiveBids((prev) => [
-            { bidderName: "مزايد", amount, timestamp: Date.now() },
+            { bidderName, amount, timestamp: Date.now() },
             ...prev,
           ]);
           // Broadcast bid to live chat
-          sendBidNotification("مزايد", amount);
+          sendBidNotification(bidderName, amount);
         },
       )
       .subscribe();

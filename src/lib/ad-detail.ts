@@ -123,21 +123,39 @@ export async function fetchAdDetail(id: string): Promise<AdDetail | null> {
     if (ad.sale_type === "auction") {
       const { data: bidsData } = await supabase
         .from("auction_bids" as never)
-        .select("*, bidder:profiles(display_name)")
+        .select("*")
         .eq("ad_id", id)
         .order("amount", { ascending: false })
         .limit(20);
 
       if (bidsData && (bidsData as unknown[]).length > 0) {
-        bids = (bidsData as Record<string, unknown>[]).map((b) => ({
+        const bidsRaw = bidsData as Record<string, unknown>[];
+
+        // Fetch bidder names separately (more reliable than PostgREST join)
+        const bidderIds = [...new Set(bidsRaw.map((b) => b.bidder_id as string))];
+        const nameMap = new Map<string, string>();
+        if (bidderIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles" as never)
+            .select("id, display_name")
+            .in("id", bidderIds);
+          if (profiles) {
+            for (const p of profiles as Record<string, unknown>[]) {
+              if (p.display_name) {
+                nameMap.set(p.id as string, p.display_name as string);
+              }
+            }
+          }
+        }
+
+        bids = bidsRaw.map((b) => ({
           id: b.id as string,
-          bidderName:
-            ((b.bidder as Record<string, unknown>)?.display_name as string) || "مزايد",
+          bidderName: nameMap.get(b.bidder_id as string) || "مزايد",
           amount: Number(b.amount),
           createdAt: b.created_at as string,
         }));
         highestBid = bids[0].amount;
-        highestBidderId = (bidsData as Record<string, unknown>[])[0].bidder_id as string;
+        highestBidderId = bidsRaw[0].bidder_id as string;
         highestBidderName = bids[0].bidderName;
       }
     }
