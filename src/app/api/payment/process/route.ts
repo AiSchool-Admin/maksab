@@ -1,11 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth/session-token";
+import { generateUniqueAmount } from "@/lib/utils/unique-amount";
 
 /**
  * POST /api/payment/process
  * Processes commission payments server-side.
  * Handles: manual (vodafone_cash, instapay), fawry, paymob_card
+ *
+ * For manual payments (InstaPay, Vodafone Cash):
+ * - Generates a unique amount (with random piasters) for transfer matching
+ * - Status starts as "pending" until user confirms and uploads screenshot
+ * - User confirmation sets status to "pending_verification"
+ * - Admin verification sets status to "paid" and grants benefits
  */
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -46,13 +53,17 @@ export async function POST(request: Request) {
     });
 
     // ── Manual payments (Vodafone Cash / InstaPay) ──
+    // Generate a unique amount with random piasters for transfer matching
     if (method === "vodafone_cash" || method === "instapay") {
+      const uniqueAmount = generateUniqueAmount(amount);
+
       const { data, error } = await adminClient
         .from("commissions")
         .insert({
           ad_id: adId || null,
           payer_id: authenticatedPayerId,
           amount,
+          unique_amount: uniqueAmount,
           payment_method: method,
           status: "pending",
           commission_type: commission_type || "post_transaction",
@@ -68,6 +79,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         transactionId: data.id,
+        uniqueAmount,
       });
     }
 

@@ -86,17 +86,57 @@ export async function POST(request: Request) {
       // Find the matching commission by Paymob order_id and update its status.
       // The order_id should have been stored in commissions.payment_reference
       // when the payment was initiated.
+      // Paymob payments (Fawry, Card) are webhook-verified — grant benefits immediately.
       if (isSuccess && orderId) {
         const { data: updated, error: updateErr } = await adminClient
           .from("commissions")
-          .update({ status: "paid", payment_reference: orderId } as never)
+          .update({
+            status: "paid",
+            payment_reference: orderId,
+            verified_by: "paymob_webhook",
+            verified_at: new Date().toISOString(),
+          } as never)
           .eq("payment_reference", orderId)
           .eq("status", "pending")
-          .select("id")
+          .select("id, payer_id, amount, commission_type, ad_id")
           .maybeSingle();
 
-        // Log unmatched payments for manual review — never blindly update random commissions
-        if (!updated && !updateErr) {
+        if (updated) {
+          // Grant supporter badge
+          await adminClient
+            .from("profiles")
+            .update({ is_commission_supporter: true } as never)
+            .eq("id", updated.payer_id);
+
+          // If pre-payment, boost the ad
+          if (updated.commission_type === "pre_payment" && updated.ad_id) {
+            await adminClient
+              .from("ads")
+              .update({
+                is_boosted: true,
+                is_trusted: true,
+                boosted_at: new Date().toISOString(),
+              } as never)
+              .eq("id", updated.ad_id);
+          }
+
+          // Send thank-you notification
+          await adminClient.from("notifications").insert({
+            user_id: updated.payer_id,
+            type: "commission_verified",
+            title: "تم تأكيد دفعك! ✅💚",
+            body: `تم التحقق من دعمك بقيمة ${updated.amount} جنيه. أنت دلوقتي "داعم مكسب" 💚`,
+            ad_id: updated.ad_id || null,
+            data: JSON.stringify({ amount: updated.amount, commission_id: updated.id }),
+          });
+
+          // Log the verification
+          await adminClient.from("payment_verification_log").insert({
+            commission_id: updated.id,
+            action: "auto_verified",
+            notes: `تم التحقق تلقائياً عبر Paymob webhook — order_id: ${orderId}`,
+          });
+        } else if (!updateErr) {
           console.warn(`[payment/callback] No commission matched for order_id=${orderId}. Manual review needed.`);
         }
       }

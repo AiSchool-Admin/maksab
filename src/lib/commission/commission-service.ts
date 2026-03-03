@@ -49,7 +49,7 @@ export function getPrePaymentSavings(adPrice: number): {
   return { prePayment, postTransaction, savings, savingsPercent };
 }
 
-export type CommissionStatus = "pending" | "paid" | "declined" | "later" | "cancelled";
+export type CommissionStatus = "pending" | "pending_verification" | "paid" | "declined" | "later" | "cancelled";
 
 export interface CommissionRecord {
   id: string;
@@ -117,6 +117,8 @@ export async function declineCommission(params: {
 
 /**
  * Check if a user has ever paid commission (for badge display).
+ * Only counts payments that have been verified by admin or system
+ * (Paymob webhook). Self-confirmed payments don't count.
  */
 export async function isCommissionSupporter(userId: string): Promise<boolean> {
   try {
