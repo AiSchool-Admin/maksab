@@ -51,6 +51,28 @@ export default function NotificationDropdown() {
     }
     setOpen(false);
 
+    // Commission reminder — open InstaPay link directly
+    if (notif.type === "commission_reminder" || notif.type === "commission_thank_you" || notif.type === "commission_verified") {
+      try {
+        const data = typeof notif.icon === "string" ? null : null;
+        // Try to extract instapay_link from notification data
+        const rawData = (notif as unknown as Record<string, unknown>).data;
+        if (rawData) {
+          const parsed = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+          if (parsed?.instapay_link && notif.type === "commission_reminder") {
+            window.open(parsed.instapay_link, "_blank");
+            return;
+          }
+        }
+      } catch { /* ignore parse errors */ }
+      // Fallback: go to the ad if available
+      if (notif.adId) {
+        router.push(`/ad/${notif.adId}`);
+        return;
+      }
+      return;
+    }
+
     if (notif.conversationId) {
       router.push(`/chat/${notif.conversationId}`);
     } else if (notif.adId) {
