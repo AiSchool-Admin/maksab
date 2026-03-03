@@ -91,7 +91,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: result.error }, { status: 500 });
       }
 
-      // Record in DB
+      // Record in DB with payment_reference for webhook matching
       await adminClient.from("commissions").insert({
         ad_id: adId || null,
         payer_id: authenticatedPayerId,
@@ -99,6 +99,7 @@ export async function POST(request: Request) {
         payment_method: "fawry",
         status: "pending",
         commission_type: commission_type || "post_transaction",
+        payment_reference: result.transactionId || null,
       });
 
       return NextResponse.json({
@@ -130,7 +131,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: result.error }, { status: 500 });
       }
 
-      // Record pending in DB
+      // Record pending in DB with payment_reference for webhook matching
       await adminClient.from("commissions").insert({
         ad_id: adId || null,
         payer_id: authenticatedPayerId,
@@ -138,6 +139,7 @@ export async function POST(request: Request) {
         payment_method: "paymob_card",
         status: "pending",
         commission_type: commission_type || "post_transaction",
+        payment_reference: result.transactionId || null,
       });
 
       return NextResponse.json({

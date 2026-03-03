@@ -18,12 +18,18 @@ import type { VideoFile } from "@/lib/utils/video-compress";
 import type { AudioRecording } from "@/lib/utils/audio-recorder";
 import type { PriceData } from "@/components/ad/steps/Step3PricePhotos";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
+import dynamic from "next/dynamic";
 import SellerInsightsCard from "@/components/ad/SellerInsightsCard";
 import ShareButtons from "@/components/ad/ShareButtons";
 import Step1CategorySaleType from "@/components/ad/steps/Step1CategorySaleType";
 import Step2CategoryDetails from "@/components/ad/steps/Step2CategoryDetails";
 import Step3PricePhotos from "@/components/ad/steps/Step3PricePhotos";
 import Step4LocationReview from "@/components/ad/steps/Step4LocationReview";
+
+const PrePaymentOfferLazy = dynamic(
+  () => import("@/components/commission/PrePaymentOffer"),
+  { ssr: false },
+);
 
 const STORAGE_KEY = "maksab_ad_draft";
 const TOTAL_STEPS = 3;
@@ -579,6 +585,12 @@ export default function CreateAdPage() {
   /* ── Success screen ────────────────────────────────── */
   if (published) {
     const adUrl = publishedAdId ? `${typeof window !== "undefined" ? window.location.origin : ""}/ad/${publishedAdId}` : undefined;
+    const adPrice = draft.saleType === "cash" && draft.priceData.price
+      ? Number(draft.priceData.price)
+      : draft.saleType === "auction" && draft.priceData.auctionStartPrice
+        ? Number(draft.priceData.auctionStartPrice)
+        : 0;
+    const showPrePayment = adPrice > 0 && publishedAdId && user?.id;
 
     return (
       <main className="min-h-screen bg-white px-4 py-8">
@@ -615,32 +627,23 @@ export default function CreateAdPage() {
             />
           )}
 
-          {/* Voluntary Commission Message */}
-          {(() => {
-            const adPrice = draft.saleType === "cash" && draft.priceData.price
-              ? Number(draft.priceData.price)
-              : draft.saleType === "auction" && draft.priceData.auctionStartPrice
-                ? Number(draft.priceData.auctionStartPrice)
-                : 0;
-            const suggested = adPrice > 0
-              ? Math.min(Math.max(Math.round(adPrice * 0.01), 10), 200)
-              : 50;
-            return (
-              <div className="bg-brand-gold-light border border-brand-gold/30 rounded-2xl p-4 text-center space-y-2">
-                <p className="text-sm font-bold text-dark">
-                  لا تنسى دعمنا بـ {suggested.toLocaleString("en-US")} جنيه
-                </p>
-                <p className="text-xs text-gray-text leading-relaxed">
-                  عمولة مكسب 1% بحد أقصى 200 جنيه — تطوعية وغير ملزمة.
-                  <br />
-                  دعمك بيساعدنا نكبر ونخدمك أحسن
-                </p>
-                <p className="text-sm text-brand-green font-bold">
-                  نتمنى لك حظ سعيد! 🍀
-                </p>
-              </div>
-            );
-          })()}
+          {/* Pre-Payment Commission — InstaPay Payment Flow */}
+          {showPrePayment && (
+            <PrePaymentOfferLazy
+              adId={publishedAdId}
+              adPrice={adPrice}
+              userId={user.id}
+              onPaid={() => {
+                // Show success toast or notification
+                import("react-hot-toast").then(({ default: toast }) => {
+                  toast.success("شكراً لدعمك! إعلانك بقى موثوق 💚");
+                });
+              }}
+              onSkip={() => {
+                // Silently move on — no penalty
+              }}
+            />
+          )}
 
           <div className="flex flex-col gap-2 pt-2">
             {publishedAdId && (

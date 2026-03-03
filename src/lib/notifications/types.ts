@@ -14,6 +14,9 @@ export type NotificationType =
   | "buy_request_match"
   | "buyer_looking"
   | "buy_request_offer"
+  | "commission_thank_you"
+  | "commission_reminder"
+  | "commission_verified"
   | "system";
 
 export interface AppNotification {
@@ -46,5 +49,8 @@ export const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   buy_request_match: "🎯",
   buyer_looking: "🛒",
   buy_request_offer: "💼",
+  commission_thank_you: "💚",
+  commission_reminder: "🏦",
+  commission_verified: "✅",
   system: "📢",
 };
