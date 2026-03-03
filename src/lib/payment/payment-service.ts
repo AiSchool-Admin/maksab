@@ -106,6 +106,7 @@ export async function processPayment(
       transactionId: data.transactionId,
       redirectUrl: data.redirectUrl,
       referenceNumber: data.referenceNumber,
+      uniqueAmount: data.uniqueAmount,
       error: data.error,
     };
   } catch {

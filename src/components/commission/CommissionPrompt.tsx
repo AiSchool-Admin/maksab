@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Heart, X, Clock, Copy, ExternalLink, ArrowLeft } from "lucide-react";
+import { useState, useRef } from "react";
+import { Check, Heart, X, Clock, Copy, ExternalLink, Camera, Upload, Shield } from "lucide-react";
 import Button from "@/components/ui/Button";
 import InstaPayLogo from "@/components/ui/InstaPayLogo";
 import {
@@ -27,6 +27,8 @@ type PromptStep =
   | "custom"
   | "instapay_guide"
   | "instapay_confirm"
+  | "screenshot_upload"
+  | "pending_verification"
   | "select_method"
   | "method_details"
   | "thanks"
@@ -43,6 +45,7 @@ export default function CommissionPrompt({
   const [step, setStep] = useState<PromptStep>("prompt");
   const [customAmount, setCustomAmount] = useState("");
   const [finalAmount, setFinalAmount] = useState(suggested);
+  const [uniqueAmount, setUniqueAmount] = useState<number | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -50,9 +53,16 @@ export default function CommissionPrompt({
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [instapayRef, setInstapayRef] = useState("");
   const [commissionId, setCommissionId] = useState<string | null>(null);
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const paymentMethods = getAvailablePaymentMethods();
   const instapayMethod = paymentMethods.find((m) => m.id === "instapay");
+
+  // The amount to display to the user for transfer
+  const displayAmount = uniqueAmount || finalAmount;
 
   // ── Direct InstaPay payment flow ──
   const handleInstapayDirect = () => {
@@ -60,74 +70,104 @@ export default function CommissionPrompt({
     setStep("instapay_guide");
   };
 
-  const handleOpenInstaPay = () => {
+  const handleOpenInstaPay = async () => {
     if (instapayMethod?.paymentLink) {
       window.open(instapayMethod.paymentLink, "_blank");
     }
-    // Record the pending payment
-    processPayment({
+    // Record the pending payment and get unique amount
+    const result = await processPayment({
       amount: finalAmount,
       method: "instapay",
       adId,
       payerId: userId,
       description: `عمولة مكسب — ${adTitle}`,
-    }).then((result) => {
-      if (result.transactionId) {
-        setCommissionId(result.transactionId);
-      }
     });
+    if (result.transactionId) {
+      setCommissionId(result.transactionId);
+    }
+    if (result.uniqueAmount) {
+      setUniqueAmount(result.uniqueAmount);
+    }
     setStep("instapay_confirm");
   };
 
-  // ── Confirm InstaPay payment with reference ──
-  const handleConfirmInstapay = async () => {
-    setIsSubmitting(true);
+  // ── Handle screenshot selection ──
+  const handleScreenshotSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate type
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setPaymentError("نوع الصورة مش مدعوم. استخدم JPG أو PNG");
+      return;
+    }
+
+    // Validate size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setPaymentError("الصورة كبيرة. الحد الأقصى 2 ميجا");
+      return;
+    }
+
+    setPaymentError(null);
+    setScreenshotFile(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (ev) => setScreenshotPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  // ── Upload screenshot and confirm payment ──
+  const handleSubmitWithScreenshot = async () => {
+    if (!screenshotFile || !commissionId) return;
+
+    setIsUploading(true);
+    setPaymentError(null);
+
     try {
       const { getSessionToken } = await import("@/lib/supabase/auth");
 
-      if (commissionId) {
-        // Verify the payment with reference number
-        await fetch("/api/payment/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            commission_id: commissionId,
-            instapay_reference: instapayRef || undefined,
-            session_token: getSessionToken(),
-            action: "user_confirmed",
-          }),
-        });
-      } else {
-        // Fallback: create and verify in one step
-        const result = await processPayment({
-          amount: finalAmount,
-          method: "instapay",
-          adId,
-          payerId: userId,
-          description: `عمولة مكسب — ${adTitle}`,
-        });
+      // 1. Upload screenshot
+      const formData = new FormData();
+      formData.append("file", screenshotFile);
+      formData.append("commission_id", commissionId);
+      formData.append("session_token", getSessionToken() || "");
 
-        if (result.transactionId) {
-          await fetch("/api/payment/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              commission_id: result.transactionId,
-              instapay_reference: instapayRef || undefined,
-              session_token: getSessionToken(),
-              action: "user_confirmed",
-            }),
-          });
-        }
+      const uploadRes = await fetch("/api/payment/screenshot", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        throw new Error(err.error || "فشل رفع الصورة");
       }
 
-      setStep("thanks");
-    } catch {
-      setPaymentError("حصل مشكلة، لكن دفعك اتسجل وهنتأكد منه قريب");
-      setStep("thanks");
+      // 2. Confirm the payment (sets status to pending_verification)
+      await fetch("/api/payment/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          commission_id: commissionId,
+          instapay_reference: instapayRef || undefined,
+          session_token: getSessionToken(),
+          action: "user_confirmed",
+        }),
+      });
+
+      setStep("pending_verification");
+    } catch (err) {
+      setPaymentError(
+        err instanceof Error ? err.message : "حصل مشكلة، جرب تاني"
+      );
     } finally {
-      setIsSubmitting(false);
+      setIsUploading(false);
     }
+  };
+
+  // ── Confirm InstaPay — go to screenshot upload ──
+  const handleConfirmInstapay = () => {
+    setStep("screenshot_upload");
   };
 
   const handleSelectMethod = (method: PaymentMethod) => {
@@ -138,6 +178,7 @@ export default function CommissionPrompt({
     } else if (method === "fawry" || method === "paymob_card") {
       handleOnlinePayment(method);
     } else {
+      // Vodafone Cash — also manual, needs screenshot
       setStep("method_details");
     }
   };
@@ -173,10 +214,12 @@ export default function CommissionPrompt({
   const handleConfirmManualPayment = async () => {
     setIsSubmitting(true);
     if (fawryRef) {
+      // Fawry payments are verified via Paymob webhook — no screenshot needed
       setIsSubmitting(false);
       setStep("thanks");
       return;
     }
+    // For Vodafone Cash — create payment record and go to screenshot upload
     const result = await processPayment({
       amount: finalAmount,
       method: selectedMethod || "vodafone_cash",
@@ -186,7 +229,13 @@ export default function CommissionPrompt({
     });
     setIsSubmitting(false);
     if (result.success) {
-      setStep("thanks");
+      if (result.transactionId) {
+        setCommissionId(result.transactionId);
+      }
+      if (result.uniqueAmount) {
+        setUniqueAmount(result.uniqueAmount);
+      }
+      setStep("screenshot_upload");
     }
   };
 
@@ -206,7 +255,35 @@ export default function CommissionPrompt({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ── Thanks screen ──
+  // ── Pending verification screen — shown after screenshot upload ──
+  if (step === "pending_verification") {
+    return (
+      <div className="bg-white rounded-2xl p-6 text-center space-y-4 max-w-sm mx-auto">
+        <div className="w-16 h-16 bg-brand-gold-light rounded-full flex items-center justify-center mx-auto">
+          <Shield size={32} className="text-brand-gold" />
+        </div>
+        <h2 className="text-2xl font-bold text-dark">تم تسجيل الدفع 📋</h2>
+        <p className="text-sm text-gray-text leading-relaxed">
+          استلمنا إثبات الدفع بتاعك بقيمة{" "}
+          <span className="font-bold text-dark">
+            {displayAmount} جنيه
+          </span>
+        </p>
+        <div className="bg-brand-green-light rounded-xl p-3 space-y-1">
+          <p className="text-sm text-dark font-semibold">إيه اللي هيحصل دلوقتي؟</p>
+          <p className="text-xs text-gray-text">
+            هنتحقق من التحويل خلال 24 ساعة وهنبعتلك إشعار تأكيد.
+            بعد التأكيد هتحصل على بادج &quot;داعم مكسب&quot; 💚
+          </p>
+        </div>
+        <Button fullWidth onClick={onComplete}>
+          تمام
+        </Button>
+      </div>
+    );
+  }
+
+  // ── Thanks screen (for Paymob verified payments only) ──
   if (step === "thanks") {
     return (
       <div className="bg-white rounded-2xl p-6 text-center space-y-4 max-w-sm mx-auto">
@@ -306,11 +383,17 @@ export default function CommissionPrompt({
             </div>
             <div className="flex items-start gap-2.5">
               <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
-              <p className="text-sm text-dark">حوّل <span className="font-bold">{finalAmount} جنيه</span></p>
+              <p className="text-sm text-dark">
+                حوّل <span className="font-bold">المبلغ اللي هيظهرلك بالظبط</span> (هيكون فيه قروش)
+              </p>
             </div>
             <div className="flex items-start gap-2.5">
               <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
-              <p className="text-sm text-dark">ارجع هنا وأكّد التحويل</p>
+              <p className="text-sm text-dark">صوّر سكرين شوت من التحويل</p>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
+              <p className="text-sm text-dark">ارجع هنا وارفع السكرين شوت</p>
             </div>
           </div>
         </div>
@@ -322,7 +405,7 @@ export default function CommissionPrompt({
           onClick={handleOpenInstaPay}
           className="!bg-purple-600 hover:!bg-purple-700"
         >
-          افتح إنستاباي ودفع {finalAmount} جنيه
+          افتح إنستاباي وادفع
         </Button>
 
         <div className="flex items-center gap-3">
@@ -348,7 +431,7 @@ export default function CommissionPrompt({
     );
   }
 
-  // ── InstaPay Confirmation — User confirms transfer + optional reference ──
+  // ── InstaPay Confirmation — User confirms transfer + shows unique amount ──
   if (step === "instapay_confirm") {
     return (
       <div className="bg-white rounded-2xl p-6 space-y-4 max-w-sm mx-auto">
@@ -357,12 +440,40 @@ export default function CommissionPrompt({
           <h2 className="text-2xl font-bold text-dark">تأكيد التحويل</h2>
         </div>
 
+        {/* Show the unique amount prominently */}
         <div className="bg-gradient-to-l from-green-50 to-emerald-50 rounded-xl p-4 text-center space-y-2">
-          <p className="text-sm text-gray-text">
-            حوّلت <span className="font-bold text-dark">{finalAmount} جنيه</span> بإنستاباي؟
-          </p>
-          <p className="text-xs text-gray-text">
-            لو حوّلت، أكّد هنا عشان نسجّل دعمك 💚
+          {uniqueAmount ? (
+            <>
+              <p className="text-sm text-gray-text">حوّل بالظبط:</p>
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-3xl font-bold text-dark" dir="ltr">
+                  {uniqueAmount.toFixed(2)}
+                </p>
+                <span className="text-sm font-bold text-dark">جنيه</span>
+              </div>
+              <button
+                onClick={() => copyToClipboard(uniqueAmount.toFixed(2))}
+                className="flex items-center gap-1 mx-auto text-xs text-brand-green font-semibold"
+              >
+                <Copy size={12} />
+                {copied ? "تم النسخ!" : "نسخ المبلغ"}
+              </button>
+              <p className="text-[11px] text-gray-text">
+                المبلغ ده فريد عشان نقدر نتحقق من التحويل بتاعك تلقائياً
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-gray-text">
+              حوّل <span className="font-bold text-dark">{finalAmount} جنيه</span>
+            </p>
+          )}
+        </div>
+
+        {/* Important: screenshot reminder */}
+        <div className="bg-brand-gold-light rounded-xl p-3 flex items-start gap-2">
+          <Camera size={18} className="text-brand-gold flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-dark">
+            <span className="font-bold">مهم:</span> بعد التحويل، صوّر سكرين شوت من شاشة التأكيد عشان ترفعها في الخطوة الجاية
           </p>
         </div>
 
@@ -379,9 +490,6 @@ export default function CommissionPrompt({
             className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none text-base text-center"
             dir="ltr"
           />
-          <p className="text-[11px] text-gray-text mt-1">
-            الرقم ده بيساعدنا نتحقق من التحويل أسرع
-          </p>
         </div>
 
         {paymentError && (
@@ -395,14 +503,12 @@ export default function CommissionPrompt({
           size="lg"
           icon={<Check size={18} />}
           onClick={handleConfirmInstapay}
-          isLoading={isSubmitting}
         >
-          أيوا، تم التحويل ✅
+          تم التحويل — ارفع السكرين شوت
         </Button>
 
         <button
           onClick={() => {
-            // Re-open InstaPay for them if they didn't finish
             if (instapayMethod?.paymentLink) {
               window.open(instapayMethod.paymentLink, "_blank");
             }
@@ -418,6 +524,110 @@ export default function CommissionPrompt({
         >
           <Clock size={12} />
           هحوّل بعدين
+        </button>
+      </div>
+    );
+  }
+
+  // ── Screenshot upload step ──
+  if (step === "screenshot_upload") {
+    return (
+      <div className="bg-white rounded-2xl p-6 space-y-4 max-w-sm mx-auto">
+        <h2 className="text-2xl font-bold text-dark text-center">
+          📸 ارفع إثبات الدفع
+        </h2>
+
+        <p className="text-sm text-gray-text text-center">
+          ارفع سكرين شوت من التحويل عشان نقدر نتحقق من الدفع
+        </p>
+
+        {/* Show unique amount as reminder */}
+        {uniqueAmount && (
+          <div className="bg-gray-light rounded-xl p-3 text-center">
+            <p className="text-xs text-gray-text">المبلغ المطلوب:</p>
+            <p className="text-lg font-bold text-dark" dir="ltr">
+              {uniqueAmount.toFixed(2)} جنيه
+            </p>
+          </div>
+        )}
+
+        {/* File input (hidden) */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleScreenshotSelect}
+        />
+
+        {/* Screenshot preview or upload button */}
+        {screenshotPreview ? (
+          <div className="space-y-2">
+            <div className="relative rounded-xl overflow-hidden border-2 border-brand-green">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={screenshotPreview}
+                alt="إثبات الدفع"
+                className="w-full max-h-64 object-contain bg-gray-50"
+              />
+              <button
+                onClick={() => {
+                  setScreenshotFile(null);
+                  setScreenshotPreview(null);
+                }}
+                className="absolute top-2 left-2 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center"
+              >
+                <X size={16} className="text-gray-text" />
+              </button>
+            </div>
+            <p className="text-xs text-brand-green text-center font-semibold">
+              ✅ تم اختيار الصورة
+            </p>
+          </div>
+        ) : (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center gap-3 hover:border-brand-green hover:bg-brand-green-light/30 transition-all active:scale-[0.98]"
+          >
+            <div className="w-14 h-14 bg-brand-green-light rounded-full flex items-center justify-center">
+              <Upload size={24} className="text-brand-green" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-dark">اضغط لرفع السكرين شوت</p>
+              <p className="text-xs text-gray-text mt-1">JPG أو PNG — حد أقصى 2 ميجا</p>
+            </div>
+          </button>
+        )}
+
+        {paymentError && (
+          <p className="text-sm text-error text-center bg-red-50 rounded-xl py-2 px-3">
+            {paymentError}
+          </p>
+        )}
+
+        <Button
+          fullWidth
+          size="lg"
+          icon={<Shield size={18} />}
+          onClick={handleSubmitWithScreenshot}
+          disabled={!screenshotFile}
+          isLoading={isUploading}
+        >
+          إرسال إثبات الدفع
+        </Button>
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full text-sm text-gray-text text-center py-2 hover:text-dark transition-colors"
+        >
+          {screenshotFile ? "اختار صورة تانية" : ""}
+        </button>
+
+        <button
+          onClick={() => setStep("instapay_confirm")}
+          className="w-full text-xs text-gray-text/70 text-center py-1"
+        >
+          رجوع
         </button>
       </div>
     );
@@ -543,6 +753,13 @@ export default function CommissionPrompt({
                 </button>
               </div>
             )}
+            {/* Screenshot reminder for manual methods */}
+            <div className="bg-brand-gold-light rounded-lg p-2 mt-3 flex items-start gap-2">
+              <Camera size={14} className="text-brand-gold flex-shrink-0 mt-0.5" />
+              <p className="text-[11px] text-dark">
+                بعد التحويل، صوّر سكرين شوت من شاشة التأكيد
+              </p>
+            </div>
           </div>
         )}
 
@@ -550,9 +767,9 @@ export default function CommissionPrompt({
           fullWidth
           onClick={handleConfirmManualPayment}
           isLoading={isSubmitting}
-          icon={<Check size={18} />}
+          icon={fawryRef ? <Check size={18} /> : <Camera size={18} />}
         >
-          {fawryRef ? "تم الدفع" : "تم التحويل"}
+          {fawryRef ? "تم الدفع" : "تم التحويل — ارفع السكرين شوت"}
         </Button>
         <button
           onClick={() => {

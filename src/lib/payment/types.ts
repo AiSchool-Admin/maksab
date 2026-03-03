@@ -8,6 +8,11 @@ export type PaymentMethod =
   | "fawry"
   | "paymob_card";
 
+/** Whether this payment method requires manual verification (screenshot + admin) */
+export function isManualPaymentMethod(method: PaymentMethod): boolean {
+  return method === "instapay" || method === "vodafone_cash";
+}
+
 export interface PaymentMethodInfo {
   id: PaymentMethod;
   name: string;
@@ -37,4 +42,6 @@ export interface PaymentResult {
   redirectUrl?: string;
   /** For reference-based payments (Fawry), the reference number */
   referenceNumber?: string;
+  /** For manual payments, the unique amount with piasters for matching */
+  uniqueAmount?: number;
 }

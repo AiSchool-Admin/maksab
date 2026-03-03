@@ -5,11 +5,21 @@ import { verifySessionToken } from "@/lib/auth/session-token";
 /**
  * POST /api/payment/verify
  *
- * User confirms they completed an InstaPay transfer by providing
- * a reference number. The system records it and sends a thank-you
- * notification. An admin can later verify the actual transfer.
+ * Three verification flows:
  *
- * Also used by the system/admin to mark payments as verified.
+ * 1. user_confirmed — User says they transferred money.
+ *    For manual payments (InstaPay, Vodafone Cash):
+ *      → Sets status to "pending_verification" (NOT "paid")
+ *      → Screenshot required via /api/payment/screenshot
+ *      → Benefits NOT granted until admin verifies
+ *
+ * 2. admin_verified — Admin confirms the payment after checking bank records.
+ *      → Sets status to "paid"
+ *      → Grants badges and boosts
+ *
+ * 3. admin_rejected — Admin determines payment was not received.
+ *      → Sets status to "cancelled"
+ *      → Notifies user
  */
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -26,11 +36,13 @@ export async function POST(request: Request) {
       instapay_reference,
       session_token,
       action,
+      admin_notes,
     } = body as {
       commission_id: string;
       instapay_reference?: string;
       session_token?: string;
       action?: "user_confirmed" | "admin_verified" | "admin_rejected";
+      admin_notes?: string;
     };
 
     if (!session_token) {
@@ -65,69 +77,52 @@ export async function POST(request: Request) {
 
     const verifyAction = action || "user_confirmed";
 
-    // ── User confirms their InstaPay transfer ──
+    // ── User confirms their manual transfer ──
+    // IMPORTANT: This does NOT mark as "paid" — only "pending_verification"
+    // Benefits are granted ONLY when admin verifies.
     if (verifyAction === "user_confirmed") {
-      // Only the payer can confirm their own payment
       if (commission.payer_id !== userId) {
         return NextResponse.json({ error: "غير مسموح" }, { status: 403 });
       }
 
-      // Update commission with reference and mark as paid
+      // Set to pending_verification — NOT paid
       await adminClient
         .from("commissions")
         .update({
-          status: "paid",
+          status: "pending_verification",
           instapay_reference: instapay_reference || null,
           verified_by: "user_confirmed",
-          verified_at: new Date().toISOString(),
         } as never)
         .eq("id", commission_id);
 
-      // Log the verification
+      // Log the action
       await adminClient.from("payment_verification_log").insert({
         commission_id,
         action: "user_confirmed",
         notes: instapay_reference
-          ? `رقم مرجع إنستاباي: ${instapay_reference}`
+          ? `المستخدم أكد التحويل — رقم مرجع: ${instapay_reference}`
           : "المستخدم أكد التحويل بدون رقم مرجع",
         performed_by: userId,
       });
 
-      // Send thank-you notification
+      // Send acknowledgment notification (not thank-you yet — that comes after verification)
       await adminClient.from("notifications").insert({
         user_id: userId,
-        type: "commission_thank_you",
-        title: "شكراً لدعمك! 💚",
-        body: `تم استلام دعمك بقيمة ${commission.amount} جنيه. أنت دلوقتي "داعم مكسب" وإعلاناتك هتظهر بشارة موثوق!`,
+        type: "commission_pending_verification",
+        title: "تم استلام طلب الدفع 📋",
+        body: `تم تسجيل دعمك بقيمة ${commission.unique_amount || commission.amount} جنيه. هنتحقق من التحويل ونبعتلك تأكيد خلال 24 ساعة.`,
         ad_id: commission.ad_id || null,
         data: JSON.stringify({ amount: commission.amount, commission_id }),
       });
 
-      // Update user profile as commission supporter
-      await adminClient
-        .from("profiles")
-        .update({ is_commission_supporter: true } as never)
-        .eq("id", userId);
-
-      // If pre-payment, boost the ad
-      if (commission.commission_type === "pre_payment" && commission.ad_id) {
-        await adminClient
-          .from("ads")
-          .update({
-            is_boosted: true,
-            is_trusted: true,
-            boosted_at: new Date().toISOString(),
-          } as never)
-          .eq("id", commission.ad_id);
-      }
-
       return NextResponse.json({
         success: true,
-        message: "شكراً لدعمك! 💚",
+        status: "pending_verification",
+        message: "تم تسجيل الدفع. هنتحقق من التحويل ونبعتلك تأكيد قريب.",
       });
     }
 
-    // ── Admin verification (for manual review) ──
+    // ── Admin verification ──
     if (verifyAction === "admin_verified" || verifyAction === "admin_rejected") {
       // Check if user is admin
       const { data: profile } = await adminClient
@@ -136,48 +131,97 @@ export async function POST(request: Request) {
         .eq("id", userId)
         .maybeSingle();
 
-      // Simple admin check — in production use a proper role system
       const isAdmin = (profile as Record<string, unknown> | null)?.seller_type === "admin";
       if (!isAdmin) {
         return NextResponse.json({ error: "غير مسموح — للمسؤولين فقط" }, { status: 403 });
       }
 
-      const newStatus = verifyAction === "admin_verified" ? "paid" : "cancelled";
+      if (verifyAction === "admin_verified") {
+        // ── ADMIN VERIFIED: Now we actually grant benefits ──
+        await adminClient
+          .from("commissions")
+          .update({
+            status: "paid",
+            verified_by: "admin_verified",
+            verified_at: new Date().toISOString(),
+            admin_notes: admin_notes || null,
+          } as never)
+          .eq("id", commission_id);
 
+        // NOW grant the "داعم مكسب" badge
+        await adminClient
+          .from("profiles")
+          .update({ is_commission_supporter: true } as never)
+          .eq("id", commission.payer_id);
+
+        // If pre-payment, NOW boost the ad
+        if (commission.commission_type === "pre_payment" && commission.ad_id) {
+          await adminClient
+            .from("ads")
+            .update({
+              is_boosted: true,
+              is_trusted: true,
+              boosted_at: new Date().toISOString(),
+            } as never)
+            .eq("id", commission.ad_id);
+        }
+
+        // Log admin action
+        await adminClient.from("payment_verification_log").insert({
+          commission_id,
+          action: "admin_verified",
+          notes: admin_notes || "تم التحقق من الدفع بواسطة المسؤول",
+          performed_by: userId,
+        });
+
+        // Send thank-you notification to the payer
+        await adminClient.from("notifications").insert({
+          user_id: commission.payer_id,
+          type: "commission_verified",
+          title: "تم تأكيد دفعك! ✅💚",
+          body: `تم التحقق من دعمك بقيمة ${commission.amount} جنيه. أنت دلوقتي "داعم مكسب" 💚 وإعلاناتك هتظهر بشارة موثوق!`,
+          ad_id: commission.ad_id || null,
+          data: JSON.stringify({ amount: commission.amount, commission_id }),
+        });
+
+        return NextResponse.json({
+          success: true,
+          status: "paid",
+        });
+      }
+
+      // ── ADMIN REJECTED ──
       await adminClient
         .from("commissions")
         .update({
-          status: newStatus,
-          verified_by: verifyAction,
+          status: "cancelled",
+          verified_by: "admin_rejected",
           verified_at: new Date().toISOString(),
+          admin_notes: admin_notes || null,
         } as never)
         .eq("id", commission_id);
 
       // Log admin action
       await adminClient.from("payment_verification_log").insert({
         commission_id,
-        action: verifyAction,
-        notes: verifyAction === "admin_verified"
-          ? "تم التحقق من الدفع بواسطة المسؤول"
-          : "تم رفض الدفع بواسطة المسؤول",
+        action: "admin_rejected",
+        notes: admin_notes || "تم رفض الدفع — لم يتم استلام التحويل",
         performed_by: userId,
       });
 
       // Notify the payer
-      if (verifyAction === "admin_verified") {
-        await adminClient.from("notifications").insert({
-          user_id: commission.payer_id,
-          type: "commission_verified",
-          title: "تم تأكيد دفعك! ✅",
-          body: `تم التحقق من دعمك بقيمة ${commission.amount} جنيه. شكراً ليك! 💚`,
-          ad_id: commission.ad_id || null,
-          data: JSON.stringify({ amount: commission.amount, commission_id }),
-        });
-      }
+      await adminClient.from("notifications").insert({
+        user_id: commission.payer_id,
+        type: "commission_rejected",
+        title: "مشكلة في الدفع ❌",
+        body: `مقدرناش نتحقق من تحويل ${commission.unique_amount || commission.amount} جنيه. لو حوّلت فعلاً، تواصل معانا أو جرب تاني.`,
+        ad_id: commission.ad_id || null,
+        data: JSON.stringify({ amount: commission.amount, commission_id }),
+      });
 
       return NextResponse.json({
         success: true,
-        status: newStatus,
+        status: "cancelled",
       });
     }
 
@@ -214,7 +258,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await adminClient
     .from("commissions")
-    .select("id, status, amount, payment_method, commission_type, verified_at, verified_by, instapay_reference, created_at")
+    .select("id, status, amount, unique_amount, payment_method, commission_type, verified_at, verified_by, instapay_reference, screenshot_url, created_at")
     .eq("id", commissionId)
     .maybeSingle();
 
