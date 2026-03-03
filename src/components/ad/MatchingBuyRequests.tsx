@@ -34,44 +34,40 @@ export default function MatchingBuyRequests({ adId, categoryId, adTitle }: Match
       setIsLoading(true);
 
       // Try the smart matching function first
-      try {
-        const { data: rpcData } = await (supabase.rpc as Function)("find_buy_requests_for_ad", {
-          p_ad_id: adId,
-          p_limit: 5,
-        });
+      const { data: rpcData, error: rpcError } = await (supabase.rpc as Function)("find_buy_requests_for_ad", {
+        p_ad_id: adId,
+        p_limit: 5,
+      });
 
-        if (rpcData && rpcData.length > 0) {
-          // Fetch the full buy request details
-          const ids = rpcData.map((r: { buy_request_id: string }) => r.buy_request_id);
-          const { data: brData } = await supabase
-            .from("buy_requests")
-            .select("*")
-            .in("id", ids)
-            .eq("status", "active");
+      if (!rpcError && rpcData && rpcData.length > 0) {
+        // Fetch the full buy request details
+        const ids = rpcData.map((r: { buy_request_id: string }) => r.buy_request_id);
+        const { data: brData } = await supabase
+          .from("buy_requests")
+          .select("*")
+          .in("id", ids)
+          .eq("status", "active");
 
-          if (brData && brData.length > 0) {
-            const scoreMap = new Map(
-              rpcData.map((r: { buy_request_id: string; match_score: number }) => [r.buy_request_id, r.match_score])
-            );
-            setRequests(
-              brData.map((row: Record<string, unknown>) => ({
-                id: row.id as string,
-                title: row.title as string,
-                categoryId: row.category_id as string,
-                purchaseType: (row.purchase_type as MatchingRequest["purchaseType"]) || "cash",
-                budgetMax: row.budget_max ? Number(row.budget_max) : undefined,
-                exchangeOffer: (row.exchange_offer as string) || undefined,
-                governorate: (row.governorate as string) || undefined,
-                createdAt: row.created_at as string,
-                matchScore: (scoreMap.get(row.id as string) as number) || 0,
-              }))
-            );
-            setIsLoading(false);
-            return;
-          }
+        if (brData && brData.length > 0) {
+          const scoreMap = new Map(
+            rpcData.map((r: { buy_request_id: string; match_score: number }) => [r.buy_request_id, r.match_score])
+          );
+          setRequests(
+            brData.map((row: Record<string, unknown>) => ({
+              id: row.id as string,
+              title: row.title as string,
+              categoryId: row.category_id as string,
+              purchaseType: (row.purchase_type as MatchingRequest["purchaseType"]) || "cash",
+              budgetMax: row.budget_max ? Number(row.budget_max) : undefined,
+              exchangeOffer: (row.exchange_offer as string) || undefined,
+              governorate: (row.governorate as string) || undefined,
+              createdAt: row.created_at as string,
+              matchScore: (scoreMap.get(row.id as string) as number) || 0,
+            }))
+          );
+          setIsLoading(false);
+          return;
         }
-      } catch {
-        // RPC might not exist yet, fall back to simple query
       }
 
       // Fallback: simple category match

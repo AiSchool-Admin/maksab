@@ -71,11 +71,19 @@ export default function InstallPrompt() {
       return () => clearTimeout(timer);
     }
 
-    // Android / Chrome path — listen for beforeinstallprompt
+    // Android / Chrome path — check if event was captured early (before React hydrated)
+    const earlyPrompt = (window as unknown as { __pwa_deferred_prompt?: BeforeInstallPromptEvent | null }).__pwa_deferred_prompt;
+    if (earlyPrompt) {
+      setDeferredPrompt(earlyPrompt);
+      (window as unknown as { __pwa_deferred_prompt?: BeforeInstallPromptEvent | null }).__pwa_deferred_prompt = null;
+      setTimeout(() => setShowPrompt(true), 3000);
+      return;
+    }
+
+    // Fallback — listen for beforeinstallprompt if it hasn't fired yet
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      // Show our custom prompt after a short delay
       setTimeout(() => setShowPrompt(true), 3000);
     };
 

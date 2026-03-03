@@ -332,12 +332,13 @@ export default function HomePage() {
               </div>
             ) : feedAds.length > 0 ? (
               <div className="grid grid-cols-3 gap-2">
-                {feedAds.slice(0, 6).map((ad) => (
+                {feedAds.slice(0, 6).map((ad, idx) => (
                   <AdCard
                     key={ad.id}
                     {...ad}
                     isFavorited={favoriteIds.has(ad.id)}
                     onToggleFavorite={handleToggleFavorite}
+                    priority={idx < 3}
                   />
                 ))}
               </div>

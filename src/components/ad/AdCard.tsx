@@ -33,6 +33,8 @@ interface AdCardProps {
   isBoosted?: boolean;
   // Day price (gold/silver — price determined on sale day)
   useDayPrice?: boolean;
+  // Above-the-fold cards should set this to true for eager loading
+  priority?: boolean;
 }
 
 const saleTypeBadge = {
@@ -93,6 +95,7 @@ function AdCard({
   priceDropPercent,
   isBoosted = false,
   useDayPrice = false,
+  priority = false,
 }: AdCardProps) {
   const badgeKey = isLiveAuction && saleType === "auction" ? "live_auction" : saleType;
   const badge = saleTypeBadge[badgeKey];
@@ -109,7 +112,8 @@ function AdCard({
               fill
               sizes="(max-width: 640px) 50vw, 200px"
               className="object-cover"
-              loading="lazy"
+              loading={priority ? "eager" : "lazy"}
+              priority={priority}
               placeholder="empty"
             />
           ) : (
