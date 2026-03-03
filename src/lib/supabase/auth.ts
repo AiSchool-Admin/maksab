@@ -263,7 +263,7 @@ export async function updateUserProfile(
     .update({ ...updates, updated_at: new Date().toISOString() } as never)
     .eq("id", userId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     return { user: null, error: "مقدرناش نحدّث البيانات. جرب تاني" };

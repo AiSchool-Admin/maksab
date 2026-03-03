@@ -52,7 +52,7 @@ export async function submitBuyRequestOffer(
       .from("buy_requests")
       .select("user_id")
       .eq("id", input.buyRequestId)
-      .single();
+      .maybeSingle();
 
     if (!reqData) return { success: false, error: "الطلب غير موجود" };
     if ((reqData as Record<string, unknown>).user_id === user.id) {
@@ -250,7 +250,7 @@ export async function respondToOffer(params: {
         .from("buy_request_offers")
         .select("buy_request_id")
         .eq("id", params.offerId)
-        .single();
+        .maybeSingle();
 
       if (offerData) {
         const reqId = (offerData as Record<string, unknown>).buy_request_id as string;

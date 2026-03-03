@@ -196,7 +196,7 @@ export async function fetchAuctionState(adId: string): Promise<AuctionState | nu
     .from("ads" as never)
     .select("*")
     .eq("id", adId)
-    .single();
+    .maybeSingle();
 
   if (!ad) return null;
 

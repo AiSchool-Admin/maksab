@@ -59,7 +59,7 @@ export default function BuyRequestDetailPage() {
       .from("buy_requests")
       .select("*")
       .eq("id", requestId)
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
       setIsLoading(false);

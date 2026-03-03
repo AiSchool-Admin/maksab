@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       .eq("id", ad_id)
       .eq("status", "active")
       .eq("sale_type", "cash")
-      .single();
+      .maybeSingle();
 
     if (adErr || !ad) {
       return NextResponse.json({ error: "الإعلان مش موجود أو مش نقدي" }, { status: 404 });
