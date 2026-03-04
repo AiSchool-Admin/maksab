@@ -27,7 +27,7 @@ export default function AchievementCard({ achievement, unlocked }: AchievementCa
           {achievement.description_ar}
         </p>
       </div>
-      <div className="flex-shrink-0 text-left">
+      <div className="flex-shrink-0 text-end">
         {unlocked ? (
           <span className="text-[10px] font-bold text-brand-green">
             +{achievement.points_reward}

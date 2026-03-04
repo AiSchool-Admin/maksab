@@ -580,7 +580,7 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
                 <p className="text-xs text-brand-green font-semibold">السعر المقدّر</p>
                 <p className="text-3xl font-bold text-brand-green-dark">
                   {formatPrice(priceEstimate.estimated_price)}
-                  <span className="text-base font-semibold mr-1">جنيه</span>
+                  <span className="text-base font-semibold me-1">جنيه</span>
                 </p>
               </div>
 
@@ -625,7 +625,7 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
               </div>
               <p className="text-lg font-bold text-brand-gold">
                 {formatPrice(priceEstimate.quick_sale_price)}
-                <span className="text-xs font-semibold mr-0.5">جنيه</span>
+                <span className="text-xs font-semibold me-0.5">جنيه</span>
               </p>
             </div>
 

@@ -214,7 +214,7 @@ export default function PrePaymentOffer({
             <div className="relative rounded-xl overflow-hidden border-2 border-brand-green">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={screenshotPreview} alt="إثبات الدفع" className="w-full max-h-48 object-contain bg-gray-50" />
-              <button onClick={() => { setScreenshotFile(null); setScreenshotPreview(null); }} className="absolute top-2 left-2 w-7 h-7 bg-white rounded-full shadow flex items-center justify-center">
+              <button onClick={() => { setScreenshotFile(null); setScreenshotPreview(null); }} className="absolute top-2 start-2 w-7 h-7 bg-white rounded-full shadow flex items-center justify-center">
                 <X size={14} className="text-gray-text" />
               </button>
             </div>

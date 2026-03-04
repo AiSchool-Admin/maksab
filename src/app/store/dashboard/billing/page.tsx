@@ -259,7 +259,7 @@ export default function BillingPage() {
             }`}
           >
             سنوي
-            <span className="text-[10px] mr-1 font-normal">
+            <span className="text-[10px] me-1 font-normal">
               (وفّر أكتر)
             </span>
           </button>

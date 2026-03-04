@@ -229,9 +229,14 @@ a,
   .fixed.inset-x-0,
   .fixed[class*="inset-x"] {
     max-width: 32rem;
-    left: 50% !important;
-    right: auto !important;
+    inset-inline-start: 50% !important;
+    inset-inline-end: auto !important;
     transform: translateX(-50%);
+  }
+
+  [dir="rtl"] .fixed.inset-x-0,
+  [dir="rtl"] .fixed[class*="inset-x"] {
+    transform: translateX(50%);
   }
 }
 

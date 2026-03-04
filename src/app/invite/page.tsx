@@ -334,7 +334,7 @@ export default function InvitePage() {
             {/* Phone Input */}
             <div>
               <label className="block text-sm font-bold text-white/70 mb-2">
-                <Phone size={14} className="inline ml-1" />
+                <Phone size={14} className="inline ms-1" />
                 رقم الموبايل
               </label>
               <input

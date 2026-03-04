@@ -84,7 +84,7 @@ export default function StickyContactBar({
 
   return (
     <div
-      className={`fixed bottom-16 inset-x-0 bg-white border-t border-gray-light z-40 transition-transform duration-300 md:hidden ${
+      className={`fixed bottom-16 inset-x-0 bg-white border-t border-gray-light z-40 transition-transform duration-300 md:hidden safe-bottom ${
         visible ? "translate-y-0" : "translate-y-full"
       }`}
     >

@@ -52,7 +52,7 @@ export default function PromotionBanner({ promotion }: PromotionBannerProps) {
             </div>
           </div>
 
-          <div className="text-left">
+          <div className="text-end">
             {promotion.sale_price != null && (
               <p className="text-sm font-bold text-brand-green">
                 {formatPrice(promotion.sale_price)}

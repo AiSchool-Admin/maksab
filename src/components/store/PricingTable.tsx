@@ -20,7 +20,7 @@ export default function PricingTable({ currentPlan }: PricingTableProps) {
       <table className="w-full min-w-[480px] text-xs">
         <thead>
           <tr className="border-b border-gray-light">
-            <th className="text-right py-3 pr-3 text-gray-text font-normal w-1/3">
+            <th className="text-end py-3 pe-3 text-gray-text font-normal w-1/3">
               المميزات
             </th>
             {plans.map((planId) => {
@@ -51,7 +51,7 @@ export default function PricingTable({ currentPlan }: PricingTableProps) {
               key={feature.label}
               className="border-b border-gray-light/50 hover:bg-gray-50 transition-colors"
             >
-              <td className="py-2.5 pr-3 text-dark">{feature.label}</td>
+              <td className="py-2.5 pe-3 text-dark">{feature.label}</td>
               {plans.map((planId) => {
                 const value = feature[planId];
                 return (

@@ -51,7 +51,7 @@ export default function Error({
         {/* Error ID for support */}
         {error.digest && (
           <p className="mt-6 text-xs text-gray-400" dir="ltr">
-            Error ID: {error.digest}
+            رقم الخطأ: {error.digest}
           </p>
         )}
       </div>

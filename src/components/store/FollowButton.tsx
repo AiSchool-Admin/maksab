@@ -42,7 +42,7 @@ export default function FollowButton({
     >
       {isFollowing ? "متابَع" : "متابعة"}
       {count > 0 && (
-        <span className="text-[10px] opacity-70 mr-1">({count})</span>
+        <span className="text-[10px] opacity-70 me-1">({count})</span>
       )}
     </Button>
   );

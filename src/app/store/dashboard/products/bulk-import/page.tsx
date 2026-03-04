@@ -555,7 +555,7 @@ export default function BulkImportPage() {
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 mt-1 mr-7">
+                    <div className="flex items-center gap-2 mt-1 me-7">
                       {editingRow === row.id ? (
                         <div className="flex items-center gap-1">
                           <input

@@ -342,7 +342,7 @@ export default function SearchBar({
             <div className="px-4 py-1.5 border-t border-gray-light hidden md:flex items-center gap-3 text-[10px] text-gray-text">
               <span>↑↓ للتنقل</span>
               <span>⏎ للاختيار</span>
-              <span>Esc للإغلاق</span>
+              <span>(Esc) للإغلاق</span>
             </div>
           )}
         </div>

@@ -35,7 +35,7 @@ export default function Step1CategorySaleType({
       {/* Category grid */}
       <div>
         <h3 className="text-sm font-bold text-dark mb-3">اختار القسم</h3>
-        <div className="grid grid-cols-4 gap-y-4 gap-x-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-y-4 gap-x-2">
           {categoriesConfig.map((cat) => (
             <button
               key={cat.id}
@@ -48,7 +48,7 @@ export default function Step1CategorySaleType({
               }`}
             >
               <CategoryIcon slug={cat.slug} size="sm" />
-              <span className="text-sm font-semibold text-dark leading-tight text-center line-clamp-1 max-w-[84px]">
+              <span className="text-sm font-semibold text-dark leading-tight text-center line-clamp-1">
                 {cat.name}
               </span>
             </button>

@@ -375,7 +375,7 @@ function ScenariosSection({ scenarios }: { scenarios: Scenario[] }) {
               </span>
               <div>
                 <span className="text-xs font-bold text-dark font-cairo">{item.label}</span>
-                <span className="text-[10px] text-gray-text font-cairo mr-1">— {item.detail}</span>
+                <span className="text-[10px] text-gray-text font-cairo me-1">— {item.detail}</span>
               </div>
             </div>
           ))}

@@ -56,7 +56,7 @@ export default function Header({
           {showBack ? (
             <button
               onClick={() => router.back()}
-              className="p-1 -me-1 text-gray-text hover:text-dark transition-colors btn-icon-sm"
+              className="p-2 -me-1 text-gray-text hover:text-dark transition-colors btn-icon-sm"
               aria-label="رجوع"
             >
               <ChevronRight size={24} />

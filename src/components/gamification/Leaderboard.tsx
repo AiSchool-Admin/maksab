@@ -93,7 +93,7 @@ export default function Leaderboard({ entries, currentUserId, userRank }: Leader
                 <span>{entry.sales_count} بيعة</span>
               </div>
             </div>
-            <div className="text-left flex-shrink-0">
+            <div className="text-end flex-shrink-0">
               <p className="text-xs font-bold text-brand-green">
                 {entry.total_points.toLocaleString("en-US")}
               </p>

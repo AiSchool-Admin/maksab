@@ -224,7 +224,7 @@ export default function MapPage() {
           {/* Radius filter */}
           <div>
             <label className="text-xs font-bold text-dark mb-2 block">
-              <Navigation size={12} className="inline ml-1" />
+              <Navigation size={12} className="inline ms-1" />
               المسافة من موقعك
             </label>
             <div className="flex gap-1.5 flex-wrap">

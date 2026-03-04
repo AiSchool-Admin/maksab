@@ -74,7 +74,7 @@ export default function UpgradeModal({
             <p className="text-xs text-gray-text mt-1">
               {billingCycle === "yearly" ? "سنوياً" : "شهرياً"}
               {billingCycle === "yearly" && (
-                <span className="text-brand-green mr-1">
+                <span className="text-brand-green me-1">
                   (وفّر {Math.round(((plan.price * 12 - plan.yearlyPrice) / (plan.price * 12)) * 100)}%)
                 </span>
               )}

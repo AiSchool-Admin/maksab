@@ -94,7 +94,7 @@ export default function StoreReviewCard({ review }: StoreReviewCardProps) {
 
       {/* Seller reply */}
       {review.seller_reply && (
-        <div className="bg-brand-green-light/50 rounded-lg p-3 mt-2 border-r-2 border-brand-green">
+        <div className="bg-brand-green-light/50 rounded-lg p-3 mt-2 border-e-2 border-brand-green">
           <p className="text-[10px] text-brand-green font-semibold mb-1">
             رد البائع:
           </p>
