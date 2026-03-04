@@ -182,9 +182,9 @@ function buildFallbackQuery(
 
   // Condition filter: "new" matches new/sealed, "used" matches everything else
   if (body.condition === "new") {
-    q = q.in("category_fields->>condition", ["new", "sealed", "new_tagged", "new_no_tag"]);
+    q = q.in("category_fields->>condition", ["new", "sealed", "new_tagged", "new_untagged", "new_unused", "new_sealed", "new_opened"]);
   } else if (body.condition === "used") {
-    q = q.not("category_fields->>condition", "in", "(new,sealed,new_tagged,new_no_tag)");
+    q = q.not("category_fields->>condition", "in", "(new,sealed,new_tagged,new_untagged,new_unused,new_sealed,new_opened)");
   }
 
   // Apply category-specific JSONB filters (brand, karat, storage, etc.)

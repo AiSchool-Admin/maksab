@@ -10,12 +10,11 @@ const sortOptions = [
   { value: "newest", label: "الأحدث" },
   { value: "price_asc", label: "الأقل سعراً" },
   { value: "price_desc", label: "الأعلى سعراً" },
-  { value: "nearest", label: "📍 الأقرب" },
 ];
 
 export default function SortOptions({ value, onChange }: SortOptionsProps) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
       <span className="text-xs text-gray-text flex-shrink-0">ترتيب:</span>
       <div className="flex gap-1.5">
         {sortOptions.map((opt) => (
@@ -23,7 +22,7 @@ export default function SortOptions({ value, onChange }: SortOptionsProps) {
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
               value === opt.value
                 ? "bg-brand-green text-white"
                 : "bg-gray-light text-gray-text hover:bg-gray-200"

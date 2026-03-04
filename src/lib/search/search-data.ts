@@ -113,9 +113,9 @@ export async function searchAds(
 
     // Condition filter: "new" matches new/sealed, "used" matches everything else
     if (filters.condition === "new") {
-      query = query.in("category_fields->>condition", ["new", "sealed", "new_tagged", "new_no_tag"]);
+      query = query.in("category_fields->>condition", ["new", "sealed", "new_tagged", "new_untagged", "new_unused", "new_sealed", "new_opened"]);
     } else if (filters.condition === "used") {
-      query = query.not("category_fields->>condition", "in", "(new,sealed,new_tagged,new_no_tag)");
+      query = query.not("category_fields->>condition", "in", "(new,sealed,new_tagged,new_untagged,new_unused,new_sealed,new_opened)");
     }
 
     // Apply category-specific JSONB filters (brand, karat, storage, etc.)
