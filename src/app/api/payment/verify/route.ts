@@ -240,10 +240,21 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const commissionId = searchParams.get("commission_id");
+  const sessionToken = searchParams.get("session_token");
 
   if (!commissionId) {
     return NextResponse.json({ error: "commission_id مطلوب" }, { status: 400 });
   }
+
+  // Require authentication to view commission details
+  if (!sessionToken) {
+    return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+  }
+  const tokenResult = verifySessionToken(sessionToken);
+  if (!tokenResult.valid) {
+    return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+  }
+  const userId = tokenResult.userId;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -258,7 +269,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await adminClient
     .from("commissions")
-    .select("id, status, amount, unique_amount, payment_method, commission_type, verified_at, verified_by, instapay_reference, screenshot_url, created_at")
+    .select("id, status, amount, unique_amount, payment_method, commission_type, verified_at, verified_by, instapay_reference, screenshot_url, created_at, payer_id")
     .eq("id", commissionId)
     .maybeSingle();
 
@@ -266,5 +277,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "سجل الدفع مش موجود" }, { status: 404 });
   }
 
-  return NextResponse.json({ commission: data });
+  // Only the payer or an admin can view commission details
+  if (data.payer_id !== userId) {
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("seller_type")
+      .eq("id", userId)
+      .maybeSingle();
+    const isAdmin = (profile as Record<string, unknown> | null)?.seller_type === "admin";
+    if (!isAdmin) {
+      return NextResponse.json({ error: "غير مسموح" }, { status: 403 });
+    }
+  }
+
+  // Remove payer_id from response
+  const { payer_id: _payerId, ...commissionData } = data;
+  return NextResponse.json({ commission: commissionData });
 }
