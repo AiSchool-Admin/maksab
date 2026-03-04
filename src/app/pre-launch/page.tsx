@@ -79,7 +79,6 @@ export default function PreLaunchPage() {
         const data = JSON.parse(stored);
         // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
         setIsRegistered(true);
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
         setUserReferralCode(data.referralCode || "");
       } catch {
         // ignore
@@ -90,7 +89,6 @@ export default function PreLaunchPage() {
     const signups = localStorage.getItem(EARLY_SIGNUPS_KEY);
     if (signups) {
       try {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
         setSignupCount((JSON.parse(signups) as EarlySignup[]).length);
       } catch {
         // ignore

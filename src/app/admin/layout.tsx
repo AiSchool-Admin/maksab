@@ -73,12 +73,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         return;
       }
       const parsed = JSON.parse(stored) as AdminSession;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
       setSession(parsed);
     } catch {
       router.replace("/admin/login");
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous client-side init
     setIsLoading(false);
   }, [isLoginPage, router]);
 

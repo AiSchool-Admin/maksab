@@ -72,7 +72,6 @@ export default function MyAdsPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous reset before async fetch
     setIsLoading(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous reset before async fetch
     setError(false);
     fetchMyAds()
       .then((data) => {

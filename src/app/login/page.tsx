@@ -86,7 +86,7 @@ function LoginPageContent() {
     }
   }, [step]);
 
-  const handleSuccess = (loggedInUser: UserProfile) => {
+  const handleSuccess = useCallback((loggedInUser: UserProfile) => {
     setUser(loggedInUser);
 
     // If merchant and doesn't have a store yet, mark as pending and redirect
@@ -96,7 +96,7 @@ function LoginPageContent() {
     } else {
       router.replace(redirectTo);
     }
-  };
+  }, [accountType, router, redirectTo, setUser]);
 
   // ── Handle phone input changes (normalize autofill values) ─────────
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -262,7 +262,7 @@ function LoginPageContent() {
 
       handleSuccess(response.user);
     },
-    [otp, phone, otpToken, accountType],
+    [otp, phone, otpToken, handleSuccess],
   );
 
 

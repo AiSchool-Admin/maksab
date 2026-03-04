@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import {
   ImagePlus,
   X,
@@ -89,6 +89,12 @@ export default function Step3PricePhotos({
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
   const [isProcessingVideo, setIsProcessingVideo] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+
+  // Compute min datetime-local value once (1 hour from now)
+  const minScheduleDate = useMemo(
+    () => new Date(Date.now() + 3600000).toISOString().slice(0, 16),
+    [],
+  );
 
   const handleEnhancedImage = (enhancedDataUrl: string) => {
     if (enhancingIndex === null) return;
@@ -380,7 +386,7 @@ export default function Step3PricePhotos({
                 type="datetime-local"
                 value={priceData.liveAuctionScheduledAt}
                 onChange={(e) => onPriceChange("liveAuctionScheduledAt", e.target.value)}
-                min={new Date(Date.now() + 3600000).toISOString().slice(0, 16)}
+                min={minScheduleDate}
                 className={`w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark ${
                   errors.liveAuctionScheduledAt ? "border-error bg-error/5" : ""
                 }`}
@@ -655,7 +661,7 @@ function VoiceNoteRecorder({
       setIsRecording(true);
       setElapsed(0);
 
-      const startTime = Date.now();
+      const startTime = Date.now(); // eslint-disable-line react-hooks/purity
       timerRef.current = setInterval(() => {
         const sec = Math.round((Date.now() - startTime) / 1000);
         setElapsed(sec);

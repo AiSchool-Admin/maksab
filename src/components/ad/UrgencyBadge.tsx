@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Clock, Zap } from "lucide-react";
 
 interface UrgencyBadgeProps {
@@ -11,7 +12,7 @@ interface UrgencyBadgeProps {
  * Highlights recent posts with special styling.
  */
 export default function UrgencyBadge({ createdAt }: UrgencyBadgeProps) {
-  const now = Date.now();
+  const [now] = useState(() => Date.now());
   const posted = new Date(createdAt).getTime();
   const diffMs = now - posted;
   const diffMinutes = Math.floor(diffMs / (1000 * 60));

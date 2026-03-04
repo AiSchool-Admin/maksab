@@ -76,8 +76,8 @@ export default function AISearchBar({
     const trimmed = query.trim();
     if (!trimmed || trimmed.length < 2) {
       setAiPreview(null); // eslint-disable-line react-hooks/set-state-in-effect
-      setShowAiPreview(false); // eslint-disable-line react-hooks/set-state-in-effect
-      setServerSuggestions([]); // eslint-disable-line react-hooks/set-state-in-effect
+      setShowAiPreview(false);
+      setServerSuggestions([]);
       return;
     }
 

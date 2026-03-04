@@ -157,15 +157,16 @@ export default function AuctionsPage() {
   }, [sortBy, statusFilter]);
 
   useEffect(() => {
-    fetchAuctions();
+    fetchAuctions(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchAuctions]);
 
   // Count active vs ended
+  const [now] = useState(() => Date.now());
   const activeCount = auctions.filter(
     (a) =>
       a.auctionStatus === "active" &&
       a.auctionEndsAt &&
-      new Date(a.auctionEndsAt).getTime() > Date.now(),
+      new Date(a.auctionEndsAt).getTime() > now,
   ).length;
 
   return (

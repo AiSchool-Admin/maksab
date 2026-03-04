@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import NextImage from "next/image";
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Sparkles,
@@ -85,18 +85,6 @@ export default function PhotoEnhancer({
   const comparisonRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
 
-  // Load image once on mount
-  useEffect(() => {
-    const img = new Image();
-    img.onload = () => {
-      imageRef.current = img;
-      drawOriginal(img);
-      // Apply default "auto" preset
-      applyPreset("auto", img);
-    };
-    img.src = imageDataUrl;
-  }, [imageDataUrl]);
-
   const drawOriginal = useCallback((img: HTMLImageElement) => {
     const canvas = originalCanvasRef.current;
     if (!canvas) return;
@@ -172,6 +160,18 @@ export default function PhotoEnhancer({
     [imageDataUrl]
   );
 
+  // Load image once on mount
+  useEffect(() => {
+    const img = new globalThis.Image();
+    img.onload = () => {
+      imageRef.current = img;
+      drawOriginal(img);
+      // Apply default "auto" preset
+      applyPreset("auto", img);
+    };
+    img.src = imageDataUrl;
+  }, [imageDataUrl, drawOriginal, applyPreset]);
+
   const handlePresetChange = (presetKey: PresetKey) => {
     setActivePreset(presetKey);
     applyPreset(presetKey);
@@ -183,15 +183,6 @@ export default function PhotoEnhancer({
     }
   };
 
-  // Slider drag handlers
-  const handleSliderStart = useCallback(
-    (clientX: number) => {
-      setIsDragging(true);
-      updateSliderPosition(clientX);
-    },
-    []
-  );
-
   const updateSliderPosition = useCallback((clientX: number) => {
     const container = comparisonRef.current;
     if (!container) return;
@@ -201,6 +192,15 @@ export default function PhotoEnhancer({
     const percent = Math.max(0, Math.min(100, (x / rect.width) * 100));
     setSliderPosition(percent);
   }, []);
+
+  // Slider drag handlers
+  const handleSliderStart = useCallback(
+    (clientX: number) => {
+      setIsDragging(true);
+      updateSliderPosition(clientX);
+    },
+    [updateSliderPosition]
+  );
 
   const handleSliderMove = useCallback(
     (clientX: number) => {
@@ -310,7 +310,7 @@ export default function PhotoEnhancer({
       >
         {/* Enhanced (full width, bottom layer) */}
         {enhancedDataUrl && (
-          <Image
+          <NextImage
             src={enhancedDataUrl}
             alt="الصورة المحسنة"
             width={400}
@@ -326,14 +326,16 @@ export default function PhotoEnhancer({
           className="absolute inset-0 overflow-hidden"
           style={{ width: `${sliderPosition}%` }}
         >
-          <Image
+          <NextImage
             src={imageDataUrl}
             alt="الصورة الأصلية"
             width={400}
             height={400}
             className="absolute top-0 right-0 h-full object-cover"
             style={{
+              // eslint-disable-next-line react-hooks/refs
               width: comparisonRef.current
+                // eslint-disable-next-line react-hooks/refs
                 ? `${comparisonRef.current.offsetWidth}px`
                 : "100vw",
             }}

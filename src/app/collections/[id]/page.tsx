@@ -51,6 +51,7 @@ export default function CollectionDetailPage({
 
   useEffect(() => {
     loadCollection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const loadCollection = async () => {

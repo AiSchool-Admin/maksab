@@ -261,7 +261,7 @@ export default function CreateAdPage() {
       setErrors(errs);
       return Object.keys(errs).length === 0;
     },
-    [draft, images],
+    [draft],
   );
 
   /* ── Navigation ────────────────────────────────────── */

@@ -198,7 +198,7 @@ export default function EditAdPage({
       setErrors(errs);
       return Object.keys(errs).length === 0;
     },
-    [draft, images],
+    [draft],
   );
 
   const goNext = useCallback(() => {
@@ -332,7 +332,7 @@ export default function EditAdPage({
     } finally {
       setIsSaving(false);
     }
-  }, [draft, images, id, user, requireAuth, validateStep]);
+  }, [draft, images, id, user, requireAuth, validateStep, videoFile, voiceNote]);
 
   // Price label for preview
   const getPriceLabel = () => {
