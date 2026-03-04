@@ -40,16 +40,11 @@ export default function HorizontalSection({
             <p className="text-[11px] text-gray-text mt-0.5">{subtitle}</p>
           )}
         </div>
-        {href ? (
+        {href && (
           <Link href={href} className="flex items-center gap-0.5 text-xs text-brand-green font-semibold btn-icon-sm">
             عرض الكل
             <ChevronLeft size={14} />
           </Link>
-        ) : (
-          <button className="flex items-center gap-0.5 text-xs text-brand-green font-semibold btn-icon-sm">
-            عرض الكل
-            <ChevronLeft size={14} />
-          </button>
         )}
       </div>
 

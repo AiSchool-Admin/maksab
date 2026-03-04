@@ -33,7 +33,7 @@ export default function UserProfileLoading() {
       {/* Ads grid */}
       <div className="px-4 pt-2">
         <Skeleton className="h-5 w-24 mb-3" />
-        <AdGridSkeleton count={4} />
+        <AdGridSkeleton count={4} cols={2} />
       </div>
     </div>
   );
