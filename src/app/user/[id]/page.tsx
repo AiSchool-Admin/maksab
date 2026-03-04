@@ -21,6 +21,8 @@ import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
 import SellerRatingSummaryComponent from "@/components/reviews/SellerRatingSummary";
 import { supabase } from "@/lib/supabase/client";
 import { formatTimeAgo } from "@/lib/utils/format";
+import { getCategoryById } from "@/lib/categories/categories-config";
+import { generateAutoTitle } from "@/lib/categories/generate";
 import type { AdSummary } from "@/lib/ad-data";
 
 interface UserProfile {
@@ -34,6 +36,8 @@ interface UserProfile {
   totalAds: number;
   memberSince: string;
   isCommissionSupporter: boolean;
+  sellerType: "individual" | "store";
+  storeId: string | null;
 }
 
 export default function PublicProfilePage({
@@ -82,6 +86,8 @@ export default function PublicProfilePage({
           totalAds: (u.total_ads_count as number) || 0,
           memberSince: u.created_at as string,
           isCommissionSupporter: (u.is_commission_supporter as boolean) || false,
+          sellerType: (u.seller_type as "individual" | "store") || "individual",
+          storeId: (u.store_id as string) || null,
         });
 
         // Fetch user's active ads
@@ -97,20 +103,41 @@ export default function PublicProfilePage({
           setAdsError(true);
         } else if (adsData) {
           setAds(
-            (adsData as Record<string, unknown>[]).map((row) => ({
-              id: row.id as string,
-              title: row.title as string,
-              price: row.price as number | null,
-              saleType: row.sale_type as "cash" | "auction" | "exchange",
-              image: ((row.images as string[]) || [])[0] || null,
-              governorate: row.governorate as string | null,
-              city: row.city as string | null,
-              createdAt: row.created_at as string,
-              isNegotiable: (row.is_negotiable as boolean) || false,
-              auctionEndsAt: (row.auction_ends_at as string) || undefined,
-              exchangeDescription: (row.exchange_description as string) || undefined,
-              isFavorited: false,
-            })),
+            (adsData as Record<string, unknown>[]).map((row) => {
+              const categoryFields = (row.category_fields as Record<string, unknown>) ?? {};
+              const categoryId = (row.category_id as string) || "";
+              const subcategoryId = (row.subcategory_id as string) || undefined;
+
+              // Resolve title using Arabic category labels
+              let title = row.title as string;
+              if (categoryId) {
+                const config = getCategoryById(categoryId);
+                if (config) {
+                  const generated = generateAutoTitle(config, categoryFields, subcategoryId);
+                  if (generated) title = generated;
+                }
+              }
+
+              return {
+                id: row.id as string,
+                title,
+                price: row.price ? Number(row.price) : null,
+                saleType: row.sale_type as "cash" | "auction" | "exchange",
+                image: ((row.images as string[]) || [])[0] || null,
+                governorate: (row.governorate as string) || null,
+                city: (row.city as string) || null,
+                createdAt: row.created_at as string,
+                isNegotiable: (row.is_negotiable as boolean) || false,
+                auctionHighestBid: row.auction_start_price ? Number(row.auction_start_price) : undefined,
+                auctionEndsAt: (row.auction_ends_at as string) || undefined,
+                auctionBidsCount: undefined,
+                exchangeDescription: (row.exchange_description as string) || undefined,
+                isFavorited: false,
+                categoryId: categoryId || undefined,
+                useDayPrice: Boolean(categoryFields.use_day_price),
+                isLiveAuction: Boolean(categoryFields.is_live_auction),
+              };
+            }),
           );
         }
 
@@ -279,6 +306,18 @@ export default function PublicProfilePage({
             <p className="text-sm text-gray-text mt-3 leading-relaxed">
               {profile.bio}
             </p>
+          )}
+
+          {/* Store link */}
+          {profile.sellerType === "store" && profile.storeId && (
+            <Link
+              href={`/store/${profile.storeId}`}
+              className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200 text-sm font-bold text-brand-green hover:text-brand-green-dark transition-colors"
+            >
+              <span className="text-lg">🏪</span>
+              زيارة المتجر
+              <ChevronRight size={14} className="rotate-180 ms-auto" />
+            </Link>
           )}
         </div>
 
