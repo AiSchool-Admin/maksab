@@ -212,7 +212,7 @@ export default function AdminDashboardPage() {
               <h3 className="text-sm font-bold text-dark">نمو المستخدمين</h3>
               <p className="text-xs text-gray-text">آخر 30 يوم</p>
             </div>
-            <div className="text-left">
+            <div className="text-start">
               <p className="text-lg font-bold text-blue-600">+{stats.newUsersMonth}</p>
               <p className="text-[10px] text-gray-text">هذا الشهر</p>
             </div>
@@ -227,7 +227,7 @@ export default function AdminDashboardPage() {
               <h3 className="text-sm font-bold text-dark">نمو الإعلانات</h3>
               <p className="text-xs text-gray-text">آخر 30 يوم</p>
             </div>
-            <div className="text-left">
+            <div className="text-start">
               <p className="text-lg font-bold text-brand-green">+{stats.newAdsWeek}</p>
               <p className="text-[10px] text-gray-text">هذا الأسبوع</p>
             </div>

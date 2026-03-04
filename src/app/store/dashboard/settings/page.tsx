@@ -154,7 +154,7 @@ export default function DashboardSettingsPage() {
               rows={3}
               maxLength={500}
             />
-            <p className="text-[10px] text-gray-text text-left mt-1">
+            <p className="text-[10px] text-gray-text text-end mt-1">
               {description.length}/500
             </p>
           </div>

@@ -88,7 +88,7 @@ export default function PlanCard({
           <>
             <p className="text-3xl font-bold text-dark">
               {price.toLocaleString("ar-EG")}
-              <span className="text-sm font-normal text-gray-text mr-1">
+              <span className="text-sm font-normal text-gray-text me-1">
                 جنيه/{billingCycle === "yearly" ? "سنة" : "شهر"}
               </span>
             </p>

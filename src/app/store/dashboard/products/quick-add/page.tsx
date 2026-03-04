@@ -459,7 +459,7 @@ export default function QuickAddProductPage() {
           <label className="block text-sm font-bold text-dark mb-2">
             الصور
             <span className="text-error me-0.5">*</span>
-            <span className="text-xs text-gray-text font-normal mr-1">
+            <span className="text-xs text-gray-text font-normal me-1">
               (حتى {MAX_IMAGES})
             </span>
           </label>

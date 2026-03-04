@@ -239,7 +239,7 @@ export default function HomePage() {
           {/* Categories Grid */}
           <section className="px-4 pb-1.5 pt-1">
             <h2 className="text-xl font-bold text-dark mb-2">الأقسام</h2>
-            <div className="grid grid-cols-4 gap-y-4 gap-x-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-y-4 gap-x-2">
               {categories.map((cat) => (
                 <Link
                   key={cat.slug}
@@ -247,7 +247,7 @@ export default function HomePage() {
                   className="flex flex-col items-center gap-1.5 group"
                 >
                   <CategoryIcon slug={cat.slug} size="md" />
-                  <span className="text-base font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1 max-w-[88px]">
+                  <span className="text-sm sm:text-base font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1">
                     {cat.name}
                   </span>
                 </Link>

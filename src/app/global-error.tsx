@@ -95,7 +95,7 @@ export default function GlobalError({
                 }}
                 dir="ltr"
               >
-                Error ID: {error.digest}
+                رقم الخطأ: {error.digest}
               </p>
             )}
           </div>

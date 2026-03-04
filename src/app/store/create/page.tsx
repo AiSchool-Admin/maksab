@@ -740,7 +740,7 @@ export default function CreateStorePage() {
                 placeholder="اوصف متجرك في كلمتين..."
                 maxLength={500}
               />
-              <p className="text-[10px] text-gray-text text-left mt-1">
+              <p className="text-[10px] text-gray-text text-end mt-1">
                 {description.length}/500
               </p>
             </div>
@@ -855,7 +855,7 @@ export default function CreateStorePage() {
             {step === 3 ? (
               <>
                 التالي
-                <span className="text-[10px] opacity-70 mr-1">(أو تخطي)</span>
+                <span className="text-[10px] opacity-70 me-1">(أو تخطي)</span>
               </>
             ) : (
               "التالي"
@@ -892,7 +892,7 @@ function ExtraFieldInput({
       <label className="flex items-center justify-between bg-white border border-gray-light rounded-xl px-4 py-3 cursor-pointer">
         <span className="text-sm text-dark">
           {field.label}
-          {field.isRequired && <span className="text-error mr-1">*</span>}
+          {field.isRequired && <span className="text-error me-1">*</span>}
         </span>
         <div className="relative">
           <input
@@ -922,7 +922,7 @@ function ExtraFieldInput({
       <div>
         <label className="text-sm text-dark mb-1.5 block">
           {field.label}
-          {field.isRequired && <span className="text-error mr-1">*</span>}
+          {field.isRequired && <span className="text-error me-1">*</span>}
         </label>
         <select
           value={(value as string) || ""}
@@ -945,7 +945,7 @@ function ExtraFieldInput({
     <div>
       <label className="text-sm text-dark mb-1.5 block">
         {field.label}
-        {field.isRequired && <span className="text-error mr-1">*</span>}
+        {field.isRequired && <span className="text-error me-1">*</span>}
       </label>
       <input
         type="text"

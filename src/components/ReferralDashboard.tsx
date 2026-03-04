@@ -157,7 +157,7 @@ export default function ReferralDashboard() {
               <p className="text-xs text-gray-text">المستوى الحالي</p>
             </div>
           </div>
-          <div className="text-left">
+          <div className="text-end">
             <p className="text-2xl font-bold text-dark">{totalPoints}</p>
             <p className="text-xs text-gray-text">نقطة</p>
           </div>
@@ -298,7 +298,7 @@ export default function ReferralDashboard() {
                       {config.nameAr}
                     </span>
                     {isCurrent && (
-                      <span className="text-[10px] text-brand-green mr-1">
+                      <span className="text-[10px] text-brand-green me-1">
                         (أنت هنا)
                       </span>
                     )}

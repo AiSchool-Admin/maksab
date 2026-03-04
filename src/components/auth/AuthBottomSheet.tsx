@@ -307,7 +307,7 @@ export default function AuthBottomSheet({
           {/* Phone number */}
           <div className="w-full">
             <label className="block text-sm font-semibold text-dark mb-1.5">
-              <Phone size={14} className="inline ml-1 text-brand-green" />
+              <Phone size={14} className="inline ms-1 text-brand-green" />
               رقم الموبايل
             </label>
             <div className="relative">
@@ -338,9 +338,9 @@ export default function AuthBottomSheet({
           {/* Display name (optional) */}
           <div className="w-full">
             <label className="block text-sm font-semibold text-dark mb-1.5">
-              <UserCircle size={14} className="inline ml-1 text-brand-green" />
+              <UserCircle size={14} className="inline ms-1 text-brand-green" />
               الاسم
-              <span className="text-gray-text font-normal text-xs mr-1">(اختياري)</span>
+              <span className="text-gray-text font-normal text-xs me-1">(اختياري)</span>
             </label>
             <input
               type="text"
@@ -410,7 +410,7 @@ export default function AuthBottomSheet({
             onClick={handlePhoneSubmit}
             disabled={phone.length < 10}
           >
-            <Smartphone size={18} className="ml-2" />
+            <Smartphone size={18} className="ms-2" />
             إرسال كود التأكيد
           </Button>
 

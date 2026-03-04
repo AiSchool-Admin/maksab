@@ -308,7 +308,7 @@ export default function DashboardProductsPage() {
                         {product.is_pinned && (
                           <Pin
                             size={11}
-                            className="inline text-brand-gold ml-1"
+                            className="inline text-brand-gold ms-1"
                           />
                         )}
                         {product.title}

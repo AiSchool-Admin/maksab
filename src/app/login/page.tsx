@@ -350,7 +350,7 @@ function LoginPageContent() {
             {/* Phone number input */}
             <div className="w-full">
               <label htmlFor="login-phone" className="block text-sm font-semibold text-dark mb-1.5">
-                <Phone size={14} className="inline ml-1 text-brand-green" />
+                <Phone size={14} className="inline ms-1 text-brand-green" />
                 رقم الموبايل
               </label>
               <div className="relative">
@@ -439,7 +439,7 @@ function LoginPageContent() {
               onClick={handlePhoneSubmit}
               disabled={phone.length < 10}
             >
-              <Smartphone size={18} className="ml-2" />
+              <Smartphone size={18} className="ms-2" />
               إرسال كود التأكيد
             </Button>
 

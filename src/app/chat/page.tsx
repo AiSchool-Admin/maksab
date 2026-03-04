@@ -88,19 +88,19 @@ export default function ChatListPage() {
       {showSearch && (
         <div className="px-4 py-2 border-b border-gray-light">
           <div className="relative">
-            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-text" />
+            <Search size={16} className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-text" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="ابحث في المحادثات..."
-              className="w-full pr-10 pl-4 py-2.5 bg-gray-light rounded-xl text-sm placeholder:text-gray-text focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+              className="w-full pe-10 ps-4 py-2.5 bg-gray-light rounded-xl text-sm placeholder:text-gray-text focus:outline-none focus:ring-2 focus:ring-brand-green/30"
               autoFocus
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-text hover:text-dark"
+                className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-text hover:text-dark"
               >
                 <X size={14} />
               </button>

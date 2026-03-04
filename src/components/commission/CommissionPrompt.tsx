@@ -575,7 +575,7 @@ export default function CommissionPrompt({
                   setScreenshotFile(null);
                   setScreenshotPreview(null);
                 }}
-                className="absolute top-2 left-2 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center"
+                className="absolute top-2 start-2 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center"
               >
                 <X size={16} className="text-gray-text" />
               </button>

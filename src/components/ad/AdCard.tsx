@@ -172,7 +172,7 @@ function AdCard({
         {/* Content */}
         <div className="p-3">
           {/* Title */}
-          <h3 className="text-base font-semibold text-dark line-clamp-2 mb-1.5 leading-relaxed">
+          <h3 className="text-base font-semibold text-dark line-clamp-2 mb-1.5 leading-relaxed break-words">
             {title}
           </h3>
 
