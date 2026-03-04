@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { checkRateLimit, recordRateLimit } from "@/lib/rate-limit/rate-limit-service";
 import { getOtpSecret, isNonProduction } from "@/lib/auth/otp-secret";
+import { parseEgyptianPhone } from "@/lib/utils/phone";
 
 const OTP_EXPIRY_MINUTES = 5;
 const WHATSAPP_BOT_NUMBER = process.env.WHATSAPP_BOT_NUMBER || "";
@@ -33,21 +34,16 @@ function generateOTP(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    let phone = body.phone?.replace(/\D/g, "") || "";
+    const phone = parseEgyptianPhone(body.phone || "");
 
-    // Normalize phone formats
-    if (/^1[0125]\d{8}$/.test(phone)) phone = `0${phone}`;
-    if (phone.startsWith("20") && phone.length === 12) phone = phone.slice(1);
-    if (phone.startsWith("0020") && phone.length === 14) phone = phone.slice(3);
-
-    if (!phone || !/^01[0125]\d{8}$/.test(phone)) {
+    if (!phone) {
       return NextResponse.json(
         { error: "رقم الموبايل مش صحيح" },
         { status: 400 }
       );
     }
 
-    // ── Rate limit check ──────────────────────────────────────────
+    // ── Rate limit check (fail-closed: reject if check fails) ─────
     try {
       const rateCheck = await checkRateLimit(phone, "otp_send");
       if (!rateCheck.allowed) {
@@ -60,7 +56,11 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch (rateLimitErr) {
-      console.warn("[send-otp] Rate limit check skipped:", rateLimitErr);
+      console.error("[send-otp] Rate limit check failed — blocking request:", rateLimitErr);
+      return NextResponse.json(
+        { error: "حصلت مشكلة مؤقتة. جرب تاني بعد شوية" },
+        { status: 503 }
+      );
     }
 
     recordRateLimit(phone, "otp_send").catch((err) => {

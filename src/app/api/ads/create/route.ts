@@ -262,8 +262,7 @@ export async function POST(req: NextRequest) {
         {
           error: insertError.code === "23503"
             ? "الفئات مش موجودة. جرب تاني أو تواصل مع الدعم"
-            : `حصل مشكلة في نشر الإعلان (${insertError.code}). جرب تاني`,
-          code: insertError.code,
+            : "حصل مشكلة في نشر الإعلان. جرب تاني",
         },
         { status: 409 },
       );

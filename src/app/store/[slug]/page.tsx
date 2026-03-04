@@ -132,7 +132,7 @@ function StoreStructuredData({ store }: { store: NonNullable<Awaited<ReturnType<
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData as Record<string, unknown>) }}
     />
   );
 }

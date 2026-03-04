@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { parseEgyptianPhone } from "@/lib/utils/phone";
 
 // ── Service client (server-side only) ────────────────────────────────────
 
@@ -227,9 +228,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Validate phone format
-      const normalized = phone.replace(/\s|-/g, "");
-      if (!/^01[0125]\d{8}$/.test(normalized)) {
+      // Validate phone format using shared utility
+      const normalized = parseEgyptianPhone(phone);
+      if (!normalized) {
         return NextResponse.json(
           { error: "رقم الموبايل مش صحيح. لازم يبدأ بـ 01 ويكون 11 رقم" },
           { status: 400 },
