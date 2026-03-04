@@ -19,12 +19,26 @@ import type { AudioRecording } from "@/lib/utils/audio-recorder";
 import type { PriceData } from "@/components/ad/steps/Step3PricePhotos";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import dynamic from "next/dynamic";
-import SellerInsightsCard from "@/components/ad/SellerInsightsCard";
-import ShareButtons from "@/components/ad/ShareButtons";
-import Step1CategorySaleType from "@/components/ad/steps/Step1CategorySaleType";
-import Step2CategoryDetails from "@/components/ad/steps/Step2CategoryDetails";
-import Step3PricePhotos from "@/components/ad/steps/Step3PricePhotos";
-import Step4LocationReview from "@/components/ad/steps/Step4LocationReview";
+const SellerInsightsCard = dynamic(
+  () => import("@/components/ad/SellerInsightsCard"),
+  { ssr: false },
+);
+const ShareButtons = dynamic(
+  () => import("@/components/ad/ShareButtons"),
+  { ssr: false },
+);
+const Step1CategorySaleType = dynamic(
+  () => import("@/components/ad/steps/Step1CategorySaleType"),
+);
+const Step2CategoryDetails = dynamic(
+  () => import("@/components/ad/steps/Step2CategoryDetails"),
+);
+const Step3PricePhotos = dynamic(
+  () => import("@/components/ad/steps/Step3PricePhotos"),
+);
+const Step4LocationReview = dynamic(
+  () => import("@/components/ad/steps/Step4LocationReview"),
+);
 
 const PrePaymentOfferLazy = dynamic(
   () => import("@/components/commission/PrePaymentOffer"),
