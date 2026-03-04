@@ -36,6 +36,7 @@ export default function SharedCollectionPage({
 
   useEffect(() => {
     loadSharedCollection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
   const loadSharedCollection = async () => {

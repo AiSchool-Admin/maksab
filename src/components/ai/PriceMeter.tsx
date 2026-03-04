@@ -100,14 +100,14 @@ function getTrendLabel(trend: "up" | "down" | "stable"): string {
   }
 }
 
-function getTrendIcon(trend: "up" | "down" | "stable") {
+function renderTrendIcon(trend: "up" | "down" | "stable", size: number) {
   switch (trend) {
     case "up":
-      return TrendingUp;
+      return <TrendingUp size={size} />;
     case "down":
-      return TrendingDown;
+      return <TrendingDown size={size} />;
     case "stable":
-      return Minus;
+      return <Minus size={size} />;
   }
 }
 
@@ -299,7 +299,6 @@ function FullMeter({
   const verdictLabel = getVerdictLabel(verdict);
   const verdictColors = getVerdictColors(verdict);
   const trendLabel = getTrendLabel(estimate.market_trend);
-  const TrendIcon = getTrendIcon(estimate.market_trend);
   const trendColors = getTrendColors(estimate.market_trend);
 
   const markerPosition = getMarkerPosition(
@@ -380,7 +379,7 @@ function FullMeter({
       <div
         className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium ${trendColors.bg} ${trendColors.text}`}
       >
-        <TrendIcon size={14} />
+        {renderTrendIcon(estimate.market_trend, 14)}
         <span>{trendLabel}</span>
       </div>
 

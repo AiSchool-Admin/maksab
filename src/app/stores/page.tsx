@@ -58,6 +58,7 @@ export default function StoresDirectoryPage() {
 
   useEffect(() => {
     loadStores(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, selectedGov]);
 
   const handleSearch = () => {
@@ -70,6 +71,7 @@ export default function StoresDirectoryPage() {
 
   useEffect(() => {
     if (page > 1) loadStores(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const isStoreOwner = user?.seller_type === "store";

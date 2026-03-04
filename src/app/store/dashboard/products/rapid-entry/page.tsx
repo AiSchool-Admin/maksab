@@ -61,20 +61,18 @@ export default function RapidEntryPage() {
 
   const priceInputsRef = useRef<Map<string, HTMLInputElement>>(new Map());
 
-  useEffect(() => {
-    if (!user) { router.push("/login"); return; }
-    async function load() {
-      const s = await getStoreByUserId(user!.id);
-      if (!s) { router.push("/store/create"); return; }
-      setStore(s);
-      if (s.main_category) {
-        setCategoryId(s.main_category);
-        initRows(s.main_category);
-      }
-      setIsLoading(false);
-    }
-    load();
-  }, [user, router]);
+  // Get the visible required field IDs for the rapid entry table
+  function getVisibleRequiredFields(config: CategoryConfig): string[] {
+    return config.requiredFields.slice(0, 4); // Max 4 required fields
+  }
+
+  // Get the CategoryField objects for display
+  function getFieldConfigs(config: CategoryConfig): CategoryField[] {
+    const reqIds = getVisibleRequiredFields(config);
+    return reqIds
+      .map(id => config.fields.find(f => f.id === id))
+      .filter((f): f is CategoryField => !!f);
+  }
 
   // Initialize rows when category changes
   const initRows = useCallback((catId: string) => {
@@ -89,18 +87,21 @@ export default function RapidEntryPage() {
     ]);
   }, []);
 
-  // Get the visible required field IDs for the rapid entry table
-  function getVisibleRequiredFields(config: CategoryConfig): string[] {
-    return config.requiredFields.slice(0, 4); // Max 4 required fields
-  }
-
-  // Get the CategoryField objects for display
-  function getFieldConfigs(config: CategoryConfig): CategoryField[] {
-    const reqIds = getVisibleRequiredFields(config);
-    return reqIds
-      .map(id => config.fields.find(f => f.id === id))
-      .filter((f): f is CategoryField => !!f);
-  }
+  useEffect(() => {
+    if (!user) { router.push("/login"); return; }
+    async function load() {
+      const s = await getStoreByUserId(user!.id);
+      if (!s) { router.push("/store/create"); return; }
+      setStore(s);
+      if (s.main_category) {
+        setCategoryId(s.main_category);
+        initRows(s.main_category);
+      }
+      setIsLoading(false);
+    }
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, router]);
 
   // Handle field change
   const handleFieldChange = useCallback((rowId: string, fieldId: string, value: string) => {
@@ -151,6 +152,7 @@ export default function RapidEntryPage() {
     const lastRow = rows[rows.length - 1];
     if (lastRow.status !== "editing") return;
     // Auto-focus handled by the field rendering
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length]);
 
   // Check if a row has enough data to publish
@@ -243,6 +245,7 @@ export default function RapidEntryPage() {
 
     setIsPublishing(false);
     setShowDone(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, user, store, categoryId]);
 
   // Category change

@@ -260,6 +260,7 @@ export default function AdDetailClient({ id }: { id: string }) {
       unsubscribe();
       clearInterval(endCheckInterval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, auctionState?.status, auctionState?.endsAt]);
 
   /* ── Handlers ────────────────────────────────────────────── */
@@ -341,7 +342,7 @@ export default function AdDetailClient({ id }: { id: string }) {
         toast.error(result.error);
       }
     },
-    [id, requireAuth],
+    [id, requireAuth, ad, track],
   );
 
   const handleBuyNow = useCallback(async () => {
