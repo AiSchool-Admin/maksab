@@ -161,10 +161,9 @@ export async function submitPrePaymentCommission(params: {
       }),
     });
     const data = await res.json();
-    if (data.success) {
-      // Mark ad as boosted + trusted (fire and forget)
-      boostAd(params.adId).catch((err) => console.warn("[commission] boostAd failed:", err));
-    }
+    // NOTE: Do NOT call boostAd here. Pre-payment boosts are only granted
+    // after admin verification (see /api/payment/verify → admin_verified).
+    // Boosting before verification would allow unverified payments to get benefits.
     return { success: data.success === true, amount };
   } catch {
     return { success: false };

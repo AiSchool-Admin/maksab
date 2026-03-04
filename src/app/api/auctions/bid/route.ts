@@ -190,8 +190,14 @@ export async function POST(request: NextRequest) {
     if (verifyBid) {
       // Someone placed a higher bid between our check and insert — remove ours
       await client.from("auction_bids").delete().eq("id", (insertedBid as Record<string, unknown>).id);
+      // Recalculate minIncrement based on the actual higher bid (not old price)
+      const higherBidAmount = Number((verifyBid as Record<string, unknown>).amount);
+      const recalcIncrement = sellerIncrement > 0
+        ? sellerIncrement
+        : Math.max(Math.ceil(higherBidAmount * 0.02), MIN_INCREMENT_EGP);
+      const newMinBid = higherBidAmount + recalcIncrement;
       return NextResponse.json(
-        { error: `حد زايد أكتر منك. الحد الأدنى دلوقتي ${(Number((verifyBid as Record<string, unknown>).amount) + minIncrement).toLocaleString("en-US")} جنيه`, min_next_bid: Number((verifyBid as Record<string, unknown>).amount) + minIncrement },
+        { error: `حد زايد أكتر منك. الحد الأدنى دلوقتي ${newMinBid.toLocaleString("en-US")} جنيه`, min_next_bid: newMinBid },
         { status: 409 },
       );
     }
@@ -227,12 +233,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch updated state to return
-    const { data: updatedBids } = await client
-      .from("auction_bids")
-      .select("*")
-      .eq("ad_id", ad_id)
-      .order("amount", { ascending: false })
-      .limit(20);
+    const [{ data: updatedBids }, { count: totalBidsCount }] = await Promise.all([
+      client
+        .from("auction_bids")
+        .select("*")
+        .eq("ad_id", ad_id)
+        .order("amount", { ascending: false })
+        .limit(20),
+      client
+        .from("auction_bids")
+        .select("id", { count: "exact", head: true })
+        .eq("ad_id", ad_id),
+    ]);
 
     // Get bidder names
     const bidderIds = [
@@ -271,6 +283,20 @@ export async function POST(request: NextRequest) {
       .eq("id", ad_id)
       .maybeSingle();
 
+    // Calculate correct minIncrement based on new highest bid
+    const newHighestBid = bids.length > 0 ? bids[0].amount : startPrice;
+    const newSellerIncrement = Number(ad.auction_min_increment) || 0;
+    const responseMinIncrement = newSellerIncrement > 0
+      ? newSellerIncrement
+      : Math.max(Math.ceil(newHighestBid * 0.02), MIN_INCREMENT_EGP);
+
+    // Calculate original end time from creation date + duration
+    const durationHours = Number(ad.auction_duration_hours) || 72;
+    const createdAt = ad.created_at as string;
+    const originalEndsAt = createdAt
+      ? new Date(new Date(createdAt).getTime() + durationHours * 3600000).toISOString()
+      : ad.auction_ends_at;
+
     return NextResponse.json({
       success: true,
       antiSnipeExtended,
@@ -284,12 +310,12 @@ export async function POST(request: NextRequest) {
         currentHighestBid: bids.length > 0 ? bids[0].amount : null,
         highestBidderName: bids.length > 0 ? bids[0].bidderName : null,
         highestBidderId: bids.length > 0 ? bids[0].bidderId : null,
-        bidsCount: bids.length,
-        minIncrement: Number(ad.auction_min_increment) || MIN_INCREMENT_EGP,
+        bidsCount: totalBidsCount ?? bids.length,
+        minIncrement: responseMinIncrement,
         endsAt: updatedAd
           ? (updatedAd as Record<string, unknown>).auction_ends_at
           : ad.auction_ends_at,
-        originalEndsAt: ad.auction_ends_at,
+        originalEndsAt,
         bids,
         winnerId: null,
         winnerName: null,
