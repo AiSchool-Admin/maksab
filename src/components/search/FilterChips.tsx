@@ -232,6 +232,32 @@ export default function FilterChips({
         ))}
       </ChipDropdown>
 
+      {/* Subcategory filter — only when category is selected and has subcategories */}
+      {selectedCat && selectedCat.subcategories.length > 0 && (
+        <ChipDropdown
+          label={
+            filters.subcategory
+              ? selectedCat.subcategories.find((s) => s.id === filters.subcategory)?.name || "القسم الفرعي"
+              : "القسم الفرعي"
+          }
+          isActive={!!filters.subcategory}
+        >
+          <OptionButton
+            label={`كل ${selectedCat.name}`}
+            selected={!filters.subcategory}
+            onClick={() => onChange({ ...filters, subcategory: undefined })}
+          />
+          {selectedCat.subcategories.map((sub) => (
+            <OptionButton
+              key={sub.id}
+              label={sub.name}
+              selected={filters.subcategory === sub.id}
+              onClick={() => onChange({ ...filters, subcategory: sub.id })}
+            />
+          ))}
+        </ChipDropdown>
+      )}
+
       {/* Sale type filter */}
       <ChipDropdown
         label={
