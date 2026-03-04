@@ -34,9 +34,9 @@ export function AdCardSkeleton() {
 }
 
 /** Skeleton grid for the home feed */
-export function AdGridSkeleton({ count = 4 }: { count?: number }) {
+export function AdGridSkeleton({ count = 6, cols = 3 }: { count?: number; cols?: 2 | 3 }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className={`grid gap-2 ${cols === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
       {Array.from({ length: count }).map((_, i) => (
         <AdCardSkeleton key={i} />
       ))}

@@ -556,7 +556,7 @@ function SearchPageInner() {
         )}
 
         {/* Loading states */}
-        {(isLoading || isImageSearching) && <AdGridSkeleton count={6} />}
+        {(isLoading || isImageSearching) && <AdGridSkeleton count={6} cols={2} />}
 
         {/* Image search results */}
         {!isImageSearching && imageSearchResults.length > 0 && (
@@ -692,7 +692,7 @@ export default function SearchPage() {
       fallback={
         <main className="min-h-screen bg-white pb-20">
           <div className="px-4 py-4">
-            <AdGridSkeleton count={6} />
+            <AdGridSkeleton count={6} cols={2} />
           </div>
         </main>
       }

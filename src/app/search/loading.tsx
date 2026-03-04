@@ -23,7 +23,7 @@ export default function SearchLoading() {
 
       {/* Results grid */}
       <div className="px-4">
-        <AdGridSkeleton count={6} />
+        <AdGridSkeleton count={6} cols={2} />
       </div>
     </div>
   );

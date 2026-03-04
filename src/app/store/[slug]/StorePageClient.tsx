@@ -119,7 +119,7 @@ export default function StorePageClient({ slug }: { slug: string }) {
       <div className="min-h-screen bg-gray-50">
         <StoreHeaderSkeleton />
         <div className="p-4">
-          <AdGridSkeleton count={4} />
+          <AdGridSkeleton count={4} cols={2} />
         </div>
       </div>
     );
@@ -237,7 +237,7 @@ export default function StorePageClient({ slug }: { slug: string }) {
         </div>
 
         {productsLoading ? (
-          <AdGridSkeleton count={4} />
+          <AdGridSkeleton count={4} cols={2} />
         ) : products.length > 0 ? (
           <div className="grid grid-cols-2 gap-3">
             {products.map((product) => (

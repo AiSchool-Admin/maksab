@@ -73,9 +73,11 @@ export default function HomePage() {
   const {
     items: feedAds,
     isLoading,
+    isLoadingMore,
     error: feedError,
     retry: retryFeed,
     refresh: refreshFeed,
+    sentinelRef,
   } = useInfiniteScroll<AdSummary>({ fetchFn: fetchFeedAds });
 
   const { requireAuth, user } = useAuth();
@@ -331,17 +333,26 @@ export default function HomePage() {
                 </button>
               </div>
             ) : feedAds.length > 0 ? (
-              <div className="grid grid-cols-3 gap-2">
-                {feedAds.slice(0, 6).map((ad, idx) => (
-                  <AdCard
-                    key={ad.id}
-                    {...ad}
-                    isFavorited={favoriteIds.has(ad.id)}
-                    onToggleFavorite={handleToggleFavorite}
-                    priority={idx < 3}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  {feedAds.map((ad, idx) => (
+                    <AdCard
+                      key={ad.id}
+                      {...ad}
+                      isFavorited={favoriteIds.has(ad.id)}
+                      onToggleFavorite={handleToggleFavorite}
+                      priority={idx < 3}
+                    />
+                  ))}
+                </div>
+                {/* Infinite scroll sentinel */}
+                <div ref={sentinelRef} className="h-4" />
+                {isLoadingMore && (
+                  <div className="flex justify-center py-4">
+                    <div className="w-6 h-6 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </>
             ) : (
               <div className="py-6 text-center">
                 <p className="text-5xl mb-3">🏪</p>
