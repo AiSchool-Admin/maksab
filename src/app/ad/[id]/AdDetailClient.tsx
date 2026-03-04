@@ -806,13 +806,19 @@ export default function AdDetailClient({ id }: { id: string }) {
                   )}
                 </div>
               </div>
-              <a
-                href={`tel:+2${ad.seller.phone}`}
-                className="text-xs text-brand-green font-semibold"
-                dir="ltr"
-              >
-                {formatPhone(ad.seller.phone)}
-              </a>
+              {user ? (
+                <a
+                  href={`tel:+2${ad.seller.phone}`}
+                  className="text-xs text-brand-green font-semibold"
+                  dir="ltr"
+                >
+                  {formatPhone(ad.seller.phone)}
+                </a>
+              ) : (
+                <span className="text-xs text-gray-text" dir="ltr">
+                  01X-XXXX-XXXX
+                </span>
+              )}
             </div>
 
             {/* Review & Report buttons for non-sellers */}
