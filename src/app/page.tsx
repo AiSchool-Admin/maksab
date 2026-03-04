@@ -370,13 +370,13 @@ export default function HomePage() {
             </section>
           )}
 
-          {/* ═══ All Ads Feed — General infinite scroll ═══ */}
-          <section className="px-3 pb-1.5">
-            <h2 className="text-xl font-bold text-dark mb-1.5">كل الإعلانات</h2>
-
-            {isLoading ? (
+          {/* ═══ Category Browse Sections ═══ */}
+          {isLoading ? (
+            <section className="px-3 pb-1.5">
               <AdGridSkeleton count={6} />
-            ) : feedError ? (
+            </section>
+          ) : feedError ? (
+            <section className="px-3 pb-1.5">
               <div className="py-6 text-center">
                 <p className="text-4xl mb-3">⚠️</p>
                 <p className="text-sm text-gray-text mb-3">حصلت مشكلة في التحميل — معلش!</p>
@@ -387,28 +387,46 @@ export default function HomePage() {
                   جرّب تاني
                 </button>
               </div>
-            ) : feedAds.length > 0 ? (
-              <>
-                <div className="grid grid-cols-3 gap-2">
-                  {feedAds.map((ad, idx) => (
-                    <AdCard
-                      key={ad.id}
-                      {...ad}
-                      isFavorited={favoriteIds.has(ad.id)}
-                      onToggleFavorite={handleToggleFavorite}
-                      priority={idx < 3}
-                    />
-                  ))}
+            </section>
+          ) : feedAds.length > 0 ? (
+            <>
+              {categories.map((cat) => {
+                const catAds = adsByCategory[cat.slug] || adsByCategory[cat.slug.replace("-", "_")] || [];
+                if (catAds.length === 0) return null;
+                return (
+                  <section key={cat.slug} className="px-3 pb-1.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <h2 className="text-xl font-bold text-dark">{cat.name}</h2>
+                      <Link
+                        href={`/search?category=${cat.slug}`}
+                        className="text-xs font-bold text-brand-green hover:underline"
+                      >
+                        عرض الكل ←
+                      </Link>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {catAds.slice(0, 6).map((ad) => (
+                        <AdCard
+                          key={ad.id}
+                          {...ad}
+                          isFavorited={favoriteIds.has(ad.id)}
+                          onToggleFavorite={handleToggleFavorite}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+              {/* Infinite scroll sentinel — loads more ads to populate category sections */}
+              <div ref={sentinelRef} className="h-4" />
+              {isLoadingMore && (
+                <div className="flex justify-center py-4">
+                  <div className="w-6 h-6 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
                 </div>
-                {/* Infinite scroll sentinel */}
-                <div ref={sentinelRef} className="h-4" />
-                {isLoadingMore && (
-                  <div className="flex justify-center py-4">
-                    <div className="w-6 h-6 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
-              </>
-            ) : (
+              )}
+            </>
+          ) : (
+            <section className="px-3 pb-1.5">
               <div className="py-6 text-center">
                 <p className="text-5xl mb-3">🏪</p>
                 <h3 className="text-lg font-bold text-dark mb-2">أهلاً بيك في مكسب!</h3>
@@ -420,37 +438,8 @@ export default function HomePage() {
                   </Button>
                 </Link>
               </div>
-            )}
-          </section>
-
-          {/* Category Browse Sections */}
-          {categories.map((cat) => {
-            const catAds = adsByCategory[cat.slug] || adsByCategory[cat.slug.replace("-", "_")] || [];
-            if (catAds.length === 0) return null;
-            return (
-              <section key={cat.slug} className="px-3 pb-1.5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <h2 className="text-xl font-bold text-dark">{cat.name}</h2>
-                  <Link
-                    href={`/search?category=${cat.slug}`}
-                    className="text-xs font-bold text-brand-green hover:underline"
-                  >
-                    عرض الكل ←
-                  </Link>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {catAds.slice(0, 3).map((ad) => (
-                    <AdCard
-                      key={ad.id}
-                      {...ad}
-                      isFavorited={favoriteIds.has(ad.id)}
-                      onToggleFavorite={handleToggleFavorite}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+            </section>
+          )}
 
           {/* ═══ Buy Requests Section — bottom of page ═══ */}
           {/* My Buy Requests */}
