@@ -28,6 +28,7 @@ import {
   Award,
   Users,
 } from "lucide-react";
+import Image from "next/image";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import Button from "@/components/ui/Button";
@@ -59,6 +60,7 @@ export default function ProfilePage() {
       isCommissionSupporter(user.id).then(setIsSupporter);
       // Load loyalty profile + award daily login
       const profile = getUserLoyaltyProfile(user.id);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous getUserLoyaltyProfile call
       setLoyaltyProfile(profile);
       awardPoints(user.id, "daily_login");
       // Load founder profile
@@ -127,10 +129,13 @@ export default function ProfilePage() {
           <div className="relative flex-shrink-0">
             <div className="w-[72px] h-[72px] rounded-full bg-brand-green-light flex items-center justify-center overflow-hidden">
               {user!.avatar_url ? (
-                <img
+                <Image
                   src={user!.avatar_url}
                   alt="صورة البروفايل"
+                  width={72}
+                  height={72}
                   className="w-full h-full object-cover"
+                  unoptimized
                 />
               ) : (
                 <User size={32} className="text-brand-green" />

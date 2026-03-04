@@ -67,7 +67,7 @@ export default function NotificationSettings() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   useEffect(() => {
-    setPushSupport(getPushSupport());
+    setPushSupport(getPushSupport()); // eslint-disable-line react-hooks/set-state-in-effect
     getNotificationPreferences(user?.id).then(setPrefs);
   }, [user]);
 

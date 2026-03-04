@@ -20,6 +20,7 @@ import {
   type SellerAnalyticsData,
   type ViewsTrendPoint,
 } from "@/lib/analytics/seller-analytics";
+import Image from "next/image";
 import { formatTimeAgo } from "@/lib/utils/format";
 
 export default function SellerAnalyticsPage() {
@@ -30,6 +31,7 @@ export default function SellerAnalyticsPage() {
 
   useEffect(() => {
     if (!user?.id) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState is in .then()/.finally() callbacks
     setLoading(true);
     getSellerAnalytics(user.id)
       .then(setData)
@@ -122,10 +124,13 @@ export default function SellerAnalyticsPage() {
                     >
                       <div className="w-12 h-12 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
                         {ad.image ? (
-                          <img
+                          <Image
                             src={ad.image}
                             alt=""
+                            width={48}
+                            height={48}
                             className="w-full h-full object-cover"
+                            unoptimized
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-300">

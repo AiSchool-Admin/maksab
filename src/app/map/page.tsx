@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { MapPin, List, SlidersHorizontal, X, Navigation, ChevronLeft, Home } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -131,6 +132,7 @@ export default function MapPage() {
   }, [selectedCategory, userLocation, radius]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState is inside async fetchAds callback
     fetchAds();
   }, [fetchAds]);
 
@@ -308,10 +310,13 @@ export default function MapPage() {
                 >
                   {/* Image */}
                   {ad.image ? (
-                    <img
+                    <Image
                       src={ad.image}
                       alt=""
+                      width={64}
+                      height={64}
                       className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+                      unoptimized
                     />
                   ) : (
                     <div className="w-16 h-16 rounded-xl bg-gray-200 flex items-center justify-center flex-shrink-0">
@@ -361,7 +366,7 @@ export default function MapPage() {
             className="w-full bg-white rounded-2xl shadow-2xl border border-gray-100 p-3 flex items-center gap-3 text-right"
           >
             {selectedAd.image ? (
-              <img src={selectedAd.image} alt="" className="w-20 h-20 rounded-xl object-cover flex-shrink-0" />
+              <Image src={selectedAd.image} alt="" width={80} height={80} className="w-20 h-20 rounded-xl object-cover flex-shrink-0" unoptimized />
             ) : (
               <div className="w-20 h-20 rounded-xl bg-gray-200 flex items-center justify-center flex-shrink-0">
                 <MapPin size={24} className="text-gray-400" />

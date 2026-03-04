@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { User, Check, X, MessageCircle, Phone } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { getSessionToken } from "@/lib/supabase/auth";
@@ -179,10 +180,13 @@ export default function OffersListSection({
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-brand-green-light flex items-center justify-center flex-shrink-0 overflow-hidden">
                 {offer.buyerAvatar ? (
-                  <img
+                  <Image
                     src={offer.buyerAvatar}
                     alt={offer.buyerName}
+                    width={32}
+                    height={32}
                     className="w-full h-full object-cover"
+                    unoptimized
                   />
                 ) : (
                   <User size={14} className="text-brand-green" />

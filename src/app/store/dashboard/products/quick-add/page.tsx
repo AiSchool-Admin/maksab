@@ -14,6 +14,7 @@ import {
   BookmarkCheck,
   Trash2,
 } from "lucide-react";
+import Image from "next/image";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
@@ -469,10 +470,13 @@ export default function QuickAddProductPage() {
                 key={i}
                 className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 border border-gray-light"
               >
-                <img
+                <Image
                   src={img.preview}
                   alt=""
+                  width={80}
+                  height={80}
                   className="w-full h-full object-cover"
+                  unoptimized
                 />
                 <button
                   onClick={() => handleRemoveImage(i)}
@@ -618,10 +622,13 @@ export default function QuickAddProductPage() {
             <p className="text-xs text-gray-text mb-1">سيتم النشر في:</p>
             <div className="flex items-center gap-2">
               {store.logo_url ? (
-                <img
+                <Image
                   src={store.logo_url}
                   alt=""
+                  width={32}
+                  height={32}
                   className="w-8 h-8 rounded-full object-cover"
+                  unoptimized
                 />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center text-sm">

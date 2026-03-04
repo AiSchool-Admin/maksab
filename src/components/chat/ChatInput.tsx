@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Image from "next/image";
 import { Send, ImagePlus, X, Loader2 } from "lucide-react";
 import { compressImage } from "@/lib/utils/image-compress";
 
@@ -73,10 +74,13 @@ export default function ChatInput({
       {/* Image preview */}
       {imagePreview && (
         <div className="px-3 pt-3 relative inline-block">
-          <img
+          <Image
             src={imagePreview}
             alt="صورة للإرسال"
+            width={80}
+            height={80}
             className="h-20 rounded-lg object-cover"
+            unoptimized
           />
           <button
             type="button"

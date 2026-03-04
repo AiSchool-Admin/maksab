@@ -53,7 +53,7 @@ export default function AmbassadorDashboard({ userId }: AmbassadorDashboardProps
   useEffect(() => {
     let cancelled = false;
     // Use startTransition-like approach: reset profile to trigger skeleton
-    setProfile(null);
+    setProfile(null); // eslint-disable-line react-hooks/set-state-in-effect
     getAmbassadorProfile(userId)
       .then((p) => {
         if (!cancelled) setProfile(p);

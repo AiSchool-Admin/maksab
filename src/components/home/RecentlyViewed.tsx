@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Clock, ChevronLeft } from "lucide-react";
@@ -8,11 +8,7 @@ import { getRecentlyViewed, type RecentlyViewedItem } from "@/lib/hooks/useRecen
 import { formatPrice, formatTimeAgo } from "@/lib/utils/format";
 
 export default function RecentlyViewed() {
-  const [items, setItems] = useState<RecentlyViewedItem[]>([]);
-
-  useEffect(() => {
-    setItems(getRecentlyViewed().slice(0, 10));
-  }, []);
+  const [items, setItems] = useState<RecentlyViewedItem[]>(() => getRecentlyViewed().slice(0, 10));
 
   if (items.length === 0) return null;
 

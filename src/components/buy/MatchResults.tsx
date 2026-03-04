@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Sparkles, ArrowLeft } from "lucide-react";
 import {
   getMatchesForRequest,
@@ -34,7 +35,7 @@ export default function MatchResults({ requestId, requestTitle }: MatchResultsPr
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
+    setLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
     getMatchesForRequest(requestId)
       .then(setMatches)
       .finally(() => setLoading(false));
@@ -82,7 +83,7 @@ export default function MatchResults({ requestId, requestTitle }: MatchResultsPr
             {/* Image */}
             <div className="w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
               {match.ad.image ? (
-                <img src={match.ad.image} alt="" className="w-full h-full object-cover" />
+                <Image src={match.ad.image} alt="" width={64} height={64} className="w-full h-full object-cover" unoptimized />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-2xl text-gray-300">📷</div>
               )}

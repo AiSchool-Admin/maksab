@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Check, CheckCheck } from "lucide-react";
 
 interface ChatBubbleProps {
@@ -38,11 +39,14 @@ export default function ChatBubble({
         {/* Image message */}
         {imageUrl && (
           <div className="mb-1.5 -mx-1 -mt-0.5">
-            <img
+            <Image
               src={imageUrl}
               alt="صورة"
+              width={300}
+              height={200}
               className="rounded-xl max-w-full max-h-60 object-cover"
               loading="lazy"
+              unoptimized
             />
           </div>
         )}

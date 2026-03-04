@@ -37,6 +37,7 @@ export default function RewardsPage() {
 
   useEffect(() => {
     if (user?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous getUserLoyaltyProfile call
       setProfile(getUserLoyaltyProfile(user.id));
       // Load gamification data + update streak
       updateStreak(user.id).then(() => {

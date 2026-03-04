@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Search, ChevronLeft, ChevronRight, Store, User, Shield, Phone } from "lucide-react";
+import Image from "next/image";
 import { useAdmin, getAdminHeaders } from "../layout";
 import type { AdminUser } from "@/lib/admin/admin-service";
 
@@ -53,6 +54,7 @@ export default function AdminUsersPage() {
   }, [admin, page, search]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState is inside async loadUsers callback
     loadUsers();
   }, [loadUsers]);
 
@@ -111,7 +113,7 @@ export default function AdminUsersPage() {
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
                             {u.avatarUrl ? (
-                              <img src={u.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                              <Image src={u.avatarUrl} alt="" width={32} height={32} className="w-full h-full rounded-full object-cover" unoptimized />
                             ) : (
                               <User size={14} className="text-gray-400" />
                             )}
@@ -153,7 +155,7 @@ export default function AdminUsersPage() {
                     <div className="flex items-center gap-2">
                       <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
                         {u.avatarUrl ? (
-                          <img src={u.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                          <Image src={u.avatarUrl} alt="" width={36} height={36} className="w-full h-full rounded-full object-cover" unoptimized />
                         ) : (
                           <User size={16} className="text-gray-400" />
                         )}

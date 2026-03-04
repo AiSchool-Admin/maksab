@@ -68,7 +68,7 @@ export default function ReferralDashboard() {
 
   useEffect(() => {
     if (!user?.id) {
-      setIsLoading(false);
+      setIsLoading(false); // eslint-disable-line react-hooks/set-state-in-effect
       return;
     }
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { GitCompareArrows, X, ChevronUp, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useComparisonStore } from "@/stores/comparison-store";
@@ -33,10 +34,13 @@ export default function ComparisonFab() {
                 className="flex items-center gap-2 text-sm"
               >
                 {ad.image && (
-                  <img
+                  <Image
                     src={ad.image}
                     alt=""
+                    width={32}
+                    height={32}
                     className="w-8 h-8 rounded object-cover flex-shrink-0"
+                    unoptimized
                   />
                 )}
                 <p className="flex-1 truncate text-dark text-xs font-medium">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   ChevronRight,
   Plus,
@@ -231,10 +232,13 @@ export default function CollectionsPage() {
                 {/* Icon + preview images */}
                 <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-2xl flex-shrink-0 border border-gray-200">
                   {col.previewImages.length > 0 ? (
-                    <img
+                    <Image
                       src={col.previewImages[0]}
                       alt=""
+                      width={56}
+                      height={56}
                       className="w-full h-full rounded-xl object-cover"
+                      unoptimized
                     />
                   ) : (
                     col.icon

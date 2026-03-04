@@ -12,6 +12,7 @@ import {
   MapPin,
   Package,
 } from "lucide-react";
+import Image from "next/image";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -221,10 +222,13 @@ export default function PublicProfilePage({
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-brand-green-light flex items-center justify-center text-brand-green flex-shrink-0 overflow-hidden">
               {profile.avatarUrl ? (
-                <img
+                <Image
                   src={profile.avatarUrl}
                   alt={profile.displayName}
+                  width={64}
+                  height={64}
                   className="w-full h-full rounded-full object-cover"
+                  unoptimized
                 />
               ) : (
                 <User size={28} />

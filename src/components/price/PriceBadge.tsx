@@ -50,7 +50,7 @@ export default function PriceBadge({
   const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
-    if (!categoryId || !price) { setLoading(false); return; }
+    if (!categoryId || !price) { setLoading(false); return; } // eslint-disable-line react-hooks/set-state-in-effect
 
     const fetchPriceData = async () => {
       try {

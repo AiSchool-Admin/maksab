@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -97,6 +98,7 @@ export default function BuyRequestDetailPage() {
   }, [requestId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState is inside async loadData callback
     loadData();
   }, [loadData]);
 
@@ -293,7 +295,7 @@ export default function BuyRequestDetailPage() {
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm">
                           {offer.sellerAvatar ? (
-                            <img src={offer.sellerAvatar} alt="" className="w-full h-full rounded-full object-cover" />
+                            <Image src={offer.sellerAvatar} alt="" width={32} height={32} className="w-full h-full rounded-full object-cover" unoptimized />
                           ) : (
                             "👤"
                           )}
@@ -328,7 +330,7 @@ export default function BuyRequestDetailPage() {
                         className="flex items-center gap-2 bg-purple-50 rounded-lg px-3 py-2 mb-2 hover:bg-purple-100 transition-colors"
                       >
                         {offer.adImage && (
-                          <img src={offer.adImage} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                          <Image src={offer.adImage} alt="" width={40} height={40} className="w-10 h-10 rounded-lg object-cover" unoptimized />
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-purple-700 truncate">🔄 {offer.adTitle}</p>
