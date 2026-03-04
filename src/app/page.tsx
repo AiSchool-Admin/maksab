@@ -41,7 +41,7 @@ import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTrackSignal } from "@/lib/hooks/useTrackSignal";
 import { getRecommendations } from "@/lib/recommendations/recommendations-service";
-import { fetchFeedAds } from "@/lib/ad-data";
+import { fetchFeedAds, fetchNewListings, isVeryFreshAd } from "@/lib/ad-data";
 import type { AdSummary } from "@/lib/ad-data";
 import { toggleFavorite, getFavoriteIds } from "@/lib/favorites/favorites-service";
 import {
@@ -80,6 +80,11 @@ export default function HomePage() {
     sentinelRef,
   } = useInfiniteScroll<AdSummary>({ fetchFn: fetchFeedAds });
 
+  // New listings state (fresh ads from last 72 hours, diversified)
+  const [newListings, setNewListings] = useState<AdSummary[]>([]);
+  const [newListingsCount, setNewListingsCount] = useState(0);
+  const [newListingsLoading, setNewListingsLoading] = useState(true);
+
   const { requireAuth, user } = useAuth();
   const { track } = useTrackSignal();
 
@@ -96,6 +101,16 @@ export default function HomePage() {
   // Load favorites from localStorage
   useEffect(() => {
     setFavoriteIds(new Set(getFavoriteIds()));
+  }, []);
+
+  // Load new listings (fresh ads from last 72 hours, diversified across categories)
+  useEffect(() => {
+    setNewListingsLoading(true);
+    fetchNewListings(0).then(({ ads, totalNew }) => {
+      setNewListings(ads);
+      setNewListingsCount(totalNew);
+      setNewListingsLoading(false);
+    }).catch(() => setNewListingsLoading(false));
   }, []);
 
   // Capture referral code from URL (?ref=CODE)
@@ -159,12 +174,15 @@ export default function HomePage() {
 
   const handlePullRefresh = useCallback(async () => {
     const userId = user?.id || "";
-    const [, recResult] = await Promise.all([
+    const [, recResult, newResult] = await Promise.all([
       refreshFeed(),
       getRecommendations(userId, user?.governorate ?? undefined),
+      fetchNewListings(0),
     ]);
     if (recResult.personalizedAds.length > 0) setPersonalizedAds(recResult.personalizedAds);
     if (recResult.matchingAuctions.length > 0) setMatchingAuctions(recResult.matchingAuctions);
+    setNewListings(newResult.ads);
+    setNewListingsCount(newResult.totalNew);
     setFavoriteIds(new Set(getFavoriteIds()));
     fetchActiveBuyRequests(10).then(setRecentBuyRequests);
     if (user) fetchMyBuyRequests().then(setMyBuyRequests);
@@ -315,9 +333,46 @@ export default function HomePage() {
             onToggleFavorite={handleToggleFavorite}
           />
 
-          {/* New Ads Feed */}
+          {/* ═══ New Listings — Fresh ads from last 72 hours, diversified ═══ */}
+          {newListingsLoading ? (
+            <section className="px-3 pb-1.5">
+              <h2 className="text-xl font-bold text-dark mb-1.5">جديد على مكسب ✨</h2>
+              <AdGridSkeleton count={6} />
+            </section>
+          ) : newListings.length > 0 && (
+            <section className="px-3 pb-1.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold text-dark">جديد على مكسب ✨</h2>
+                  {newListingsCount > 0 && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-green/10 text-brand-green">
+                      {newListingsCount > 99 ? "+99" : newListingsCount} إعلان
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-gray-text">آخر 3 أيام</span>
+              </div>
+              <p className="text-xs text-gray-text mb-2">
+                إعلانات طازة من كل الأقسام — نقدي ومزاد وتبديل
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {newListings.map((ad, idx) => (
+                  <AdCard
+                    key={`new-${ad.id}`}
+                    {...ad}
+                    isFavorited={favoriteIds.has(ad.id)}
+                    onToggleFavorite={handleToggleFavorite}
+                    priority={idx < 3}
+                    showFreshBadge={isVeryFreshAd(ad.createdAt)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ═══ All Ads Feed — General infinite scroll ═══ */}
           <section className="px-3 pb-1.5">
-            <h2 className="text-xl font-bold text-dark mb-1.5">جديد على مكسب</h2>
+            <h2 className="text-xl font-bold text-dark mb-1.5">كل الإعلانات</h2>
 
             {isLoading ? (
               <AdGridSkeleton count={6} />
