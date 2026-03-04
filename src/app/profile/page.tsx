@@ -36,15 +36,35 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { calcProfileCompletion } from "@/lib/supabase/auth";
 import { formatPhone } from "@/lib/utils/format";
 import { isCommissionSupporter } from "@/lib/commission/commission-service";
-import VerificationSection from "@/components/verification/VerificationSection";
-import SellerRatingSummaryComponent from "@/components/reviews/SellerRatingSummary";
+import dynamic from "next/dynamic";
 import { getUserLoyaltyProfile, awardPoints } from "@/lib/loyalty/loyalty-service";
 import type { UserLoyaltyProfile } from "@/lib/loyalty/types";
-import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
-import PointsDisplay from "@/components/loyalty/PointsDisplay";
-import UpgradeToStoreBanner from "@/components/store/UpgradeToStoreBanner";
-import FounderBadge from "@/components/social/FounderBadge";
 import { getFounderProfile, type FounderProfile } from "@/lib/founder/founder-service";
+
+const VerificationSection = dynamic(
+  () => import("@/components/verification/VerificationSection"),
+  { ssr: false },
+);
+const SellerRatingSummaryComponent = dynamic(
+  () => import("@/components/reviews/SellerRatingSummary"),
+  { ssr: false },
+);
+const LoyaltyBadge = dynamic(
+  () => import("@/components/loyalty/LoyaltyBadge"),
+  { ssr: false },
+);
+const PointsDisplay = dynamic(
+  () => import("@/components/loyalty/PointsDisplay"),
+  { ssr: false },
+);
+const UpgradeToStoreBanner = dynamic(
+  () => import("@/components/store/UpgradeToStoreBanner"),
+  { ssr: false },
+);
+const FounderBadge = dynamic(
+  () => import("@/components/social/FounderBadge"),
+  { ssr: false },
+);
 
 export default function ProfilePage() {
   const router = useRouter();
