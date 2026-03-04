@@ -12,7 +12,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { getOtpSecret } from "./otp-secret";
 
-const SESSION_TOKEN_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+const SESSION_TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /** Generate a signed session token for a verified user */
 export function generateSessionToken(userId: string): string {
