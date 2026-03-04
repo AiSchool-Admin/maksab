@@ -515,7 +515,7 @@ function SearchPageInner() {
 
         {/* Results header: count + sort + search method */}
         {hasSearched && !isLoading && !isImageSearching && (
-          <div className="flex items-center justify-between">
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
               <p className="text-xs text-gray-text">
                 {total > 0 ? (

@@ -241,13 +241,13 @@ export default function HomePage() {
           {/* Quick search chips */}
           <div className="relative">
             <div className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-hide">
-              {["سيارات", "موبايلات", "عقارات", "ذهب وفضة", "أثاث", "خردة", "أجهزة", "موضة", "فاخرة", "هوايات", "عدد", "خدمات", "كمبيوتر", "أطفال", "إلكترونيات", "جمال وصحة"].map((term) => (
+              {categories.map((cat) => (
                 <Link
-                  key={term}
-                  href={`/search?q=${encodeURIComponent(term)}`}
+                  key={cat.slug}
+                  href={`/search?category=${cat.slug}`}
                   className="flex-shrink-0 px-4 py-2 bg-gray-light text-dark text-base font-bold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
                 >
-                  {term}
+                  {cat.name}
                 </Link>
               ))}
             </div>
