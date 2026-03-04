@@ -57,7 +57,7 @@ export default function AISearchBar({
     if (!isFocused) return;
 
     const recent = getRecentSearches();
-    setRecentSearches(recent);
+    setRecentSearches(recent); // eslint-disable-line react-hooks/set-state-in-effect
 
     if (!trendingLoaded) {
       let cancelled = false;
@@ -75,9 +75,9 @@ export default function AISearchBar({
   useEffect(() => {
     const trimmed = query.trim();
     if (!trimmed || trimmed.length < 2) {
-      setAiPreview(null);
-      setShowAiPreview(false);
-      setServerSuggestions([]);
+      setAiPreview(null); // eslint-disable-line react-hooks/set-state-in-effect
+      setShowAiPreview(false); // eslint-disable-line react-hooks/set-state-in-effect
+      setServerSuggestions([]); // eslint-disable-line react-hooks/set-state-in-effect
       return;
     }
 

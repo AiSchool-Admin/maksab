@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ChevronRight, User, Phone, Home } from "lucide-react";
 import Link from "next/link";
 import ChatBubble from "@/components/chat/ChatBubble";
@@ -331,10 +332,13 @@ export default function ChatPage({
           <div className="relative flex-shrink-0">
             <div className="w-10 h-10 rounded-full bg-brand-green-light flex items-center justify-center text-brand-green overflow-hidden">
               {otherUser.avatarUrl ? (
-                <img
+                <Image
                   src={otherUser.avatarUrl}
                   alt={otherUser.displayName}
+                  width={40}
+                  height={40}
                   className="w-full h-full object-cover"
+                  unoptimized
                 />
               ) : (
                 <User size={20} />

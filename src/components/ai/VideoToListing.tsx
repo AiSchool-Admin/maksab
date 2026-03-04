@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Video,
@@ -699,11 +700,14 @@ export default function VideoToListing({
           {frames.length > 0 && (
             <div className="flex justify-center gap-2">
               {frames.map((frame, i) => (
-                <img
+                <Image
                   key={i}
                   src={frame}
                   alt={`إطار ${i + 1}`}
+                  width={64}
+                  height={64}
                   className="w-16 h-16 rounded-lg object-cover border-2 border-brand-green/30"
+                  unoptimized
                 />
               ))}
             </div>
@@ -728,11 +732,14 @@ export default function VideoToListing({
           {/* Extracted frames */}
           <div className="flex gap-2 overflow-x-auto pb-2">
             {frames.map((frame, i) => (
-              <img
+              <Image
                 key={i}
                 src={frame}
                 alt={`إطار ${i + 1}`}
+                width={96}
+                height={96}
                 className="w-24 h-24 rounded-xl object-cover flex-shrink-0"
+                unoptimized
               />
             ))}
           </div>
@@ -842,11 +849,14 @@ export default function VideoToListing({
           {frames.length > 0 && (
             <div className="flex justify-center gap-2">
               {frames.map((frame, i) => (
-                <img
+                <Image
                   key={i}
                   src={frame}
                   alt=""
+                  width={64}
+                  height={64}
                   className="w-16 h-16 rounded-lg object-cover opacity-50"
+                  unoptimized
                 />
               ))}
             </div>

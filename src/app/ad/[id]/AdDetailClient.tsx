@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   ChevronRight,
   Heart,
@@ -766,10 +767,13 @@ export default function AdDetailClient({ id }: { id: string }) {
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-brand-green-light flex items-center justify-center text-brand-green flex-shrink-0">
                 {ad.seller.avatarUrl ? (
-                  <img
+                  <Image
                     src={ad.seller.avatarUrl}
                     alt={ad.seller.displayName}
+                    width={48}
+                    height={48}
                     className="w-full h-full rounded-full object-cover"
+                    unoptimized
                   />
                 ) : (
                   <User size={24} />

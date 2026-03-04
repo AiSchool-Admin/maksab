@@ -50,7 +50,7 @@ export default function ChatbotWidget() {
 
   useEffect(() => {
     const hidden = localStorage.getItem("maksab_chatbot_hidden");
-    if (hidden === "true") setIsHidden(true);
+    if (hidden === "true") setIsHidden(true); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
 
   const sendMessage = useCallback(

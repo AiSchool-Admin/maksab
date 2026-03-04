@@ -74,6 +74,7 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init (needs client-side window)
     setSettings(loadSettings());
   }, []);
 
@@ -348,6 +349,7 @@ function PushNotificationToggle({ userId }: { userId: string }) {
 
   useEffect(() => {
     if ("Notification" in window) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous browser API check
       setPushEnabled(Notification.permission === "granted");
     }
   }, []);

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Sparkles,
@@ -309,11 +310,14 @@ export default function PhotoEnhancer({
       >
         {/* Enhanced (full width, bottom layer) */}
         {enhancedDataUrl && (
-          <img
+          <Image
             src={enhancedDataUrl}
             alt="الصورة المحسنة"
+            width={400}
+            height={400}
             className="absolute inset-0 w-full h-full object-cover"
             draggable={false}
+            unoptimized
           />
         )}
 
@@ -322,9 +326,11 @@ export default function PhotoEnhancer({
           className="absolute inset-0 overflow-hidden"
           style={{ width: `${sliderPosition}%` }}
         >
-          <img
+          <Image
             src={imageDataUrl}
             alt="الصورة الأصلية"
+            width={400}
+            height={400}
             className="absolute top-0 right-0 h-full object-cover"
             style={{
               width: comparisonRef.current
@@ -332,6 +338,7 @@ export default function PhotoEnhancer({
                 : "100vw",
             }}
             draggable={false}
+            unoptimized
           />
         </div>
 

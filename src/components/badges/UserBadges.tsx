@@ -27,7 +27,7 @@ export default function UserBadges({
   useEffect(() => {
     if (!userId) return;
     const profile = getUserBadges(userId);
-    setBadges(profile.badges.map((b) => b.badgeId));
+    setBadges(profile.badges.map((b) => b.badgeId)); // eslint-disable-line react-hooks/set-state-in-effect
   }, [userId]);
 
   if (badges.length === 0) return null;

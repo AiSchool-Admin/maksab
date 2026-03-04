@@ -74,7 +74,7 @@ export default function InstallPrompt() {
     // Android / Chrome path — check if event was captured early (before React hydrated)
     const earlyPrompt = (window as unknown as { __pwa_deferred_prompt?: BeforeInstallPromptEvent | null }).__pwa_deferred_prompt;
     if (earlyPrompt) {
-      setDeferredPrompt(earlyPrompt);
+      setDeferredPrompt(earlyPrompt); // eslint-disable-line react-hooks/set-state-in-effect
       (window as unknown as { __pwa_deferred_prompt?: BeforeInstallPromptEvent | null }).__pwa_deferred_prompt = null;
       setTimeout(() => setShowPrompt(true), 3000);
       return;

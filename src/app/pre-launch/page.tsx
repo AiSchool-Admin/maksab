@@ -67,6 +67,7 @@ export default function PreLaunchPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous URL param init
     if (ref) setReferralCode(ref);
   }, []);
 
@@ -76,7 +77,9 @@ export default function PreLaunchPage() {
     if (stored) {
       try {
         const data = JSON.parse(stored);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
         setIsRegistered(true);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
         setUserReferralCode(data.referralCode || "");
       } catch {
         // ignore
@@ -87,6 +90,7 @@ export default function PreLaunchPage() {
     const signups = localStorage.getItem(EARLY_SIGNUPS_KEY);
     if (signups) {
       try {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
         setSignupCount((JSON.parse(signups) as EarlySignup[]).length);
       } catch {
         // ignore

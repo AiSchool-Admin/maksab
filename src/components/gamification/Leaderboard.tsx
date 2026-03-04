@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Trophy, Medal, Award } from "lucide-react";
 import type { LeaderboardEntry } from "@/lib/gamification";
 
@@ -77,7 +78,7 @@ export default function Leaderboard({ entries, currentUserId, userRank }: Leader
             </div>
             <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
               {entry.avatar_url ? (
-                <img src={entry.avatar_url} alt="" className="w-full h-full object-cover" />
+                <Image src={entry.avatar_url} alt="" width={32} height={32} className="w-full h-full object-cover" unoptimized />
               ) : (
                 <span className="text-xs text-gray-text">👤</span>
               )}
@@ -124,7 +125,7 @@ function PodiumCard({
           isFirst ? "border-yellow-400 bg-yellow-50" : "border-gray-200 bg-gray-100"
         }`}>
           {entry.avatar_url ? (
-            <img src={entry.avatar_url} alt="" className="w-full h-full object-cover" />
+            <Image src={entry.avatar_url} alt="" width={48} height={48} className="w-full h-full object-cover" unoptimized />
           ) : (
             <span className="text-lg">👤</span>
           )}

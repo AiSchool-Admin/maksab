@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { User } from "lucide-react";
 import { formatTimeAgo } from "@/lib/utils/format";
 import type { ChatConversation } from "@/lib/chat/chat-service";
@@ -23,10 +24,13 @@ export default function ConversationItem({
       <div className="relative flex-shrink-0">
         <div className="w-12 h-12 rounded-full bg-brand-green-light flex items-center justify-center text-brand-green overflow-hidden">
           {otherUser.avatarUrl ? (
-            <img
+            <Image
               src={otherUser.avatarUrl}
               alt={otherUser.displayName}
+              width={48}
+              height={48}
               className="w-full h-full object-cover"
+              unoptimized
             />
           ) : (
             <User size={22} />

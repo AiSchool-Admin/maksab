@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRef, useState, useEffect, useCallback } from "react";
 import {
   ImagePlus,
@@ -471,7 +472,7 @@ export default function Step3PricePhotos({
         <div className="grid grid-cols-4 gap-3">
           {images.map((img, index) => (
             <div key={index} className="relative aspect-square">
-              <img src={img.preview} alt={`صورة ${index + 1}`} className="w-full h-full object-cover rounded-xl" />
+              <Image src={img.preview} alt={`صورة ${index + 1}`} width={200} height={200} className="w-full h-full object-cover rounded-xl" unoptimized />
               <button
                 type="button"
                 onClick={() => handleRemoveImage(index)}

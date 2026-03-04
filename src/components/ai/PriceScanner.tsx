@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -503,11 +504,14 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
             {images.length > 0 && (
               <div className="flex justify-center gap-2 pt-2">
                 {images.map((img, i) => (
-                  <img
+                  <Image
                     key={i}
                     src={img}
                     alt={`صورة ${i + 1}`}
+                    width={64}
+                    height={64}
                     className="w-16 h-16 rounded-lg object-cover border-2 border-brand-green/20 opacity-70"
+                    unoptimized
                   />
                 ))}
               </div>
@@ -532,11 +536,14 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
               {images.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {images.map((img, i) => (
-                    <img
+                    <Image
                       key={i}
                       src={img}
                       alt={`صورة ${i + 1}`}
+                      width={80}
+                      height={80}
                       className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+                      unoptimized
                     />
                   ))}
                 </div>
@@ -707,11 +714,14 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
             {images.length > 0 && (
               <div className="flex justify-center gap-2">
                 {images.map((img, i) => (
-                  <img
+                  <Image
                     key={i}
                     src={img}
                     alt=""
+                    width={64}
+                    height={64}
                     className="w-16 h-16 rounded-lg object-cover opacity-50"
+                    unoptimized
                   />
                 ))}
               </div>

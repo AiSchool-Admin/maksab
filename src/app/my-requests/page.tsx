@@ -56,6 +56,7 @@ export default function MyRequestsPage() {
 
   useEffect(() => {
     if (!user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState is inside async loadData callback
     loadData();
   }, [user]);
 

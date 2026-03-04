@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useRef } from "react";
 import { Camera, Sparkles, Loader2, RefreshCw, Check, X } from "lucide-react";
 import type { ProductAnalysis } from "@/lib/ai/ai-service";
@@ -166,11 +167,14 @@ export default function SnapAndSell({ onAnalysisComplete, onCancel }: SnapAndSel
           {images.length > 0 && (
             <div className="flex justify-center gap-2">
               {images.map((img, i) => (
-                <img
+                <Image
                   key={i}
                   src={img}
                   alt={`صورة ${i + 1}`}
+                  width={64}
+                  height={64}
                   className="w-16 h-16 rounded-lg object-cover border-2 border-brand-green/30"
+                  unoptimized
                 />
               ))}
             </div>
@@ -184,11 +188,14 @@ export default function SnapAndSell({ onAnalysisComplete, onCancel }: SnapAndSel
           {/* Image preview */}
           <div className="flex gap-2 overflow-x-auto pb-2">
             {images.map((img, i) => (
-              <img
+              <Image
                 key={i}
                 src={img}
                 alt={`صورة ${i + 1}`}
+                width={96}
+                height={96}
                 className="w-24 h-24 rounded-xl object-cover flex-shrink-0"
+                unoptimized
               />
             ))}
           </div>
@@ -279,7 +286,7 @@ export default function SnapAndSell({ onAnalysisComplete, onCancel }: SnapAndSel
           {images.length > 0 && (
             <div className="flex justify-center gap-2">
               {images.map((img, i) => (
-                <img key={i} src={img} alt="" className="w-16 h-16 rounded-lg object-cover opacity-50" />
+                <Image key={i} src={img} alt="" width={64} height={64} className="w-16 h-16 rounded-lg object-cover opacity-50" unoptimized />
               ))}
             </div>
           )}

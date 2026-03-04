@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Plus,
   Eye,
@@ -21,7 +22,7 @@ export default function SellTab() {
 
   useEffect(() => {
     if (user) {
-      setLoading(true);
+      setLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
       fetchMyAds()
         .then(setMyAds)
         .finally(() => setLoading(false));
@@ -123,7 +124,7 @@ export default function SellTab() {
                     >
                       <div className="w-12 h-12 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
                         {ad.image ? (
-                          <img src={ad.image} alt="" className="w-full h-full object-cover" />
+                          <Image src={ad.image} alt="" width={48} height={48} className="w-full h-full object-cover" unoptimized />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-300">📷</div>
                         )}

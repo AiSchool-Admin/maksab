@@ -22,6 +22,7 @@ import {
   Loader2,
   Rocket,
 } from "lucide-react";
+import Image from "next/image";
 import { useAuthStore } from "@/stores/auth-store";
 import { getStoreByUserId, getStoreProductsForDashboard } from "@/lib/stores/store-service";
 import { supabase } from "@/lib/supabase/client";
@@ -284,10 +285,13 @@ export default function DashboardProductsPage() {
                 {/* Image */}
                 <Link href={`/ad/${product.id}`} className="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                   {product.images?.[0] ? (
-                    <img
+                    <Image
                       src={product.images[0]}
                       alt=""
+                      width={64}
+                      height={64}
                       className="w-full h-full object-cover"
+                      unoptimized
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-2xl">

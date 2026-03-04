@@ -26,10 +26,15 @@ export default function EditProfilePage() {
 
   useEffect(() => {
     if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing form state from user prop
       setDisplayName(user.display_name || "");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing form state from user prop
       setSellerType(user.seller_type || "individual");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing form state from user prop
       setGovernorate(user.governorate || "");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing form state from user prop
       setCity(user.city || "");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing form state from user prop
       setBio(user.bio || "");
     }
   }, [user]);

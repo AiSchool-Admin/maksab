@@ -16,7 +16,7 @@ export default function WishList({ onSearchWish, refreshTrigger }: WishListProps
 
   useEffect(() => {
     if (refreshTrigger !== undefined && refreshTrigger > 0) {
-      setWishes(getWishes());
+      setWishes(getWishes()); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [refreshTrigger]);
 

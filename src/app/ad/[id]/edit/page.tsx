@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ChevronLeft, ChevronRight, Edit3, Loader2, Home } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
@@ -526,10 +527,13 @@ export default function EditAdPage({
             <div className="flex gap-2 overflow-x-auto scrollbar-hide">
               {draft.existingImages.map((url, i) => (
                 <div key={i} className="relative flex-shrink-0">
-                  <img
+                  <Image
                     src={url}
                     alt={`صورة ${i + 1}`}
+                    width={80}
+                    height={80}
                     className="w-20 h-20 rounded-lg object-cover"
+                    unoptimized
                   />
                   <button
                     onClick={() => {

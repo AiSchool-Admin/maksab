@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Search, ChevronLeft, ChevronRight, Eye, Heart, ExternalLink } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useAdmin, getAdminHeaders } from "../layout";
 import { getCategoryById } from "@/lib/categories/categories-config";
@@ -68,6 +69,7 @@ export default function AdminAdsPage() {
   }, [admin, page, search, statusFilter, saleTypeFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState is inside async loadAds callback
     loadAds();
   }, [loadAds]);
 
@@ -132,7 +134,7 @@ export default function AdminAdsPage() {
                     {/* Image */}
                     <div className="w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
                       {ad.image ? (
-                        <img src={ad.image} alt="" className="w-full h-full object-cover" />
+                        <Image src={ad.image} alt="" width={64} height={64} className="w-full h-full object-cover" unoptimized />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-300 text-xl">
                           {catConfig?.icon || "📦"}

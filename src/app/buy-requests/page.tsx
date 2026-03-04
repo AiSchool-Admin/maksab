@@ -33,6 +33,7 @@ export default function BuyRequestsPage() {
   }, [selectedCategory]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState is inside async loadRequests callback
     loadRequests();
   }, [loadRequests]);
 

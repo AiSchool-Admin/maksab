@@ -27,6 +27,7 @@ import {
   getStatusLabel,
   type MyAd,
 } from "@/lib/my-ads/my-ads-service";
+import Image from "next/image";
 import { formatTimeAgo } from "@/lib/utils/format";
 import type { AdStatus } from "@/types";
 
@@ -69,7 +70,9 @@ export default function MyAdsPage() {
 
   // Load ads
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous reset before async fetch
     setIsLoading(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous reset before async fetch
     setError(false);
     fetchMyAds()
       .then((data) => {
@@ -251,11 +254,13 @@ export default function MyAdsPage() {
                   {/* Image thumbnail */}
                   <div className="w-20 h-20 bg-gray-light rounded-lg flex-shrink-0 overflow-hidden">
                     {ad.image ? (
-                      <img
+                      <Image
                         src={ad.image}
                         alt={ad.title}
+                        width={80}
+                        height={80}
                         className="w-full h-full object-cover"
-                        loading="lazy"
+                        unoptimized
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-2xl">

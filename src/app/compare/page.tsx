@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ChevronRight, X, MapPin, ExternalLink, Home } from "lucide-react";
 import Link from "next/link";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -152,10 +153,13 @@ export default function ComparePage() {
                       <X size={12} />
                     </button>
                     {ad.image ? (
-                      <img
+                      <Image
                         src={ad.image}
                         alt={ad.title}
+                        width={160}
+                        height={120}
                         className="w-full aspect-[4/3] object-cover rounded-xl"
+                        unoptimized
                       />
                     ) : (
                       <div className="w-full aspect-[4/3] bg-gray-light rounded-xl flex items-center justify-center text-3xl">

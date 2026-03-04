@@ -14,6 +14,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import { useAuth, isPendingMerchant, clearPendingMerchant } from "@/components/auth/AuthProvider";
+import Image from "next/image";
 import Button from "@/components/ui/Button";
 import { categoriesConfig } from "@/lib/categories/categories-config";
 import {
@@ -359,10 +360,13 @@ export default function CreateStorePage() {
           >
             <div className="p-6 text-center text-white">
               {logoPreview ? (
-                <img
+                <Image
                   src={logoPreview}
                   alt="شعار المتجر"
+                  width={80}
+                  height={80}
                   className="w-20 h-20 rounded-full mx-auto mb-3 object-cover border-4 border-white/30"
+                  unoptimized
                 />
               ) : (
                 <div className="w-20 h-20 bg-white/20 rounded-full mx-auto mb-3 flex items-center justify-center">
@@ -689,10 +693,13 @@ export default function CreateStorePage() {
               </label>
               {logoPreview ? (
                 <div className="relative w-28 h-28 mx-auto">
-                  <img
+                  <Image
                     src={logoPreview}
                     alt="شعار المتجر"
+                    width={112}
+                    height={112}
                     className="w-full h-full rounded-2xl object-cover border-2 border-gray-light"
+                    unoptimized
                   />
                   <button
                     onClick={removeLogo}
@@ -809,10 +816,13 @@ export default function CreateStorePage() {
               }}
             >
               {logoPreview && (
-                <img
+                <Image
                   src={logoPreview}
                   alt="شعار"
+                  width={48}
+                  height={48}
                   className="w-12 h-12 rounded-full mx-auto mb-2 border-2 border-white/30 object-cover"
+                  unoptimized
                 />
               )}
               <p className="text-lg font-bold">{name || "اسم المتجر"}</p>

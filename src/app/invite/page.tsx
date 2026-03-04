@@ -90,7 +90,9 @@ export default function InvitePage() {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref") || params.get("invite");
     if (ref) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous URL param init
       setInviteCode(ref);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous URL param init
       setShowInviteInput(true);
     }
   }, []);
@@ -101,8 +103,11 @@ export default function InvitePage() {
     if (stored) {
       try {
         const data = JSON.parse(stored);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
         setIsRegistered(true);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
         setUserInviteCode(data.inviteCode || "");
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous localStorage init
         setFounderNumber(data.founderNumber || 0);
       } catch {
         // ignore

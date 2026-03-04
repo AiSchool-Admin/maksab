@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { MapPin, Pencil } from "lucide-react";
 import Select from "@/components/ui/Select";
@@ -109,10 +110,13 @@ export default function Step4LocationReview({
           {/* Image preview */}
           {images.length > 0 && (
             <div className="rounded-xl overflow-hidden">
-              <img
+              <Image
                 src={images[0].preview}
                 alt="صورة الإعلان"
+                width={400}
+                height={192}
                 className="w-full h-48 object-cover"
+                unoptimized
               />
             </div>
           )}

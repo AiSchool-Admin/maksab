@@ -12,6 +12,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import Image from "next/image";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import { useAuthStore } from "@/stores/auth-store";
@@ -364,10 +365,13 @@ export default function BulkPhotosPage() {
               >
                 {/* Image thumbnail */}
                 <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 relative">
-                  <img
+                  <Image
                     src={product.image.preview}
                     alt=""
+                    width={64}
+                    height={64}
                     className="w-full h-full object-cover"
+                    unoptimized
                   />
                   {product.status === "success" && (
                     <div className="absolute inset-0 bg-green-500/30 flex items-center justify-center">
