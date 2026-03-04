@@ -70,9 +70,13 @@ async function handleAddComment(body: Record<string, unknown>) {
     );
   }
 
-  // Sanitize content: strip HTML tags to prevent XSS
+  // Sanitize content: strip HTML tags, entities, and script vectors to prevent XSS
   const sanitized = (content as string)
-    .replace(/<[^>]*>/g, "")
+    .replace(/<\/?[^>]+(>|$)/g, "")     // Strip HTML tags (including malformed)
+    .replace(/&(?:#x?[0-9a-f]+|[a-z]+);/gi, "") // Strip HTML entities
+    .replace(/javascript\s*:/gi, "")     // Strip javascript: URIs
+    .replace(/on\w+\s*=/gi, "")          // Strip event handlers (onclick=, etc.)
+    .replace(/\0/g, "")                  // Strip null bytes
     .trim();
 
   const trimmed = sanitized;

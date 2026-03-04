@@ -16,6 +16,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { generateSessionToken } from "@/lib/auth/session-token";
 import { getOtpSecret, isNonProduction } from "@/lib/auth/otp-secret";
 import { getServiceClient } from "@/lib/supabase/server";
+import { parseEgyptianPhone } from "@/lib/utils/phone";
 
 /**
  * Generate a dev-mode user profile when Supabase admin API is unavailable.
@@ -92,17 +93,11 @@ export async function POST(req: NextRequest) {
     const displayName = body.display_name?.trim() || null;
 
     // ── HMAC OTP verification ─────────────────────────────────────────
-    let phone = body.phone?.replace(/\D/g, "") || "";
+    const phone = parseEgyptianPhone(body.phone || "");
     const code = body.code?.replace(/\D/g, "");
     const token = body.token;
 
-    // Normalize phone: accept 10 digits without leading 0
-    if (/^1[0125]\d{8}$/.test(phone)) phone = `0${phone}`;
-    if (phone.startsWith("20") && phone.length === 12) phone = phone.slice(1);
-    if (phone.startsWith("0020") && phone.length === 14) phone = phone.slice(3);
-
-    // Validate inputs
-    if (!phone || !/^01[0125]\d{8}$/.test(phone)) {
+    if (!phone) {
       return NextResponse.json(
         { error: "رقم الموبايل مش صحيح" },
         { status: 400 }

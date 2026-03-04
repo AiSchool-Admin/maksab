@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
     if (insertError) {
       console.error("[ads/bulk-create] Insert error:", insertError);
       return NextResponse.json(
-        { error: `حصل مشكلة في إضافة المنتجات (${insertError.code})` },
+        { error: "حصل مشكلة في إضافة المنتجات. جرب تاني" },
         { status: 409 },
       );
     }

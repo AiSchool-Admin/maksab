@@ -354,10 +354,15 @@ export async function getDailyGrowth(days = 30): Promise<DailyGrowth[]> {
 // ── Verify admin ────────────────────────────────────────────────
 
 export async function verifyAdmin(userId: string): Promise<boolean> {
+  if (!userId || typeof userId !== "string" || userId.length < 10) {
+    return false;
+  }
+
   // 1. Check env-based admin list (always works, no migration needed)
   //    Set ADMIN_USER_IDS=id1,id2 or ADMIN_PHONES=01012345678,01098765432
   const envAdminIds = process.env.ADMIN_USER_IDS || "";
   if (envAdminIds && envAdminIds.split(",").map((s) => s.trim()).includes(userId)) {
+    console.log(`[admin] Verified admin by env ID: ${userId.slice(0, 8)}...`);
     return true;
   }
 
@@ -372,6 +377,7 @@ export async function verifyAdmin(userId: string): Promise<boolean> {
       .maybeSingle();
     const phone = (profile as Record<string, unknown>)?.phone as string;
     if (phone && envAdminPhones.split(",").map((s) => s.trim()).includes(phone)) {
+      console.log(`[admin] Verified admin by env phone: ${userId.slice(0, 8)}...`);
       return true;
     }
   }
@@ -387,10 +393,15 @@ export async function verifyAdmin(userId: string): Promise<boolean> {
 
     if (error) {
       // Column doesn't exist yet — fall back to env only
+      console.warn("[admin] is_admin column check failed:", error.message);
       return false;
     }
 
-    return Boolean((data as Record<string, unknown>)?.is_admin);
+    const isAdmin = Boolean((data as Record<string, unknown>)?.is_admin);
+    if (isAdmin) {
+      console.log(`[admin] Verified admin by DB flag: ${userId.slice(0, 8)}...`);
+    }
+    return isAdmin;
   } catch {
     return false;
   }
