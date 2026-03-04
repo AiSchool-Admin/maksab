@@ -9,9 +9,12 @@ import PinnedProducts from "@/components/store/PinnedProducts";
 import PromotionBanner from "@/components/store/PromotionBanner";
 import AdCard from "@/components/ad/AdCard";
 import EmptyState from "@/components/ui/EmptyState";
+import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { StoreHeaderSkeleton } from "@/components/store/StoreSkeleton";
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
 import { useAuthStore } from "@/stores/auth-store";
+import { getCategoryById } from "@/lib/categories/categories-config";
+import { generateAutoTitle } from "@/lib/categories/generate";
 import {
   getStoreBySlug,
   getStoreProducts,
@@ -21,6 +24,18 @@ import {
   recordStoreView,
 } from "@/lib/stores/store-service";
 import type { StoreWithStats, StoreCategory, StorePromotion } from "@/types";
+
+/** Resolve product title using Arabic labels from category config */
+function resolveProductTitle(product: Record<string, unknown>): string {
+  const storedTitle = product.title as string;
+  const categoryId = product.category_id as string | undefined;
+  const subcategoryId = product.subcategory_id as string | undefined;
+  const categoryFields = (product.category_fields as Record<string, unknown>) ?? {};
+  if (!categoryId) return storedTitle;
+  const config = getCategoryById(categoryId);
+  if (!config) return storedTitle;
+  return generateAutoTitle(config, categoryFields, subcategoryId || undefined) || storedTitle;
+}
 
 export default function StorePageClient({ slug }: { slug: string }) {
   const router = useRouter();
@@ -218,7 +233,7 @@ export default function StorePageClient({ slug }: { slug: string }) {
               >
                 {cat.name}
                 {cat.products_count > 0 && (
-                  <span className="mr-1 opacity-70">
+                  <span className="ms-1 opacity-70">
                     ({cat.products_count})
                   </span>
                 )}
@@ -244,8 +259,8 @@ export default function StorePageClient({ slug }: { slug: string }) {
               <AdCard
                 key={product.id as string}
                 id={product.id as string}
-                title={product.title as string}
-                price={product.price as number | null}
+                title={resolveProductTitle(product)}
+                price={product.price ? Number(product.price) : null}
                 saleType={
                   product.sale_type as "cash" | "auction" | "exchange"
                 }
@@ -259,6 +274,7 @@ export default function StorePageClient({ slug }: { slug: string }) {
                 exchangeDescription={
                   product.exchange_description as string | undefined
                 }
+                useDayPrice={Boolean((product.category_fields as Record<string, unknown>)?.use_day_price)}
               />
             ))}
           </div>
@@ -300,6 +316,8 @@ export default function StorePageClient({ slug }: { slug: string }) {
           </Link>
         </div>
       )}
+
+      <BottomNavWithBadge />
     </div>
   );
 }
