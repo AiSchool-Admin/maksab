@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Star, MapPin, Clock, Share2 } from "lucide-react";
+import { Star, MapPin, Phone, Share2 } from "lucide-react";
 import type { StoreWithStats, SubscriptionPlan } from "@/types";
 import StoreBadges from "./StoreBadges";
 import SubscriptionBadge from "./SubscriptionBadge";
@@ -143,10 +143,10 @@ export default function StoreHeader({
             </span>
           )}
           {store.phone && (
-            <span className="flex items-center gap-1">
-              <Clock size={12} />
+            <a href={`tel:+2${store.phone}`} className="flex items-center gap-1 hover:text-brand-green transition-colors">
+              <Phone size={12} />
               {formatPhone(store.phone)}
-            </span>
+            </a>
           )}
         </div>
       </div>
