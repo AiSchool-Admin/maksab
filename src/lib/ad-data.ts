@@ -74,8 +74,172 @@ export const auctionAds: AdSummary[] = [];
 
 const PAGE_SIZE = 8;
 
+/** How many hours an ad is considered "new" for the dedicated section */
+const NEW_AD_HOURS = 72; // 3 days
+
 /**
- * Fetch paginated feed ads from Supabase.
+ * Fetch "new on Maksab" ads — only ads from the last 72 hours,
+ * with category diversity (round-robin across categories),
+ * photos prioritized, and sale type mixing.
+ */
+export async function fetchNewListings(page: number): Promise<{ ads: AdSummary[]; hasMore: boolean; totalNew: number }> {
+  const cutoff = new Date(Date.now() - NEW_AD_HOURS * 3600000).toISOString();
+  const limit = 60; // fetch a generous batch to allow diversity sorting
+
+  try {
+    // Only fetch on first page; subsequent pages draw from the same pool
+    if (page > 0) {
+      // For pagination, use offset-based approach on the already-diverse set
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error } = await supabase
+        .from("ads" as never)
+        .select("*")
+        .eq("status", "active")
+        .gte("created_at", cutoff)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error || !data || (data as unknown[]).length === 0) {
+        return { ads: [], hasMore: false, totalNew: 0 };
+      }
+
+      const ads = (data as Record<string, unknown>[]).map(rowToAdSummary);
+      return { ads: diversifyAds(ads), hasMore: ads.length === PAGE_SIZE, totalNew: 0 };
+    }
+
+    // First page: fetch all recent ads to count and diversify
+    const { data, error, count } = await supabase
+      .from("ads" as never)
+      .select("*", { count: "exact" })
+      .eq("status", "active")
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !data || (data as unknown[]).length === 0) {
+      return { ads: [], hasMore: false, totalNew: 0 };
+    }
+
+    const allAds = (data as Record<string, unknown>[]).map(rowToAdSummary);
+    const totalNew = count ?? allAds.length;
+
+    // Apply diversity: round-robin by category, prioritize ads with photos
+    const diverse = diversifyAds(allAds);
+    const firstPage = diverse.slice(0, PAGE_SIZE);
+
+    return { ads: firstPage, hasMore: diverse.length > PAGE_SIZE, totalNew };
+  } catch {
+    return { ads: [], hasMore: false, totalNew: 0 };
+  }
+}
+
+/**
+ * Diversify ads: round-robin across categories, prioritize ads with images,
+ * and mix sale types so the feed feels varied and interesting.
+ */
+function diversifyAds(ads: AdSummary[]): AdSummary[] {
+  if (ads.length <= 3) return ads;
+
+  // Group by category
+  const byCategory: Record<string, AdSummary[]> = {};
+  for (const ad of ads) {
+    const cat = ad.categoryId || "other";
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(ad);
+  }
+
+  // Within each category, sort: ads with images first, then by newest
+  for (const cat of Object.keys(byCategory)) {
+    byCategory[cat].sort((a, b) => {
+      // Images first
+      if (a.image && !b.image) return -1;
+      if (!a.image && b.image) return 1;
+      // Then by date (newest first)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }
+
+  // Round-robin across categories (sorted by number of ads desc for fairness)
+  const categoryKeys = Object.keys(byCategory).sort(
+    (a, b) => byCategory[b].length - byCategory[a].length,
+  );
+  const pointers: Record<string, number> = {};
+  for (const k of categoryKeys) pointers[k] = 0;
+
+  const result: AdSummary[] = [];
+  const seen = new Set<string>();
+  let lastSaleType = "";
+  let sameTypeRun = 0;
+
+  // Keep going until we've placed all ads or run out
+  let exhausted = false;
+  while (!exhausted) {
+    exhausted = true;
+    for (const cat of categoryKeys) {
+      const catAds = byCategory[cat];
+      let ptr = pointers[cat];
+
+      // Find next ad from this category that maintains sale type diversity
+      while (ptr < catAds.length) {
+        const candidate = catAds[ptr];
+        if (seen.has(candidate.id)) {
+          ptr++;
+          continue;
+        }
+
+        // Sale type diversity: avoid more than 3 consecutive same type
+        if (candidate.saleType === lastSaleType && sameTypeRun >= 3) {
+          // Try to find a different sale type in this category
+          let found = false;
+          for (let j = ptr + 1; j < catAds.length; j++) {
+            if (!seen.has(catAds[j].id) && catAds[j].saleType !== lastSaleType) {
+              result.push(catAds[j]);
+              seen.add(catAds[j].id);
+              lastSaleType = catAds[j].saleType;
+              sameTypeRun = 1;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            // Accept the same type if no alternative
+            result.push(candidate);
+            seen.add(candidate.id);
+            sameTypeRun++;
+          }
+        } else {
+          if (candidate.saleType === lastSaleType) {
+            sameTypeRun++;
+          } else {
+            lastSaleType = candidate.saleType;
+            sameTypeRun = 1;
+          }
+          result.push(candidate);
+          seen.add(candidate.id);
+        }
+
+        ptr++;
+        pointers[cat] = ptr;
+        exhausted = false;
+        break;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Check if an ad is "very fresh" (less than 24 hours old).
+ */
+export function isVeryFreshAd(createdAt: string): boolean {
+  return Date.now() - new Date(createdAt).getTime() < 24 * 3600000;
+}
+
+/**
+ * Fetch paginated feed ads from Supabase (all active, for the general feed below "new" section).
  */
 export async function fetchFeedAds(page: number): Promise<{ ads: AdSummary[]; hasMore: boolean }> {
   const from = page * PAGE_SIZE;

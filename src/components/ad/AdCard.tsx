@@ -35,6 +35,8 @@ interface AdCardProps {
   useDayPrice?: boolean;
   // Above-the-fold cards should set this to true for eager loading
   priority?: boolean;
+  // Show "جديد" freshness badge (ad < 24 hours old)
+  showFreshBadge?: boolean;
 }
 
 const saleTypeBadge = {
@@ -96,6 +98,7 @@ function AdCard({
   isBoosted = false,
   useDayPrice = false,
   priority = false,
+  showFreshBadge = false,
 }: AdCardProps) {
   const badgeKey = isLiveAuction && saleType === "auction" ? "live_auction" : saleType;
   const badge = saleTypeBadge[badgeKey];
@@ -148,6 +151,13 @@ function AdCard({
             <span className="absolute bottom-2 start-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-error/90 text-white backdrop-blur-sm flex items-center gap-0.5 shadow-sm">
               <TrendingDown size={10} />
               نزل {priceDropPercent}%
+            </span>
+          )}
+
+          {/* Fresh "جديد" badge for ads < 24 hours */}
+          {showFreshBadge && (
+            <span className="absolute bottom-2 end-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-brand-green/90 text-white backdrop-blur-sm shadow-sm">
+              ✨ جديد
             </span>
           )}
 
