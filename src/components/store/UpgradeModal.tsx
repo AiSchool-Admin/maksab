@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { X, Copy, Check, ExternalLink } from "lucide-react";
 import type { SubscriptionPlan } from "@/types";
 import { PLANS, PAYMENT_METHODS, type PaymentMethodId } from "@/lib/stores/subscription-plans";
@@ -181,7 +182,10 @@ export default function UpgradeModal({
           </Button>
 
           <p className="text-[10px] text-gray-text text-center leading-relaxed">
-            بالضغط على تأكيد، أنت موافق على شروط الاستخدام.
+            بالضغط على تأكيد، أنت موافق على{" "}
+            <Link href="/terms" className="text-brand-green underline" target="_blank">
+              شروط الاستخدام
+            </Link>.
             <br />
             هيتم تفعيل الباقة بعد التحقق من الدفع.
           </p>

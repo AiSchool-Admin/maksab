@@ -109,7 +109,8 @@ export default function TermsPage() {
         </Section>
 
         <Section title="13. التواصل معنا">
-          لو عندك أي استفسار عن الشروط دي، تواصل معانا عن طريق صفحة المساعدة
+          لو عندك أي استفسار عن الشروط دي، تواصل معانا عن طريق{" "}
+          <a href="/help" className="text-brand-green underline font-semibold">صفحة المساعدة</a>{" "}
           في التطبيق.
         </Section>
       </div>

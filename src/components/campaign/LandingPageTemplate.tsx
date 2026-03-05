@@ -222,10 +222,15 @@ export default function LandingPageTemplate({
       </div>
 
       {/* Footer */}
-      <footer className="bg-gray-light py-6 text-center">
+      <footer className="bg-gray-light py-6 text-center space-y-2">
         <p className="text-xs text-gray-text">
           مكسب — <strong className="text-brand-green">كل صفقة مكسب</strong> 💚
         </p>
+        <div className="flex items-center justify-center gap-3 text-[11px] text-gray-text">
+          <Link href="/terms" className="hover:text-dark transition-colors">شروط الاستخدام</Link>
+          <span>|</span>
+          <Link href="/privacy" className="hover:text-dark transition-colors">سياسة الخصوصية</Link>
+        </div>
       </footer>
     </main>
   );

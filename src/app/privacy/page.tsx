@@ -132,7 +132,9 @@ export default function PrivacyPage() {
 
         <Section title="12. التواصل معنا">
           لو عندك أي سؤال عن الخصوصية أو عايز تمارس أي من حقوقك،
-          تواصل معانا عن طريق صفحة المساعدة في التطبيق.
+          تواصل معانا عن طريق{" "}
+          <a href="/help" className="text-brand-green underline font-semibold">صفحة المساعدة</a>{" "}
+          في التطبيق.
         </Section>
       </div>
 

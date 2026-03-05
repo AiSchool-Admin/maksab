@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   MessageCircle,
   ChevronDown,
   ChevronUp,
-  Phone,
   Mail,
   ExternalLink,
+  FileText,
+  Shield,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -158,6 +160,38 @@ export default function HelpPage() {
                 )}
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Legal links */}
+        <section>
+          <h2 className="text-xl font-bold text-dark mb-3">معلومات قانونية</h2>
+          <div className="space-y-2">
+            <Link
+              href="/terms"
+              className="flex items-center gap-3 bg-gray-light rounded-lg p-3 hover:bg-gray-200 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-full bg-brand-green-light flex items-center justify-center">
+                <FileText size={18} className="text-brand-green" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-dark">شروط الاستخدام</p>
+              </div>
+              <ChevronDown size={14} className="text-gray-text -rotate-90" />
+            </Link>
+
+            <Link
+              href="/privacy"
+              className="flex items-center gap-3 bg-gray-light rounded-lg p-3 hover:bg-gray-200 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center">
+                <Shield size={18} className="text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-dark">سياسة الخصوصية</p>
+              </div>
+              <ChevronDown size={14} className="text-gray-text -rotate-90" />
+            </Link>
           </div>
         </section>
 
