@@ -30,6 +30,7 @@ import type { ChatConversation, ChatMessage } from "@/lib/chat/chat-service";
 import { useRealtimeChat } from "@/lib/hooks/useRealtimeChat";
 import { useTyping } from "@/lib/hooks/useTyping";
 import { useIsOnline } from "@/lib/hooks/usePresence";
+import toast from "react-hot-toast";
 
 export default function ChatPage({
   params,
@@ -217,10 +218,22 @@ export default function ChatPage({
           },
         };
       });
+      notifyRecipient(text);
+    } else {
+      // Remove failed optimistic message
+      useChatStore.setState((state) => {
+        const msgs = state.messagesByConversation[conversationId] || [];
+        return {
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: msgs.filter((m) => m.id !== tempId),
+          },
+        };
+      });
+      toast.error("فشل إرسال الرسالة، جرب تاني");
     }
 
     setIsSending(false);
-    notifyRecipient(text);
   };
 
   /* ── Send image message ────────────────────────────────────────────── */
@@ -242,12 +255,25 @@ export default function ChatPage({
     addMessage(optimisticMsg);
 
     // Upload to Supabase Storage if file provided
-    let imageUrl = preview;
+    let imageUrl: string | null = null;
     if (file) {
-      const uploadedUrl = await uploadChatImage(file, conversationId);
-      if (uploadedUrl) {
-        imageUrl = uploadedUrl;
-      }
+      imageUrl = await uploadChatImage(file, conversationId);
+    }
+
+    if (!imageUrl) {
+      // Upload failed — remove optimistic message and notify user
+      useChatStore.setState((state) => {
+        const msgs = state.messagesByConversation[conversationId] || [];
+        return {
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: msgs.filter((m) => m.id !== tempId),
+          },
+        };
+      });
+      toast.error("فشل رفع الصورة، جرب تاني");
+      setIsSending(false);
+      return;
     }
 
     // Persist to DB
@@ -269,10 +295,21 @@ export default function ChatPage({
           },
         };
       });
+      notifyRecipient("📷 صورة");
+    } else {
+      useChatStore.setState((state) => {
+        const msgs = state.messagesByConversation[conversationId] || [];
+        return {
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: msgs.filter((m) => m.id !== tempId),
+          },
+        };
+      });
+      toast.error("فشل إرسال الصورة، جرب تاني");
     }
 
     setIsSending(false);
-    notifyRecipient("📷 صورة");
   };
 
   /* ── Handle typing in input ────────────────────────────────────────── */
