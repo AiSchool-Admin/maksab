@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { Send, ImagePlus, X, Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 import { compressImage } from "@/lib/utils/image-compress";
 
 interface ChatInputProps {
@@ -60,7 +61,7 @@ export default function ChatInput({
       setImagePreview(compressed.preview);
       setImageFile(compressed.file);
     } catch {
-      // Failed to compress
+      toast.error("فشل تحميل الصورة، جرب صورة تانية");
     }
     setIsCompressing(false);
     // Reset file input

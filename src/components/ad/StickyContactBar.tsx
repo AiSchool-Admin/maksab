@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageCircle, Phone } from "lucide-react";
+import { MessageCircle, Phone, Loader2 } from "lucide-react";
 import { ga4ContactSeller } from "@/lib/analytics/ga4";
 import { fbContact } from "@/lib/meta-pixel";
 import { useExperiment } from "@/hooks/useExperiment";
@@ -11,6 +11,7 @@ interface StickyContactBarProps {
   adTitle: string;
   adId: string;
   onChat: () => void;
+  isChatLoading?: boolean;
 }
 
 /**
@@ -23,6 +24,7 @@ export default function StickyContactBar({
   adTitle,
   adId,
   onChat,
+  isChatLoading = false,
 }: StickyContactBarProps) {
   const [visible, setVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
@@ -93,10 +95,11 @@ export default function StickyContactBar({
         <button
           type="button"
           onClick={handleChat}
-          className="flex-1 flex items-center justify-center gap-2 py-3 bg-brand-green text-white rounded-xl font-semibold text-sm hover:bg-brand-green-dark transition-colors"
+          disabled={isChatLoading}
+          className="flex-1 flex items-center justify-center gap-2 py-3 bg-brand-green text-white rounded-xl font-semibold text-sm hover:bg-brand-green-dark transition-colors disabled:opacity-60"
         >
-          <MessageCircle size={18} />
-          شات
+          {isChatLoading ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />}
+          {isChatLoading ? "جاري الفتح..." : "شات"}
         </button>
 
         {/* WhatsApp (A/B tested color) */}

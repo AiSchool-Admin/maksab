@@ -52,7 +52,8 @@ export async function fetchConversations(): Promise<ChatConversation[]> {
       .from("conversations" as never)
       .select("*")
       .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-      .order("last_message_at", { ascending: false });
+      .order("last_message_at", { ascending: false })
+      .limit(100);
 
     if (error || !data) return [];
 
@@ -90,11 +91,14 @@ export async function fetchConversations(): Promise<ChatConversation[]> {
         .in("conversation_id", convIds)
         .neq("sender_id", user.id)
         .eq("is_read", false),
+      // Fetch only the most recent messages (limit to avoid loading entire history).
+      // We pick the first per conversation below, so N×3 is a safe upper bound.
       supabase
         .from("messages" as never)
         .select("conversation_id, content, image_url, created_at")
         .in("conversation_id", convIds)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(convIds.length * 3),
     ]);
 
     // Build lookup maps
@@ -220,8 +224,87 @@ export async function fetchConversation(
   conversationId: string,
 ): Promise<ChatConversation | null> {
   try {
-    const conversations = await fetchConversations();
-    return conversations.find((c) => c.id === conversationId) || null;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from("conversations" as never)
+      .select("*")
+      .eq("id", conversationId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    const row = data as Record<string, unknown>;
+    const otherUserId = (
+      row.buyer_id === user.id ? row.seller_id : row.buyer_id
+    ) as string;
+
+    // Fetch profile, ad, unread count, last message in parallel
+    const [profileRes, adRes, unreadRes, lastMsgRes] = await Promise.all([
+      supabase
+        .from("profiles" as never)
+        .select("id, display_name, avatar_url, phone")
+        .eq("id", otherUserId)
+        .maybeSingle(),
+      row.ad_id
+        ? supabase
+            .from("ads" as never)
+            .select("id, title, images, price")
+            .eq("id", row.ad_id as string)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from("messages" as never)
+        .select("id", { count: "exact", head: true })
+        .eq("conversation_id", conversationId)
+        .neq("sender_id", user.id)
+        .eq("is_read", false),
+      supabase
+        .from("messages" as never)
+        .select("content, image_url, created_at")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    const profile = profileRes.data as Record<string, unknown> | null;
+    const ad = adRes.data as Record<string, unknown> | null;
+    const lastMsg = lastMsgRes.data as Record<string, unknown> | null;
+
+    let lastMessage: string | null = null;
+    if (lastMsg) {
+      lastMessage = lastMsg.image_url
+        ? "📷 صورة"
+        : (lastMsg.content as string) || null;
+    }
+
+    return {
+      id: row.id as string,
+      adId: (row.ad_id as string) || "",
+      adTitle: ad ? (ad.title as string) || "" : "",
+      adImage: ad ? ((ad.images as string[]) ?? [])[0] ?? null : null,
+      adPrice: ad && ad.price ? Number(ad.price) : null,
+      buyerId: row.buyer_id as string,
+      sellerId: row.seller_id as string,
+      otherUser: {
+        id: otherUserId,
+        displayName: profile
+          ? (profile.display_name as string) || "مستخدم"
+          : "مستخدم",
+        avatarUrl: profile ? (profile.avatar_url as string) || null : null,
+        phone: profile ? (profile.phone as string) || "" : "",
+        isOnline: false,
+        lastSeen: null,
+      },
+      lastMessage,
+      lastMessageAt:
+        (row.last_message_at as string) || (row.created_at as string),
+      unreadCount: unreadRes.count ?? 0,
+    };
   } catch {
     return null;
   }

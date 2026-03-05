@@ -144,6 +144,7 @@ export default function AdDetailClient({ id }: { id: string }) {
 
   const [notFound, setNotFound] = useState(false);
   const [autoDropEnabled, setAutoDropEnabled] = useState(false);
+  const [isStartingChat, setIsStartingChat] = useState(false);
   const currentUserId = user?.id || "";
 
   /* ── Load ad detail ──────────────────────────────────────── */
@@ -289,6 +290,7 @@ export default function AdDetailClient({ id }: { id: string }) {
   const handleChat = async () => {
     const authedUser = await requireAuth();
     if (!authedUser || !ad) return;
+    setIsStartingChat(true);
     // Track chat_initiated signal
     track("chat_initiated", {
       categoryId: ad.categoryId,
@@ -302,10 +304,12 @@ export default function AdDetailClient({ id }: { id: string }) {
       "@/lib/chat/chat-service"
     );
     const conv = await findOrCreateConversation(ad.id);
+    setIsStartingChat(false);
     if (conv) {
       router.push(`/chat/${conv.id}`);
     } else {
-      router.push("/chat");
+      const { toast } = await import("react-hot-toast");
+      toast.error("حصل مشكلة في بدء المحادثة، جرب تاني");
     }
   };
 
@@ -941,6 +945,7 @@ export default function AdDetailClient({ id }: { id: string }) {
           adTitle={ad.title}
           adId={ad.id}
           onChat={handleChat}
+          isChatLoading={isStartingChat}
         />
       )}
 
