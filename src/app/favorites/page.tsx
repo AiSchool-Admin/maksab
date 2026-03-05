@@ -97,7 +97,10 @@ export default function FavoritesPage() {
   }
 
   const handleToggleFavorite = useCallback(
-    (adId: string) => {
+    async (adId: string) => {
+      const authedUser = await requireAuth();
+      if (!authedUser) return;
+
       toggleFavorite(adId); // removes from localStorage + price snapshot
 
       setFavorites((prev) => prev.filter((a) => a.id !== adId));
