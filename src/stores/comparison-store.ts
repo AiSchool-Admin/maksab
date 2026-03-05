@@ -1,8 +1,10 @@
 /**
  * Comparison store — manages up to 3 ads for side-by-side comparison.
+ * Persisted to localStorage so comparisons survive page refreshes.
  */
 
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 export interface ComparisonAd {
   id: string;
@@ -28,30 +30,38 @@ interface ComparisonState {
 
 const MAX_COMPARISON = 3;
 
-export const useComparisonStore = create<ComparisonState>((set, get) => ({
-  ads: [],
-  isOpen: false,
+export const useComparisonStore = create<ComparisonState>()(
+  persist(
+    (set, get) => ({
+      ads: [],
+      isOpen: false,
 
-  addAd: (ad) => {
-    const { ads } = get();
-    if (ads.length >= MAX_COMPARISON) return false;
-    if (ads.some((a) => a.id === ad.id)) return false;
-    // Only allow comparing ads from same category
-    if (ads.length > 0 && ads[0].categoryId !== ad.categoryId) return false;
+      addAd: (ad) => {
+        const { ads } = get();
+        if (ads.length >= MAX_COMPARISON) return false;
+        if (ads.some((a) => a.id === ad.id)) return false;
+        // Only allow comparing ads from same category
+        if (ads.length > 0 && ads[0].categoryId !== ad.categoryId) return false;
 
-    set({ ads: [...ads, ad] });
-    return true;
-  },
+        set({ ads: [...ads, ad] });
+        return true;
+      },
 
-  removeAd: (id) => {
-    set((state) => ({
-      ads: state.ads.filter((a) => a.id !== id),
-    }));
-  },
+      removeAd: (id) => {
+        set((state) => ({
+          ads: state.ads.filter((a) => a.id !== id),
+        }));
+      },
 
-  clearAll: () => set({ ads: [], isOpen: false }),
+      clearAll: () => set({ ads: [], isOpen: false }),
 
-  toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
+      toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
 
-  setOpen: (open) => set({ isOpen: open }),
-}));
+      setOpen: (open) => set({ isOpen: open }),
+    }),
+    {
+      name: "maksab_comparison",
+      partialize: (state) => ({ ads: state.ads }),
+    }
+  )
+);

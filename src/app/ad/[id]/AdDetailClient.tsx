@@ -55,7 +55,6 @@ import VerificationBadge, { TrustedSellerBadge, IdVerifiedBadge } from "@/compon
 import PriceOfferButton from "@/components/offers/PriceOfferButton";
 import OffersListSection from "@/components/offers/OffersListSection";
 import AddToCompareButton from "@/components/comparison/AddToCompareButton";
-import ComparisonFab from "@/components/comparison/ComparisonFab";
 import PriceBadge from "@/components/price/PriceBadge";
 import LoyaltyBadge from "@/components/loyalty/LoyaltyBadge";
 import ReportButton from "@/components/report/ReportButton";
@@ -956,9 +955,6 @@ export default function AdDetailClient({ id }: { id: string }) {
           onClose={() => setShowShareModal(false)}
         />
       )}
-
-      {/* Comparison FAB */}
-      <ComparisonFab />
 
       {/* Review Form Modal */}
       <Modal

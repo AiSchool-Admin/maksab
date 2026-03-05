@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { GitCompareArrows, X, ChevronUp, ChevronDown } from "lucide-react";
@@ -9,19 +8,18 @@ import { useComparisonStore } from "@/stores/comparison-store";
 
 /**
  * Floating Action Button that shows when items are added for comparison.
- * Sticks above the bottom nav.
+ * Sticks above the bottom nav. Rendered globally from layout.
  */
 export default function ComparisonFab() {
   const router = useRouter();
   const { ads, removeAd, clearAll, isOpen, toggleOpen } = useComparisonStore();
-  const [isExpanded, setIsExpanded] = useState(false);
 
   if (ads.length === 0) return null;
 
   return (
-    <div className="fixed bottom-20 inset-x-4 z-40">
+    <div className="fixed bottom-20 inset-x-4 z-40 max-w-lg mx-auto">
       <AnimatePresence>
-        {isExpanded && (
+        {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -70,14 +68,14 @@ export default function ComparisonFab() {
         className="flex items-center gap-2"
       >
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
+          onClick={toggleOpen}
           className="bg-brand-green text-white rounded-full shadow-lg shadow-brand-green/30 px-4 py-3 flex items-center gap-2 flex-1 hover:bg-brand-green-dark transition-colors"
         >
           <GitCompareArrows size={18} />
           <span className="text-sm font-bold">
             مقارنة ({ads.length}/3)
           </span>
-          {isExpanded ? <ChevronDown size={16} className="ms-auto" /> : <ChevronUp size={16} className="ms-auto" />}
+          {isOpen ? <ChevronDown size={16} className="ms-auto" /> : <ChevronUp size={16} className="ms-auto" />}
         </button>
 
         {ads.length >= 2 && (
