@@ -14,8 +14,10 @@ import {
   ArrowLeft,
   RefreshCw,
   ShoppingBag,
+  LogIn,
 } from "lucide-react";
 import type { ProductAnalysis } from "@/lib/ai/ai-service";
+import { ga4PriceScannerUse } from "@/lib/analytics/ga4";
 
 // ── Types ────────────────────────────────────────────
 
@@ -40,7 +42,8 @@ type ScannerState =
   | "analyzing_product"
   | "analyzing_price"
   | "done"
-  | "error";
+  | "error"
+  | "auth_required";
 
 type InputMode = "photo" | "text";
 
@@ -76,6 +79,34 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+/** Compress an image data URL to max ~1MB JPEG */
+function compressImage(dataUrl: string, maxWidth = 1200, quality = 0.7): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let { width, height } = img;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx?.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl); // fallback to original
+    img.src = dataUrl;
+  });
+}
+
+/** Check if user is logged in (has session token) */
+function isLoggedIn(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!localStorage.getItem("maksab_session_token");
+}
+
 // ── Component ────────────────────────────────────────
 
 export default function PriceScanner({ onClose }: PriceScannerProps) {
@@ -93,12 +124,20 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
   // ── Photo flow ─────────────────────────────────────
 
   const handlePhotoMode = () => {
+    if (!isLoggedIn()) {
+      setState("auth_required");
+      return;
+    }
     setInputMode("photo");
     setState("capturing");
     fileInputRef.current?.click();
   };
 
   const handleGallerySelect = () => {
+    if (!isLoggedIn()) {
+      setState("auth_required");
+      return;
+    }
     setInputMode("photo");
     setState("capturing");
     if (fileInputRef.current) {
@@ -118,8 +157,9 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
 
     const dataUrls: string[] = [];
     for (const file of files.slice(0, 3)) {
-      const dataUrl = await fileToDataUrl(file);
-      dataUrls.push(dataUrl);
+      const raw = await fileToDataUrl(file);
+      const compressed = await compressImage(raw);
+      dataUrls.push(compressed);
     }
     setImages(dataUrls);
 
@@ -138,6 +178,11 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
         body: JSON.stringify({ images: photoDataUrls }),
       });
 
+      if (imageRes.status === 401) {
+        setState("auth_required");
+        return;
+      }
+
       const imageData = await imageRes.json();
       if (!imageRes.ok || !imageData.success) {
         throw new Error(imageData.error || "فشل تحليل الصورة");
@@ -145,6 +190,11 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
 
       const productAnalysis: ProductAnalysis = imageData.analysis;
       setAnalysis(productAnalysis);
+
+      // Track GA4
+      if (productAnalysis.category_id) {
+        ga4PriceScannerUse(productAnalysis.category_id);
+      }
 
       // Step 2: Get price estimate
       setState("analyzing_price");
@@ -158,6 +208,11 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
           governorate: productAnalysis.governorate || undefined,
         }),
       });
+
+      if (priceRes.status === 401) {
+        setState("auth_required");
+        return;
+      }
 
       const priceData = await priceRes.json();
       if (!priceRes.ok || !priceData.success) {
@@ -175,6 +230,10 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
   // ── Text flow ──────────────────────────────────────
 
   const handleTextMode = () => {
+    if (!isLoggedIn()) {
+      setState("auth_required");
+      return;
+    }
     setInputMode("text");
     setState("typing");
   };
@@ -193,6 +252,11 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
         body: JSON.stringify({ text: textInput.trim() }),
       });
 
+      if (parseRes.status === 401) {
+        setState("auth_required");
+        return;
+      }
+
       const parseData = await parseRes.json();
       if (!parseRes.ok || !parseData.success) {
         throw new Error(parseData.error || "فشل تحليل النص");
@@ -200,6 +264,11 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
 
       const productAnalysis: ProductAnalysis = parseData.analysis;
       setAnalysis(productAnalysis);
+
+      // Track GA4
+      if (productAnalysis.category_id) {
+        ga4PriceScannerUse(productAnalysis.category_id);
+      }
 
       // Step 2: Get price estimate
       setState("analyzing_price");
@@ -213,6 +282,11 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
           governorate: productAnalysis.governorate || undefined,
         }),
       });
+
+      if (priceRes.status === 401) {
+        setState("auth_required");
+        return;
+      }
 
       const priceData = await priceRes.json();
       if (!priceRes.ok || !priceData.success) {
@@ -233,6 +307,7 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
     if (!analysis) return;
 
     // Store analysis data in localStorage so the create ad page can pick it up
+    // Exclude images to avoid exceeding localStorage limits
     const prefillData = {
       category_id: analysis.category_id,
       subcategory_id: analysis.subcategory_id,
@@ -240,7 +315,6 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
       suggested_title: analysis.suggested_title,
       suggested_description: analysis.suggested_description,
       suggested_price: priceEstimate?.estimated_price || analysis.suggested_price,
-      images,
     };
 
     localStorage.setItem("maksab_prefill_ad", JSON.stringify(prefillData));
@@ -257,6 +331,20 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
     setAnalysis(null);
     setPriceEstimate(null);
     setError(null);
+  };
+
+  // ── Back/Close handler ─────────────────────────────
+
+  const handleBack = () => {
+    if (state === "idle") {
+      if (onClose) {
+        onClose();
+      } else {
+        router.back();
+      }
+    } else {
+      handleReset();
+    }
   };
 
   // ── Trend icon helper ──────────────────────────────
@@ -325,9 +413,9 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
         <button
-          onClick={state === "idle" ? onClose : handleReset}
+          onClick={handleBack}
           className="flex items-center gap-1 text-gray-text hover:text-dark transition-colors"
-          aria-label={state === "idle" ? "اغلق" : "ارجع"}
+          aria-label={state === "idle" ? "رجوع" : "ابدأ من الأول"}
         >
           <ArrowLeft size={20} />
           <span className="text-sm font-semibold">
@@ -405,6 +493,38 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
           </div>
         )}
 
+        {/* ── AUTH REQUIRED: Login prompt ────────── */}
+        {state === "auth_required" && (
+          <div className="text-center space-y-5 py-8">
+            <div className="w-20 h-20 bg-brand-gold-light rounded-2xl flex items-center justify-center mx-auto">
+              <LogIn size={32} className="text-brand-gold" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-dark">سجّل دخول الأول</h3>
+              <p className="text-sm text-gray-text leading-relaxed">
+                عشان تستخدم ماسح الأسعار، محتاج تسجّل برقم موبايلك. التسجيل مجاني وبياخد ثواني
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => router.push("/profile?action=login&redirect=/price-scanner")}
+                className="w-full py-4 bg-brand-green text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-brand-green-dark transition-colors"
+              >
+                <LogIn size={18} />
+                سجّل دخول
+              </button>
+              <button
+                onClick={handleReset}
+                className="w-full py-3 text-sm text-gray-text font-semibold"
+              >
+                رجوع
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── TYPING: Text input ──────────────────── */}
         {state === "typing" && inputMode === "text" && (
           <div className="space-y-4">
@@ -423,6 +543,7 @@ export default function PriceScanner({ onClose }: PriceScannerProps) {
               onChange={(e) => setTextInput(e.target.value)}
               placeholder="مثلاً: آيفون 15 برو 256 جيجا أسود مستعمل زيرو..."
               rows={4}
+              maxLength={1000}
               className="w-full p-4 border-2 border-gray-200 rounded-xl text-sm text-dark placeholder:text-gray-300 focus:border-brand-green focus:outline-none resize-none transition-colors"
               dir="rtl"
               autoFocus
