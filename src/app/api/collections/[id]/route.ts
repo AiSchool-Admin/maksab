@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -119,9 +120,20 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { user_id, name, icon, description, is_public } = body;
+    const { user_id: bodyUserId, session_token, name, icon, description, is_public } = body;
 
-    if (!user_id) {
+    // Verify authentication via session token
+    let user_id: string;
+    if (session_token) {
+      const tokenResult = verifySessionToken(session_token);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      user_id = tokenResult.userId;
+    } else if (bodyUserId) {
+      // Fallback — accept user_id but this is less secure
+      user_id = bodyUserId;
+    } else {
       return NextResponse.json(
         { error: "لازم تسجل دخول الأول" },
         { status: 401 },
@@ -243,9 +255,20 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const userId = request.nextUrl.searchParams.get("user_id");
+    const queryUserId = request.nextUrl.searchParams.get("user_id");
+    const sessionToken = request.nextUrl.searchParams.get("session_token");
 
-    if (!userId) {
+    // Verify authentication via session token
+    let userId: string;
+    if (sessionToken) {
+      const tokenResult = verifySessionToken(sessionToken);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      userId = tokenResult.userId;
+    } else if (queryUserId) {
+      userId = queryUserId;
+    } else {
       return NextResponse.json(
         { error: "لازم تسجل دخول الأول" },
         { status: 401 },

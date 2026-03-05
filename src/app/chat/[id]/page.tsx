@@ -38,7 +38,7 @@ export default function ChatPage({
 }) {
   const { id: conversationId } = use(params);
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading, requireAuth } = useAuth();
 
   const {
     messagesByConversation,
@@ -280,8 +280,30 @@ export default function ChatPage({
     handleLocalTyping();
   };
 
+  /* ── Auth guard — require login for chat ───────────────────────────── */
+  if (!isAuthLoading && !user) {
+    return (
+      <main className="flex flex-col items-center justify-center h-screen bg-white">
+        <div className="w-20 h-20 rounded-full bg-gray-light flex items-center justify-center mx-auto mb-4">
+          <User size={36} className="text-gray-text" />
+        </div>
+        <h3 className="text-lg font-bold text-dark mb-2">سجّل دخولك الأول</h3>
+        <p className="text-sm text-gray-text px-8 mb-6 text-center">
+          عشان تقدر تشوف الرسائل، سجّل دخولك
+        </p>
+        <button
+          type="button"
+          onClick={() => requireAuth()}
+          className="bg-brand-green text-white font-bold py-3 px-8 rounded-xl hover:bg-brand-green-dark transition-colors"
+        >
+          تسجيل الدخول
+        </button>
+      </main>
+    );
+  }
+
   /* ── Loading state ─────────────────────────────────────────────────── */
-  if (isLoadingConv) {
+  if (isAuthLoading || isLoadingConv) {
     return (
       <main className="flex flex-col h-screen bg-white">
         <div className="flex items-center gap-3 px-4 h-16 border-b border-gray-light">

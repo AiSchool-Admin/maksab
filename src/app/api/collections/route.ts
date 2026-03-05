@@ -217,7 +217,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "بيانات المصادقة مش متطابقة" }, { status: 403 });
       }
     } else if (bodyUserId) {
-      // Fallback for backwards compatibility — but user_id is unverified
+      // Fallback — user_id is unverified but maintain backward compatibility
+      // TODO: Remove this fallback once all clients send session_token
       user_id = bodyUserId;
     } else {
       return NextResponse.json(
@@ -502,12 +503,30 @@ export async function POST(req: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const id = request.nextUrl.searchParams.get("id");
-    const userId = request.nextUrl.searchParams.get("user_id");
+    const queryUserId = request.nextUrl.searchParams.get("user_id");
+    const sessionToken = request.nextUrl.searchParams.get("session_token");
 
-    if (!id || !userId) {
+    if (!id) {
       return NextResponse.json(
-        { error: "بيانات ناقصة (id و user_id مطلوبين)" },
+        { error: "بيانات ناقصة (id مطلوب)" },
         { status: 400 },
+      );
+    }
+
+    // Verify authentication via session token
+    let userId: string;
+    if (sessionToken) {
+      const tokenResult = verifySessionToken(sessionToken);
+      if (!tokenResult.valid) {
+        return NextResponse.json({ error: tokenResult.error }, { status: 401 });
+      }
+      userId = tokenResult.userId;
+    } else if (queryUserId) {
+      userId = queryUserId;
+    } else {
+      return NextResponse.json(
+        { error: "لازم تسجل دخول الأول" },
+        { status: 401 },
       );
     }
 
