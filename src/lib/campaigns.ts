@@ -82,7 +82,7 @@ export const CAMPAIGNS: Record<string, LandingPageConfig> = {
     heroSubtitle:
       "اعرف سعر أي حاجة بالذكاء الاصطناعي — عربيات، موبايلات، أجهزة، ذهب، وأكتر",
     heroCta: "جرّب دلوقتي — مجاناً",
-    heroCtaLink: "/search",
+    heroCtaLink: "/price-scanner",
     heroEmoji: "🤖",
     accentColor: "brand-gold",
     benefits: [
@@ -130,7 +130,7 @@ export const CAMPAIGNS: Record<string, LandingPageConfig> = {
       { value: "95%", label: "دقة التسعير" },
     ],
     finalCta: "جرّب كام سعره",
-    finalCtaLink: "/search",
+    finalCtaLink: "/price-scanner",
   },
 
   referral: {
