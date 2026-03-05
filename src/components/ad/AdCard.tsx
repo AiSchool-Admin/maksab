@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Heart, MapPin, Clock, TrendingDown, Shield } from "lucide-react";
 import { formatPrice, formatTimeAgo, formatCountdown } from "@/lib/utils/format";
+import AddToCompareButton from "@/components/comparison/AddToCompareButton";
 
 interface AdCardProps {
   id: string;
@@ -37,6 +38,9 @@ interface AdCardProps {
   priority?: boolean;
   // Show "جديد" freshness badge (ad < 24 hours old)
   showFreshBadge?: boolean;
+  // Comparison data
+  categoryId?: string;
+  categoryFields?: Record<string, unknown>;
 }
 
 const saleTypeBadge = {
@@ -99,6 +103,8 @@ function AdCard({
   useDayPrice = false,
   priority = false,
   showFreshBadge = false,
+  categoryId,
+  categoryFields,
 }: AdCardProps) {
   const badgeKey = isLiveAuction && saleType === "auction" ? "live_auction" : saleType;
   const badge = saleTypeBadge[badgeKey];
@@ -161,22 +167,43 @@ function AdCard({
             </span>
           )}
 
-          {/* Favorite button */}
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onToggleFavorite?.(id);
-            }}
-            className={`absolute top-2 end-2 p-1.5 rounded-full backdrop-blur-sm transition-colors btn-icon-sm ${
-              isFavorited
-                ? "bg-error/10 text-error"
-                : "bg-white/80 text-gray-text hover:text-error"
-            }`}
-            aria-label={isFavorited ? "شيل من المفضلة" : "حفظ في المفضلة"}
-          >
-            <Heart size={16} fill={isFavorited ? "currentColor" : "none"} />
-          </button>
+          {/* Top-right action buttons */}
+          <div className="absolute top-2 end-2 flex flex-col gap-1.5">
+            {/* Favorite button */}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleFavorite?.(id);
+              }}
+              className={`p-1.5 rounded-full backdrop-blur-sm transition-colors btn-icon-sm ${
+                isFavorited
+                  ? "bg-error/10 text-error"
+                  : "bg-white/80 text-gray-text hover:text-error"
+              }`}
+              aria-label={isFavorited ? "شيل من المفضلة" : "حفظ في المفضلة"}
+            >
+              <Heart size={16} fill={isFavorited ? "currentColor" : "none"} />
+            </button>
+
+            {/* Compare button — only show when category data is available */}
+            {categoryId && (
+              <AddToCompareButton
+                ad={{
+                  id,
+                  title,
+                  price,
+                  saleType,
+                  image,
+                  governorate,
+                  city,
+                  categoryId,
+                  categoryFields: categoryFields || {},
+                }}
+                variant="icon"
+              />
+            )}
+          </div>
         </div>
 
         {/* Content */}

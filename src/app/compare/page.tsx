@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ChevronRight, X, MapPin, ExternalLink, Home } from "lucide-react";
+import { ChevronRight, X, MapPin, ExternalLink, Home, ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useComparisonStore } from "@/stores/comparison-store";
@@ -12,8 +13,51 @@ import { formatPrice } from "@/lib/utils/format";
 export default function ComparePage() {
   const router = useRouter();
   const { ads, removeAd, clearAll } = useComparisonStore();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollStart, setCanScrollStart] = useState(false);
+  const [canScrollEnd, setCanScrollEnd] = useState(false);
 
-  // If less than 2 ads, redirect back
+  const handleRemoveAd = useCallback(
+    (id: string) => {
+      removeAd(id);
+    },
+    [removeAd]
+  );
+
+  // Auto-redirect when ads drop below 2
+  useEffect(() => {
+    if (ads.length < 2) {
+      const timer = setTimeout(() => {
+        router.back();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [ads.length, router]);
+
+  // Scroll indicator logic
+  const updateScrollIndicators = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // RTL: scrollLeft is negative in RTL in some browsers
+    const scrollLeft = Math.abs(el.scrollLeft);
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    setCanScrollStart(scrollLeft > 5);
+    setCanScrollEnd(scrollLeft < maxScroll - 5);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateScrollIndicators();
+    el.addEventListener("scroll", updateScrollIndicators, { passive: true });
+    window.addEventListener("resize", updateScrollIndicators);
+    return () => {
+      el.removeEventListener("scroll", updateScrollIndicators);
+      window.removeEventListener("resize", updateScrollIndicators);
+    };
+  }, [updateScrollIndicators, ads.length]);
+
+  // If less than 2 ads, show empty state (will auto-redirect)
   if (ads.length < 2) {
     return (
       <main className="min-h-screen bg-white pb-20">
@@ -34,16 +78,10 @@ export default function ComparePage() {
         </header>
         <div className="px-4 py-12 text-center">
           <p className="text-4xl mb-4">📊</p>
-          <p className="text-lg font-bold text-dark mb-2">مفيش إعلانات للمقارنة</p>
+          <p className="text-lg font-bold text-dark mb-2">مفيش إعلانات كفاية للمقارنة</p>
           <p className="text-sm text-gray-text mb-4">
-            اختار إعلانين على الأقل من نفس القسم عشان تقارن بينهم
+            هنرجعك للصفحة اللي قبلها...
           </p>
-          <button
-            onClick={() => router.push("/")}
-            className="text-sm font-semibold text-brand-green"
-          >
-            تصفح الإعلانات
-          </button>
         </div>
         <BottomNavWithBadge />
       </main>
@@ -74,7 +112,7 @@ export default function ComparePage() {
   // Get field display value
   const getFieldValue = (ad: typeof ads[0], fieldId: string): string => {
     const rawValue = ad.categoryFields?.[fieldId];
-    if (rawValue === undefined || rawValue === null) return "—";
+    if (rawValue === undefined || rawValue === null) return "\u2014";
 
     const field = fields.find((f) => f.id === fieldId);
 
@@ -136,108 +174,124 @@ export default function ComparePage() {
         </div>
       </header>
 
-      {/* Comparison table */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px]">
-          {/* Ad images and titles */}
-          <thead>
-            <tr>
-              <th className="sticky start-0 bg-white z-10 p-2 w-28 min-w-[112px]" />
-              {ads.map((ad) => (
-                <th key={ad.id} className="p-2 min-w-[160px]">
-                  <div className="relative">
-                    <button
-                      onClick={() => removeAd(ad.id)}
-                      className="absolute -top-1 -start-1 w-6 h-6 bg-error text-white rounded-full flex items-center justify-center z-10"
-                    >
-                      <X size={12} />
-                    </button>
-                    {ad.image ? (
-                      <Image
-                        src={ad.image}
-                        alt={ad.title}
-                        width={160}
-                        height={120}
-                        className="w-full aspect-[4/3] object-cover rounded-xl"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="w-full aspect-[4/3] bg-gray-light rounded-xl flex items-center justify-center text-3xl">
-                        📷
-                      </div>
-                    )}
-                    <Link
-                      href={`/ad/${ad.id}`}
-                      className="block mt-2 text-sm font-bold text-dark text-center line-clamp-2 hover:text-brand-green transition-colors"
-                    >
-                      {ad.title}
-                      <ExternalLink size={10} className="inline ms-1" />
-                    </Link>
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
+      {/* Comparison table with scroll indicators */}
+      <div className="relative">
+        {/* Scroll indicator — start (right in RTL) */}
+        {canScrollStart && (
+          <div className="absolute top-0 end-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none flex items-center justify-center">
+            <ChevronLeft size={16} className="text-gray-text animate-pulse" />
+          </div>
+        )}
 
-          <tbody>
-            {/* Price row */}
-            <CompareRow label="السعر" highlight>
-              {ads.map((ad) => (
-                <td key={ad.id} className="p-3 text-center">
-                  <p className="text-lg font-bold text-brand-green">
-                    {ad.price ? formatPrice(ad.price) : "—"}
-                  </p>
-                  <p className="text-[11px] text-gray-text">
-                    {ad.saleType === "cash"
-                      ? "💰 للبيع"
-                      : ad.saleType === "auction"
-                        ? "🔥 مزاد"
-                        : "🔄 للتبديل"}
-                  </p>
-                </td>
-              ))}
-            </CompareRow>
+        {/* Scroll indicator — end (left in RTL) */}
+        {canScrollEnd && (
+          <div className="absolute top-0 start-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none flex items-center justify-center">
+            <ChevronRight size={16} className="text-gray-text animate-pulse" />
+          </div>
+        )}
 
-            {/* Location row */}
-            <CompareRow label="الموقع">
-              {ads.map((ad) => (
-                <td key={ad.id} className="p-3 text-center">
-                  <span className="flex items-center justify-center gap-1 text-sm text-dark">
-                    <MapPin size={12} className="text-brand-green" />
-                    {ad.governorate || "—"}
-                    {ad.city ? ` — ${ad.city}` : ""}
-                  </span>
-                </td>
-              ))}
-            </CompareRow>
-
-            {/* Category-specific fields */}
-            {Array.from(allFieldKeys).map((fieldId) => {
-              const same = areValuesSame(fieldId);
-              return (
-                <CompareRow
-                  key={fieldId}
-                  label={getFieldLabel(fieldId)}
-                  highlight={!same}
-                >
-                  {ads.map((ad) => {
-                    const value = getFieldValue(ad, fieldId);
-                    return (
-                      <td
-                        key={ad.id}
-                        className={`p-3 text-center text-sm ${
-                          !same ? "font-bold text-dark" : "text-gray-text"
-                        }`}
+        <div ref={scrollRef} className="overflow-x-auto">
+          <table className="w-full min-w-[600px]">
+            {/* Ad images and titles */}
+            <thead>
+              <tr>
+                <th className="sticky start-0 bg-white z-10 p-2 w-28 min-w-[112px]" />
+                {ads.map((ad) => (
+                  <th key={ad.id} className="p-2 min-w-[160px]">
+                    <div className="relative">
+                      <button
+                        onClick={() => handleRemoveAd(ad.id)}
+                        className="absolute -top-1 -start-1 w-6 h-6 bg-error text-white rounded-full flex items-center justify-center z-10"
                       >
-                        {value}
-                      </td>
-                    );
-                  })}
-                </CompareRow>
-              );
-            })}
-          </tbody>
-        </table>
+                        <X size={12} />
+                      </button>
+                      {ad.image ? (
+                        <Image
+                          src={ad.image}
+                          alt={ad.title}
+                          width={160}
+                          height={120}
+                          className="w-full aspect-[4/3] object-cover rounded-xl"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="w-full aspect-[4/3] bg-gray-light rounded-xl flex items-center justify-center text-3xl">
+                          📷
+                        </div>
+                      )}
+                      <Link
+                        href={`/ad/${ad.id}`}
+                        className="block mt-2 text-sm font-bold text-dark text-center line-clamp-2 hover:text-brand-green transition-colors"
+                      >
+                        {ad.title}
+                        <ExternalLink size={10} className="inline ms-1" />
+                      </Link>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {/* Price row */}
+              <CompareRow label="السعر" highlight>
+                {ads.map((ad) => (
+                  <td key={ad.id} className="p-3 text-center">
+                    <p className="text-lg font-bold text-brand-green">
+                      {ad.price ? formatPrice(ad.price) : "\u2014"}
+                    </p>
+                    <p className="text-[11px] text-gray-text">
+                      {ad.saleType === "cash"
+                        ? "💰 للبيع"
+                        : ad.saleType === "auction"
+                          ? "🔥 مزاد"
+                          : "🔄 للتبديل"}
+                    </p>
+                  </td>
+                ))}
+              </CompareRow>
+
+              {/* Location row */}
+              <CompareRow label="الموقع">
+                {ads.map((ad) => (
+                  <td key={ad.id} className="p-3 text-center">
+                    <span className="flex items-center justify-center gap-1 text-sm text-dark">
+                      <MapPin size={12} className="text-brand-green" />
+                      {ad.governorate || "\u2014"}
+                      {ad.city ? ` \u2014 ${ad.city}` : ""}
+                    </span>
+                  </td>
+                ))}
+              </CompareRow>
+
+              {/* Category-specific fields */}
+              {Array.from(allFieldKeys).map((fieldId) => {
+                const same = areValuesSame(fieldId);
+                return (
+                  <CompareRow
+                    key={fieldId}
+                    label={getFieldLabel(fieldId)}
+                    highlight={!same}
+                  >
+                    {ads.map((ad) => {
+                      const value = getFieldValue(ad, fieldId);
+                      return (
+                        <td
+                          key={ad.id}
+                          className={`p-3 text-center text-sm ${
+                            !same ? "font-bold text-dark" : "text-gray-text"
+                          }`}
+                        >
+                          {value}
+                        </td>
+                      );
+                    })}
+                  </CompareRow>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <BottomNavWithBadge />
