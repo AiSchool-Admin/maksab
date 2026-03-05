@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, MapPin } from "lucide-react";
 import InstaPayLogo from "@/components/ui/InstaPayLogo";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -274,6 +274,17 @@ export default function HomePage() {
               ))}
             </div>
           </section>
+
+          {/* Map link */}
+          <div className="px-4 pb-2">
+            <Link
+              href="/map"
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green-light rounded-xl hover:bg-green-100 transition-colors"
+            >
+              <MapPin size={18} className="text-brand-green" />
+              <span className="text-sm font-bold text-brand-green">عرض الإعلانات على الخريطة</span>
+            </Link>
+          </div>
 
           {/* Commission / InstaPay */}
           <div className="px-4 pb-1">

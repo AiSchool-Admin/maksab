@@ -58,10 +58,12 @@ export default function MapPage() {
   const [showList, setShowList] = useState(false);
   const [radius, setRadius] = useState(0); // 0 = all
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch ads with location data
   const fetchAds = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       let query = supabase
         .from("ads" as never)
@@ -74,7 +76,13 @@ export default function MapPage() {
         query = query.eq("category_id", selectedCategory);
       }
 
-      const { data } = await query;
+      const { data, error: queryError } = await query;
+
+      if (queryError) {
+        setError("حصلت مشكلة في تحميل الإعلانات، جرب تاني");
+        setLoading(false);
+        return;
+      }
 
       if (data) {
         let mapped = (data as Record<string, unknown>[]).map((ad) => {
@@ -126,7 +134,7 @@ export default function MapPage() {
         setAds(mapped);
       }
     } catch {
-      // Silently fail
+      setError("حصلت مشكلة في تحميل الإعلانات، جرب تاني");
     }
     setLoading(false);
   }, [selectedCategory, userLocation, radius]);
@@ -142,11 +150,17 @@ export default function MapPage() {
       .then((pos) => setUserLocation(pos))
       .catch(() => {
         // Fallback to Cairo center
+        setUserLocation({ lat: 30.0444, lng: 31.2357 });
       });
   }, []);
 
   const handleLocationDetected = useCallback((lat: number, lng: number) => {
     setUserLocation({ lat, lng });
+  }, []);
+
+  const handleAdClick = useCallback((id: string) => {
+    setSelectedAdId(id);
+    setShowList(true);
   }, []);
 
   const selectedAd = selectedAdId ? ads.find((a) => a.id === selectedAdId) : null;
@@ -157,9 +171,14 @@ export default function MapPage() {
     { id: "real_estate", label: "🏠 عقارات" },
     { id: "phones", label: "📱 موبايلات" },
     { id: "fashion", label: "👗 موضة" },
+    { id: "scrap", label: "♻️ خردة" },
     { id: "gold", label: "💰 ذهب" },
+    { id: "luxury", label: "💎 فاخرة" },
     { id: "appliances", label: "🏠 أجهزة" },
     { id: "furniture", label: "🪑 أثاث" },
+    { id: "hobbies", label: "🎮 هوايات" },
+    { id: "tools", label: "🔧 عدد" },
+    { id: "services", label: "🛠️ خدمات" },
   ];
 
   return (
@@ -256,7 +275,7 @@ export default function MapPage() {
         <MapView
           ads={ads}
           userLocation={userLocation}
-          onAdClick={(id) => { setSelectedAdId(id); setShowList(true); }}
+          onAdClick={handleAdClick}
           onLocationDetected={handleLocationDetected}
           selectedAdId={selectedAdId || undefined}
           height="100%"
@@ -278,7 +297,17 @@ export default function MapPage() {
           </div>
 
           <div className="max-h-[40vh] overflow-y-auto px-4 pb-20 space-y-2">
-            {loading ? (
+            {error ? (
+              <div className="py-8 text-center">
+                <p className="text-sm text-error mb-2">{error}</p>
+                <button
+                  onClick={() => fetchAds()}
+                  className="text-xs text-brand-green font-bold"
+                >
+                  جرب تاني
+                </button>
+              </div>
+            ) : loading ? (
               <div className="py-8 text-center">
                 <div className="w-6 h-6 border-2 border-brand-green border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                 <p className="text-xs text-gray-text">جاري التحميل...</p>

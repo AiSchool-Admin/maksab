@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { MapPin, Navigation, Loader2, Layers, ZoomIn, ZoomOut } from "lucide-react";
+import { MapPin, Navigation, Loader2, ZoomIn, ZoomOut } from "lucide-react";
 import { EGYPT_BOUNDS, haversineDistance, formatDistance, getCurrentPosition } from "@/lib/utils/geo";
 import { formatPrice } from "@/lib/utils/format";
 import type L from "leaflet";
+
+/** Escape HTML special characters to prevent XSS in map popups */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 interface MapAd {
   id: string;
@@ -115,7 +125,8 @@ export default function MapView({
       const icon = leaflet.divIcon({
         className: "custom-map-marker",
         html: `
-          <div class="${isSelected ? "ring-2 ring-brand-green" : ""}" style="
+          <div style="
+            position: relative;
             background: ${isSelected ? "#1B7A3D" : "white"};
             color: ${isSelected ? "white" : "#1A1A2E"};
             border-radius: 12px;
@@ -130,42 +141,45 @@ export default function MapView({
             gap: 3px;
             border: 2px solid ${isSelected ? "#145C2E" : "#E5E7EB"};
             cursor: pointer;
-            transform: translate(-50%, -100%);
           ">
             <span>${saleIcon}</span>
-            <span>${priceText}</span>
+            <span>${escapeHtml(priceText)}</span>
+            <div style="
+              position: absolute;
+              bottom: -8px;
+              left: 50%;
+              transform: translateX(-50%);
+              width: 0;
+              height: 0;
+              border-left: 6px solid transparent;
+              border-right: 6px solid transparent;
+              border-top: 6px solid ${isSelected ? "#1B7A3D" : "white"};
+            "></div>
           </div>
-          <div style="
-            width: 0;
-            height: 0;
-            border-left: 6px solid transparent;
-            border-right: 6px solid transparent;
-            border-top: 6px solid ${isSelected ? "#1B7A3D" : "white"};
-            margin: 0 auto;
-            transform: translateX(-50%);
-            position: absolute;
-            left: 50%;
-            bottom: -6px;
-          "></div>
         `,
-        iconSize: [0, 0],
-        iconAnchor: [0, 0],
+        iconSize: [80, 36],
+        iconAnchor: [40, 36],
       });
 
       const marker = leaflet.marker([ad.latitude, ad.longitude], { icon });
 
-      // Popup content
+      // Popup content — all user data is escaped to prevent XSS
+      const safeTitle = escapeHtml(ad.title);
+      const safeGov = escapeHtml(ad.governorate);
+      const safeCity = ad.city ? escapeHtml(ad.city) : "";
+      const safeImage = ad.image ? escapeHtml(ad.image) : "";
+
       const popupContent = `
         <div dir="rtl" style="font-family: var(--font-cairo), sans-serif; min-width: 200px; max-width: 250px;">
-          ${ad.image ? `<img src="${ad.image}" alt="" style="width:100%; height:100px; object-fit:cover; border-radius:8px; margin-bottom:8px;" />` : ""}
+          ${safeImage ? `<img src="${safeImage}" alt="" style="width:100%; height:100px; object-fit:cover; border-radius:8px; margin-bottom:8px;" />` : ""}
           <p style="font-weight:700; font-size:13px; margin:0 0 4px; line-height:1.4; color:#1A1A2E;">
-            ${ad.title}
+            ${safeTitle}
           </p>
           <p style="color:#1B7A3D; font-weight:700; font-size:14px; margin:0 0 4px;">
-            ${saleIcon} ${priceText}
+            ${saleIcon} ${escapeHtml(priceText)}
           </p>
           <p style="color:#6B7280; font-size:11px; margin:0;">
-            📍 ${ad.governorate}${ad.city ? ` — ${ad.city}` : ""}
+            📍 ${safeGov}${safeCity ? ` — ${safeCity}` : ""}
             ${distanceText ? ` · ${distanceText}` : ""}
           </p>
         </div>
