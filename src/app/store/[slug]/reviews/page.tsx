@@ -95,7 +95,7 @@ export default function StoreReviewsPage() {
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
       <header className="bg-white border-b border-gray-light px-4 py-3 flex items-center gap-3 sticky top-0 z-40">
-        <button onClick={() => router.back()} className="p-1">
+        <button onClick={() => router.back()} className="p-1" aria-label="رجوع">
           <ArrowRight size={20} />
         </button>
         <div className="flex-1">

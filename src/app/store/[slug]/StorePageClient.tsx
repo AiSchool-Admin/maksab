@@ -12,7 +12,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { StoreHeaderSkeleton } from "@/components/store/StoreSkeleton";
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { getCategoryById } from "@/lib/categories/categories-config";
 import { generateAutoTitle } from "@/lib/categories/generate";
 import {
@@ -39,7 +39,7 @@ function resolveProductTitle(product: Record<string, unknown>): string {
 
 export default function StorePageClient({ slug }: { slug: string }) {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user } = useAuth();
 
   const [store, setStore] = useState<StoreWithStats | null>(null);
   const [categories, setCategories] = useState<StoreCategory[]>([]);
@@ -253,7 +253,7 @@ export default function StorePageClient({ slug }: { slug: string }) {
       <div className="px-4 mt-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold text-dark">
-            المنتجات ({store.total_products})
+            المنتجات ({selectedCategory ? products.length : store.total_products})
           </h3>
         </div>
 

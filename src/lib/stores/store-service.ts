@@ -451,20 +451,29 @@ export async function toggleFollow(
   }
 }
 
-/** Record a store view for analytics */
+/** Record a store view for analytics (increment, not overwrite) */
 export async function recordStoreView(storeId: string): Promise<void> {
   const today = new Date().toISOString().split("T")[0];
 
-  await supabase.from("store_analytics" as never).upsert(
-    {
-      store_id: storeId,
-      date: today,
-      total_views: 1,
-      unique_visitors: 1,
-      source_direct: 1,
-    } as never,
-    { onConflict: "store_id,date" },
-  );
+  // Try RPC increment first (if available), fallback to insert-only for new rows
+  const { error } = await supabase.rpc("increment_store_view" as never, {
+    p_store_id: storeId,
+    p_date: today,
+  } as never);
+
+  if (error) {
+    // Fallback: insert new row only (won't overwrite existing)
+    await supabase.from("store_analytics" as never).upsert(
+      {
+        store_id: storeId,
+        date: today,
+        total_views: 1,
+        unique_visitors: 1,
+        source_direct: 1,
+      } as never,
+      { onConflict: "store_id,date", ignoreDuplicates: true },
+    );
+  }
 }
 
 // ============================================
