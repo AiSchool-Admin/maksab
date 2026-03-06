@@ -51,7 +51,7 @@ export default function StoreReviewsPage() {
       setStoreName(store.name);
       setStoreId(store.id);
       setStoreOwnerId(store.user_id);
-      setAvgRating(store.avg_rating);
+      setAvgRating(store.avg_rating || 0);
 
       await loadReviews(store.id, 1);
       setIsLoading(false);
@@ -84,7 +84,7 @@ export default function StoreReviewsPage() {
     await loadReviews(storeId, 1);
     const store = await getStoreBySlug(slug);
     if (store) {
-      setAvgRating(store.avg_rating);
+      setAvgRating(store.avg_rating || 0);
       setTotal((prev) => prev + 1);
     }
   };

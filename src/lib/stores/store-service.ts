@@ -323,7 +323,7 @@ export async function getStoreCategories(
   }
 }
 
-/** Fetch store reviews */
+/** Fetch store reviews with reviewer info */
 export async function getStoreReviews(
   storeId: string,
   page = 1,
@@ -332,14 +332,33 @@ export async function getStoreReviews(
   const from = (page - 1) * limit;
 
   try {
+    // Join with profiles to get reviewer display_name and avatar_url
     const { data, count, error } = await supabase
       .from("store_reviews" as never)
-      .select("*", { count: "exact" })
+      .select("*, reviewer:profiles!reviewer_id(display_name, avatar_url)", { count: "exact" })
       .eq("store_id", storeId)
       .order("created_at", { ascending: false })
       .range(from, from + limit - 1);
 
-    if (error || !data || data.length === 0) {
+    if (error) {
+      // Fallback: fetch without join if profiles relation fails
+      const fallback = await supabase
+        .from("store_reviews" as never)
+        .select("*", { count: "exact" })
+        .eq("store_id", storeId)
+        .order("created_at", { ascending: false })
+        .range(from, from + limit - 1);
+
+      if (fallback.error || !fallback.data || fallback.data.length === 0) {
+        return { reviews: [], total: 0 };
+      }
+      return {
+        reviews: (fallback.data || []) as unknown as StoreReview[],
+        total: fallback.count || 0,
+      };
+    }
+
+    if (!data || data.length === 0) {
       return { reviews: [], total: 0 };
     }
     return {

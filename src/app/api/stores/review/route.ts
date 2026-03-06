@@ -77,6 +77,21 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if user already reviewed this store (one review per user per store)
+    const { data: existingReview } = await adminClient
+      .from("store_reviews")
+      .select("id")
+      .eq("store_id", store_id)
+      .eq("reviewer_id", reviewer_id)
+      .maybeSingle();
+
+    if (existingReview) {
+      return NextResponse.json(
+        { error: "أنت قيّمت المتجر ده قبل كده" },
+        { status: 409 },
+      );
+    }
+
     const { data: review, error } = await adminClient
       .from("store_reviews")
       .insert({
