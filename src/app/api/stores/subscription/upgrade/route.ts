@@ -105,10 +105,17 @@ export async function POST(request: Request) {
 
     // Expire old subscription if exists
     if (currentSub) {
-      await adminClient
+      const { error: expireError } = await adminClient
         .from("store_subscriptions")
         .update({ status: "expired", end_at: now.toISOString() })
         .eq("id", currentSub.id);
+
+      if (expireError) {
+        return NextResponse.json(
+          { error: "فشل إنهاء الاشتراك الحالي. جرب تاني" },
+          { status: 500 },
+        );
+      }
     }
 
     // Create new subscription
