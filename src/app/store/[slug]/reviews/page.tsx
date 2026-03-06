@@ -82,10 +82,10 @@ export default function StoreReviewsPage() {
     setShowReviewForm(false);
     setPage(1);
     await loadReviews(storeId, 1);
+    // Re-fetch store to get updated avg_rating (loadReviews already sets total)
     const store = await getStoreBySlug(slug);
     if (store) {
       setAvgRating(store.avg_rating || 0);
-      setTotal((prev) => prev + 1);
     }
   };
 

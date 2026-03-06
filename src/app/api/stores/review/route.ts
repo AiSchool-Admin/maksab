@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
     const reviewer_id = tokenResult.userId;
 
-    if (!store_id || !transaction_id || !overall_rating) {
+    if (!store_id || !overall_rating) {
       return NextResponse.json(
         { error: "البيانات الأساسية مطلوبة" },
         { status: 400 },
@@ -51,6 +51,25 @@ export async function POST(request: Request) {
     if (overall_rating < 1 || overall_rating > 5) {
       return NextResponse.json(
         { error: "التقييم لازم يكون من 1 لـ 5" },
+        { status: 400 },
+      );
+    }
+
+    // Validate sub-ratings (1-5 if provided)
+    const subRatings = { quality_rating, accuracy_rating, response_rating, commitment_rating };
+    for (const [key, val] of Object.entries(subRatings)) {
+      if (val != null && (val < 1 || val > 5)) {
+        return NextResponse.json(
+          { error: "التقييمات الفرعية لازم تكون من 1 لـ 5" },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate comment length
+    if (comment && typeof comment === "string" && comment.length > 500) {
+      return NextResponse.json(
+        { error: "التعليق لازم يكون أقل من 500 حرف" },
         { status: 400 },
       );
     }
@@ -92,19 +111,24 @@ export async function POST(request: Request) {
       );
     }
 
+    const insertData: Record<string, unknown> = {
+      store_id,
+      reviewer_id,
+      overall_rating,
+      quality_rating: quality_rating || null,
+      accuracy_rating: accuracy_rating || null,
+      response_rating: response_rating || null,
+      commitment_rating: commitment_rating || null,
+      comment: comment ? String(comment).slice(0, 500) : null,
+    };
+    // Only include transaction_id if it's a valid UUID
+    if (transaction_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(transaction_id)) {
+      insertData.transaction_id = transaction_id;
+    }
+
     const { data: review, error } = await adminClient
       .from("store_reviews")
-      .insert({
-        store_id,
-        reviewer_id,
-        transaction_id,
-        overall_rating,
-        quality_rating: quality_rating || null,
-        accuracy_rating: accuracy_rating || null,
-        response_rating: response_rating || null,
-        commitment_rating: commitment_rating || null,
-        comment: comment || null,
-      })
+      .insert(insertData)
       .select()
       .single();
 
