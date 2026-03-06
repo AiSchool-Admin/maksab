@@ -29,6 +29,7 @@ import AdCard from "@/components/ad/AdCard";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { getCategoryById, getEffectiveFields } from "@/lib/categories/categories-config";
 import { generateAutoTitle, generateAutoDescription } from "@/lib/categories/generate";
+import { supabase } from "@/lib/supabase/client";
 import { fetchAdDetail, getSimilarAds } from "@/lib/ad-detail";
 import type { AdDetail } from "@/lib/ad-detail";
 import type { AdSummary } from "@/lib/ad-data";
@@ -175,6 +176,11 @@ export default function AdDetailClient({ id }: { id: string }) {
       if (data.saleType === "auction" && data.auctionStartPrice) {
         const state = toAuctionState(data);
         setAuctionState(state);
+      }
+
+      // Initialize auto-drop toggle from ad data
+      if ((data.categoryFields as Record<string, unknown>)?.auto_price_drop === true) {
+        setAutoDropEnabled(true);
       }
 
       // Load similar ads in parallel (non-blocking)
@@ -373,6 +379,9 @@ export default function AdDetailClient({ id }: { id: string }) {
     if (result.success) {
       const fresh = await fetchAuctionState(id);
       if (fresh) setAuctionState(fresh);
+      import("react-hot-toast").then(({ toast }) => toast.success("تم إلغاء المزاد"));
+    } else {
+      import("react-hot-toast").then(({ toast }) => toast.error(result.error || "حصل مشكلة في إلغاء المزاد"));
     }
   }, [id]);
 
@@ -384,6 +393,9 @@ export default function AdDetailClient({ id }: { id: string }) {
     if (result.success) {
       const fresh = await fetchAuctionState(id);
       if (fresh) setAuctionState(fresh);
+      import("react-hot-toast").then(({ toast }) => toast.success(`تم تمديد المزاد ${hours} ساعة`));
+    } else {
+      import("react-hot-toast").then(({ toast }) => toast.error(result.error || "حصل مشكلة في تمديد المزاد"));
     }
   }, [id]);
 
@@ -861,7 +873,18 @@ export default function AdDetailClient({ id }: { id: string }) {
             favoritesCount={ad.favoritesCount}
             daysListed={Math.max(1, Math.floor((Date.now() - new Date(ad.createdAt).getTime()) / (1000 * 60 * 60 * 24)))}
             autoDropEnabled={autoDropEnabled}
-            onToggleAutoDrop={setAutoDropEnabled}
+            onToggleAutoDrop={async (enabled) => {
+              setAutoDropEnabled(enabled);
+              // Persist toggle to database
+              try {
+                const cf = (ad.categoryFields as Record<string, unknown>) || {};
+                const updated: Record<string, unknown> = { ...cf, auto_price_drop: enabled };
+                if (enabled && !cf.original_price && ad.price) {
+                  updated.original_price = ad.price;
+                }
+                await supabase.from("ads" as never).update({ category_fields: updated } as never).eq("id", ad.id);
+              } catch { /* silent — local state already updated */ }
+            }}
             onApplyDrop={(newPrice) => {
               setAd((prev) => prev ? { ...prev, price: newPrice } : prev);
             }}
