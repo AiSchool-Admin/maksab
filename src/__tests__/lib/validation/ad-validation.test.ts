@@ -127,6 +127,7 @@ describe("Ad Validation", () => {
       const result = validateAdData({
         ...validAd,
         sale_type: "exchange",
+        exchange_description: "عايز موبايل سامسونج",
       });
       expect(result.valid).toBe(true);
     });

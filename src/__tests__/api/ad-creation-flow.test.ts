@@ -232,6 +232,7 @@ describe("Ad Creation Flow", () => {
         category_id: "phones",
         sale_type: "exchange",
         title: "آيفون 14 برو — للتبديل",
+        exchange_description: "عايز سامسونج S24",
         category_fields: {
           brand: "آيفون",
           model: "14 برو",
@@ -246,6 +247,7 @@ describe("Ad Creation Flow", () => {
         category_id: "phones",
         sale_type: "exchange",
         title: "موبايل للتبديل",
+        exchange_description: "عايز موبايل تاني",
         price: 0,
       });
       expect(result.valid).toBe(true);
@@ -256,6 +258,7 @@ describe("Ad Creation Flow", () => {
         category_id: "phones",
         sale_type: "exchange",
         title: "موبايل للتبديل مع فرق",
+        exchange_description: "عايز موبايل أحسن",
         price: 2000,
       });
       expect(result.valid).toBe(true);
@@ -499,6 +502,7 @@ describe("Ad Creation Flow", () => {
         category_id: cat,
         sale_type: "exchange",
         title: `تبديل في ${cat}`,
+        exchange_description: "عايز بديل مناسب",
       });
       expect(result.valid).toBe(true);
     });
