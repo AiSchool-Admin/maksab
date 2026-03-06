@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { ChevronRight, Loader2, SearchX, Brain } from "lucide-react";
+
+const ShoppingAssistantFab = dynamic(
+  () => import("@/components/chat/ShoppingAssistantFab"),
+  { ssr: false },
+);
 import AISearchBar from "@/components/search/AISearchBar";
 import FilterChips, {
   type ActiveFilters,
@@ -679,6 +685,7 @@ function SearchPageInner() {
         )}
       </div>
 
+      <ShoppingAssistantFab />
       <BottomNavWithBadge />
     </main>
   );
