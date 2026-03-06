@@ -254,13 +254,23 @@ export default function CreateAdPage() {
       if (step === 3) {
         if (draft.saleType === "cash") {
           if (!draft.priceData.price && !draft.priceData.useDayPrice) errs.price = "السعر مطلوب";
-        } else if (draft.saleType === "auction") {
-          if (!draft.priceData.auctionStartPrice)
-            errs.auctionStartPrice = "سعر الافتتاح مطلوب";
-        } else if (draft.saleType === "live_auction") {
-          if (!draft.priceData.auctionStartPrice)
-            errs.auctionStartPrice = "سعر الافتتاح مطلوب";
-          if (!draft.priceData.liveAuctionScheduledAt)
+        } else if (draft.saleType === "auction" || draft.saleType === "live_auction") {
+          const startPrice = Number(draft.priceData.auctionStartPrice);
+          if (!draft.priceData.auctionStartPrice || isNaN(startPrice) || startPrice < 1)
+            errs.auctionStartPrice = "سعر الافتتاح لازم يكون أكبر من 0";
+          // Buy-now price must be higher than start price
+          if (draft.priceData.auctionBuyNowPrice) {
+            const buyNow = Number(draft.priceData.auctionBuyNowPrice);
+            if (!isNaN(buyNow) && !isNaN(startPrice) && buyNow <= startPrice)
+              errs.auctionBuyNowPrice = "سعر الشراء الفوري لازم يكون أعلى من سعر الافتتاح";
+          }
+          // Min increment must be positive if provided
+          if (draft.priceData.auctionMinIncrement) {
+            const minInc = Number(draft.priceData.auctionMinIncrement);
+            if (isNaN(minInc) || minInc < 1)
+              errs.auctionMinIncrement = "الحد الأدنى للمزايدة لازم يكون أكبر من 0";
+          }
+          if (draft.saleType === "live_auction" && !draft.priceData.liveAuctionScheduledAt)
             errs.liveAuctionScheduledAt = "حدد موعد البث المباشر";
         } else if (draft.saleType === "exchange") {
           if (!draft.priceData.exchangeWantedCategoryId)
@@ -496,12 +506,7 @@ export default function CreateAdPage() {
           (draft.saleType === "auction" || draft.saleType === "live_auction") && draft.priceData.auctionMinIncrement
             ? Number(draft.priceData.auctionMinIncrement)
             : null,
-        auction_ends_at:
-          draft.saleType === "auction" || draft.saleType === "live_auction"
-            ? new Date(Date.now() + (draft.priceData.auctionDuration || 24) * 3600000).toISOString()
-            : null,
-        auction_status:
-          draft.saleType === "auction" || draft.saleType === "live_auction" ? "active" : null,
+        // auction_ends_at and auction_status are computed server-side
         exchange_description:
           draft.saleType === "exchange"
             ? (draft.priceData.exchangeWantedTitle || draft.priceData.exchangeNotes || draft.priceData.exchangeDescription || null)

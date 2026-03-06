@@ -292,6 +292,7 @@ export default function Step3PricePhotos({
               unit="جنيه"
               placeholder="0"
               hint="لو حد دفع المبلغ ده المزاد بينتهي فوراً"
+              error={errors.auctionBuyNowPrice}
             />
             <div>
               <label className="block text-sm font-medium text-dark mb-2">
@@ -325,6 +326,7 @@ export default function Step3PricePhotos({
               unit="جنيه"
               placeholder="50"
               hint="أقل مبلغ يزود بيه المزايد"
+              error={errors.auctionMinIncrement}
             />
           </div>
         )}
