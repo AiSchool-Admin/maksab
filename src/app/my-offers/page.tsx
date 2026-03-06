@@ -6,6 +6,7 @@ import { DollarSign, MessageCircle, Phone, Check, X } from "lucide-react";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
+import { EmptyMyOffers, EmptyNeedsLogin } from "@/components/ui/EmptyState";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   getUserOffers,
@@ -120,13 +121,7 @@ export default function MyOffersPage() {
             <div key={i} className="h-24 bg-gray-light rounded-xl animate-pulse" />
           ))
         ) : offers.length === 0 ? (
-          <div className="text-center py-12">
-            <DollarSign size={48} className="text-gray-text mx-auto mb-4" />
-            <p className="text-lg font-bold text-dark mb-2">مفيش عروض أسعار</p>
-            <p className="text-sm text-gray-text">
-              لما تلاقي إعلان يعجبك، ابعت عرض سعر للبائع
-            </p>
-          </div>
+          <EmptyMyOffers />
         ) : (
           offers.map((offer) => (
             <Link

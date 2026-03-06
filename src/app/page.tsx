@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Search, Plus, MapPin } from "lucide-react";
+import { Search, Plus, MapPin, TrendingUp } from "lucide-react";
 import InstaPayLogo from "@/components/ui/InstaPayLogo";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -49,6 +49,10 @@ import {
   fetchActiveBuyRequests,
   type BuyRequest,
 } from "@/lib/buy-requests/buy-request-service";
+import {
+  getTrendingSearches,
+  type TrendingSearch,
+} from "@/lib/search/search-service";
 
 const categories = [
   { name: "سيارات", slug: "cars" },
@@ -94,6 +98,9 @@ export default function HomePage() {
   const [hasSignals, setHasSignals] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
+  // Trending searches state
+  const [trendingSearches, setTrendingSearches] = useState<TrendingSearch[]>([]);
+
   // Buy requests state
   const [myBuyRequests, setMyBuyRequests] = useState<BuyRequest[]>([]);
   const [recentBuyRequests, setRecentBuyRequests] = useState<BuyRequest[]>([]);
@@ -138,6 +145,11 @@ export default function HomePage() {
       setHasSignals(result.hasSignals);
     });
   }, [user]);
+
+  // Load trending searches
+  useEffect(() => {
+    getTrendingSearches(8).then(setTrendingSearches);
+  }, []);
 
   // Load buy requests
   useEffect(() => {
@@ -185,6 +197,7 @@ export default function HomePage() {
     setNewListingsCount(newResult.totalNew);
     setFavoriteIds(new Set(getFavoriteIds()));
     fetchActiveBuyRequests(10).then(setRecentBuyRequests);
+    getTrendingSearches(8).then(setTrendingSearches);
     if (user) fetchMyBuyRequests().then(setMyBuyRequests);
   }, [refreshFeed, user]);
 
@@ -238,6 +251,31 @@ export default function HomePage() {
       </div>
 
       <PullToRefresh onRefresh={handlePullRefresh}>
+          {/* Trending Searches */}
+          {trendingSearches.length > 0 && (
+            <section className="px-4 pt-2 pb-1">
+              <div className="flex items-center gap-1.5 mb-2">
+                <TrendingUp size={14} className="text-brand-green" />
+                <h3 className="text-xs font-bold text-gray-text">الأكثر بحثاً</h3>
+                <span className="text-[8px] text-gray-text bg-gray-100 px-1.5 py-0.5 rounded-full">مباشر</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {trendingSearches.map((item, i) => (
+                  <Link
+                    key={item.query}
+                    href={`/search?q=${encodeURIComponent(item.query)}`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-light rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
+                  >
+                    <span className={`text-[10px] font-bold ${i < 3 ? "text-brand-green" : "text-gray-text"}`}>
+                      {i + 1}
+                    </span>
+                    <span className="text-xs text-dark font-medium">{item.query}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Quick search chips */}
           <div className="relative">
             <div className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-hide">

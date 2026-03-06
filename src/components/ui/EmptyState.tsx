@@ -178,14 +178,15 @@ export function EmptyOffers() {
 }
 
 /** Empty state for collections */
-export function EmptyCollections() {
+export function EmptyCollections({ onCreateNew }: { onCreateNew?: () => void } = {}) {
   return (
     <EmptyState
       icon="📁"
       title="مفيش مجموعات لسه"
-      description="أنشئ مجموعة عشان تنظم الإعلانات اللي بتتابعها"
-      actionLabel="أنشئ مجموعة"
-      actionHref="/collections"
+      description="اعمل قائمة واحفظ فيها الإعلانات اللي عجبتك وشاركها مع صحابك"
+      actionLabel="اعمل أول قائمة"
+      onAction={onCreateNew}
+      actionHref={onCreateNew ? undefined : "/collections"}
     />
   );
 }
@@ -219,6 +220,58 @@ export function EmptyStoreProducts() {
       description="أضف أول منتج لمتجرك وابدأ البيع"
       actionLabel="أضف منتج"
       actionHref="/store/dashboard/products/quick-add"
+    />
+  );
+}
+
+/** Empty state for price offers (buyer side) */
+export function EmptyMyOffers() {
+  return (
+    <EmptyState
+      icon="💰"
+      title="مفيش عروض أسعار"
+      description="لما تلاقي إعلان يعجبك، ابعت عرض سعر للبائع"
+      actionLabel="تصفّح الإعلانات"
+      actionHref="/"
+    />
+  );
+}
+
+/** Empty state for user profile page when viewed by others */
+export function EmptyUserAds() {
+  return (
+    <EmptyState
+      icon="📦"
+      title="مفيش إعلانات"
+      description="المستخدم ده ملهوش إعلانات حالياً"
+      actionLabel="تصفّح الإعلانات"
+      actionHref="/"
+    />
+  );
+}
+
+/** Empty state for comparison page */
+export function EmptyComparison() {
+  return (
+    <EmptyState
+      icon="⚖️"
+      title="مفيش حاجات للمقارنة"
+      description="أضف إعلانات للمقارنة من صفحة الإعلان"
+      actionLabel="تصفّح الإعلانات"
+      actionHref="/"
+    />
+  );
+}
+
+/** Empty state for rewards page */
+export function EmptyRewards() {
+  return (
+    <EmptyState
+      icon="🎁"
+      title="مفيش مكافآت لسه"
+      description="استخدم مكسب أكتر واكسب نقاط ومكافآت"
+      actionLabel="ابدأ دلوقتي"
+      actionHref="/"
     />
   );
 }
