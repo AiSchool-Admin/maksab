@@ -80,8 +80,8 @@ export async function POST(req: NextRequest) {
       title: ad.title,
     });
 
-    // If apply=true and auto-drop is enabled, update the price
-    if (apply && autoDropEnabled && suggestion.shouldDrop) {
+    // If apply=true, update the price (manual apply from seller always works)
+    if (apply && suggestion.shouldDrop) {
       const oldPrice = ad.price;
       const newPrice = suggestion.suggestedNewPrice;
 
