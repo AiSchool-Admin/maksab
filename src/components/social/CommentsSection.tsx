@@ -23,7 +23,7 @@ interface CommentsSectionProps {
 const PAGE_SIZE = 10;
 
 export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProps) {
-  const { user: authUser } = useAuth();
+  const { user: authUser, requireAuth } = useAuth();
   const [comments, setComments] = useState<AdComment[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -87,7 +87,10 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
     }
 
     if (!currentUser) {
-      setInputError("لازم تسجل دخول الأول عشان تعلّق");
+      const authedUser = await requireAuth();
+      if (!authedUser) return;
+      // User just logged in — they need to retry
+      setInputError("اضغط إرسال تاني");
       return;
     }
 

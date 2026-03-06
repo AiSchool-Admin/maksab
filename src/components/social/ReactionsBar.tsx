@@ -11,6 +11,7 @@ import {
   type ReactionConfig,
 } from "@/lib/social/reactions-service";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 interface ReactionsBarProps {
   adId: string;
@@ -18,6 +19,7 @@ interface ReactionsBarProps {
 }
 
 export default function ReactionsBar({ adId, compact = false }: ReactionsBarProps) {
+  const { requireAuth } = useAuth();
   const [summary, setSummary] = useState<ReactionSummary>({
     total: 0,
     counts: {
@@ -67,8 +69,11 @@ export default function ReactionsBar({ adId, compact = false }: ReactionsBarProp
     if (isLoading) return;
 
     if (!userId) {
-      // Trigger auth — for now just close picker
       setPickerOpen(false);
+      const authedUser = await requireAuth();
+      if (authedUser) {
+        setUserId(authedUser.id);
+      }
       return;
     }
 
