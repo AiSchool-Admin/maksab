@@ -13,11 +13,11 @@ import {
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { useAuthStore } from "@/stores/auth-store";
+import { getSessionToken } from "@/lib/supabase/auth";
 import { getStoreByUserId } from "@/lib/stores/store-service";
 import {
   getCategoryById,
   categoriesConfig,
-  getEffectiveFields,
 } from "@/lib/categories/categories-config";
 import {
   generateAutoTitle,
@@ -159,9 +159,9 @@ export default function RapidEntryPage() {
   function isRowValid(row: RapidRow, config: CategoryConfig): boolean {
     const price = Number(row.price);
     if (!price || price <= 0) return false;
-    // At least the first required field must be filled
+    // All visible required fields must be filled
     const reqFields = getVisibleRequiredFields(config);
-    return reqFields.length === 0 || !!row.fields[reqFields[0]];
+    return reqFields.every((fId) => !!row.fields[fId]);
   }
 
   // Publish all valid rows
@@ -212,6 +212,7 @@ export default function RapidEntryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: user.id,
+          session_token: getSessionToken(),
           ads,
           store_id: store.id,
         }),
