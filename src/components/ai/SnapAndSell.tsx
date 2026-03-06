@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState, useRef } from "react";
-import { Camera, Sparkles, Loader2, RefreshCw, Check, X } from "lucide-react";
+import { Camera, Sparkles, RefreshCw, Check, X } from "lucide-react";
 import type { ProductAnalysis } from "@/lib/ai/ai-service";
 
 interface SnapAndSellProps {
