@@ -46,6 +46,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (name.trim().length < 2) {
+      return NextResponse.json(
+        { error: "اسم المتجر لازم يكون حرفين على الأقل" },
+        { status: 400 },
+      );
+    }
+
     if (name.trim().length > 30) {
       return NextResponse.json(
         { error: "اسم المتجر لازم يكون أقل من 30 حرف" },
