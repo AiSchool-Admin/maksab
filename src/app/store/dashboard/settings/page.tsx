@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Upload } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/lib/supabase/client";
 import { getStoreByUserId } from "@/lib/stores/store-service";
@@ -76,6 +76,30 @@ export default function DashboardSettingsPage() {
 
   const handleSave = async () => {
     if (!store) return;
+
+    // Validate required fields
+    if (!name.trim()) {
+      toast.error("اسم المتجر مطلوب");
+      return;
+    }
+
+    // Validate phone if provided
+    if (phone && !/^01[0125]\d{8}$/.test(phone)) {
+      toast.error("رقم التليفون لازم يبدأ بـ 010 أو 011 أو 012 أو 015 ويكون 11 رقم");
+      return;
+    }
+
+    // Validate hex colors
+    const hexRegex = /^#[0-9A-Fa-f]{6}$/;
+    if (!hexRegex.test(primaryColor)) {
+      toast.error("اللون الأساسي مش صالح");
+      return;
+    }
+    if (secondaryColor && !hexRegex.test(secondaryColor)) {
+      toast.error("اللون الثانوي مش صالح");
+      return;
+    }
+
     setIsSaving(true);
 
     const updates = {
