@@ -3,13 +3,13 @@
  * Validates required fields, sale type specifics, and category_fields structure.
  */
 
+import { categoriesConfig } from "@/lib/categories/categories-config";
+
 const VALID_SALE_TYPES = ["cash", "auction", "exchange", "live_auction"];
-const VALID_CATEGORIES = [
-  "cars", "real_estate", "phones", "fashion", "scrap",
-  "gold", "gold_silver", "luxury", "appliances", "home_appliances", "furniture",
-  "hobbies", "tools", "services",
-  "computers", "kids_babies", "electronics", "beauty",
-];
+const VALID_CATEGORIES = categoriesConfig.map((c) => c.id);
+
+// Known internal keys stored as nested objects in category_fields
+const ALLOWED_NESTED_KEYS = new Set(["exchange_wanted"]);
 
 const MAX_TITLE_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 5000;
@@ -51,6 +51,11 @@ export function validateAdData(adData: Record<string, unknown>): ValidationResul
   // Validate category_id is a known category
   if (!VALID_CATEGORIES.includes(adData.category_id as string)) {
     return { valid: false, error: "القسم مش موجود" };
+  }
+
+  // Validate governorate
+  if (!adData.governorate || typeof adData.governorate !== "string") {
+    return { valid: false, error: "المحافظة مطلوبة" };
   }
 
   // Validate sale-type-specific fields
@@ -133,8 +138,12 @@ export function validateAdData(adData: Record<string, unknown>): ValidationResul
             return { valid: false, error: `بيانات الحقل "${key}" مش صحيحة` };
           }
         }
+      } else if (typeof value === "object") {
+        // Allow specific known nested object keys (e.g. exchange_wanted)
+        if (!ALLOWED_NESTED_KEYS.has(key)) {
+          return { valid: false, error: `نوع بيانات الحقل "${key}" مش مدعوم` };
+        }
       } else {
-        // Reject nested objects
         return { valid: false, error: `نوع بيانات الحقل "${key}" مش مدعوم` };
       }
     }

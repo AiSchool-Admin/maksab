@@ -45,6 +45,7 @@ export default function ExchangeWantedForm({
   onPriceDiffChange,
 }: ExchangeWantedFormProps) {
   const [showOptionalFields, setShowOptionalFields] = useState(false);
+  const [isTitleManuallyEdited, setIsTitleManuallyEdited] = useState(false);
 
   const selectedCategory = wantedCategoryId ? getCategoryById(wantedCategoryId) : null;
 
@@ -78,18 +79,19 @@ export default function ExchangeWantedForm({
 
   const { required: requiredFields, optional: optionalFields } = getFieldsToShow();
 
-  // Auto-generate wanted title when fields change
+  // Auto-generate wanted title when fields change (only if not manually edited)
   useEffect(() => {
-    if (!wantedCategoryId) return;
+    if (!wantedCategoryId || isTitleManuallyEdited) return;
     const title = generateWantedTitle(wantedCategoryId, wantedFields, wantedSubcategoryId || undefined);
     if (title) onTitleChange(title);
-  }, [wantedCategoryId, wantedSubcategoryId, wantedFields, onTitleChange]);
+  }, [wantedCategoryId, wantedSubcategoryId, wantedFields, onTitleChange, isTitleManuallyEdited]);
 
   // Reset fields when category changes
   const handleCategorySelect = (catId: string) => {
     if (catId === wantedCategoryId) return;
     onCategoryChange(catId);
     onSubcategoryChange("");
+    setIsTitleManuallyEdited(false);
 
     // Set default values for the new category
     const config = getCategoryById(catId);
