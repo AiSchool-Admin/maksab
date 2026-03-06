@@ -98,6 +98,7 @@ export default function Step4LocationReview({
             options={cityOptions}
             placeholder={governorate ? "اختار المدينة" : "اختار المحافظة الأول"}
             disabled={!governorate}
+            error={errors.city}
           />
         </div>
       </div>

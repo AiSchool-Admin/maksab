@@ -269,6 +269,7 @@ export default function CreateAdPage() {
         // Images are optional — no validation needed
         // Location validation (merged from old step 4)
         if (!draft.governorate) errs.governorate = "اختار المحافظة";
+        if (draft.governorate && !draft.city) errs.city = "اختار المدينة";
         if (!draft.title.trim()) errs.title = "العنوان مطلوب";
       }
 
@@ -367,6 +368,8 @@ export default function CreateAdPage() {
     try {
       // Upload images via /api/upload (FormData, not base64 in JSON)
       const uploadedImageUrls: string[] = [];
+      let failedImageCount = 0;
+      const authToken = getSessionToken();
       for (let i = 0; i < images.length; i++) {
         try {
           const formData = new FormData();
@@ -380,7 +383,7 @@ export default function CreateAdPage() {
           const uploadRes = await fetch("/api/upload", {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${getSessionToken()}`,
+              Authorization: `Bearer ${authToken}`,
             },
             body: formData,
           });
@@ -389,11 +392,26 @@ export default function CreateAdPage() {
             const uploadData = await uploadRes.json();
             if (uploadData.url) {
               uploadedImageUrls.push(uploadData.url);
+            } else {
+              failedImageCount++;
             }
+          } else {
+            failedImageCount++;
           }
         } catch {
-          // Skip failed image upload
+          failedImageCount++;
         }
+      }
+
+      // Warn if some images failed to upload
+      if (failedImageCount > 0 && uploadedImageUrls.length > 0) {
+        import("react-hot-toast").then(({ default: toast }) => {
+          toast.error(`${failedImageCount} صورة مرفعتش. الإعلان هينشر بالصور اللي اترفعت بنجاح`);
+        });
+      } else if (failedImageCount > 0 && uploadedImageUrls.length === 0 && images.length > 0) {
+        setErrors({ publish: "فشل رفع الصور. تأكد من اتصالك بالإنترنت وجرب تاني" });
+        setIsPublishing(false);
+        return;
       }
 
       // Upload video if present
@@ -404,7 +422,7 @@ export default function CreateAdPage() {
           vf.append("file", videoFile.file);
           vf.append("bucket", "ad-videos");
           vf.append("path", `ads/${authedUser.id}/${Date.now()}_video.${videoFile.file.name.split(".").pop() || "mp4"}`);
-          const vRes = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${getSessionToken()}` }, body: vf });
+          const vRes = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${authToken}` }, body: vf });
           if (vRes.ok) {
             const vData = await vRes.json();
             if (vData.url) videoUrl = vData.url;
@@ -420,7 +438,7 @@ export default function CreateAdPage() {
           af.append("file", voiceNote.file);
           af.append("bucket", "ad-audio");
           af.append("path", `ads/${authedUser.id}/${Date.now()}_voice.${voiceNote.file.name.split(".").pop() || "webm"}`);
-          const aRes = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${getSessionToken()}` }, body: af });
+          const aRes = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${authToken}` }, body: af });
           if (aRes.ok) {
             const aData = await aRes.json();
             if (aData.url) voiceNoteUrl = aData.url;
