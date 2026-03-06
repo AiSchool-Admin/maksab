@@ -15,6 +15,7 @@ import {
   X,
   Shield,
   ChevronLeft,
+  Database,
 } from "lucide-react";
 
 const ADMIN_SESSION_KEY = "maksab_admin_session";
@@ -47,6 +48,7 @@ const navItems = [
   { href: "/admin/analytics", label: "التحليلات", icon: TrendingUp },
   { href: "/admin/locations", label: "المواقع", icon: MapPin },
   { href: "/admin/settings", label: "الإعدادات", icon: Settings },
+  { href: "/admin/setup", label: "إعداد DB", icon: Database },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
