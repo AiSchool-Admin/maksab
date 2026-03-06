@@ -28,6 +28,7 @@ import {
   Bookmark,
   Award,
   Users,
+  Wallet,
 } from "lucide-react";
 import Image from "next/image";
 import Header from "@/components/layout/Header";
@@ -67,6 +68,10 @@ const UpgradeToStoreBanner = dynamic(
 );
 const FounderBadge = dynamic(
   () => import("@/components/social/FounderBadge"),
+  { ssr: false },
+);
+const PendingPaymentsBanner = dynamic(
+  () => import("@/components/commission/PendingPaymentsBanner"),
   { ssr: false },
 );
 
@@ -424,6 +429,11 @@ export default function ProfilePage() {
         <SellerRatingSummaryComponent sellerId={user!.id} />
       </section>
 
+      {/* Pending payments reminder banner */}
+      <section className="px-4 pb-5">
+        <PendingPaymentsBanner userId={user!.id} />
+      </section>
+
       {/* InstaPay commission support banner */}
       <InstaPayBanner />
 
@@ -465,6 +475,11 @@ export default function ProfilePage() {
           icon={<ShoppingCart size={20} />}
           label="طلبات الشراء"
           onClick={() => router.push("/buy-requests")}
+        />
+        <ProfileMenuItem
+          icon={<Wallet size={20} />}
+          label="المدفوعات والعمولة"
+          onClick={() => router.push("/profile/payments")}
         />
         <ProfileMenuItem
           icon={<DollarSign size={20} />}
