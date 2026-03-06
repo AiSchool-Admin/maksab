@@ -10,6 +10,7 @@ import {
   Settings,
   Heart,
   ShoppingBag,
+  ShoppingCart,
   HelpCircle,
   Camera,
   Edit3,
@@ -385,6 +386,11 @@ export default function ProfilePage() {
           icon={<Award size={20} />}
           label="سفير مكسب"
           onClick={() => router.push("/ambassador")}
+        />
+        <ProfileMenuItem
+          icon={<ShoppingCart size={20} />}
+          label="طلبات الشراء"
+          onClick={() => router.push("/buy-requests")}
         />
         <ProfileMenuItem
           icon={<DollarSign size={20} />}

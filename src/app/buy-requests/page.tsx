@@ -53,8 +53,14 @@ export default function BuyRequestsPage() {
       switch (sortBy) {
         case "budget_high":
           return (b.budgetMax || 0) - (a.budgetMax || 0);
-        case "budget_low":
-          return (a.budgetMax || Infinity) - (b.budgetMax || Infinity);
+        case "budget_low": {
+          const aHas = a.budgetMax != null && a.budgetMax > 0;
+          const bHas = b.budgetMax != null && b.budgetMax > 0;
+          if (aHas && bHas) return a.budgetMax! - b.budgetMax!;
+          if (aHas) return -1;
+          if (bHas) return 1;
+          return 0;
+        }
         default:
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }

@@ -151,6 +151,54 @@ export async function respondToOffer(params: {
 }
 
 /**
+ * Respond to a counter offer (buyer accepts or rejects the counter)
+ */
+export async function respondToCounterOffer(params: {
+  offerId: string;
+  buyerId: string;
+  action: "accepted" | "rejected";
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from("price_offers" as never)
+      .update({
+        status: params.action,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", params.offerId)
+      .eq("buyer_id", params.buyerId)
+      .eq("status", "countered");
+
+    if (error) return { success: false, error: "حصل مشكلة، جرب تاني" };
+
+    // If accepted, reject all other pending offers on same ad
+    if (params.action === "accepted") {
+      const { data: offerData } = await supabase
+        .from("price_offers" as never)
+        .select("ad_id")
+        .eq("id", params.offerId)
+        .maybeSingle();
+
+      if (offerData) {
+        const adId = (offerData as Record<string, unknown>).ad_id as string;
+        await supabase
+          .from("price_offers" as never)
+          .update({ status: "rejected", updated_at: new Date().toISOString() } as never)
+          .eq("ad_id", adId)
+          .eq("status", "pending")
+          .neq("id", params.offerId);
+
+        await updateAdOfferStats(adId);
+      }
+    }
+
+    return { success: true };
+  } catch {
+    return { success: false, error: "حصل مشكلة، جرب تاني" };
+  }
+}
+
+/**
  * Withdraw a pending offer
  */
 export async function withdrawOffer(

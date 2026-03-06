@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { DollarSign, MessageCircle, Phone } from "lucide-react";
+import { DollarSign, MessageCircle, Phone, Check, X } from "lucide-react";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
@@ -10,6 +10,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import {
   getUserOffers,
   withdrawOffer,
+  respondToCounterOffer,
   getOfferStatusLabel,
   getOfferStatusColor,
   type PriceOffer,
@@ -61,6 +62,22 @@ export default function MyOffersPage() {
     const adUrl = typeof window !== "undefined" ? `${window.location.origin}/ad/${offer.adId}` : "";
     const message = `مرحباً، بخصوص عرضي ${formatPrice(offer.amount)} على إعلانك في مكسب: ${offer.adTitle || "إعلان"}\n${adUrl}`;
     return `https://wa.me/2${phone}?text=${encodeURIComponent(message)}`;
+  };
+
+  const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);
+
+  const handleRespondToCounter = async (offerId: string, action: "accepted" | "rejected") => {
+    if (!user?.id) return;
+    setRespondingOfferId(offerId);
+    const result = await respondToCounterOffer({ offerId, buyerId: user.id, action });
+    setRespondingOfferId(null);
+    if (result.success) {
+      toast.success(action === "accepted" ? "تم قبول العرض المضاد" : "تم رفض العرض المضاد");
+      const updated = await getUserOffers(user.id);
+      setOffers(updated);
+    } else {
+      toast.error(result.error || "حصل مشكلة");
+    }
   };
 
   const handleWithdraw = async (offerId: string) => {
@@ -147,6 +164,31 @@ export default function MyOffersPage() {
                   {offer.counterMessage && (
                     <p className="text-xs text-blue-600">{offer.counterMessage}</p>
                   )}
+                  <div
+                    className="flex gap-2 mt-2"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  >
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => handleRespondToCounter(offer.id, "accepted")}
+                      isLoading={respondingOfferId === offer.id}
+                      icon={<Check size={14} />}
+                      className="flex-1"
+                    >
+                      قبول
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleRespondToCounter(offer.id, "rejected")}
+                      isLoading={respondingOfferId === offer.id}
+                      icon={<X size={14} />}
+                      className="flex-1"
+                    >
+                      رفض
+                    </Button>
+                  </div>
                 </div>
               )}
 
