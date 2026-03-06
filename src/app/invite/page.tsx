@@ -2,14 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Rocket,
-  Users,
   Gavel,
   ArrowLeftRight,
   Recycle,
   Shield,
   ChevronLeft,
-  Check,
   Gift,
   Share2,
   Star,
@@ -307,7 +304,13 @@ export default function InvitePage() {
 
         {/* Registration Form OR Success State */}
         {!isRegistered ? (
-          <section className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
+            className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 space-y-4"
+          >
             <div className="text-center">
               <h2 className="text-2xl font-bold text-white mb-1">
                 سجّل كمؤسس مكسب 🏛️
@@ -353,6 +356,7 @@ export default function InvitePage() {
             {/* Invite Code */}
             <div>
               <button
+                type="button"
                 onClick={() => setShowInviteInput(!showInviteInput)}
                 className="text-xs text-amber-400 font-semibold hover:text-amber-300 transition-colors"
               >
@@ -372,7 +376,7 @@ export default function InvitePage() {
 
             {/* Submit */}
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={isSubmitting || phone.length < 11}
               className="w-full h-13 bg-gradient-to-l from-amber-500 to-yellow-500 text-[#1A1A2E] font-bold rounded-xl hover:from-amber-400 hover:to-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
               style={{ height: "52px" }}
@@ -386,7 +390,7 @@ export default function InvitePage() {
                 </>
               )}
             </button>
-          </section>
+          </form>
         ) : (
           <section className="bg-gradient-to-b from-amber-500/10 to-yellow-500/5 backdrop-blur-sm rounded-2xl border border-amber-500/30 p-6 space-y-5">
             {/* Success Header */}

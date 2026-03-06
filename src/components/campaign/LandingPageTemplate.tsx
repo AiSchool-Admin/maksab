@@ -4,8 +4,6 @@ import { useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
-  CheckCircle2,
-  type LucideIcon,
 } from "lucide-react";
 import MaksabLogo from "@/components/ui/MaksabLogo";
 import { ga4Event } from "@/lib/analytics/ga4";
@@ -49,8 +47,40 @@ export interface LandingPageConfig {
   testimonials?: LandingTestimonial[];
   finalCta: string;
   finalCtaLink: string;
-  accentColor?: string; // Tailwind color class
+  accentColor?: string; // Tailwind color key
 }
+
+// ── Accent Color Mapping ─────────────────────────────────
+// Tailwind purges dynamic class names at build time,
+// so we map accent keys to full static class names.
+
+interface AccentClasses {
+  text: string;
+  bg: string;
+  bgLight: string;
+  border: string;
+}
+
+const ACCENT_CLASSES: Record<string, AccentClasses> = {
+  "brand-green": {
+    text: "text-brand-green",
+    bg: "bg-brand-green",
+    bgLight: "bg-brand-green-light",
+    border: "border-brand-green/10",
+  },
+  "brand-gold": {
+    text: "text-brand-gold",
+    bg: "bg-brand-gold",
+    bgLight: "bg-brand-gold-light",
+    border: "border-brand-gold/10",
+  },
+  "brand-orange": {
+    text: "text-brand-orange",
+    bg: "bg-brand-orange",
+    bgLight: "bg-brand-orange-light",
+    border: "border-brand-orange/10",
+  },
+};
 
 // ── Component ──────────────────────────────────────────
 
@@ -64,7 +94,7 @@ export default function LandingPageTemplate({
     fbViewContent(config.slug, "campaign", 0);
   }, [config.slug]);
 
-  const accent = config.accentColor || "brand-green";
+  const a = ACCENT_CLASSES[config.accentColor || "brand-green"] || ACCENT_CLASSES["brand-green"];
 
   return (
     <main className="min-h-screen bg-white" dir="rtl">
@@ -76,7 +106,7 @@ export default function LandingPageTemplate({
           </Link>
           <Link
             href={config.heroCtaLink}
-            className={`text-xs font-bold text-${accent} hover:underline flex items-center gap-1`}
+            className={`text-xs font-bold ${a.text} hover:underline flex items-center gap-1`}
           >
             {config.heroCta}
             <ArrowLeft size={14} />
@@ -98,7 +128,7 @@ export default function LandingPageTemplate({
           </p>
           <Link
             href={config.heroCtaLink}
-            className={`inline-flex items-center gap-2 px-8 py-4 bg-${accent} text-white font-bold rounded-xl text-base hover:opacity-90 transition-opacity shadow-lg`}
+            className={`inline-flex items-center gap-2 px-8 py-4 ${a.bg} text-white font-bold rounded-xl text-base hover:opacity-90 transition-opacity shadow-lg`}
           >
             {config.heroCta}
             <ArrowLeft size={18} />
@@ -116,7 +146,7 @@ export default function LandingPageTemplate({
                 key={i}
                 className="bg-gray-light rounded-2xl p-5 space-y-2"
               >
-                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-2xl">
                   {benefit.icon}
                 </div>
                 <h3 className="text-sm font-bold text-dark">{benefit.title}</h3>
@@ -139,8 +169,8 @@ export default function LandingPageTemplate({
                 key={step.number}
                 className="flex items-start gap-4"
               >
-                <div className={`w-10 h-10 rounded-full bg-${accent}/10 flex items-center justify-center flex-shrink-0`}>
-                  <span className={`text-lg font-bold text-${accent}`}>
+                <div className={`w-10 h-10 rounded-full ${a.bgLight} flex items-center justify-center flex-shrink-0`}>
+                  <span className={`text-lg font-bold ${a.text}`}>
                     {step.number}
                   </span>
                 </div>
@@ -157,11 +187,11 @@ export default function LandingPageTemplate({
 
         {/* Stats / Social Proof */}
         <section className="py-10">
-          <div className={`bg-${accent}/5 border border-${accent}/10 rounded-2xl p-6`}>
+          <div className={`${a.bgLight} border ${a.border} rounded-2xl p-6`}>
             <div className="grid grid-cols-3 gap-4 text-center">
               {config.stats.map((stat, i) => (
                 <div key={i}>
-                  <p className={`text-2xl font-bold text-${accent}`}>
+                  <p className={`text-2xl font-bold ${a.text}`}>
                     {stat.value}
                   </p>
                   <p className="text-xs text-gray-text mt-1">{stat.label}</p>
@@ -210,7 +240,7 @@ export default function LandingPageTemplate({
           </h2>
           <Link
             href={config.finalCtaLink}
-            className={`inline-flex items-center gap-2 px-10 py-4 bg-${accent} text-white font-bold rounded-xl text-lg hover:opacity-90 transition-opacity shadow-lg`}
+            className={`inline-flex items-center gap-2 px-10 py-4 ${a.bg} text-white font-bold rounded-xl text-lg hover:opacity-90 transition-opacity shadow-lg`}
           >
             {config.finalCta}
             <ArrowLeft size={20} />
