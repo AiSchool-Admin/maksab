@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, PlusCircle, Home } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlusCircle, Home, Camera, Mic, Edit3 } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -13,6 +13,7 @@ import {
   generateAutoDescription,
 } from "@/lib/categories/generate";
 import type { SaleType } from "@/types";
+import type { ProductAnalysis } from "@/lib/ai/ai-service";
 import type { CompressedImage } from "@/lib/utils/image-compress";
 import type { VideoFile } from "@/lib/utils/video-compress";
 import type { AudioRecording } from "@/lib/utils/audio-recorder";
@@ -42,6 +43,16 @@ const Step4LocationReview = dynamic(
 
 const PrePaymentOfferLazy = dynamic(
   () => import("@/components/commission/PrePaymentOffer"),
+  { ssr: false },
+);
+
+const SnapAndSell = dynamic(
+  () => import("@/components/ai/SnapAndSell"),
+  { ssr: false },
+);
+
+const VoiceToListing = dynamic(
+  () => import("@/components/ai/VoiceToListing"),
   { ssr: false },
 );
 
@@ -152,6 +163,9 @@ export default function CreateAdPage() {
   const [publishedAdId, setPublishedAdId] = useState<string | null>(null);
   const initialized = useRef(false);
 
+  // AI mode: null = show mode selector, "manual" = skip AI, "snap" = camera AI, "voice" = voice/text AI
+  const [aiMode, setAiMode] = useState<"snap" | "voice" | "manual" | null>(null);
+
   // Track blob URLs for cleanup on unmount
   const imagesRef = useRef<CompressedImage[]>([]);
   const videoRef = useRef<VideoFile | null>(null);
@@ -200,13 +214,19 @@ export default function CreateAdPage() {
               currentStep: 1,
             };
             setDraft(prefillDraft);
+            setAiMode("manual"); // Skip AI selector since we came from PriceScanner
             initialized.current = true;
             return;
           }
         } catch { /* ignore */ }
       }
 
-      setDraft(loadDraft());
+      const loaded = loadDraft();
+      setDraft(loaded);
+      // If there's a saved draft in progress, skip AI mode selector
+      if (loaded.categoryId || loaded.currentStep > 1) {
+        setAiMode("manual");
+      }
       initialized.current = true;
     }
   }, []);
@@ -238,6 +258,51 @@ export default function CreateAdPage() {
         title: generateAutoTitle(config, d.categoryFields, d.subcategoryId || undefined),
         description: generateAutoDescription(config, d.categoryFields, d.subcategoryId || undefined),
       };
+    },
+    [],
+  );
+
+  /* ── AI analysis complete handler ──────────────────── */
+  const handleAiAnalysisComplete = useCallback(
+    (analysis: ProductAnalysis, mediaOrTranscript: string[] | string) => {
+      const prefillDraft: DraftData = {
+        ...getInitialDraft(),
+        categoryId: analysis.category_id || "",
+        subcategoryId: analysis.subcategory_id || "",
+        saleType: analysis.sale_type || "cash",
+        categoryFields: analysis.category_fields || {},
+        title: analysis.suggested_title || "",
+        description: analysis.suggested_description || "",
+        priceData: {
+          ...getInitialPriceData(),
+          price: analysis.suggested_price ? String(analysis.suggested_price) : "",
+        },
+        governorate: analysis.governorate || "القاهرة",
+        city: analysis.city || "",
+        isTitleDescEdited: !!(analysis.suggested_title),
+        currentStep: analysis.category_id ? 2 : 1,
+      };
+      setDraft(prefillDraft);
+
+      // If SnapAndSell provided image data URLs, convert them to CompressedImage objects
+      if (Array.isArray(mediaOrTranscript) && mediaOrTranscript.length > 0) {
+        const aiImages: CompressedImage[] = mediaOrTranscript.map((dataUrl, i) => {
+          // Convert data URL to File
+          const byteString = atob(dataUrl.split(",")[1] || "");
+          const mimeString = dataUrl.split(",")[0]?.split(":")[1]?.split(";")[0] || "image/jpeg";
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let j = 0; j < byteString.length; j++) {
+            ia[j] = byteString.charCodeAt(j);
+          }
+          const blob = new Blob([ab], { type: mimeString });
+          const file = new File([blob], `ai-photo-${i}.jpg`, { type: mimeString });
+          return { file, preview: dataUrl };
+        });
+        setImages(aiImages);
+      }
+
+      setAiMode("manual"); // Switch to manual form flow
     },
     [],
   );
@@ -746,9 +811,17 @@ export default function CreateAdPage() {
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
             <button
-              onClick={() =>
-                draft.currentStep > 1 ? goPrev() : router.back()
-              }
+              onClick={() => {
+                if (aiMode === "snap" || aiMode === "voice") {
+                  setAiMode(null);
+                } else if (draft.currentStep > 1) {
+                  goPrev();
+                } else if (aiMode === "manual") {
+                  setAiMode(null);
+                } else {
+                  router.back();
+                }
+              }}
               className="p-1 -me-1 text-gray-text hover:text-dark transition-colors"
               aria-label="رجوع"
             >
@@ -759,9 +832,11 @@ export default function CreateAdPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-dark leading-tight">
-                {stepTitles[draft.currentStep - 1]}
+                {aiMode === null ? "أضف إعلان" : aiMode === "snap" ? "صوّر واِبيع" : aiMode === "voice" ? "اتكلم واِبيع" : stepTitles[draft.currentStep - 1]}
               </h1>
-              <p className="text-[10px] text-brand-green font-bold">إعلانك في ٣ خطوات بس</p>
+              <p className="text-[10px] text-brand-green font-bold">
+                {aiMode === "manual" ? "إعلانك في ٣ خطوات بس" : aiMode === null ? "اختار الطريقة الأسرع" : "بالذكاء الاصطناعي"}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -772,25 +847,110 @@ export default function CreateAdPage() {
             >
               <Home size={18} />
             </Link>
-            <span className="text-sm text-gray-text font-medium">
-              {draft.currentStep} / {TOTAL_STEPS}
-            </span>
+            {aiMode === "manual" && (
+              <span className="text-sm text-gray-text font-medium">
+                {draft.currentStep} / {TOTAL_STEPS}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Progress bar */}
-        <div className="h-1 bg-gray-100">
-          <div
-            className="h-full bg-brand-green transition-all duration-300"
-            style={{
-              width: `${(draft.currentStep / TOTAL_STEPS) * 100}%`,
-            }}
-          />
-        </div>
+        {aiMode === "manual" && (
+          <div className="h-1 bg-gray-100">
+            <div
+              className="h-full bg-brand-green transition-all duration-300"
+              style={{
+                width: `${(draft.currentStep / TOTAL_STEPS) * 100}%`,
+              }}
+            />
+          </div>
+        )}
       </header>
 
+      {/* AI Mode Selector — shown before manual form */}
+      {aiMode === null && (
+        <div className="px-4 py-6 space-y-6">
+          <div className="text-center space-y-2">
+            <h2 className="text-xl font-bold text-dark">إزاي تحب تضيف إعلانك؟</h2>
+            <p className="text-sm text-gray-text">اختار الطريقة الأسرع ليك</p>
+          </div>
+
+          <div className="space-y-3">
+            {/* Snap & Sell */}
+            <button
+              onClick={() => setAiMode("snap")}
+              className="w-full flex items-center gap-4 p-4 bg-brand-green-light border-2 border-brand-green/20 rounded-xl hover:border-brand-green/40 transition-all active:scale-[0.98] text-start"
+            >
+              <div className="w-12 h-12 bg-brand-green rounded-xl flex items-center justify-center flex-shrink-0">
+                <Camera size={24} className="text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-dark">صوّر واِبيع</h3>
+                <p className="text-xs text-gray-text mt-0.5">صوّر المنتج والذكاء الاصطناعي هيملأ الإعلان تلقائياً</p>
+              </div>
+              <ChevronLeft size={18} className="text-gray-text flex-shrink-0" />
+            </button>
+
+            {/* Voice to Listing */}
+            <button
+              onClick={() => setAiMode("voice")}
+              className="w-full flex items-center gap-4 p-4 bg-blue-50 border-2 border-blue-200/40 rounded-xl hover:border-blue-300/60 transition-all active:scale-[0.98] text-start"
+            >
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Mic size={24} className="text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-dark">اتكلم أو اكتب واِبيع</h3>
+                <p className="text-xs text-gray-text mt-0.5">قول أو اكتب تفاصيل المنتج وهنملأ الإعلان تلقائياً</p>
+              </div>
+              <ChevronLeft size={18} className="text-gray-text flex-shrink-0" />
+            </button>
+
+            {/* Manual */}
+            <button
+              onClick={() => setAiMode("manual")}
+              className="w-full flex items-center gap-4 p-4 bg-gray-light border-2 border-transparent rounded-xl hover:border-gray-200 transition-all active:scale-[0.98] text-start"
+            >
+              <div className="w-12 h-12 bg-gray-300 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Edit3 size={24} className="text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-dark">اعمل الإعلان يدوي</h3>
+                <p className="text-xs text-gray-text mt-0.5">اختار القسم واملأ التفاصيل بنفسك</p>
+              </div>
+              <ChevronLeft size={18} className="text-gray-text flex-shrink-0" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI: SnapAndSell mode */}
+      {aiMode === "snap" && (
+        <div className="px-4 py-5">
+          <SnapAndSell
+            onAnalysisComplete={(analysis, imageDataUrls) =>
+              handleAiAnalysisComplete(analysis, imageDataUrls)
+            }
+            onCancel={() => setAiMode("manual")}
+          />
+        </div>
+      )}
+
+      {/* AI: VoiceToListing mode */}
+      {aiMode === "voice" && (
+        <div className="px-4 py-5">
+          <VoiceToListing
+            onAnalysisComplete={(analysis, transcript) =>
+              handleAiAnalysisComplete(analysis, transcript)
+            }
+            onCancel={() => setAiMode("manual")}
+          />
+        </div>
+      )}
+
       {/* Step content */}
-      <div className="px-4 py-5">
+      {aiMode === "manual" && <div className="px-4 py-5">
         {draft.currentStep === 1 && (
           <Step1CategorySaleType
             categoryId={draft.categoryId}
@@ -906,10 +1066,10 @@ export default function CreateAdPage() {
             {errors.publish}
           </p>
         )}
-      </div>
+      </div>}
 
-      {/* Bottom navigation */}
-      <div className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-light p-4 flex gap-3 z-40">
+      {/* Bottom navigation — only show in manual form mode */}
+      {aiMode === "manual" && <div className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-light p-4 flex gap-3 z-40">
         {draft.currentStep > 1 && (
           <Button
             variant="outline"
@@ -941,7 +1101,7 @@ export default function CreateAdPage() {
             نشر الإعلان
           </Button>
         )}
-      </div>
+      </div>}
     </main>
   );
 }
