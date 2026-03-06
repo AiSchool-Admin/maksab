@@ -152,6 +152,25 @@ export default function CreateAdPage() {
   const [publishedAdId, setPublishedAdId] = useState<string | null>(null);
   const initialized = useRef(false);
 
+  // Track blob URLs for cleanup on unmount
+  const imagesRef = useRef<CompressedImage[]>([]);
+  const videoRef = useRef<VideoFile | null>(null);
+  const voiceRef = useRef<AudioRecording | null>(null);
+  imagesRef.current = images;
+  videoRef.current = videoFile;
+  voiceRef.current = voiceNote;
+
+  // Cleanup blob URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      for (const img of imagesRef.current) {
+        if (img.preview.startsWith("blob:")) URL.revokeObjectURL(img.preview);
+      }
+      if (videoRef.current?.preview.startsWith("blob:")) URL.revokeObjectURL(videoRef.current.preview);
+      if (voiceRef.current?.preview.startsWith("blob:")) URL.revokeObjectURL(voiceRef.current.preview);
+    };
+  }, []);
+
   // Load draft from localStorage on mount (+ check for AI scanner prefill)
   useEffect(() => {
     if (!initialized.current) {
@@ -697,6 +716,12 @@ export default function CreateAdPage() {
               fullWidth
               variant="outline"
               onClick={() => {
+                // Revoke blob URLs before clearing state
+                for (const img of images) {
+                  if (img.preview.startsWith("blob:")) URL.revokeObjectURL(img.preview);
+                }
+                if (videoFile?.preview.startsWith("blob:")) URL.revokeObjectURL(videoFile.preview);
+                if (voiceNote?.preview.startsWith("blob:")) URL.revokeObjectURL(voiceNote.preview);
                 setDraft(getInitialDraft());
                 setImages([]);
                 setVideoFile(null);
