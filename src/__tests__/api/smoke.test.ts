@@ -102,6 +102,7 @@ describe("Ad Creation Smoke Tests", () => {
     const exchangeAd = {
       ...baseAd,
       sale_type: "exchange",
+      exchange_description: "عايز بديل مناسب",
     };
     expect(validateAdData(exchangeAd).valid).toBe(true);
   });
@@ -126,7 +127,7 @@ describe("Ad Creation Smoke Tests", () => {
 
   describe("Price validation", () => {
     it("should accept zero price for exchange", () => {
-      const result = validateAdData({ ...baseAd, sale_type: "exchange", price: 0 });
+      const result = validateAdData({ ...baseAd, sale_type: "exchange", price: 0, exchange_description: "عايز بديل" });
       expect(result.valid).toBe(true);
     });
 
