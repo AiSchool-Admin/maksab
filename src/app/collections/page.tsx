@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
+import { EmptyCollections } from "@/components/ui/EmptyState";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { formatTimeAgo } from "@/lib/utils/format";
 
@@ -207,21 +208,7 @@ export default function CollectionsPage() {
             <span className="text-sm text-gray-text">بنحمّل القوائم...</span>
           </div>
         ) : collections.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-5xl mb-4">📋</div>
-            <h2 className="text-xl font-bold text-dark mb-2">مفيش قوائم لسه</h2>
-            <p className="text-sm text-gray-text mb-6 max-w-[250px] mx-auto">
-              اعمل قائمة واحفظ فيها الإعلانات اللي عجبتك وشاركها مع صحابك
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 bg-brand-green text-white px-6 py-3 rounded-xl font-bold text-sm"
-            >
-              <Plus size={18} />
-              اعمل أول قائمة
-            </button>
-          </div>
+          <EmptyCollections onCreateNew={() => setShowCreate(true)} />
         ) : (
           collections.map((col) => (
             <div

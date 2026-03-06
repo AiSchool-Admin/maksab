@@ -1,14 +1,19 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Search, X, Clock, TrendingUp, ArrowLeft, Sparkles } from "lucide-react";
+import { Search, X, Clock, TrendingUp, ArrowLeft, Sparkles, Loader2 } from "lucide-react";
 import {
   getRecentSearches,
   removeRecentSearch,
   clearRecentSearches,
 } from "@/lib/search/recent-searches";
 import { getAutoSuggestions } from "@/lib/search/smart-parser";
-import { popularSearches } from "@/lib/search/search-data";
+import {
+  getAutocomplete,
+  getTrendingSearches,
+  type AutocompleteSuggestion,
+  type TrendingSearch,
+} from "@/lib/search/search-service";
 
 interface SearchBarProps {
   initialQuery?: string;
@@ -25,34 +30,67 @@ export default function SearchBar({
   const [isFocused, setIsFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [serverSuggestions, setServerSuggestions] = useState<AutocompleteSuggestion[]>([]);
+  const [trendingSearches, setTrendingSearches] = useState<TrendingSearch[]>([]);
+  const [trendingLoaded, setTrendingLoaded] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Load recent searches on focus
+  // Load recent searches + trending on focus
   useEffect(() => {
-    if (isFocused) {
-      setRecentSearches(getRecentSearches());
-    }
-  }, [isFocused]);
+    if (!isFocused) return;
 
-  // Auto-suggestions as user types (debounced)
+    setRecentSearches(getRecentSearches());
+
+    if (!trendingLoaded) {
+      let cancelled = false;
+      getTrendingSearches(10).then((trending) => {
+        if (!cancelled) {
+          setTrendingSearches(trending);
+          setTrendingLoaded(true);
+        }
+      });
+      return () => { cancelled = true; };
+    }
+  }, [isFocused, trendingLoaded]);
+
+  // Auto-suggestions as user types (debounced) — local + server
   useEffect(() => {
     if (!query.trim() || query.trim().length < 2) {
       setSuggestions([]);
+      setServerSuggestions([]);
       return;
     }
-    const timer = setTimeout(() => {
-      setSuggestions(getAutoSuggestions(query));
-    }, 150);
-    return () => clearTimeout(timer);
+
+    // Immediate local suggestions
+    setSuggestions(getAutoSuggestions(query));
+
+    // Debounced server autocomplete
+    let cancelled = false;
+    setIsLoadingSuggestions(true);
+
+    const timer = setTimeout(async () => {
+      const results = await getAutocomplete(query.trim());
+      if (!cancelled) {
+        setServerSuggestions(results);
+        setIsLoadingSuggestions(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      setIsLoadingSuggestions(false);
+    };
   }, [query]);
 
   // Reset active index when suggestions change
   useEffect(() => {
     setActiveIndex(-1);
-  }, [suggestions, recentSearches, query]);
+  }, [suggestions, serverSuggestions, recentSearches, query]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -68,22 +106,47 @@ export default function SearchBar({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Merge local + server suggestions, deduplicated
+  const mergedSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+
+    // Server suggestions first (higher quality)
+    for (const s of serverSuggestions) {
+      const lower = s.text.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        merged.push(s.text);
+      }
+    }
+    // Then local suggestions
+    for (const s of suggestions) {
+      const lower = s.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        merged.push(s);
+      }
+    }
+    return merged.slice(0, 8);
+  }, [suggestions, serverSuggestions]);
+
   // Build flat list of all navigable items for keyboard nav
   const navItems = useMemo(() => {
-    const items: { text: string; type: "suggestion" | "recent" | "popular" }[] = [];
+    const items: { text: string; type: "suggestion" | "recent" | "trending" }[] = [];
 
-    if (query && suggestions.length > 0) {
-      suggestions.forEach((s) => items.push({ text: s, type: "suggestion" }));
+    if (query && mergedSuggestions.length > 0) {
+      mergedSuggestions.forEach((s) => items.push({ text: s, type: "suggestion" }));
     } else if (!query) {
       if (recentSearches.length > 0) {
         recentSearches.forEach((s) => items.push({ text: s, type: "recent" }));
-      } else {
-        popularSearches.forEach((s) => items.push({ text: s, type: "popular" }));
+      }
+      if (trendingSearches.length > 0) {
+        trendingSearches.slice(0, 8).forEach((s) => items.push({ text: s.query, type: "trending" }));
       }
     }
 
     return items;
-  }, [query, suggestions, recentSearches]);
+  }, [query, mergedSuggestions, recentSearches, trendingSearches]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,7 +224,7 @@ export default function SearchBar({
   }, [activeIndex]);
 
   const showDropdown =
-    isFocused && (suggestions.length > 0 || recentSearches.length > 0 || !query);
+    isFocused && (mergedSuggestions.length > 0 || recentSearches.length > 0 || trendingSearches.length > 0 || !query);
 
   // Track which item is at which index for highlighting
   let navIndex = 0;
@@ -191,6 +254,9 @@ export default function SearchBar({
               activeIndex >= 0 ? `search-item-${activeIndex}` : undefined
             }
           />
+          {isLoadingSuggestions && query.length >= 2 && (
+            <Loader2 size={14} className="animate-spin text-brand-green flex-shrink-0" />
+          )}
           {query && (
             <button
               type="button"
@@ -204,7 +270,7 @@ export default function SearchBar({
         </div>
       </form>
 
-      {/* Dropdown: suggestions / recent / popular */}
+      {/* Dropdown: suggestions / recent / trending */}
       {showDropdown && (
         <div
           ref={dropdownRef}
@@ -213,14 +279,14 @@ export default function SearchBar({
           role="listbox"
         >
           {/* Auto-suggestions (when typing) */}
-          {suggestions.length > 0 && (
+          {mergedSuggestions.length > 0 && (
             <div className="py-2">
               <div className="px-4 pb-1">
                 <span className="text-[10px] font-bold text-gray-text flex items-center gap-1">
                   <Sparkles size={10} /> اقتراحات
                 </span>
               </div>
-              {suggestions.map((s) => {
+              {mergedSuggestions.map((s) => {
                 const idx = navIndex++;
                 return (
                   <button
@@ -301,39 +367,48 @@ export default function SearchBar({
             </div>
           )}
 
-          {/* Popular searches (when no recent and no query) */}
-          {!query && recentSearches.length === 0 && (
+          {/* Trending searches (live from API) */}
+          {!query && trendingSearches.length > 0 && (
             <div className="py-2">
-              <div className="px-4 pb-1">
+              <div className="px-4 pb-1 flex items-center gap-1">
+                <TrendingUp size={12} className="text-brand-green" />
                 <span className="text-xs font-bold text-gray-text">
-                  بحث رائج
+                  الأكثر بحثاً
+                </span>
+                <span className="text-[8px] text-gray-text bg-gray-100 px-1.5 py-0.5 rounded-full ms-1">
+                  مباشر
                 </span>
               </div>
-              {popularSearches.map((term) => {
-                const idx = navIndex++;
-                return (
-                  <button
-                    key={term}
-                    id={`search-item-${idx}`}
-                    data-nav-item
-                    type="button"
-                    onClick={() => handleSuggestionClick(term)}
-                    role="option"
-                    aria-selected={activeIndex === idx}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark transition-colors text-start ${
-                      activeIndex === idx
-                        ? "bg-brand-green-light"
-                        : "hover:bg-gray-light"
-                    }`}
-                  >
-                    <TrendingUp
-                      size={14}
-                      className="text-brand-green flex-shrink-0"
-                    />
-                    <span>{term}</span>
-                  </button>
-                );
-              })}
+              <div className="grid grid-cols-2 gap-1 px-3">
+                {trendingSearches.slice(0, 8).map((item, i) => {
+                  const idx = navIndex++;
+                  return (
+                    <button
+                      key={item.query}
+                      id={`search-item-${idx}`}
+                      data-nav-item
+                      type="button"
+                      onClick={() => handleSuggestionClick(item.query)}
+                      role="option"
+                      aria-selected={activeIndex === idx}
+                      className={`flex items-center gap-2 px-2.5 py-2 text-start rounded-lg transition-colors ${
+                        activeIndex === idx
+                          ? "bg-brand-green-light"
+                          : "hover:bg-gray-light"
+                      }`}
+                    >
+                      <span className={`text-[10px] font-bold w-4 text-center flex-shrink-0 ${
+                        i < 3 ? "text-brand-green" : "text-gray-text"
+                      }`}>
+                        {i + 1}
+                      </span>
+                      <span className="text-xs text-dark line-clamp-1 flex-1">
+                        {item.query}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
