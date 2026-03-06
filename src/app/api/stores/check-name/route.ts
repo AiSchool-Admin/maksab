@@ -13,7 +13,8 @@ export async function GET(request: Request) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json({ available: true });
+    // Can't verify — return error so client shows neutral state
+    return NextResponse.json({ available: null, error: "لا يمكن التحقق حالياً" });
   }
 
   try {
@@ -21,14 +22,18 @@ export async function GET(request: Request) {
       auth: { persistSession: false },
     });
 
-    const { data } = await adminClient
+    const { data, error } = await adminClient
       .from("stores")
       .select("id")
       .ilike("name", name.trim())
       .maybeSingle();
 
+    if (error) {
+      return NextResponse.json({ available: null, error: "فشل التحقق من الاسم" });
+    }
+
     return NextResponse.json({ available: !data });
   } catch {
-    return NextResponse.json({ available: true });
+    return NextResponse.json({ available: null, error: "فشل التحقق من الاسم" });
   }
 }

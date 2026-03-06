@@ -17,6 +17,7 @@ import { useAuth, isPendingMerchant, clearPendingMerchant } from "@/components/a
 import Image from "next/image";
 import Button from "@/components/ui/Button";
 import { categoriesConfig } from "@/lib/categories/categories-config";
+import { governorates, citiesByGovernorate } from "@/lib/data/governorates";
 import {
   businessTypesConfig,
   type BusinessType,
@@ -99,7 +100,8 @@ export default function CreateStorePage() {
           `/api/stores/check-name?name=${encodeURIComponent(name.trim())}`,
         );
         const data = await res.json();
-        setNameAvailable(data.available);
+        // available can be true, false, or null (check failed)
+        setNameAvailable(data.available ?? null);
       } catch {
         setNameAvailable(null);
       } finally {
@@ -223,7 +225,6 @@ export default function CreateStorePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: authedUser.id,
           session_token: getSessionToken(),
           name: name.trim(),
           description: description.trim() || null,
@@ -234,8 +235,9 @@ export default function CreateStorePage() {
           logo_url: logoUrl,
           working_hours_text: workingHoursText,
           business_data: Object.keys(businessData).length > 0 ? businessData : null,
-          location_gov: selectedBusinessConfig?.requiresAddress ? extraFieldValues.location_gov || null : null,
-          location_area: selectedBusinessConfig?.requiresAddress ? extraFieldValues.location_area || null : null,
+          location_gov: extraFieldValues.location_gov || null,
+          location_area: extraFieldValues.location_area || null,
+          address_detail: extraFieldValues.address_detail || null,
         }),
       });
 
@@ -413,10 +415,20 @@ export default function CreateStorePage() {
                   {themes.find((t) => t.value === theme)?.label}
                 </span>
               </div>
+              {/* Show location if set */}
+              {(extraFieldValues.location_gov) && (
+                <div className="flex justify-between">
+                  <span className="text-gray-text">الموقع</span>
+                  <span className="font-semibold text-dark">
+                    {extraFieldValues.location_gov}
+                    {extraFieldValues.location_area ? ` — ${extraFieldValues.location_area}` : ""}
+                  </span>
+                </div>
+              )}
               {/* Show extra field values */}
               {selectedBusinessConfig?.extraFields.map((field) => {
                 const val = extraFieldValues[field.id];
-                if (!val) return null;
+                if (!val || field.id === "location_gov" || field.id === "location_area" || field.id === "address_detail") return null;
                 return (
                   <div key={field.id} className="flex justify-between">
                     <span className="text-gray-text">{field.label}</span>
@@ -590,7 +602,7 @@ export default function CreateStorePage() {
                   maxLength={30}
                 />
                 {/* Status indicator */}
-                <div className="absolute start-3 top-1/2 -translate-y-1/2">
+                <div className="absolute end-3 top-1/2 -translate-y-1/2">
                   {checkingName && (
                     <div className="w-4 h-4 border-2 border-gray-300 border-t-brand-green rounded-full animate-spin" />
                   )}
@@ -660,12 +672,45 @@ export default function CreateStorePage() {
             {selectedBusinessConfig?.requiresAddress && (
               <div className="space-y-3 pt-2">
                 <p className="text-sm font-semibold text-dark">العنوان (اختياري)</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-text mb-1 block">المحافظة</label>
+                    <select
+                      value={(extraFieldValues.location_gov as string) || ""}
+                      onChange={(e) => {
+                        handleExtraFieldChange("location_gov", e.target.value);
+                        handleExtraFieldChange("location_area", "");
+                      }}
+                      className="w-full bg-white border border-gray-light rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-brand-green appearance-none"
+                    >
+                      <option value="">اختار...</option>
+                      {governorates.map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-text mb-1 block">المدينة/المنطقة</label>
+                    <select
+                      value={(extraFieldValues.location_area as string) || ""}
+                      onChange={(e) => handleExtraFieldChange("location_area", e.target.value)}
+                      disabled={!extraFieldValues.location_gov}
+                      className="w-full bg-white border border-gray-light rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-brand-green appearance-none disabled:opacity-50"
+                    >
+                      <option value="">اختار...</option>
+                      {extraFieldValues.location_gov &&
+                        (citiesByGovernorate[extraFieldValues.location_gov as string] || []).map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
                 <input
                   type="text"
                   value={(extraFieldValues.address_detail as string) || ""}
                   onChange={(e) => handleExtraFieldChange("address_detail", e.target.value)}
                   className="w-full bg-white border border-gray-light rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-green"
-                  placeholder="مثال: 15 شارع التحرير، الدقي"
+                  placeholder="تفاصيل العنوان (اختياري): مثال: 15 شارع التحرير"
                   maxLength={200}
                 />
               </div>
@@ -908,7 +953,7 @@ function ExtraFieldInput({
           >
             <div
               className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform absolute top-0.5 ${
-                value ? "translate-x-0.5" : "translate-x-5.5"
+                value ? "end-0.5" : "end-[22px]"
               }`}
             />
           </div>
