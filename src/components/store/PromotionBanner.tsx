@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Tag, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 import { formatPrice } from "@/lib/utils/format";
 import type { StorePromotion } from "@/types";
 

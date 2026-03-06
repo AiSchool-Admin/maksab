@@ -2,7 +2,7 @@ import { Skeleton, AdGridSkeleton } from "@/components/ui/SkeletonLoader";
 
 export default function StoreDetailLoading() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Cover image */}
       <Skeleton className="w-full h-36" />
 

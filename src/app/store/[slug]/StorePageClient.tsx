@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Grid3X3, List, LayoutGrid } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import StoreHeader from "@/components/store/StoreHeader";
 import PinnedProducts from "@/components/store/PinnedProducts";
 import PromotionBanner from "@/components/store/PromotionBanner";
@@ -104,11 +104,16 @@ export default function StorePageClient({ slug }: { slug: string }) {
       if (!store) return;
       setSelectedCategory(catId);
       setProductsLoading(true);
-      const result = await getStoreProducts(store.id, {
-        categoryId: catId || undefined,
-      });
-      setProducts(result.products as unknown as Record<string, unknown>[]);
-      setProductsLoading(false);
+      try {
+        const result = await getStoreProducts(store.id, {
+          categoryId: catId || undefined,
+        });
+        setProducts(result.products as unknown as Record<string, unknown>[]);
+      } catch {
+        // Keep existing products on error
+      } finally {
+        setProductsLoading(false);
+      }
     },
     [store],
   );
@@ -161,6 +166,7 @@ export default function StorePageClient({ slug }: { slug: string }) {
         <button
           onClick={() => router.back()}
           className="p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-sm"
+          aria-label="رجوع"
         >
           <ArrowRight size={20} />
         </button>
@@ -191,7 +197,7 @@ export default function StorePageClient({ slug }: { slug: string }) {
           <PinnedProducts
             products={pinnedProducts.map((p) => ({
               id: p.id as string,
-              title: p.title as string,
+              title: resolveProductTitle(p),
               price: p.price as number | null,
               sale_type: p.sale_type as "cash" | "auction" | "exchange",
               images: (p.images as string[]) || [],
