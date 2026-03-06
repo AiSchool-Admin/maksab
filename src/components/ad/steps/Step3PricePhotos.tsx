@@ -449,10 +449,10 @@ export default function Step3PricePhotos({
             acceptsPriceDiff={priceData.exchangeAcceptsPriceDiff}
             priceDiff={priceData.exchangePriceDiff}
             errors={errors}
-            onCategoryChange={(id) => {
+            onCategoryChange={(id, defaults) => {
               onPriceChange("exchangeWantedCategoryId", id);
               onPriceChange("exchangeWantedSubcategoryId", "");
-              onPriceChange("exchangeWantedFields", {});
+              onPriceChange("exchangeWantedFields", defaults ?? {});
               onPriceChange("exchangeWantedTitle", "");
             }}
             onSubcategoryChange={(id) => onPriceChange("exchangeWantedSubcategoryId", id)}

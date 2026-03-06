@@ -99,6 +99,19 @@ export function validateAdData(adData: Record<string, unknown>): ValidationResul
     }
   }
 
+  // Validate exchange-specific fields
+  if (saleType === "exchange") {
+    // exchange_description should be present for exchange ads
+    if (!adData.exchange_description && typeof adData.exchange_description !== "string") {
+      // Check if exchange_wanted is in category_fields as fallback
+      const cf = adData.category_fields as Record<string, unknown> | undefined;
+      const ew = cf?.exchange_wanted as Record<string, unknown> | undefined;
+      if (!ew?.title && !ew?.category_id) {
+        return { valid: false, error: "وصف البديل المطلوب مطلوب لإعلانات التبديل" };
+      }
+    }
+  }
+
   // Validate images array
   if (adData.images && Array.isArray(adData.images)) {
     if ((adData.images as unknown[]).length > MAX_IMAGES) {

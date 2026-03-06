@@ -275,6 +275,8 @@ export default function CreateAdPage() {
         } else if (draft.saleType === "exchange") {
           if (!draft.priceData.exchangeWantedCategoryId)
             errs.exchangeWantedCategory = "اختار قسم البديل المطلوب";
+          if (draft.priceData.exchangeWantedCategoryId && !draft.priceData.exchangeWantedTitle.trim() && !draft.priceData.exchangeNotes.trim())
+            errs.exchangeWantedTitle = "حدد مواصفات البديل المطلوب أو اكتب ملاحظة";
         }
         // Images are optional — no validation needed
         // Location validation (merged from old step 4)

@@ -15,7 +15,7 @@ interface ExchangeWantedFormProps {
   acceptsPriceDiff: boolean;
   priceDiff: string;
   errors: Record<string, string>;
-  onCategoryChange: (id: string) => void;
+  onCategoryChange: (id: string, defaults?: Record<string, unknown>) => void;
   onSubcategoryChange: (id: string) => void;
   onFieldChange: (fieldId: string, value: unknown) => void;
   onTitleChange: (title: string) => void;
@@ -89,19 +89,22 @@ export default function ExchangeWantedForm({
   // Reset fields when category changes
   const handleCategorySelect = (catId: string) => {
     if (catId === wantedCategoryId) return;
-    onCategoryChange(catId);
     onSubcategoryChange("");
     setIsTitleManuallyEdited(false);
 
-    // Set default values for the new category
+    // Build default values for the new category and set them via category change
+    // This avoids stale closure issues when setting fields individually
     const config = getCategoryById(catId);
+    const defaults: Record<string, unknown> = {};
     if (config) {
       for (const field of config.fields) {
         if (field.defaultValue !== undefined) {
-          onFieldChange(field.id, field.defaultValue);
+          defaults[field.id] = field.defaultValue;
         }
       }
     }
+    // Notify parent with defaults included (parent handles resetting fields)
+    onCategoryChange(catId, defaults);
   };
 
   return (
@@ -235,6 +238,9 @@ export default function ExchangeWantedForm({
             {wantedTitle}
           </p>
         </div>
+      )}
+      {errors.exchangeWantedTitle && (
+        <p className="text-xs text-error">{errors.exchangeWantedTitle}</p>
       )}
 
       {/* ── Optional notes ── */}
