@@ -187,6 +187,9 @@ export default function EditAdPage({
         if (draft.saleType === "exchange" && !draft.priceData.exchangeWantedCategoryId) {
           errs.exchangeWantedCategory = "اختار قسم البديل المطلوب";
         }
+        if (draft.saleType === "exchange" && draft.priceData.exchangeWantedCategoryId && !draft.priceData.exchangeWantedTitle.trim() && !draft.priceData.exchangeNotes.trim()) {
+          errs.exchangeWantedTitle = "حدد مواصفات البديل المطلوب أو اكتب ملاحظة";
+        }
         // Images are optional
       }
 
