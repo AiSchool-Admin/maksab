@@ -22,12 +22,12 @@ export interface ReferralProfile {
   referralCount: number;
 }
 
-// Points awarded per event
+// Points awarded per event (aligned with loyalty POINT_ACTIONS)
 const REFERRAL_POINTS: Record<ReferralEventType, number> = {
   click: 0,
-  signup: 10,
-  first_ad: 25,
-  first_sale: 50,
+  signup: 200,
+  first_ad: 100,
+  first_sale: 100,
 };
 
 const REFERRAL_STORAGE_KEY = "maksab_ref_code";

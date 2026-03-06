@@ -252,9 +252,9 @@ export default function ReferralDashboard() {
         </h3>
         <div className="space-y-2">
           {[
-            { action: "صاحبك سجّل بدعوتك", points: 10, emoji: "🤝" },
-            { action: "صاحبك نشر أول إعلان", points: 25, emoji: "📝" },
-            { action: "صاحبك باع أول حاجة", points: 50, emoji: "💰" },
+            { action: "صاحبك سجّل بدعوتك", points: 200, emoji: "🤝" },
+            { action: "صاحبك نشر أول إعلان", points: 100, emoji: "📝" },
+            { action: "صاحبك باع أول حاجة", points: 100, emoji: "💰" },
           ].map((item) => (
             <div
               key={item.action}

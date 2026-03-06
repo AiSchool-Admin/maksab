@@ -13,7 +13,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import {
   Copy,
@@ -48,7 +48,6 @@ export default function AmbassadorDashboard({ userId }: AmbassadorDashboardProps
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [activeMessageIdx, setActiveMessageIdx] = useState(0);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -236,20 +235,12 @@ export default function AmbassadorDashboard({ userId }: AmbassadorDashboardProps
       <div className="space-y-3">
         <h3 className="text-sm font-bold text-dark">رسائل جاهزة للمشاركة</h3>
         <div className="relative">
-          <div
-            ref={messagesContainerRef}
-            className="overflow-hidden"
-          >
-            <div
-              className="transition-transform duration-300 ease-in-out"
-              style={{
-                transform: `translateX(${activeMessageIdx * 100}%)`,
-              }}
-            >
+          <div className="overflow-hidden">
+            <div>
               {shareMessages.map((msg, idx) => (
                 <div
                   key={msg.platform}
-                  className={`${idx === activeMessageIdx ? "block" : "hidden"}`}
+                  className={`transition-opacity duration-300 ${idx === activeMessageIdx ? "block opacity-100" : "hidden opacity-0"}`}
                 >
                   <div className="bg-gray-light rounded-xl p-4 space-y-3">
                     <div className="flex items-center gap-2">
@@ -291,9 +282,9 @@ export default function AmbassadorDashboard({ userId }: AmbassadorDashboardProps
           {/* Navigation dots */}
           <div className="flex items-center justify-center gap-2 mt-3">
             <button
-              onClick={() => scrollMessages("next")}
-              disabled={activeMessageIdx >= shareMessages.length - 1}
-              className="p-1 text-gray-text hover:text-dark disabled:opacity-30 transition-colors"
+              onClick={() => scrollMessages("prev")}
+              disabled={activeMessageIdx <= 0}
+              className="p-1 text-gray-text hover:text-dark disabled:opacity-30 transition-colors rotate-180"
               aria-label="الرسالة السابقة"
             >
               <ChevronLeft size={16} />
@@ -311,9 +302,9 @@ export default function AmbassadorDashboard({ userId }: AmbassadorDashboardProps
               />
             ))}
             <button
-              onClick={() => scrollMessages("prev")}
-              disabled={activeMessageIdx <= 0}
-              className="p-1 text-gray-text hover:text-dark disabled:opacity-30 transition-colors rotate-180"
+              onClick={() => scrollMessages("next")}
+              disabled={activeMessageIdx >= shareMessages.length - 1}
+              className="p-1 text-gray-text hover:text-dark disabled:opacity-30 transition-colors"
               aria-label="الرسالة التالية"
             >
               <ChevronLeft size={16} />

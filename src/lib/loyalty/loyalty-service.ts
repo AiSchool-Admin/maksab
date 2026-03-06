@@ -327,12 +327,13 @@ export async function checkReferralFirstAd(userId: string): Promise<void> {
 
 /**
  * Get referral link for sharing.
+ * Uses /invite/{code} format consistent with lib/referral.ts
  */
 export function getReferralLink(referralCode: string): string {
   if (typeof window !== "undefined") {
-    return `${window.location.origin}/?ref=${referralCode}`;
+    return `${window.location.origin}/invite/${referralCode}`;
   }
-  return `https://maksab.app/?ref=${referralCode}`;
+  return `https://maksab.app/invite/${referralCode}`;
 }
 
 /**
