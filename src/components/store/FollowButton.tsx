@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { UserPlus, UserCheck } from "lucide-react";
 import Button from "@/components/ui/Button";
+import { useAuth } from "@/components/auth/AuthProvider";
+import toast from "react-hot-toast";
 
 interface FollowButtonProps {
   isFollowing: boolean;
@@ -15,16 +17,29 @@ export default function FollowButton({
   followersCount: initialCount,
   onToggle,
 }: FollowButtonProps) {
+  const { user, requireAuth } = useAuth();
   const [isFollowing, setIsFollowing] = useState(initialFollowing);
   const [count, setCount] = useState(initialCount);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleToggle = async () => {
+    // Require auth before following
+    const authedUser = user || await requireAuth();
+    if (!authedUser) return;
+
     setIsLoading(true);
+    // Optimistic update
+    const wasFollowing = isFollowing;
+    setIsFollowing(!wasFollowing);
+    setCount((prev) => (wasFollowing ? prev - 1 : prev + 1));
+
     try {
-      setIsFollowing(!isFollowing);
-      setCount((prev) => (isFollowing ? prev - 1 : prev + 1));
       onToggle?.();
+    } catch {
+      // Revert optimistic update on failure
+      setIsFollowing(wasFollowing);
+      setCount((prev) => (wasFollowing ? prev + 1 : prev - 1));
+      toast.error("حصل مشكلة، جرب تاني");
     } finally {
       setIsLoading(false);
     }
