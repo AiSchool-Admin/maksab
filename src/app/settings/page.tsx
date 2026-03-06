@@ -20,6 +20,7 @@ import dynamic from "next/dynamic";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useThemeStore } from "@/stores/theme-store";
 import { setupPushNotifications } from "@/lib/notifications/notification-service";
+import { authFetch } from "@/lib/utils/auth-fetch";
 
 const NotificationSettings = dynamic(
   () => import("@/components/notifications/NotificationSettings"),
@@ -66,6 +67,21 @@ function saveSettings(settings: AppSettings) {
   }
 }
 
+// Store the deferred PWA install prompt globally
+let deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e as BeforeInstallPromptEvent;
+  });
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -108,19 +124,21 @@ export default function SettingsPage() {
     setIsDeleting(true);
     try {
       // Soft-delete via API (anonymizes data, deactivates ads)
-      const response = await fetch("/api/users/delete", {
+      const response = await authFetch("/api/users/delete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: user?.id,
           reason: deleteReason || null,
         }),
       });
 
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "حصل مشكلة في حذف الحساب. جرب تاني");
         setIsDeleting(false);
         return;
       }
+
+      toast.success("تم حذف حسابك بنجاح");
 
       // Clear all local data
       if (typeof window !== "undefined") {
@@ -129,6 +147,7 @@ export default function SettingsPage() {
       await logout();
       router.push("/");
     } catch {
+      toast.error("حصل مشكلة في الاتصال. جرب تاني");
       setIsDeleting(false);
     }
   };
@@ -252,8 +271,17 @@ export default function SettingsPage() {
             />
             <SettingItem
               label="تثبيت على الشاشة الرئيسية"
-              onClick={() => {
-                // PWA install prompt is handled by browser
+              onClick={async () => {
+                if (deferredInstallPrompt) {
+                  await deferredInstallPrompt.prompt();
+                  const { outcome } = await deferredInstallPrompt.userChoice;
+                  if (outcome === "accepted") {
+                    toast.success("تم تثبيت مكسب على الشاشة الرئيسية");
+                  }
+                  deferredInstallPrompt = null;
+                } else {
+                  toast("افتح مكسب من المتصفح واختار «إضافة للشاشة الرئيسية» من القائمة", { icon: "ℹ️" });
+                }
               }}
             />
             <button

@@ -269,7 +269,13 @@ export async function updateUserProfile(
     return { user: null, error: "مقدرناش نحدّث البيانات. جرب تاني" };
   }
 
-  return { user: data as unknown as UserProfile, error: null };
+  const updatedProfile = data as unknown as UserProfile;
+  // Update localStorage session cache so it stays in sync
+  if (updatedProfile) {
+    saveSession(updatedProfile);
+  }
+
+  return { user: updatedProfile, error: null };
 }
 
 // ── Get current session ───────────────────────────────────────────────

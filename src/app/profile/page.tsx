@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   User,
@@ -37,6 +37,9 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { calcProfileCompletion } from "@/lib/supabase/auth";
 import { formatPhone } from "@/lib/utils/format";
 import { isCommissionSupporter } from "@/lib/commission/commission-service";
+import { updateUserProfile } from "@/lib/supabase/auth";
+import { authFetch } from "@/lib/utils/auth-fetch";
+import toast from "react-hot-toast";
 import dynamic from "next/dynamic";
 import { getUserLoyaltyProfile, awardPoints } from "@/lib/loyalty/loyalty-service";
 import type { UserLoyaltyProfile } from "@/lib/loyalty/types";
@@ -69,12 +72,14 @@ const FounderBadge = dynamic(
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isLoading, requireAuth, logout } = useAuth();
+  const { user, isLoading, requireAuth, logout, setUser } = useAuth();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // All hooks must be called before any early returns
   const [isSupporter, setIsSupporter] = useState(false);
   const [loyaltyProfile, setLoyaltyProfile] = useState<UserLoyaltyProfile | null>(null);
   const [founderProfile, setFounderProfile] = useState<FounderProfile | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -88,6 +93,62 @@ export default function ProfilePage() {
       getFounderProfile(user.id).then(setFounderProfile);
     }
   }, [user?.id]);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("نوع الصورة مش مدعوم. استخدم JPG أو PNG أو WebP");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("حجم الصورة أكبر من 5MB");
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${user.id}/avatar.${ext}`;
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bucket", "avatars");
+      formData.append("path", path);
+
+      const res = await authFetch("/api/upload", {
+        method: "POST",
+        headers: {}, // Let browser set multipart boundary
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "فشل رفع الصورة");
+        return;
+      }
+
+      const { url } = await res.json();
+
+      // Update profile with new avatar URL
+      const { user: updated, error } = await updateUserProfile(user.id, { avatar_url: url });
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      if (updated) {
+        setUser(updated);
+        toast.success("تم تحديث صورة البروفايل");
+      }
+    } catch {
+      toast.error("حصل مشكلة في رفع الصورة. جرب تاني");
+    } finally {
+      setIsUploadingAvatar(false);
+      // Reset input so same file can be selected again
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  };
 
   // ── Not logged in ─────────────────────────────────────────────────
   if (!isLoading && !user) {
@@ -149,7 +210,11 @@ export default function ProfilePage() {
           {/* Avatar */}
           <div className="relative flex-shrink-0">
             <div className="w-[72px] h-[72px] rounded-full bg-brand-green-light flex items-center justify-center overflow-hidden">
-              {user!.avatar_url ? (
+              {isUploadingAvatar ? (
+                <div className="w-full h-full flex items-center justify-center bg-brand-green-light">
+                  <div className="w-6 h-6 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : user!.avatar_url ? (
                 <Image
                   src={user!.avatar_url}
                   alt="صورة البروفايل"
@@ -162,8 +227,17 @@ export default function ProfilePage() {
                 <User size={32} className="text-brand-green" />
               )}
             </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
             <button
-              className="absolute -bottom-0.5 -end-0.5 w-7 h-7 bg-brand-green text-white rounded-full flex items-center justify-center shadow-md btn-icon-sm"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={isUploadingAvatar}
+              className="absolute -bottom-0.5 -end-0.5 w-7 h-7 bg-brand-green text-white rounded-full flex items-center justify-center shadow-md btn-icon-sm disabled:opacity-50"
               aria-label="تغيير الصورة"
             >
               <Camera size={14} />
