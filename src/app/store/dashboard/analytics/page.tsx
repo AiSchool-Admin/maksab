@@ -31,10 +31,12 @@ export default function DashboardAnalyticsPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const [store, setStore] = useState<Store | null>(null);
-  const [data, setData] = useState<AnalyticsData[]>([]);
+  const [allData, setAllData] = useState<AnalyticsData[]>([]);
   const [period, setPeriod] = useState<7 | 30>(30);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedBar, setSelectedBar] = useState<AnalyticsData | null>(null);
 
+  // Always fetch 30 days, then filter client-side for 7 days
   useEffect(() => {
     if (!user) {
       router.push("/login");
@@ -50,12 +52,15 @@ export default function DashboardAnalyticsPage() {
       }
       setStore(s);
 
-      const analytics = await getStoreAnalytics(s.id, period);
-      setData(analytics);
+      const analytics = await getStoreAnalytics(s.id, 30);
+      setAllData(analytics);
       setIsLoading(false);
     }
     load();
-  }, [user, router, period]);
+  }, [user, router]);
+
+  // Filter data based on selected period
+  const data = period === 7 ? allData.slice(-7) : allData;
 
   const totals = data.reduce(
     (acc, d) => ({
@@ -111,6 +116,16 @@ export default function DashboardAnalyticsPage() {
           <Skeleton className="h-40 w-full" />
           <Skeleton className="h-32 w-full" />
         </div>
+      ) : !store ? (
+        <div className="px-4 mt-8">
+          <EmptyState
+            icon="🏪"
+            title="مفيش متجر لسه"
+            description="أنشئ متجرك الأول عشان تشوف الإحصائيات"
+            actionLabel="أنشئ متجرك"
+            actionHref="/store/create"
+          />
+        </div>
       ) : data.length === 0 ? (
         <div className="px-4 mt-8">
           <EmptyState
@@ -149,23 +164,35 @@ export default function DashboardAnalyticsPage() {
               <h3 className="text-sm font-bold text-dark mb-3">
                 المشاهدات اليومية
               </h3>
+              {selectedBar && (
+                <div className="mb-2 text-center bg-brand-green-light rounded-lg py-1.5 px-3">
+                  <span className="text-xs font-bold text-brand-green">
+                    {new Date(selectedBar.date).toLocaleDateString("ar-EG", { weekday: "short", month: "short", day: "numeric" })}
+                    {" — "}
+                    {selectedBar.total_views} مشاهدة، {selectedBar.unique_visitors} زائر
+                  </span>
+                </div>
+              )}
               <div className="flex items-end gap-1 h-32">
-                {data.slice(-period).map((d) => {
+                {data.map((d) => {
                   const height = Math.max(
                     (d.total_views / maxViews) * 100,
                     4,
                   );
+                  const isSelected = selectedBar?.date === d.date;
                   return (
-                    <div
+                    <button
                       key={d.date}
                       className="flex-1 flex flex-col items-center gap-1"
+                      onClick={() => setSelectedBar(isSelected ? null : d)}
                     >
                       <div
-                        className="w-full bg-brand-green/80 rounded-t-sm min-w-[4px]"
+                        className={`w-full rounded-t-sm min-w-[4px] transition-colors ${
+                          isSelected ? "bg-brand-green" : "bg-brand-green/60"
+                        }`}
                         style={{ height: `${height}%` }}
-                        title={`${d.date}: ${d.total_views} مشاهدة`}
                       />
-                    </div>
+                    </button>
                   );
                 })}
               </div>
