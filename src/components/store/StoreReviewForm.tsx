@@ -96,7 +96,6 @@ export default function StoreReviewForm({
         body: JSON.stringify({
           store_id: storeId,
           session_token: sessionToken,
-          transaction_id: `direct_review_${Date.now()}`,
           overall_rating: overallRating,
           quality_rating: subRatings.quality_rating || null,
           accuracy_rating: subRatings.accuracy_rating || null,
