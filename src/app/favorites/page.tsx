@@ -5,8 +5,9 @@ import { Trash2 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
-import EmptyState from "@/components/ui/EmptyState";
+import { EmptyFavorites } from "@/components/ui/EmptyState";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
 import { supabase } from "@/lib/supabase/client";
 import { getFavoriteIds as getLocalFavorites, clearFavorites, getFavoritePrices, saveFavoritePrice } from "@/lib/favorites/favorites-service";
 import { toggleFavorite } from "@/lib/favorites/favorites-service";
@@ -143,19 +144,9 @@ export default function FavoritesPage() {
       {/* Content */}
       <div className="px-4 py-2">
         {isLoading ? (
-          <div className="grid grid-cols-2 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="aspect-[3/4] bg-gray-light rounded-xl skeleton" />
-            ))}
-          </div>
+          <AdGridSkeleton count={4} cols={2} />
         ) : favorites.length === 0 ? (
-          <EmptyState
-            icon="💚"
-            title="مفيش مفضلة لسه"
-            description="لما تعجبك حاجة، اضغط على القلب ♡ وهتلاقيها هنا"
-            actionLabel="تصفح الإعلانات"
-            actionHref="/"
-          />
+          <EmptyFavorites />
         ) : (
           <>
             <p className="text-sm text-gray-text mb-3">

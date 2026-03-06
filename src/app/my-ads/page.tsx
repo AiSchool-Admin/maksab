@@ -18,8 +18,9 @@ import {
 import toast from "react-hot-toast";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
-import EmptyState from "@/components/ui/EmptyState";
-import { Skeleton } from "@/components/ui/SkeletonLoader";
+import { EmptyMyAds, EmptyOffers } from "@/components/ui/EmptyState";
+import ErrorMessage, { FullPageError } from "@/components/ui/ErrorMessage";
+import { MyAdsListSkeleton } from "@/components/ui/SkeletonLoader";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getSessionToken } from "@/lib/supabase/auth";
 import {
@@ -277,41 +278,24 @@ export default function MyAdsPage() {
       {/* Content */}
       <div className="px-4 py-4 space-y-3">
         {error ? (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-3">⚠️</div>
-            <p className="text-sm text-gray-text mb-3">حصل مشكلة في تحميل إعلاناتك</p>
-            <button
-              onClick={() => {
-                setError(false);
-                setIsLoading(true);
-                fetchMyAds()
-                  .then((data) => { setAds(data); setIsLoading(false); })
-                  .catch(() => { setError(true); setIsLoading(false); });
-              }}
-              className="text-sm font-bold text-brand-green hover:text-brand-green-dark"
-            >
-              جرب تاني
-            </button>
-          </div>
+          <ErrorMessage
+            message="حصلت مشكلة في تحميل إعلاناتك"
+            onRetry={() => {
+              setError(false);
+              setIsLoading(true);
+              fetchMyAds()
+                .then((data) => { setAds(data); setIsLoading(false); })
+                .catch(() => { setError(true); setIsLoading(false); });
+            }}
+          />
         ) : isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-28 bg-gray-light rounded-xl skeleton"
-            />
-          ))
+          <MyAdsListSkeleton count={3} />
         ) : activeTab === "offers" ? (
           // ── Offers Tab ──────────────────────────────────
           isLoadingOffers ? (
-            Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-24 bg-gray-light rounded-xl skeleton" />
-            ))
+            <MyAdsListSkeleton count={3} />
           ) : allOffers.length === 0 ? (
-            <EmptyState
-              icon="💰"
-              title="مفيش عروض أسعار"
-              description="لما مشتري يقدم عرض سعر على إعلاناتك، هتلاقيه هنا"
-            />
+            <EmptyOffers />
           ) : (
             allOffers.map((offer) => (
               <div
@@ -408,23 +392,11 @@ export default function MyAdsPage() {
             ))
           )
         ) : filteredAds.length === 0 ? (
-          <EmptyState
-            icon={activeTab === "sold" ? "🎉" : activeTab === "expired" ? "⏰" : "📦"}
-            title={
-              activeTab === "sold"
-                ? "لسه مبعتش حاجة"
-                : activeTab === "expired"
-                  ? "مفيش إعلانات خلصت"
-                  : "مفيش إعلانات"
-            }
-            description={
-              activeTab === "all"
-                ? "لسه مضفتش أي إعلانات. ابدأ أول صفقة دلوقتي!"
-                : "هتظهر إعلاناتك هنا لما يكون فيه"
-            }
-            actionLabel={activeTab === "all" ? "أضف إعلان" : undefined}
-            actionHref={activeTab === "all" ? "/ad/create" : undefined}
-          />
+          activeTab === "all" ? (
+            <EmptyMyAds />
+          ) : (
+            <EmptyMyAds />
+          )
         ) : (
           filteredAds.map((ad) => {
             const { label: statusLabel, color: statusColor } = getStatusLabel(

@@ -33,6 +33,7 @@ import {
 import Image from "next/image";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
+import { ProfileSkeleton } from "@/components/ui/SkeletonLoader";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { calcProfileCompletion } from "@/lib/supabase/auth";
@@ -192,11 +193,7 @@ export default function ProfilePage() {
     return (
       <main className="bg-white">
         <Header title="حسابي" showNotifications={false} />
-        <div className="px-4 py-12 text-center">
-          <div className="w-20 h-20 bg-gray-light rounded-full skeleton mx-auto mb-4" />
-          <div className="h-5 w-32 skeleton rounded-lg mx-auto mb-2" />
-          <div className="h-4 w-48 skeleton rounded-lg mx-auto" />
-        </div>
+        <ProfileSkeleton />
         <BottomNavWithBadge />
       </main>
     );

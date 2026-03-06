@@ -39,7 +39,7 @@ export default function BottomNav({ unreadMessages = 0, isMerchant = false }: Bo
 
   return (
     <nav className="fixed bottom-0 inset-x-0 bg-white dark:bg-[#0f1117] border-t border-gray-light safe-bottom z-50">
-      <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
+      <div className="flex items-center justify-around h-16 max-w-lg sm:max-w-xl md:max-w-2xl mx-auto">
         {tabs.map((tab) => {
           const isActive =
             tab.href === "/"
