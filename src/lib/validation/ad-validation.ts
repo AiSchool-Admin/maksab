@@ -70,11 +70,26 @@ export function validateAdData(adData: Record<string, unknown>): ValidationResul
     }
   }
 
-  if (saleType === "auction") {
-    if (adData.auction_start_price !== null && adData.auction_start_price !== undefined) {
-      const startPrice = Number(adData.auction_start_price);
-      if (isNaN(startPrice) || startPrice < 1) {
-        return { valid: false, error: "سعر بداية المزاد لازم يكون أكبر من 0" };
+  if (saleType === "auction" || saleType === "live_auction") {
+    // Start price is required for auctions
+    const startPrice = adData.auction_start_price !== null && adData.auction_start_price !== undefined
+      ? Number(adData.auction_start_price)
+      : NaN;
+    if (isNaN(startPrice) || startPrice < 1) {
+      return { valid: false, error: "سعر بداية المزاد لازم يكون أكبر من 0" };
+    }
+    // Buy-now price must be higher than start price
+    if (adData.auction_buy_now_price !== null && adData.auction_buy_now_price !== undefined) {
+      const buyNow = Number(adData.auction_buy_now_price);
+      if (!isNaN(buyNow) && buyNow > 0 && buyNow <= startPrice) {
+        return { valid: false, error: "سعر الشراء الفوري لازم يكون أعلى من سعر الافتتاح" };
+      }
+    }
+    // Min increment must be positive if provided
+    if (adData.auction_min_increment !== null && adData.auction_min_increment !== undefined) {
+      const minInc = Number(adData.auction_min_increment);
+      if (isNaN(minInc) || minInc < 1) {
+        return { valid: false, error: "الحد الأدنى للمزايدة لازم يكون أكبر من 0" };
       }
     }
     if (adData.auction_duration_hours !== null && adData.auction_duration_hours !== undefined) {
