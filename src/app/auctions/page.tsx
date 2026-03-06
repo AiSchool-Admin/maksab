@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Flame, SlidersHorizontal, Home, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import AdCard from "@/components/ad/AdCard";
-import { Skeleton } from "@/components/ui/SkeletonLoader";
+import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
+import { EmptyAuctions } from "@/components/ui/EmptyState";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { supabase } from "@/lib/supabase/client";
 import type { AdSummary } from "@/lib/ad-data";
@@ -274,32 +275,10 @@ export default function AuctionsPage() {
 
       <div className="px-4 py-4">
         {/* Loading */}
-        {isLoading && (
-          <div className="grid grid-cols-2 gap-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="aspect-[4/3] rounded-xl" />
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-3 w-1/2" />
-              </div>
-            ))}
-          </div>
-        )}
+        {isLoading && <AdGridSkeleton count={6} cols={2} />}
 
         {/* Empty state */}
-        {!isLoading && auctions.length === 0 && (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🔥</div>
-            <h2 className="text-2xl font-bold text-dark mb-2">
-              مفيش مزادات{" "}
-              {statusFilter === "active" ? "شغالة" : ""}
-              {" "}دلوقتي
-            </h2>
-            <p className="text-sm text-gray-text mb-6">
-              انشر مزاد جديد أو ارجع بعدين — المزادات بتولع هنا كل شوية 🔥
-            </p>
-          </div>
-        )}
+        {!isLoading && auctions.length === 0 && <EmptyAuctions />}
 
         {/* Auctions grid */}
         {!isLoading && auctions.length > 0 && (

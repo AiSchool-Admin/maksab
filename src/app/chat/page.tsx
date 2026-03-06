@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { MessageCircle, LogIn, Search, X } from "lucide-react";
+import { LogIn, Search, X } from "lucide-react";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import ConversationItem from "@/components/chat/ConversationItem";
-import { Skeleton } from "@/components/ui/SkeletonLoader";
+import { ConversationListSkeleton } from "@/components/ui/SkeletonLoader";
+import { EmptyChats, EmptyNeedsLogin } from "@/components/ui/EmptyState";
 import Button from "@/components/ui/Button";
 import { useChatStore } from "@/stores/chat-store";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -110,49 +111,16 @@ export default function ChatListPage() {
       )}
 
       {/* Auth loading */}
-      {isAuthLoading && (
-        <div className="space-y-1">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-4 py-3">
-              <Skeleton className="w-12 h-12 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-1/3" />
-                <Skeleton className="h-3 w-2/3" />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {isAuthLoading && <ConversationListSkeleton count={3} />}
 
       {/* Not logged in */}
       {!isAuthLoading && !user && (
-        <div className="py-16 text-center">
-          <div className="w-20 h-20 rounded-full bg-gray-light flex items-center justify-center mx-auto mb-4">
-            <LogIn size={36} className="text-gray-text" />
-          </div>
-          <h3 className="text-lg font-bold text-dark mb-2">سجّل دخولك الأول</h3>
-          <p className="text-sm text-gray-text px-8 mb-6">
-            عشان تقدر تبعت وتستقبل رسائل، سجّل دخولك
-          </p>
-          <Button onClick={() => requireAuth()} size="lg">
-            تسجيل الدخول
-          </Button>
-        </div>
+        <EmptyNeedsLogin feature="الرسائل" onLogin={() => requireAuth()} />
       )}
 
       {/* Loading conversations */}
       {!isAuthLoading && user && isLoadingConversations && (
-        <div className="space-y-1">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-4 py-3">
-              <Skeleton className="w-12 h-12 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-1/3" />
-                <Skeleton className="h-3 w-2/3" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <ConversationListSkeleton count={5} />
       )}
 
       {/* Conversations list */}
@@ -175,15 +143,7 @@ export default function ChatListPage() {
 
       {/* Empty state */}
       {!isAuthLoading && user && !isLoadingConversations && conversations.length === 0 && (
-        <div className="py-16 text-center">
-          <div className="w-20 h-20 rounded-full bg-gray-light flex items-center justify-center mx-auto mb-4">
-            <MessageCircle size={36} className="text-gray-text" />
-          </div>
-          <h3 className="text-lg font-bold text-dark mb-2">مفيش رسائل</h3>
-          <p className="text-sm text-gray-text px-8">
-            لما تبدأ محادثة مع بائع أو مشتري، هتلاقيها هنا
-          </p>
-        </div>
+        <EmptyChats />
       )}
 
       <BottomNavWithBadge />

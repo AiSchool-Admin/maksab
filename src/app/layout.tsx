@@ -137,8 +137,8 @@ export default function RootLayout({
         <UpdateBanner />
         <ThemeProvider>
           <AuthProvider>
-            {/* Main content centered with max mobile width */}
-            <div className="min-h-screen pb-20 max-w-lg mx-auto">{children}</div>
+            {/* Main content centered — mobile-first, scales to tablet */}
+            <div className="min-h-screen pb-20 max-w-lg sm:max-w-xl md:max-w-2xl mx-auto">{children}</div>
             <ComparisonFab />
             <InstallPrompt />
             <ChatbotWidget />

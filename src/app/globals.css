@@ -228,7 +228,7 @@ a,
 @media (min-width: 32rem) {
   .fixed.inset-x-0,
   .fixed[class*="inset-x"] {
-    max-width: 32rem;
+    max-width: 42rem;
     inset-inline-start: 50% !important;
     inset-inline-end: auto !important;
     transform: translateX(-50%);
@@ -254,6 +254,77 @@ a,
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ═══ RTL Layout Utilities ═══════════════════════════════ */
+/* Ensure all flex/grid gaps work correctly in RTL */
+[dir="rtl"] .space-x-reverse > :not(:first-child) {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+/* RTL-aware text alignment */
+.text-start {
+  text-align: right;
+}
+.text-end {
+  text-align: left;
+}
+
+/* RTL-aware float */
+.float-start {
+  float: right;
+}
+.float-end {
+  float: left;
+}
+
+/* RTL-aware icon flip for directional icons */
+.rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* RTL scroll snap alignment */
+[dir="rtl"] .snap-start {
+  scroll-snap-align: end;
+}
+
+/* ═══ Responsive Layout ═════════════════════════════════ */
+/* Tablet: 2-column layout for grids */
+@media (min-width: 640px) {
+  .responsive-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Desktop: wider content area */
+@media (min-width: 768px) {
+  .responsive-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Tablet/Desktop: wider content container */
+@media (min-width: 768px) {
+  .content-container {
+    max-width: 48rem;
+    margin-inline: auto;
+  }
+}
+
+/* Tablet: adjust ad cards for larger screens */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .ad-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ad-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
 }
 
 /* Reduce CLS — reserve space for images */
