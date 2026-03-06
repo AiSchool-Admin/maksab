@@ -122,13 +122,23 @@ export default function Step3PricePhotos({
     const remaining = MAX_IMAGES - images.length;
     const toAdd = Array.from(files).slice(0, remaining);
     const compressed: CompressedImage[] = [];
+    let failedCount = 0;
     for (const file of toAdd) {
       try {
         const result = await compressImage(file);
         compressed.push(result);
       } catch {
-        // Skip failed images
+        failedCount++;
       }
+    }
+    if (failedCount > 0 && compressed.length > 0) {
+      import("react-hot-toast").then(({ default: toast }) => {
+        toast.error(`${failedCount} صورة مقدرناش نضغطها. الصور التانية اتضافت بنجاح`);
+      });
+    } else if (failedCount > 0 && compressed.length === 0) {
+      import("react-hot-toast").then(({ default: toast }) => {
+        toast.error("مقدرناش نحمّل الصور دي. جرب صور تانية أو صيغة مختلفة");
+      });
     }
     onImagesChange([...images, ...compressed]);
     if (fileInputRef.current) fileInputRef.current.value = "";

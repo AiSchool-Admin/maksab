@@ -159,10 +159,7 @@ export default function Step4LocationReview({
       <div>
         <button
           type="button"
-          onClick={() => {
-            setShowEdit(!showEdit);
-            if (!isTitleDescEdited) onTitleDescEditToggle();
-          }}
+          onClick={() => setShowEdit(!showEdit)}
           className="flex items-center gap-2 text-sm font-semibold text-brand-green hover:text-brand-green-dark transition-colors"
         >
           <Pencil size={14} />
@@ -175,7 +172,10 @@ export default function Step4LocationReview({
               label="العنوان"
               name="title"
               value={title}
-              onChange={(e) => onTitleChange(e.target.value)}
+              onChange={(e) => {
+                onTitleChange(e.target.value);
+                if (!isTitleDescEdited) onTitleDescEditToggle();
+              }}
               placeholder="عنوان الإعلان"
               error={errors.title}
               required
@@ -186,7 +186,10 @@ export default function Step4LocationReview({
               </label>
               <textarea
                 value={description}
-                onChange={(e) => onDescriptionChange(e.target.value)}
+                onChange={(e) => {
+                  onDescriptionChange(e.target.value);
+                  if (!isTitleDescEdited) onTitleDescEditToggle();
+                }}
                 placeholder="وصف الإعلان..."
                 rows={4}
                 className="w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all text-dark placeholder:text-gray-text resize-none"
