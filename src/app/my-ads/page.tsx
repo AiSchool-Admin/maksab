@@ -20,6 +20,7 @@ import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import EmptyState from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { getSessionToken } from "@/lib/supabase/auth";
 import {
   fetchMyAds,
   updateAdStatus,
@@ -101,6 +102,9 @@ export default function MyAdsPage() {
         setAds((prev) =>
           prev.map((a) => (a.id === adId ? { ...a, status: "sold" as AdStatus } : a)),
         );
+        toast.success("تم تحديث الإعلان — مبروك على البيعة!");
+      } else {
+        toast.error("حصل مشكلة، جرب تاني");
       }
       setActionMenuId(null);
     },
@@ -109,6 +113,11 @@ export default function MyAdsPage() {
 
   const handleDelete = useCallback(
     async (adId: string) => {
+      const confirmed = window.confirm("متأكد إنك عايز تحذف الإعلان ده؟ مش هتقدر ترجعه تاني.");
+      if (!confirmed) {
+        setActionMenuId(null);
+        return;
+      }
       const authedUser = user || (await requireAuth());
       if (!authedUser) return;
       const result = await deleteAd(adId);
@@ -116,6 +125,9 @@ export default function MyAdsPage() {
         setAds((prev) =>
           prev.map((a) => (a.id === adId ? { ...a, status: "deleted" as AdStatus } : a)),
         );
+        toast.success("تم حذف الإعلان");
+      } else {
+        toast.error("حصل مشكلة في الحذف، جرب تاني");
       }
       setActionMenuId(null);
     },
@@ -133,6 +145,9 @@ export default function MyAdsPage() {
             a.id === adId ? { ...a, status: "active" as AdStatus } : a,
           ),
         );
+        toast.success("تم تجديد الإعلان بنجاح!");
+      } else {
+        toast.error("حصل مشكلة في التجديد، جرب تاني");
       }
       setActionMenuId(null);
     },
@@ -144,15 +159,20 @@ export default function MyAdsPage() {
       const authedUser = user || (await requireAuth());
       if (!authedUser) return;
       try {
+        const sessionToken = getSessionToken();
+        if (!sessionToken) {
+          toast.error("الجلسة انتهت — سجل دخول تاني");
+          return;
+        }
         const response = await fetch("/api/ads/duplicate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ad_id: adId, user_id: authedUser.id }),
+          body: JSON.stringify({ ad_id: adId, user_id: authedUser.id, session_token: sessionToken }),
         });
         const result = await response.json();
-        if (result.success) {
+        if (result.success && result.ad?.id) {
           toast.success("تم نسخ الإعلان — بيتم فتحه دلوقتي");
-          router.push(`/ad/${result.newAdId}/edit`);
+          router.push(`/ad/${result.ad.id}/edit`);
         } else {
           toast.error(result.error || "حصل مشكلة");
         }
@@ -281,16 +301,17 @@ export default function MyAdsPage() {
                       {/* Action menu */}
                       <div className="relative flex-shrink-0">
                         <button
-                          onClick={() =>
-                            setActionMenuId(isMenuOpen ? null : ad.id)
-                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActionMenuId(isMenuOpen ? null : ad.id);
+                          }}
                           className="p-1 text-gray-text hover:text-dark rounded transition-colors"
                         >
                           <MoreHorizontal size={18} />
                         </button>
 
                         {isMenuOpen && (
-                          <div className="absolute top-full end-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-light py-1 z-30 min-w-[140px]">
+                          <div onClick={(e) => e.stopPropagation()} className="absolute top-full end-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-light py-1 z-30 min-w-[140px]">
                             {ad.status === "active" && (
                               <>
                                 <button
