@@ -115,7 +115,7 @@ export default function FavoritesPage() {
         return next;
       });
     },
-    [],
+    [requireAuth],
   );
 
   return (

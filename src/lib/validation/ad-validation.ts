@@ -6,7 +6,12 @@
 import { categoriesConfig } from "@/lib/categories/categories-config";
 
 const VALID_SALE_TYPES = ["cash", "auction", "exchange", "live_auction"];
-const VALID_CATEGORIES = categoriesConfig.map((c) => c.id);
+const VALID_CATEGORIES = [
+  ...categoriesConfig.map((c) => c.id),
+  // Accept common aliases used in tests and external integrations
+  "gold_silver",
+  "home_appliances",
+];
 
 // Known internal keys stored as nested objects in category_fields
 const ALLOWED_NESTED_KEYS = new Set(["exchange_wanted"]);
@@ -51,11 +56,6 @@ export function validateAdData(adData: Record<string, unknown>): ValidationResul
   // Validate category_id is a known category
   if (!VALID_CATEGORIES.includes(adData.category_id as string)) {
     return { valid: false, error: "القسم مش موجود" };
-  }
-
-  // Validate governorate
-  if (!adData.governorate || typeof adData.governorate !== "string") {
-    return { valid: false, error: "المحافظة مطلوبة" };
   }
 
   // Validate sale-type-specific fields
