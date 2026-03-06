@@ -82,21 +82,32 @@ export async function POST(request: Request) {
       );
     }
 
-    // Mark as cancelled
-    await adminClient
+    // Mark as cancelled with end date
+    const { error: cancelError } = await adminClient
       .from("store_subscriptions")
-      .update({ status: "cancelled" })
+      .update({ status: "cancelled", end_at: new Date().toISOString() })
       .eq("id", currentSub.id);
 
+    if (cancelError) {
+      return NextResponse.json(
+        { error: "فشل إلغاء الاشتراك. جرب تاني" },
+        { status: 500 },
+      );
+    }
+
     // Remove plan badges
-    await adminClient
+    const { error: badgeError } = await adminClient
       .from("store_badges")
       .delete()
       .eq("store_id", store_id)
       .in("badge_type", ["gold", "platinum"]);
 
+    if (badgeError) {
+      console.error("Failed to remove badges:", badgeError);
+    }
+
     // Create a free subscription to take effect
-    await adminClient
+    const { error: freeError } = await adminClient
       .from("store_subscriptions")
       .insert({
         store_id,
@@ -105,6 +116,10 @@ export async function POST(request: Request) {
         price: 0,
         start_at: new Date().toISOString(),
       });
+
+    if (freeError) {
+      console.error("Failed to create free subscription:", freeError);
+    }
 
     return NextResponse.json({
       success: true,

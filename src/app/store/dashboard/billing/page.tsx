@@ -30,6 +30,7 @@ export default function BillingPage() {
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -46,8 +47,10 @@ export default function BillingPage() {
     setStore(s);
 
     // Fetch subscription & history in parallel
+    const { getSessionToken } = await import("@/lib/supabase/auth");
+    const token = getSessionToken();
     const [subRes, hist] = await Promise.all([
-      fetch(`/api/stores/subscription?store_id=${s.id}`),
+      fetch(`/api/stores/subscription?store_id=${s.id}&session_token=${encodeURIComponent(token || "")}`),
       getSubscriptionHistory(s.id),
     ]);
 
@@ -229,7 +232,7 @@ export default function BillingPage() {
           {/* Cancel button for paid plans */}
           {currentPlan !== "free" && (
             <button
-              onClick={handleCancel}
+              onClick={() => setShowCancelConfirm(true)}
               disabled={isCancelling}
               className="mt-3 text-xs text-error hover:underline disabled:opacity-50"
             >
@@ -372,6 +375,48 @@ export default function BillingPage() {
           onClose={() => setUpgradeTarget(null)}
           isLoading={isUpgrading}
         />
+      )}
+
+      {/* Cancel Confirmation Dialog */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowCancelConfirm(false)}
+          />
+          <div className="relative bg-white rounded-2xl w-[90%] max-w-sm p-5 space-y-4">
+            <div className="text-center">
+              <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                <AlertCircle size={28} className="text-error" />
+              </div>
+              <h3 className="text-lg font-bold text-dark">
+                متأكد من إلغاء الاشتراك؟
+              </h3>
+              <p className="text-sm text-gray-text mt-2 leading-relaxed">
+                هترجع للباقة المجانية وهتفقد المميزات الإضافية
+                زي العروض والظهور المميز في البحث.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-light text-sm font-semibold text-dark hover:bg-gray-50 transition-colors"
+              >
+                لا، خليني
+              </button>
+              <button
+                onClick={() => {
+                  setShowCancelConfirm(false);
+                  handleCancel();
+                }}
+                disabled={isCancelling}
+                className="flex-1 py-2.5 rounded-xl bg-error text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isCancelling ? "جاري الإلغاء..." : "إلغاء الاشتراك"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
