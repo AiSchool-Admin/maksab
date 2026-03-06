@@ -25,7 +25,7 @@ import {
 import Image from "next/image";
 import { useAuthStore } from "@/stores/auth-store";
 import { getStoreByUserId, getStoreProductsForDashboard } from "@/lib/stores/store-service";
-import { supabase } from "@/lib/supabase/client";
+import { getSessionToken } from "@/lib/supabase/auth";
 import { formatPrice, formatTimeAgo } from "@/lib/utils/format";
 import EmptyState from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -88,58 +88,65 @@ export default function DashboardProductsPage() {
     };
   }, [activeMenu]);
 
-  const handleTogglePin = useCallback(async (productId: string, currentlyPinned: boolean) => {
-    await supabase
-      .from("ads" as never)
-      .update({ is_pinned: !currentlyPinned } as never)
-      .eq("id", productId);
+  const callUpdateApi = useCallback(async (adId: string, action: string) => {
+    if (!user) return false;
+    try {
+      const res = await fetch("/api/ads/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id, session_token: getSessionToken(), ad_id: adId, action }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }, [user]);
 
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId ? { ...p, is_pinned: !currentlyPinned } : p,
-      ),
-    );
+  const handleTogglePin = useCallback(async (productId: string, currentlyPinned: boolean) => {
+    const action = currentlyPinned ? "unpin" : "pin";
+    const ok = await callUpdateApi(productId, action);
+    if (ok) {
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId ? { ...p, is_pinned: !currentlyPinned } : p,
+        ),
+      );
+    }
     setActiveMenu(null);
-  }, []);
+  }, [callUpdateApi]);
 
   const handleMarkSold = useCallback(async (productId: string) => {
-    await supabase
-      .from("ads" as never)
-      .update({ status: "sold" } as never)
-      .eq("id", productId);
-
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId ? { ...p, status: "sold" } : p,
-      ),
-    );
+    const ok = await callUpdateApi(productId, "mark_sold");
+    if (ok) {
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId ? { ...p, status: "sold" } : p,
+        ),
+      );
+    }
     setActiveMenu(null);
-  }, []);
+  }, [callUpdateApi]);
 
   const handleReactivate = useCallback(async (productId: string) => {
-    await supabase
-      .from("ads" as never)
-      .update({ status: "active" } as never)
-      .eq("id", productId);
-
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId ? { ...p, status: "active" } : p,
-      ),
-    );
+    const ok = await callUpdateApi(productId, "reactivate");
+    if (ok) {
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId ? { ...p, status: "active" } : p,
+        ),
+      );
+    }
     setActiveMenu(null);
-  }, []);
+  }, [callUpdateApi]);
 
   const handleDelete = useCallback(async (productId: string) => {
-    await supabase
-      .from("ads" as never)
-      .update({ status: "deleted" } as never)
-      .eq("id", productId);
-
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    const ok = await callUpdateApi(productId, "delete");
+    if (ok) {
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
+    }
     setActiveMenu(null);
     setDeleteConfirm(null);
-  }, []);
+  }, [callUpdateApi]);
 
   const [duplicating, setDuplicating] = useState<string | null>(null);
 
@@ -151,7 +158,7 @@ export default function DashboardProductsPage() {
       const res = await fetch("/api/ads/duplicate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: user.id, ad_id: productId }),
+        body: JSON.stringify({ user_id: user.id, session_token: getSessionToken(), ad_id: productId }),
       });
       const result = await res.json();
       if (res.ok && result.ad) {
@@ -354,7 +361,7 @@ export default function DashboardProductsPage() {
 
                 {/* Dropdown menu */}
                 {activeMenu === product.id && (
-                  <div className="absolute top-10 left-3 bg-white border border-gray-light rounded-xl shadow-lg z-10 overflow-hidden min-w-[160px]">
+                  <div className="absolute top-10 start-3 bg-white border border-gray-light rounded-xl shadow-lg z-10 overflow-hidden min-w-[160px]">
                     <Link
                       href={`/ad/${product.id}`}
                       className="flex items-center gap-2 px-4 py-2.5 text-sm text-dark hover:bg-gray-50"
@@ -463,7 +470,7 @@ export default function DashboardProductsPage() {
               </button>
             </div>
             <p className="text-sm text-gray-text">
-              متأكد إنك عايز تحذف المنتج ده؟ الحذف مش هيتشال نهائياً ويمكن استرجاعه لاحقاً.
+              متأكد إنك عايز تحذف المنتج ده؟ المنتج هيختفي من المتجر لكن ممكن تتواصل مع الدعم لاسترجاعه.
             </p>
             <div className="flex gap-2">
               <button

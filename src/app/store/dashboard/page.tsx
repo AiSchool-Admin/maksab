@@ -11,7 +11,7 @@ import {
   Star,
   Users,
   Eye,
-  TrendingUp,
+  ChevronLeft,
   Plus,
   ExternalLink,
   Crown,
@@ -23,7 +23,7 @@ import {
 import { useAuthStore } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import EmptyState from "@/components/ui/EmptyState";
-import { getStoreByUserId, getStoreProductsForDashboard, getStoreReviews } from "@/lib/stores/store-service";
+import { getStoreByUserId, getStoreProductsForDashboard, getStoreReviews, getStoreAnalytics } from "@/lib/stores/store-service";
 import { supabase } from "@/lib/supabase/client";
 import type { Store } from "@/types";
 
@@ -62,9 +62,10 @@ export default function StoreDashboardPage() {
       setStore(s);
 
       // Fetch stats using store-service helpers (with dev fallback)
-      const [productsData, reviewsResult] = await Promise.all([
+      const [productsData, reviewsResult, analyticsData] = await Promise.all([
         getStoreProductsForDashboard(s.id),
         getStoreReviews(s.id, 1, 100),
+        getStoreAnalytics(s.id, 30),
       ]);
 
       // Also try to get followers count from Supabase
@@ -81,9 +82,15 @@ export default function StoreDashboardPage() {
             reviewsData.length
           : 0;
 
+      // Sum total views from analytics data
+      const totalViews = analyticsData.reduce(
+        (sum, day) => sum + (day.total_views || 0),
+        0,
+      );
+
       setStats({
         totalProducts: activeProducts.length,
-        totalViews: 0,
+        totalViews,
         totalFollowers: followersCount || 0,
         totalReviews: reviewsData.length,
         avgRating: Math.round(avg * 10) / 10,
@@ -288,7 +295,7 @@ export default function StoreDashboardPage() {
               <p className="text-sm font-bold text-dark">{item.label}</p>
               <p className="text-xs text-gray-text">{item.desc}</p>
             </div>
-            <TrendingUp size={16} className="text-gray-text rotate-180" />
+            <ChevronLeft size={16} className="text-gray-text" />
           </Link>
         ))}
       </div>
