@@ -14,9 +14,11 @@ import {
   Edit3,
   Loader2,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import { useAuthStore } from "@/stores/auth-store";
+import { getSessionToken } from "@/lib/supabase/auth";
 import { getStoreByUserId } from "@/lib/stores/store-service";
 import {
   getCategoryById,
@@ -152,17 +154,17 @@ export default function BulkImportPage() {
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
         parsedRows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" }) as Record<string, string>[];
       } else {
-        alert("نوع الملف مش مدعوم. استخدم CSV أو Excel (.xlsx)");
+        toast.error("نوع الملف مش مدعوم. استخدم CSV أو Excel (.xlsx)");
         return;
       }
 
       if (parsedRows.length === 0) {
-        alert("الملف فاضي أو مفيش بيانات");
+        toast.error("الملف فاضي أو مفيش بيانات");
         return;
       }
 
       if (parsedRows.length > 100) {
-        alert("الحد الأقصى 100 منتج في المرة الواحدة. الملف فيه " + parsedRows.length + " صف");
+        toast.error("الحد الأقصى 100 منتج في المرة الواحدة. الملف فيه " + parsedRows.length + " صف");
         parsedRows = parsedRows.slice(0, 100);
       }
 
@@ -239,7 +241,7 @@ export default function BulkImportPage() {
       setStep("preview");
     } catch (err) {
       console.error("File parse error:", err);
-      alert("حصل مشكلة في قراءة الملف. تأكد إنه CSV أو Excel صحيح");
+      toast.error("حصل مشكلة في قراءة الملف. تأكد إنه CSV أو Excel صحيح");
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -276,7 +278,7 @@ export default function BulkImportPage() {
 
     const validRows = rows.filter(r => r.errors.length === 0);
     if (validRows.length === 0) {
-      alert("مفيش منتجات صالحة للنشر. صلّح الأخطاء الأول");
+      toast.error("مفيش منتجات صالحة للنشر. صلّح الأخطاء الأول");
       return;
     }
 
@@ -312,6 +314,7 @@ export default function BulkImportPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             user_id: user.id,
+            session_token: getSessionToken(),
             ads,
             store_id: store.id,
           }),
