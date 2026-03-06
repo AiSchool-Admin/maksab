@@ -15,6 +15,8 @@ export interface MyAd {
   viewsCount: number;
   favoritesCount: number;
   messagesCount: number;
+  offersCount: number;
+  highestOffer: number | null;
   createdAt: string;
   expiresAt: string | null;
   governorate: string | null;
@@ -47,6 +49,8 @@ export async function fetchMyAds(): Promise<MyAd[]> {
       viewsCount: Number(row.views_count) || 0,
       favoritesCount: Number(row.favorites_count) || 0,
       messagesCount: 0,
+      offersCount: Number(row.offers_count) || 0,
+      highestOffer: row.highest_offer ? Number(row.highest_offer) : null,
       createdAt: row.created_at as string,
       governorate: (row.governorate as string) ?? null,
       city: (row.city as string) ?? null,

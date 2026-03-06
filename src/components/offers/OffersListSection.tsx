@@ -132,7 +132,10 @@ export default function OffersListSection({
     setChattingOfferId(offer.id);
     try {
       const { findOrCreateConversation } = await import("@/lib/chat/chat-service");
-      const conv = await findOrCreateConversation(adId);
+      // If the current user is the seller, pass the buyer's ID so we find/create
+      // the correct conversation (seller→buyer), not (currentUser as buyer→seller)
+      const buyerId = isSeller ? offer.buyerId : undefined;
+      const conv = await findOrCreateConversation(adId, buyerId);
       if (conv) {
         router.push(`/chat/${conv.id}`);
       } else {

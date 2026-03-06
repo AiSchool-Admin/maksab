@@ -13,6 +13,7 @@ import {
   Edit3,
   AlertTriangle,
   Copy,
+  DollarSign,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Header from "@/components/layout/Header";
@@ -28,11 +29,18 @@ import {
   getStatusLabel,
   type MyAd,
 } from "@/lib/my-ads/my-ads-service";
+import {
+  getAdOffers,
+  respondToOffer,
+  getOfferStatusLabel,
+  getOfferStatusColor,
+  type PriceOffer,
+} from "@/lib/offers/offers-service";
+import { formatPrice, formatTimeAgo } from "@/lib/utils/format";
 import Image from "next/image";
-import { formatTimeAgo } from "@/lib/utils/format";
 import type { AdStatus } from "@/types";
 
-type TabFilter = "all" | "active" | "sold" | "expired";
+type TabFilter = "all" | "active" | "sold" | "expired" | "offers";
 
 /** Calculate days until expiry; returns null if no expiry date or already expired */
 function getDaysUntilExpiry(expiresAt: string | null): number | null {
@@ -54,6 +62,7 @@ function getExpiryWarning(daysLeft: number | null): { text: string; color: strin
 const tabs: { id: TabFilter; label: string }[] = [
   { id: "all", label: "الكل" },
   { id: "active", label: "شغال" },
+  { id: "offers", label: "العروض" },
   { id: "sold", label: "اتباع" },
   { id: "expired", label: "خلص" },
 ];
@@ -68,6 +77,11 @@ export default function MyAdsPage() {
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
 
   const [error, setError] = useState(false);
+
+  // Offers tab state
+  const [allOffers, setAllOffers] = useState<(PriceOffer & { _adTitle: string })[]>([]);
+  const [isLoadingOffers, setIsLoadingOffers] = useState(false);
+  const [isRespondingOffer, setIsRespondingOffer] = useState<string | null>(null);
 
   // Load ads
   useEffect(() => {
@@ -84,6 +98,48 @@ export default function MyAdsPage() {
         setIsLoading(false);
       });
   }, []);
+
+  // Load offers when switching to offers tab
+  useEffect(() => {
+    if (activeTab !== "offers" || ads.length === 0) return;
+    const adsWithOffers = ads.filter((a) => a.offersCount > 0 && a.saleType === "cash");
+    if (adsWithOffers.length === 0) return;
+
+    setIsLoadingOffers(true);
+    Promise.all(
+      adsWithOffers.map(async (ad) => {
+        const offers = await getAdOffers(ad.id);
+        return offers.map((o) => ({ ...o, _adTitle: ad.title }));
+      }),
+    ).then((results) => {
+      const flat = results.flat().sort((a, b) => {
+        // Pending first, then by date
+        if (a.status === "pending" && b.status !== "pending") return -1;
+        if (a.status !== "pending" && b.status === "pending") return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      setAllOffers(flat);
+      setIsLoadingOffers(false);
+    });
+  }, [activeTab, ads]);
+
+  const handleOfferAction = async (offerId: string, action: "accepted" | "rejected") => {
+    if (!user) return;
+    setIsRespondingOffer(offerId);
+    const result = await respondToOffer({ offerId, sellerId: user.id, action });
+    setIsRespondingOffer(null);
+    if (result.success) {
+      toast.success(action === "accepted" ? "تم قبول العرض" : "تم رفض العرض");
+      // Update locally
+      setAllOffers((prev) =>
+        prev.map((o) =>
+          o.id === offerId ? { ...o, status: action } : o,
+        ),
+      );
+    } else {
+      toast.error(result.error || "حصل مشكلة");
+    }
+  };
 
   // Filter ads by tab
   const filteredAds = ads.filter((ad) => {
@@ -206,6 +262,14 @@ export default function MyAdsPage() {
                 ({ads.filter((a) => a.status !== "deleted").length})
               </span>
             )}
+            {tab.id === "offers" && !isLoading && (() => {
+              const total = ads.reduce((sum, a) => sum + a.offersCount, 0);
+              return total > 0 ? (
+                <span className="ms-1 text-xs bg-brand-gold text-white rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">
+                  {total}
+                </span>
+              ) : null;
+            })()}
           </button>
         ))}
       </div>
@@ -236,6 +300,113 @@ export default function MyAdsPage() {
               className="h-28 bg-gray-light rounded-xl skeleton"
             />
           ))
+        ) : activeTab === "offers" ? (
+          // ── Offers Tab ──────────────────────────────────
+          isLoadingOffers ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-24 bg-gray-light rounded-xl skeleton" />
+            ))
+          ) : allOffers.length === 0 ? (
+            <EmptyState
+              icon="💰"
+              title="مفيش عروض أسعار"
+              description="لما مشتري يقدم عرض سعر على إعلاناتك، هتلاقيه هنا"
+            />
+          ) : (
+            allOffers.map((offer) => (
+              <div
+                key={offer.id}
+                className="bg-white border border-gray-light rounded-xl p-3 space-y-2"
+              >
+                {/* Ad title + offer header */}
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => router.push(`/ad/${offer.adId}`)}
+                    className="text-xs text-brand-green font-semibold truncate hover:underline"
+                  >
+                    {offer._adTitle}
+                  </button>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${getOfferStatusColor(offer.status)}`}
+                  >
+                    {getOfferStatusLabel(offer.status)}
+                  </span>
+                </div>
+
+                {/* Buyer info + amount */}
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-brand-green-light flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {offer.buyerAvatar ? (
+                      <Image
+                        src={offer.buyerAvatar}
+                        alt={offer.buyerName}
+                        width={32}
+                        height={32}
+                        className="w-full h-full object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <DollarSign size={14} className="text-brand-green" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-dark">{offer.buyerName || "مشتري"}</p>
+                    <p className="text-[10px] text-gray-text">{formatTimeAgo(offer.createdAt)}</p>
+                  </div>
+                  <p className="text-lg font-bold text-brand-green flex-shrink-0">
+                    {formatPrice(offer.amount)}
+                  </p>
+                </div>
+
+                {/* Message */}
+                {offer.message && (
+                  <p className="text-xs text-gray-text bg-gray-light rounded-lg px-3 py-2">
+                    {offer.message}
+                  </p>
+                )}
+
+                {/* Counter offer display */}
+                {offer.status === "countered" && offer.counterAmount && (
+                  <div className="bg-blue-50 rounded-lg px-3 py-2 border border-blue-200">
+                    <p className="text-[10px] text-blue-600 mb-0.5">عرضك المضاد:</p>
+                    <p className="text-sm font-bold text-blue-700">{formatPrice(offer.counterAmount)}</p>
+                    {offer.counterMessage && (
+                      <p className="text-xs text-blue-600 mt-0.5">{offer.counterMessage}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions for pending offers */}
+                {offer.status === "pending" && (
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => handleOfferAction(offer.id, "accepted")}
+                      disabled={isRespondingOffer === offer.id}
+                      className="flex-1 flex items-center justify-center gap-1 py-2 bg-brand-green text-white rounded-lg text-xs font-semibold hover:bg-brand-green-dark transition-colors disabled:opacity-50"
+                    >
+                      <CheckCircle size={14} />
+                      قبول
+                    </button>
+                    <button
+                      onClick={() => router.push(`/ad/${offer.adId}#offers`)}
+                      className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-light text-dark rounded-lg text-xs font-semibold hover:bg-gray-200 transition-colors"
+                    >
+                      <MessageCircle size={14} />
+                      تفاصيل
+                    </button>
+                    <button
+                      onClick={() => handleOfferAction(offer.id, "rejected")}
+                      disabled={isRespondingOffer === offer.id}
+                      className="flex-1 flex items-center justify-center gap-1 py-2 bg-red-50 text-error rounded-lg text-xs font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 size={14} />
+                      رفض
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))
+          )
         ) : filteredAds.length === 0 ? (
           <EmptyState
             icon={activeTab === "sold" ? "🎉" : activeTab === "expired" ? "⏰" : "📦"}
@@ -397,6 +568,24 @@ export default function MyAdsPage() {
                   </div>
                 </div>
 
+                {/* Offers badge — show when there are pending offers */}
+                {ad.offersCount > 0 && ad.saleType === "cash" && (
+                  <div
+                    className="flex items-center gap-2 mt-2 bg-brand-gold-light rounded-lg px-3 py-2 cursor-pointer hover:bg-brand-gold-light/80 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); router.push(`/ad/${ad.id}#offers`); }}
+                  >
+                    <DollarSign size={14} className="text-brand-gold" />
+                    <span className="text-xs font-bold text-brand-gold">
+                      {ad.offersCount} عرض سعر
+                    </span>
+                    {ad.highestOffer && (
+                      <span className="text-xs text-gray-text">
+                        — أعلى عرض: {ad.highestOffer.toLocaleString("en-US")} جنيه
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* Stats bar */}
                 <div className="flex items-center gap-4 mt-3 pt-2.5 border-t border-gray-light">
                   <span className="flex items-center gap-1 text-[11px] text-gray-text">
@@ -411,6 +600,12 @@ export default function MyAdsPage() {
                     <MessageCircle size={12} />
                     {ad.messagesCount}
                   </span>
+                  {ad.offersCount > 0 && (
+                    <span className="flex items-center gap-1 text-[11px] text-brand-gold font-semibold">
+                      <DollarSign size={12} />
+                      {ad.offersCount}
+                    </span>
+                  )}
                 </div>
               </div>
             );

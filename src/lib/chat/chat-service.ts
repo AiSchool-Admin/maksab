@@ -314,6 +314,7 @@ export async function fetchConversation(
 
 export async function findOrCreateConversation(
   adId: string,
+  specificBuyerId?: string,
 ): Promise<ChatConversation | null> {
   try {
     const {
@@ -321,7 +322,49 @@ export async function findOrCreateConversation(
     } = await supabase.auth.getUser();
     if (!user) return null;
 
-    // Check if conversation already exists
+    // If specificBuyerId is provided, we're the seller looking for a conversation
+    // with a specific buyer (e.g., from offers list)
+    if (specificBuyerId) {
+      const { data: existing } = await supabase
+        .from("conversations" as never)
+        .select("*")
+        .eq("ad_id", adId)
+        .eq("buyer_id", specificBuyerId)
+        .maybeSingle();
+
+      if (existing) {
+        const conversations = await fetchConversations();
+        return (
+          conversations.find(
+            (c) => c.id === (existing as Record<string, unknown>).id,
+          ) || null
+        );
+      }
+
+      // Create conversation with seller = current user, buyer = specificBuyerId
+      const { data: newConv, error } = await supabase
+        .from("conversations" as never)
+        .insert({
+          ad_id: adId,
+          buyer_id: specificBuyerId,
+          seller_id: user.id,
+          last_message_at: new Date().toISOString(),
+        } as never)
+        .select()
+        .maybeSingle();
+
+      if (error || !newConv) return null;
+
+      const conversations = await fetchConversations();
+      return (
+        conversations.find(
+          (c) => c.id === (newConv as Record<string, unknown>).id,
+        ) || null
+      );
+    }
+
+    // Default: current user is the buyer
+    // Check if conversation already exists where current user is buyer
     const { data: existing } = await supabase
       .from("conversations" as never)
       .select("*")
