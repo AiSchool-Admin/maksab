@@ -34,7 +34,7 @@ export default function FollowButton({
     setCount((prev) => (wasFollowing ? prev - 1 : prev + 1));
 
     try {
-      onToggle?.();
+      await onToggle?.();
     } catch {
       // Revert optimistic update on failure
       setIsFollowing(wasFollowing);
