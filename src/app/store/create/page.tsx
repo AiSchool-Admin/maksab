@@ -86,30 +86,47 @@ export default function CreateStorePage() {
 
   const selectedBusinessConfig = businessType ? getBusinessTypeConfig(businessType) : null;
 
+  // ── Reserved slugs that conflict with existing routes ─────────
+  const RESERVED_NAMES = ["create", "dashboard", "settings", "admin", "api", "login", "null", "undefined", "مكسب", "maksab"];
+
   // ── Live name uniqueness check ────────────────────────────────
   useEffect(() => {
-    if (name.trim().length < 2) {
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
       setNameAvailable(null);
       return;
     }
 
+    // Check reserved names client-side
+    if (RESERVED_NAMES.some((r) => r.toLowerCase() === trimmed.toLowerCase())) {
+      setNameAvailable(false);
+      return;
+    }
+
+    const controller = new AbortController();
     const timeout = setTimeout(async () => {
       setCheckingName(true);
       try {
         const res = await fetch(
-          `/api/stores/check-name?name=${encodeURIComponent(name.trim())}`,
+          `/api/stores/check-name?name=${encodeURIComponent(trimmed)}`,
+          { signal: controller.signal },
         );
         const data = await res.json();
         // available can be true, false, or null (check failed)
         setNameAvailable(data.available ?? null);
-      } catch {
-        setNameAvailable(null);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          setNameAvailable(null);
+        }
       } finally {
         setCheckingName(false);
       }
     }, 500);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [name]);
 
   // ── Logo handling ─────────────────────────────────────────────
@@ -150,7 +167,7 @@ export default function CreateStorePage() {
   const canProceed = () => {
     if (step === 1) return businessType !== null;
     if (step === 2) {
-      const nameValid = name.trim().length >= 2 && nameAvailable !== false;
+      const nameValid = name.trim().length >= 2 && nameAvailable === true;
       const categoryValid = !!mainCategory;
       // Check required extra fields
       const requiredFields = selectedBusinessConfig?.extraFields.filter((f) => f.isRequired) || [];
@@ -316,24 +333,10 @@ export default function CreateStorePage() {
         </button>
 
         <button
-          onClick={() => {
-            setView("steps");
-            setStep(1);
-            setBusinessType(null);
-            setName("");
-            setMainCategory("");
-            setNameAvailable(null);
-            setExtraFieldValues({});
-            setLogoFile(null);
-            setLogoPreview(null);
-            setDescription("");
-            setTheme("classic");
-            setPrimaryColor("#1B7A3D");
-            setCreatedStore(null);
-          }}
+          onClick={() => router.push("/")}
           className="mt-2 text-sm text-gray-text hover:text-dark hover:underline"
         >
-          أو أنشئ متجر/نشاط تاني
+          ارجع للرئيسية
         </button>
       </div>
     );
@@ -909,7 +912,7 @@ export default function CreateStorePage() {
         ) : (
           <Button
             onClick={() => setView("preview")}
-            disabled={!name.trim() || !mainCategory || !businessType}
+            disabled={!name.trim() || !mainCategory || !businessType || nameAvailable !== true}
             className="flex-1"
           >
             معاينة المتجر

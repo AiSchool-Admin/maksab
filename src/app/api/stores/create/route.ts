@@ -71,6 +71,15 @@ export async function POST(request: Request) {
       auth: { persistSession: false },
     });
 
+    // ── Check reserved names ─────────────────────────────────────
+    const RESERVED_NAMES = ["create", "dashboard", "settings", "admin", "api", "login", "null", "undefined", "مكسب", "maksab"];
+    if (RESERVED_NAMES.some((r) => r.toLowerCase() === name.trim().toLowerCase())) {
+      return NextResponse.json(
+        { error: "الاسم ده محجوز ومينفعش يتسجل" },
+        { status: 400 },
+      );
+    }
+
     // ── Check user exists ───────────────────────────────────────
     const { data: profile } = await adminClient
       .from("profiles")
@@ -82,6 +91,20 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "المستخدم غير موجود" },
         { status: 404 },
+      );
+    }
+
+    // ── Check if user already has a store ──────────────────────
+    const { data: existingUserStore } = await adminClient
+      .from("stores")
+      .select("id, name")
+      .eq("user_id", authenticatedUserId)
+      .maybeSingle();
+
+    if (existingUserStore) {
+      return NextResponse.json(
+        { error: "عندك متجر بالفعل. كل مستخدم يقدر ينشئ متجر واحد بس" },
+        { status: 409 },
       );
     }
 

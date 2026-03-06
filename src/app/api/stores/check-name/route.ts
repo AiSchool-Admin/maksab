@@ -1,12 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+const RESERVED_NAMES = ["create", "dashboard", "settings", "admin", "api", "login", "null", "undefined", "مكسب", "maksab"];
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const name = searchParams.get("name");
 
   if (!name || name.trim().length < 2) {
     return NextResponse.json({ available: false, error: "الاسم قصير أوي" });
+  }
+
+  if (name.trim().length > 30) {
+    return NextResponse.json({ available: false, error: "الاسم طويل أوي (أقصى حد 30 حرف)" });
+  }
+
+  if (RESERVED_NAMES.some((r) => r.toLowerCase() === name.trim().toLowerCase())) {
+    return NextResponse.json({ available: false, error: "الاسم ده محجوز ومينفعش يتسجل" });
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

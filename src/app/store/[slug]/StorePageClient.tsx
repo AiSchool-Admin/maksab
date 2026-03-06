@@ -289,7 +289,7 @@ export default function StorePageClient({ slug }: { slug: string }) {
 
       {/* Reviews link */}
       <div className="px-4 mt-6">
-        <a
+        <Link
           href={`/store/${slug}/reviews`}
           className="flex items-center justify-between bg-white rounded-xl border border-gray-light p-4 hover:shadow-sm transition-shadow"
         >
@@ -298,11 +298,11 @@ export default function StorePageClient({ slug }: { slug: string }) {
               التقييمات ({store.total_reviews})
             </h3>
             <p className="text-xs text-gray-text">
-              تقييم عام: {store.avg_rating.toFixed(1)} من 5
+              تقييم عام: {(store.avg_rating || 0).toFixed(1)} من 5
             </p>
           </div>
           <ArrowRight size={16} className="text-gray-text rotate-180" />
-        </a>
+        </Link>
       </div>
 
       {/* Owner CTA */}

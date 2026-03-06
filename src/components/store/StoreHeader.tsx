@@ -122,7 +122,7 @@ export default function StoreHeader({
         <div className="flex items-center gap-4 text-sm text-gray-text mb-3 flex-wrap">
           <span className="flex items-center gap-1">
             <Star size={14} className="text-brand-gold fill-brand-gold" />
-            <strong className="text-dark">{store.avg_rating.toFixed(1)}</strong>
+            <strong className="text-dark">{(store.avg_rating || 0).toFixed(1)}</strong>
             <span>({store.total_reviews} تقييم)</span>
           </span>
           <span>
