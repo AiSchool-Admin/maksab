@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifySessionToken } from "@/lib/auth/session-token";
+import { validateImageMagicBytes, moderateImageServer } from "@/lib/moderation/image-moderation";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -109,6 +110,26 @@ export async function POST(req: NextRequest) {
     // Convert File to Buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+
+    // Image moderation — validate magic bytes and check for embedded scripts
+    const isImageBucket = ["ad-images", "store-logos", "chat-images", "avatars"].includes(bucket);
+    if (isImageBucket) {
+      const magicCheck = validateImageMagicBytes(arrayBuffer, contentType);
+      if (!magicCheck.valid) {
+        return NextResponse.json(
+          { error: "الملف ده مش صورة صحيحة. استخدم صور JPG أو PNG أو WebP" },
+          { status: 400 },
+        );
+      }
+
+      const moderation = moderateImageServer(buffer, contentType);
+      if (!moderation.approved) {
+        return NextResponse.json(
+          { error: moderation.reason || "الصورة مش مقبولة" },
+          { status: 400 },
+        );
+      }
+    }
 
     // Upload
     const { error: uploadError } = await supabase.storage
