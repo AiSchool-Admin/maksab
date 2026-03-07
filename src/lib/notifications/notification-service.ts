@@ -46,6 +46,55 @@ export async function fetchNotifications(
 }
 
 /**
+ * Fetch paginated notifications with optional type filter.
+ */
+export async function fetchNotificationsPaginated(
+  userId: string,
+  options: { page?: number; limit?: number; type?: string } = {},
+): Promise<{ notifications: AppNotification[]; hasMore: boolean }> {
+  try {
+    const { supabase } = await import("@/lib/supabase/client");
+    const page = options.page || 1;
+    const limit = options.limit || 20;
+    const from = (page - 1) * limit;
+
+    let query = supabase
+      .from("notifications" as never)
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .range(from, from + limit);
+
+    if (options.type && options.type !== "all") {
+      query = query.eq("type", options.type);
+    }
+
+    const { data, error } = await query;
+    if (error || !data) return { notifications: [], hasMore: false };
+
+    const notifications = (data as Record<string, unknown>[]).map((row) => ({
+      id: row.id as string,
+      userId: row.user_id as string,
+      type: row.type as NotificationType,
+      title: row.title as string,
+      body: row.body as string,
+      icon: NOTIFICATION_ICONS[(row.type as NotificationType) || "system"],
+      adId: row.ad_id as string | undefined,
+      conversationId: row.conversation_id as string | undefined,
+      isRead: row.is_read as boolean,
+      createdAt: row.created_at as string,
+    }));
+
+    return {
+      notifications,
+      hasMore: (data as unknown[]).length > limit,
+    };
+  } catch {
+    return { notifications: [], hasMore: false };
+  }
+}
+
+/**
  * Get count of unread notifications.
  */
 export async function getUnreadCount(userId: string): Promise<number> {

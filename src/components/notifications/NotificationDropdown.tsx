@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCheck, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -158,6 +159,17 @@ export default function NotificationDropdown() {
           ))
         )}
       </div>
+
+      {/* View all link */}
+      {notifications.length > 0 && (
+        <Link
+          href="/notifications"
+          onClick={() => setOpen(false)}
+          className="block text-center py-2.5 text-xs font-semibold text-brand-green hover:bg-gray-light/50 transition-colors border-t border-gray-light"
+        >
+          عرض كل الإشعارات
+        </Link>
+      )}
     </div>
   );
 }
