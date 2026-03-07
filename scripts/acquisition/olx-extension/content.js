@@ -388,6 +388,112 @@
     }
   }
 
+  // ── Bulk Ad Extraction (Search Results) ────────────────
+
+  function extractAllAdsFromSearch() {
+    const adCards = document.querySelectorAll(
+      '[data-aut-id="itemBox"], .items-list li, [class*="listing-card"], [class*="adCard"]'
+    );
+
+    const ads = [];
+    adCards.forEach((card) => {
+      try {
+        const title = card.querySelector(
+          '[data-aut-id="itemTitle"], [class*="title"], h3, h2'
+        );
+        const price = card.querySelector(
+          '[data-aut-id="itemPrice"], [class*="price"]'
+        );
+        const location = card.querySelector(
+          '[data-aut-id="item-location"], [class*="location"]'
+        );
+        const link = card.querySelector('a[href]');
+        const img = card.querySelector('img');
+        const category = card.querySelector('[class*="category"]');
+        const date = card.querySelector('[data-aut-id="item-date"], [class*="date"], time');
+
+        if (!title || !title.textContent.trim()) return;
+
+        const ad = {
+          title: title.textContent.trim(),
+          price: price ? price.textContent.trim() : '',
+          priceNumeric: price ? parseInt(price.textContent.replace(/\D/g, '') || '0', 10) : 0,
+          location: location ? location.textContent.trim() : '',
+          category: category ? category.textContent.trim() : '',
+          url: link ? link.href : '',
+          imageUrl: img ? (img.src || img.dataset.src || '') : '',
+          hasImage: !!(img && (img.src || img.dataset.src)),
+          date: date ? date.textContent.trim() : '',
+          extractedAt: new Date().toISOString(),
+        };
+
+        // Extract ad ID from URL
+        if (ad.url) {
+          const idMatch = ad.url.match(/(\d+)\.html/) || ad.url.match(/item\/(\d+)/);
+          if (idMatch) ad.sourceId = idMatch[1];
+        }
+
+        ads.push(ad);
+      } catch (e) {
+        // Skip malformed cards
+      }
+    });
+
+    return {
+      type: 'bulk_ads',
+      query: new URLSearchParams(window.location.search).get('q') || '',
+      category: document.querySelector('.breadcrumb a:nth-child(2), [class*="breadcrumb"] a:nth-child(2)')?.textContent?.trim() || '',
+      totalResults: ads.length,
+      ads,
+      pageUrl: window.location.href,
+      extractedAt: new Date().toISOString(),
+    };
+  }
+
+  // ── Deep Ad Detail Extraction ─────────────────────────
+
+  function extractFullAdDetail() {
+    const data = extractAdDetail();
+
+    // Extract all images with full URLs
+    const imageUrls = [];
+    const galleryImgs = document.querySelectorAll(
+      '[data-aut-id="gallery"] img, .gallery img, [class*="carousel"] img, [class*="slider"] img, [class*="Gallery"] img'
+    );
+    galleryImgs.forEach((img) => {
+      const src = img.src || img.dataset.src || '';
+      if (src && !src.includes('placeholder')) {
+        // Try to get highest resolution
+        const highRes = src.replace(/\/thumbnails\//, '/images/').replace(/\?.*$/, '');
+        imageUrls.push(highRes);
+      }
+    });
+
+    // Also check picture/source elements
+    const sources = document.querySelectorAll('[class*="gallery"] source, [class*="Gallery"] source');
+    sources.forEach((source) => {
+      const srcset = source.srcset || '';
+      if (srcset) {
+        const urls = srcset.split(',').map(s => s.trim().split(' ')[0]);
+        imageUrls.push(...urls.filter(u => u));
+      }
+    });
+
+    data.allImages = [...new Set(imageUrls)];
+    data.type = 'full_ad_detail';
+
+    // Try extracting more details
+    const allText = document.body.innerText;
+
+    // Extract phone patterns from page text
+    const phoneMatches = allText.match(/01[0125]\d{8}/g);
+    if (phoneMatches) {
+      data.phonesFound = [...new Set(phoneMatches)];
+    }
+
+    return data;
+  }
+
   // ── Communication with Popup/Background ────────────────
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -397,6 +503,14 @@
     }
     if (request.action === 'getPageType') {
       sendResponse({ pageType: detectPageType() });
+    }
+    if (request.action === 'extractBulkAds') {
+      const data = extractAllAdsFromSearch();
+      sendResponse(data);
+    }
+    if (request.action === 'extractFullDetail') {
+      const data = extractFullAdDetail();
+      sendResponse(data);
     }
     return true; // async response
   });

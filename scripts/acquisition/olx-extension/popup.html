@@ -208,8 +208,10 @@
   </div>
 
   <div class="status-bar">
-    <span>بائعين محفوظين:</span>
-    <span class="count" id="saved-count">0</span>
+    <div style="display:flex;gap:16px;align-items:center;width:100%;">
+      <div><span>بائعين:</span> <span class="count" id="saved-count">0</span></div>
+      <div><span>إعلانات:</span> <span class="count" id="saved-ads-count">0</span></div>
+    </div>
   </div>
 
   <div class="content">
@@ -233,7 +235,11 @@
 
     <div class="actions" style="margin-top: 16px;">
       <button class="btn btn-primary" id="btn-extract">📋 استخراج البيانات</button>
-      <button class="btn btn-export" id="btn-export">📥 تصدير الكل</button>
+      <button class="btn btn-secondary" id="btn-bulk-ads">📦 جمع كل الإعلانات</button>
+    </div>
+    <div class="actions" style="margin-top: 8px;">
+      <button class="btn btn-export" id="btn-export">📥 تصدير البائعين</button>
+      <button class="btn btn-primary" id="btn-export-ads" style="font-size:12px;">📥 تصدير الإعلانات</button>
     </div>
   </div>
 

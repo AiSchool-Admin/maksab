@@ -8,17 +8,21 @@
 // ── Storage Keys ─────────────────────────────────────
 
 const STORAGE_KEY = 'maksab_leads';
+const STORAGE_ADS_KEY = 'maksab_collected_ads';
 const STORAGE_STATS = 'maksab_lead_stats';
 
 // ── DOM Elements ─────────────────────────────────────
 
 const savedCountEl = document.getElementById('saved-count');
+const savedAdsCountEl = document.getElementById('saved-ads-count');
 const pageIconEl = document.getElementById('page-icon');
 const pageTypeTextEl = document.getElementById('page-type-text');
 const resultAreaEl = document.getElementById('result-area');
 const emptyStateEl = document.getElementById('empty-state');
 const btnExtract = document.getElementById('btn-extract');
+const btnBulkAds = document.getElementById('btn-bulk-ads');
 const btnExport = document.getElementById('btn-export');
+const btnExportAds = document.getElementById('btn-export-ads');
 const toastEl = document.getElementById('toast');
 
 // ── Toast ────────────────────────────────────────────
@@ -69,6 +73,42 @@ async function updateSavedCount(count) {
     count = leads.length;
   }
   savedCountEl.textContent = count;
+}
+
+// ── Ads Storage ─────────────────────────────────────
+
+async function getCollectedAds() {
+  const result = await chrome.storage.local.get(STORAGE_ADS_KEY);
+  return result[STORAGE_ADS_KEY] || [];
+}
+
+async function saveCollectedAds(newAds) {
+  const existingAds = await getCollectedAds();
+  const existingUrls = new Set(existingAds.map((a) => a.url));
+
+  let addedCount = 0;
+  for (const ad of newAds) {
+    if (ad.url && !existingUrls.has(ad.url)) {
+      existingAds.push({
+        ...ad,
+        collectedAt: new Date().toISOString(),
+      });
+      existingUrls.add(ad.url);
+      addedCount++;
+    }
+  }
+
+  await chrome.storage.local.set({ [STORAGE_ADS_KEY]: existingAds });
+  updateSavedAdsCount(existingAds.length);
+  return addedCount;
+}
+
+async function updateSavedAdsCount(count) {
+  if (count === undefined) {
+    const ads = await getCollectedAds();
+    count = ads.length;
+  }
+  if (savedAdsCountEl) savedAdsCountEl.textContent = count;
 }
 
 // ── Page Type Display ────────────────────────────────
@@ -351,6 +391,7 @@ function formatDate() {
 
 async function init() {
   await updateSavedCount();
+  await updateSavedAdsCount();
 
   // Detect current page type
   try {
@@ -379,10 +420,118 @@ async function init() {
   }
 }
 
+// ── Bulk Ads Collection ──────────────────────────────
+
+async function collectBulkAds() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) {
+      showToast('❌ مفيش تاب مفتوح');
+      return;
+    }
+
+    const response = await chrome.tabs.sendMessage(tab.id, { action: 'extractBulkAds' });
+
+    if (!response || !response.ads || response.ads.length === 0) {
+      showToast('⚠️ مفيش إعلانات في الصفحة دي');
+      return;
+    }
+
+    const addedCount = await saveCollectedAds(response.ads);
+    showToast(`✅ تم جمع ${addedCount} إعلان جديد (${response.ads.length} في الصفحة)`);
+
+    // Show results
+    emptyStateEl.style.display = 'none';
+    const totalAds = await getCollectedAds();
+
+    resultAreaEl.innerHTML = `
+      <div class="stats">
+        <div class="stat-box">
+          <div class="number">${response.ads.length}</div>
+          <div class="label">في الصفحة</div>
+        </div>
+        <div class="stat-box">
+          <div class="number">${addedCount}</div>
+          <div class="label">جديد تم حفظه</div>
+        </div>
+        <div class="stat-box">
+          <div class="number">${totalAds.length}</div>
+          <div class="label">إجمالي محفوظ</div>
+        </div>
+        <div class="stat-box">
+          <div class="number">${response.ads.filter((a) => a.priceNumeric > 0).length}</div>
+          <div class="label">بسعر محدد</div>
+        </div>
+      </div>
+
+      <div id="ad-list" style="max-height: 250px; overflow-y: auto;">
+        <div style="font-size: 12px; color: #6B7280; margin-bottom: 6px;">
+          إعلانات الصفحة الحالية:
+        </div>
+        ${response.ads.slice(0, 20).map((ad) => `
+          <div class="ad-item">
+            <div class="ad-title">${ad.title}</div>
+            <div style="display:flex;justify-content:space-between;margin-top:4px;">
+              <span class="ad-price">${ad.price || 'بدون سعر'}</span>
+              <span style="color:#6B7280;font-size:11px;">${ad.location || ''}</span>
+            </div>
+          </div>
+        `).join('')}
+        ${response.ads.length > 20 ? `<div style="text-align:center;padding:8px;color:#6B7280;font-size:12px;">... و${response.ads.length - 20} إعلان آخر</div>` : ''}
+      </div>
+
+      <p style="font-size: 11px; color: #6B7280; text-align: center; margin-top: 8px;">
+        💡 افتح صفحات أكتر واضغط "جمع كل الإعلانات" لجمع بيانات أكتر
+      </p>
+    `;
+  } catch (err) {
+    console.error('Bulk extract error:', err);
+    showToast('❌ حصل خطأ — جرب تحدّث الصفحة');
+  }
+}
+
+// ── Export Ads ───────────────────────────────────────
+
+async function exportAds() {
+  const ads = await getCollectedAds();
+
+  if (ads.length === 0) {
+    showToast('⚠️ مفيش إعلانات محفوظة');
+    return;
+  }
+
+  // JSON export (for importer.ts)
+  const jsonData = JSON.stringify(ads, null, 2);
+
+  // CSV export
+  const headers = ['title', 'price', 'priceNumeric', 'location', 'category', 'url', 'imageUrl', 'hasImage', 'date', 'collectedAt'];
+  const csvRows = [headers.join(',')];
+  for (const ad of ads) {
+    const row = headers.map((h) => {
+      const val = ad[h];
+      if (typeof val === 'string' && (val.includes(',') || val.includes('"') || val.includes('\n'))) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val ?? '';
+    });
+    csvRows.push(row.join(','));
+  }
+  const csvData = csvRows.join('\n');
+
+  downloadFile(jsonData, `maksab-ads-${formatDate()}.json`, 'application/json');
+  setTimeout(() => {
+    downloadFile(csvData, `maksab-ads-${formatDate()}.csv`, 'text/csv');
+  }, 500);
+
+  showToast(`✅ تم تصدير ${ads.length} إعلان (JSON + CSV)`);
+}
+
 // ── Event Listeners ──────────────────────────────────
 
 btnExtract.addEventListener('click', extractData);
+btnBulkAds.addEventListener('click', collectBulkAds);
 btnExport.addEventListener('click', exportLeads);
+btnExportAds.addEventListener('click', exportAds);
 
 // Init
 init();
