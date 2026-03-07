@@ -92,7 +92,6 @@ export default function ProfilePage() {
       isCommissionSupporter(user.id).then(setIsSupporter);
       // Load loyalty profile + award daily login
       const profile = getUserLoyaltyProfile(user.id);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous getUserLoyaltyProfile call
       setLoyaltyProfile(profile);
       awardPoints(user.id, "daily_login");
       // Load founder profile

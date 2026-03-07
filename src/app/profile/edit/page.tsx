@@ -31,7 +31,6 @@ export default function EditProfilePage() {
 
   useEffect(() => {
     if (user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing form state from user prop
       setDisplayName(user.display_name || "");
       setSellerType(user.seller_type || "individual");
       setGovernorate(user.governorate || "");

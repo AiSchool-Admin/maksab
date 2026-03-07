@@ -193,13 +193,6 @@ export default function AuctionsPage() {
               </h1>
             </div>
             <div className="flex items-center gap-1">
-              <Link
-                href="/"
-                className="p-2 text-brand-green hover:text-brand-green-dark hover:bg-green-50 rounded-lg transition-colors"
-                aria-label="الرئيسية"
-              >
-                <Home size={18} />
-              </Link>
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={`p-2 rounded-lg transition-colors ${

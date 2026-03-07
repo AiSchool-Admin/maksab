@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   RefreshCw,
   Trash2,
+  Download,
+  FileCode,
 } from "lucide-react";
 import { useAdmin, getAdminHeaders } from "../layout";
 
@@ -48,6 +50,7 @@ export default function AdminSetupPage() {
 
   const [tableCheck, setTableCheck] = useState<TableCheckResult | null>(null);
   const [checking, setChecking] = useState(true);
+  const [fullSqlCopied, setFullSqlCopied] = useState(false);
 
   const supabaseRef =
     (typeof window !== "undefined"
@@ -238,8 +241,35 @@ export default function AdminSetupPage() {
 
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={handleCopySQL}
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/admin/full-setup-sql");
+                const text = await res.text();
+                await navigator.clipboard.writeText(text);
+                setFullSqlCopied(true);
+                setTimeout(() => setFullSqlCopied(false), 3000);
+              } catch {
+                window.open("/api/admin/full-setup-sql", "_blank");
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-green text-white rounded-xl text-sm font-medium hover:bg-brand-green-dark transition-colors"
+          >
+            {fullSqlCopied ? (
+              <>
+                <Check size={14} />
+                تم النسخ!
+              </>
+            ) : (
+              <>
+                <FileCode size={14} />
+                انسخ Full Setup SQL (كل الجداول)
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleCopySQL}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-dark rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
           >
             {sqlCopied ? (
               <>
@@ -249,7 +279,7 @@ export default function AdminSetupPage() {
             ) : (
               <>
                 <Copy size={14} />
-                انسخ كود SQL
+                انسخ SQL للجداول الناقصة فقط
               </>
             )}
           </button>
@@ -262,6 +292,16 @@ export default function AdminSetupPage() {
           >
             <ExternalLink size={14} />
             افتح SQL Editor
+          </a>
+
+          <a
+            href="/api/admin/full-setup-sql"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-text rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            <Download size={14} />
+            حمّل ملف SQL كامل
           </a>
 
           <button

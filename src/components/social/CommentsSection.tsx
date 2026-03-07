@@ -113,7 +113,7 @@ export default function CommentsSection({ adId, adOwnerId }: CommentsSectionProp
     }
 
     setIsSending(false);
-  }, [adId, inputValue, isSending, currentUser]);
+  }, [adId, inputValue, isSending, currentUser, requireAuth]);
 
   // Delete comment
   const handleDelete = useCallback(async (commentId: string) => {

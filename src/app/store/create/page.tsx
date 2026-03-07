@@ -49,6 +49,9 @@ const presetColors = [
 
 type WizardView = "steps" | "preview" | "success";
 
+// Reserved slugs that conflict with existing routes
+const RESERVED_NAMES = ["create", "dashboard", "settings", "admin", "api", "login", "null", "undefined", "مكسب", "maksab"];
+
 export default function CreateStorePage() {
   const router = useRouter();
   const { user, requireAuth, refreshUser } = useAuth();
@@ -85,9 +88,6 @@ export default function CreateStorePage() {
   const [primaryColor, setPrimaryColor] = useState("#1B7A3D");
 
   const selectedBusinessConfig = businessType ? getBusinessTypeConfig(businessType) : null;
-
-  // ── Reserved slugs that conflict with existing routes ─────────
-  const RESERVED_NAMES = ["create", "dashboard", "settings", "admin", "api", "login", "null", "undefined", "مكسب", "maksab"];
 
   // ── Live name uniqueness check ────────────────────────────────
   useEffect(() => {
