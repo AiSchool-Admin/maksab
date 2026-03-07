@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Maksab Seller Discovery",
+  "name_localized": {
+    "ar": "مكسب — اكتشاف البائعين"
+  },
+  "version": "1.0.0",
+  "description": "Discover and analyze professional sellers on OLX Egypt for Maksab marketplace outreach",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["https://www.olx.com.eg/*", "https://olx.com.eg/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.olx.com.eg/*", "https://olx.com.eg/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
