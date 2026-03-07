@@ -8,6 +8,7 @@ import UpdateBanner from "@/components/pwa/UpdateBanner";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget";
 import ComparisonFab from "@/components/comparison/ComparisonFab";
+import OfflineQueueBanner from "@/components/pwa/OfflineQueueBanner";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
 import GoogleAnalytics from "@/components/providers/GoogleAnalytics";
 import MetaPixel from "@/components/providers/MetaPixel";
@@ -137,6 +138,7 @@ export default function RootLayout({
         <UpdateBanner />
         <ThemeProvider>
           <AuthProvider>
+            <OfflineQueueBanner />
             {/* Main content centered — mobile-first, scales to tablet */}
             <div className="min-h-screen pb-20 max-w-lg sm:max-w-xl md:max-w-2xl mx-auto">{children}</div>
             <ComparisonFab />
