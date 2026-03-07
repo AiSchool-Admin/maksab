@@ -1,0 +1,76 @@
+{
+  "sellers": [
+    {
+      "name": "محمد أحمد",
+      "phone": "01012345678",
+      "source": "olx",
+      "source_profile_url": "https://www.olx.com.eg/profile/example1",
+      "categories": ["cars"],
+      "active_ads_count": 15,
+      "location": {
+        "governorate": "القاهرة",
+        "city": "مدينة نصر"
+      },
+      "seller_score": 42,
+      "seller_tier": "platinum",
+      "notes": "تاجر سيارات — 15 إعلان نشط — يرد بسرعة"
+    },
+    {
+      "name": "أحمد علي",
+      "phone": "01198765432",
+      "source": "olx",
+      "source_profile_url": "https://www.olx.com.eg/profile/example2",
+      "categories": ["phones", "home_appliances"],
+      "active_ads_count": 8,
+      "location": {
+        "governorate": "الجيزة",
+        "city": "الدقي"
+      },
+      "seller_score": 35,
+      "seller_tier": "gold",
+      "notes": "بائع موبايلات وأجهزة — إعلانات بصور عالية الجودة"
+    },
+    {
+      "name": "سارة محمود",
+      "phone": "01234567890",
+      "source": "facebook",
+      "categories": ["fashion"],
+      "active_ads_count": 22,
+      "location": {
+        "governorate": "الإسكندرية",
+        "city": "سموحة"
+      },
+      "seller_score": 38,
+      "seller_tier": "gold",
+      "notes": "بائعة ملابس — نشطة جداً على Facebook Marketplace"
+    },
+    {
+      "name": "خالد حسن",
+      "phone": "01512345678",
+      "source": "olx",
+      "categories": ["gold_silver"],
+      "active_ads_count": 5,
+      "location": {
+        "governorate": "القاهرة",
+        "city": "الحسين"
+      },
+      "seller_score": 28,
+      "seller_tier": "silver",
+      "notes": "تاجر ذهب — 5 إعلانات — محل في الحسين"
+    },
+    {
+      "name": "عمر فاروق",
+      "phone": "01098765432",
+      "source": "manual",
+      "categories": ["scrap"],
+      "active_ads_count": 3,
+      "location": {
+        "governorate": "القاهرة",
+        "city": "شبرا"
+      },
+      "seller_score": 15,
+      "seller_tier": "bronze",
+      "notes": "تاجر خردة — تواصل مباشر في المعرض"
+    }
+  ]
+}

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مكسب — اكتشاف البائعين</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 380px;
+      min-height: 400px;
+      font-family: 'Cairo', sans-serif;
+      background: #FAFAFA;
+      color: #1A1A2E;
+      direction: rtl;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #1B7A3D 0%, #145C2E 100%);
+      color: white;
+      padding: 16px;
+      text-align: center;
+    }
+    .header h1 { font-size: 18px; font-weight: 700; }
+    .header p { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: #E8F5E9;
+      font-size: 12px;
+      color: #145C2E;
+    }
+    .status-bar .count { font-weight: 700; font-size: 16px; }
+
+    .content { padding: 16px; }
+
+    .page-type {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border: 1px solid #E5E7EB;
+    }
+    .page-type .icon { font-size: 24px; }
+    .page-type .label { font-size: 13px; color: #6B7280; }
+    .page-type .value { font-size: 15px; font-weight: 600; }
+
+    .seller-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid #E5E7EB;
+    }
+    .seller-card .name {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .seller-card .detail {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 4px 0;
+      border-bottom: 1px solid #F3F4F6;
+    }
+    .seller-card .detail:last-child { border: none; }
+    .seller-card .detail .label { color: #6B7280; }
+
+    .score-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    .score-badge.platinum { background: #FFF8E1; color: #B8860B; border: 1px solid #D4A843; }
+    .score-badge.gold { background: #FFF3CD; color: #856404; border: 1px solid #FFD700; }
+    .score-badge.silver { background: #F8F9FA; color: #495057; border: 1px solid #ADB5BD; }
+    .score-badge.bronze { background: #FFF0E6; color: #8B4513; border: 1px solid #CD853F; }
+
+    .categories {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .categories .tag {
+      padding: 4px 10px;
+      background: #E8F5E9;
+      color: #1B7A3D;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary {
+      background: #1B7A3D;
+      color: white;
+    }
+    .btn-secondary {
+      background: white;
+      color: #1B7A3D;
+      border: 1px solid #1B7A3D;
+    }
+    .btn-export {
+      background: #D4A843;
+      color: white;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #6B7280;
+    }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 13px; line-height: 1.6; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stat-box {
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      border: 1px solid #E5E7EB;
+    }
+    .stat-box .number {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1B7A3D;
+    }
+    .stat-box .label {
+      font-size: 11px;
+      color: #6B7280;
+      margin-top: 4px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      background: #1B7A3D;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: center;
+      transform: translateY(100px);
+      transition: transform 0.3s;
+      z-index: 100;
+    }
+    .toast.show { transform: translateY(0); }
+
+    #ad-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 8px;
+    }
+    .ad-item {
+      padding: 8px;
+      background: #F9FAFB;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    .ad-item .ad-title { font-weight: 600; }
+    .ad-item .ad-price { color: #1B7A3D; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>💚 مكسب — اكتشاف البائعين</h1>
+    <p>استخرج بيانات البائعين من OLX بضغطة واحدة</p>
+  </div>
+
+  <div class="status-bar">
+    <span>بائعين محفوظين:</span>
+    <span class="count" id="saved-count">0</span>
+  </div>
+
+  <div class="content">
+    <div class="page-type" id="page-type-section">
+      <span class="icon" id="page-icon">⏳</span>
+      <div>
+        <div class="label">نوع الصفحة</div>
+        <div class="value" id="page-type-text">جاري الكشف...</div>
+      </div>
+    </div>
+
+    <div id="result-area">
+      <div class="empty-state" id="empty-state">
+        <div class="icon">🔍</div>
+        <p>
+          افتح صفحة بائع على OLX<br>
+          وهنستخرج بياناته تلقائياً
+        </p>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top: 16px;">
+      <button class="btn btn-primary" id="btn-extract">📋 استخراج البيانات</button>
+      <button class="btn btn-export" id="btn-export">📥 تصدير الكل</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
