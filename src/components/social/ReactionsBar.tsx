@@ -127,7 +127,7 @@ export default function ReactionsBar({ adId, compact = false }: ReactionsBarProp
 
     setTimeout(() => setAnimatingReaction(null), 400);
     setIsLoading(false);
-  }, [adId, isLoading, summary, userId]);
+  }, [adId, isLoading, summary, userId, requireAuth]);
 
   const topConfig = summary.topReaction
     ? configs.find((c) => c.type === summary.topReaction) ?? null

@@ -11,7 +11,7 @@ import {
   Upload,
   RefreshCw,
   ExternalLink,
-  Image,
+  Image as ImageIcon,
   MapPin,
   Tag,
   ChevronLeft,
@@ -206,7 +206,7 @@ export default function ImportedAdsPage() {
         >
           <StatCard icon={<Package size={20} />} label="إجمالي الإعلانات" value={stats.total} color="#1B7A3D" />
           <StatCard icon={<Users size={20} />} label="بائعين فريدين" value={stats.uniqueSellers} color="#D4A843" />
-          <StatCard icon={<Image size={20} />} label="بصور" value={stats.withImages} color="#2563EB" />
+          <StatCard icon={<ImageIcon size={20} />} label="بصور" value={stats.withImages} color="#2563EB" />
           <StatCard
             icon={<BarChart3 size={20} />}
             label="متوسط السعر"
@@ -401,9 +401,10 @@ export default function ImportedAdsPage() {
                   <td style={tdStyle}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {ad.images?.[0] ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                           src={ad.images[0]}
-                          alt=""
+                          alt={ad.title || "صورة الإعلان"}
                           style={{
                             width: 48,
                             height: 48,
@@ -426,7 +427,7 @@ export default function ImportedAdsPage() {
                             justifyContent: "center",
                           }}
                         >
-                          <Image size={20} color="#D1D5DB" />
+                          <ImageIcon size={20} color="#D1D5DB" />
                         </div>
                       )}
                       <div>
@@ -670,6 +671,7 @@ function AdDetailModal({
         {ad.images && ad.images.length > 0 && (
           <div style={{ display: "flex", gap: 4, padding: 16, overflowX: "auto" }}>
             {ad.images.map((img, i) => (
+              /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 key={i}
                 src={img}

@@ -13,6 +13,7 @@ export const maxDuration = 30;
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { categoriesConfig } from "@/lib/categories/categories-config";
+import { governorates, citiesByGovernorate } from "@/lib/data/governorates";
 
 // Tables to check
 const REQUIRED_TABLES = [
@@ -169,7 +170,55 @@ export async function GET(req: NextRequest) {
       results["subcategories"] = `تم تعبئة ${subcategories.length} قسم فرعي`;
     }
 
-    // 4. Ensure profiles table has is_admin column
+    // 4. Seed governorates
+    const govData = governorates.map((name, i) => ({
+      id: i + 1,
+      name,
+      name_en: null,
+    }));
+
+    const { error: govError } = await client
+      .from("governorates")
+      .upsert(govData, { onConflict: "id" });
+
+    if (govError) {
+      results["governorates"] = `خطأ: ${govError.message}`;
+    } else {
+      results["governorates"] = `تم تعبئة ${govData.length} محافظة`;
+
+      // 5. Seed cities (only if governorates succeeded)
+      let cityCount = 0;
+      const cityData: { governorate_id: number; name: string; name_en: string | null }[] = [];
+      for (let gi = 0; gi < governorates.length; gi++) {
+        const govName = governorates[gi];
+        const cities = citiesByGovernorate[govName] || [];
+        for (const cityName of cities) {
+          cityData.push({
+            governorate_id: gi + 1,
+            name: cityName,
+            name_en: null,
+          });
+          cityCount++;
+        }
+      }
+
+      if (cityData.length > 0) {
+        // Delete existing cities to avoid duplicates (cities don't have stable IDs)
+        await client.from("cities").delete().gte("id", 0);
+
+        const { error: cityError } = await client
+          .from("cities")
+          .insert(cityData);
+
+        if (cityError) {
+          results["cities"] = `خطأ: ${cityError.message}`;
+        } else {
+          results["cities"] = `تم تعبئة ${cityCount} مدينة`;
+        }
+      }
+    }
+
+    // 6. Ensure profiles table has is_admin column
     const { error: adminColError } = await client
       .from("profiles")
       .select("is_admin" as never)
