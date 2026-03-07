@@ -153,7 +153,25 @@ Content-Type: application/json
 
 ---
 
-## 5. قواعد التواصل الآمن
+## 5. نظام جمع بيانات OLX (OLX Collector)
+
+نظام آلي لجمع الإعلانات الحقيقية وبيانات البائعين من OLX Egypt.
+
+```bash
+# جمع بيانات من أقسام محددة
+npx tsx scripts/acquisition/olx-collector/collector.ts \
+  --categories cars-for-sale,mobile-phones --max-pages 5
+
+# استيراد في قاعدة البيانات
+npx tsx scripts/acquisition/olx-collector/importer.ts \
+  --dir ./data/olx-collection/batch_xxx
+```
+
+للتفاصيل الكاملة: `scripts/acquisition/olx-collector/README.md`
+
+---
+
+## 6. قواعد التواصل الآمن
 
 | القاعدة | التفصيل |
 |---------|---------|
