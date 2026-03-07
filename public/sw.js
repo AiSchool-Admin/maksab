@@ -260,6 +260,21 @@ self.addEventListener("message", (event) => {
   }
 });
 
+// Background Sync: retry queued ad submissions when back online
+self.addEventListener("sync", (event) => {
+  if (event.tag === "sync-pending-ads") {
+    event.waitUntil(
+      self.clients.matchAll({ type: "window" }).then((clients) => {
+        // Notify a client window to process the queue
+        // (IndexedDB access is easier from the main thread)
+        clients.forEach((client) => {
+          client.postMessage({ type: "PROCESS_AD_QUEUE" });
+        });
+      })
+    );
+  }
+});
+
 // Push notifications
 self.addEventListener("push", (event) => {
   let data = {};
