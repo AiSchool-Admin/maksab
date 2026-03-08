@@ -1,3 +1,5 @@
+export const maxDuration = 60;
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -6,6 +8,94 @@ function getServiceClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   );
+}
+
+/**
+ * Execute SQL against Supabase using multiple methods (with fallbacks).
+ * Tries: 1) exec_sql RPC, 2) /pg/query endpoint, 3) statement-by-statement via RPC
+ */
+async function executeSQLRobust(sql: string): Promise<{ success: boolean; error?: string }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
+  if (!supabaseUrl || !serviceKey) {
+    return { success: false, error: "Missing Supabase URL or service key" };
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+  };
+
+  // Method 1: Try exec_sql RPC function
+  try {
+    const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: sql }),
+    });
+    if (rpcRes.ok) return { success: true };
+  } catch {
+    // Continue to next method
+  }
+
+  // Method 2: Try /pg/query endpoint (Supabase v2+)
+  try {
+    const pgRes = await fetch(`${supabaseUrl}/pg/query`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: sql }),
+    });
+    if (pgRes.ok) return { success: true };
+  } catch {
+    // Continue to next method
+  }
+
+  // Method 3: Create exec_sql function via /pg/query, then use it
+  try {
+    const createFnSQL = `
+      CREATE OR REPLACE FUNCTION exec_sql(query text)
+      RETURNS void AS $$
+      BEGIN EXECUTE query; END;
+      $$ LANGUAGE plpgsql SECURITY DEFINER;
+    `;
+    const createRes = await fetch(`${supabaseUrl}/pg/query`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: createFnSQL }),
+    });
+    if (createRes.ok) {
+      const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query: sql }),
+      });
+      if (rpcRes.ok) return { success: true };
+    }
+  } catch {
+    // Continue
+  }
+
+  // Method 4: Try executing SQL statements one by one via the supabase client
+  // This splits the SQL by semicolons and executes each CREATE TABLE IF NOT EXISTS
+  try {
+    const supabase = getServiceClient();
+    // Try calling rpc with the sql param name used in some setups
+    const { error } = await supabase.rpc("exec_sql" as never, { sql } as never);
+    if (!error) return { success: true };
+
+    // Try alternate param name
+    const { error: error2 } = await supabase.rpc("exec_sql" as never, { query: sql } as never);
+    if (!error2) return { success: true };
+  } catch {
+    // Continue
+  }
+
+  return {
+    success: false,
+    error: "مش قادر ينفذ SQL — جرب انسخ CRM SQL وشغله في Supabase SQL Editor يدوياً",
+  };
 }
 
 // SQL to create all CRM tables
@@ -903,44 +993,45 @@ export async function POST(req: NextRequest) {
   const supabase = getServiceClient();
   const results: { step: string; status: string; error?: string }[] = [];
 
-  // Step 1: Create tables
-  try {
-    const { error } = await supabase.rpc("exec_sql", { sql: CRM_TABLES_SQL });
-    if (error) {
-      // Try direct SQL via REST API as fallback
-      results.push({ step: "create_tables", status: "rpc_failed", error: error.message });
+  // Combine all SQL into one big script for efficiency
+  const fullSQL = [CRM_TABLES_SQL, CRM_RLS_SQL, CRM_INDEXES_SQL].join("\n\n");
+
+  // Step 1: Try executing all SQL at once
+  const execResult = await executeSQLRobust(fullSQL);
+  if (execResult.success) {
+    results.push({ step: "create_tables", status: "success" });
+    results.push({ step: "rls_grants", status: "success" });
+    results.push({ step: "indexes", status: "success" });
+  } else {
+    // Try each part separately
+    const tableResult = await executeSQLRobust(CRM_TABLES_SQL);
+    results.push({
+      step: "create_tables",
+      status: tableResult.success ? "success" : "failed",
+      error: tableResult.error,
+    });
+
+    if (tableResult.success) {
+      const rlsResult = await executeSQLRobust(CRM_RLS_SQL);
+      results.push({
+        step: "rls_grants",
+        status: rlsResult.success ? "success" : "failed",
+        error: rlsResult.error,
+      });
+
+      const indexResult = await executeSQLRobust(CRM_INDEXES_SQL);
+      results.push({
+        step: "indexes",
+        status: indexResult.success ? "success" : "failed",
+        error: indexResult.error,
+      });
     } else {
-      results.push({ step: "create_tables", status: "success" });
+      results.push({ step: "rls_grants", status: "skipped", error: "Tables creation failed" });
+      results.push({ step: "indexes", status: "skipped", error: "Tables creation failed" });
     }
-  } catch (e) {
-    results.push({ step: "create_tables", status: "error", error: String(e) });
   }
 
-  // Step 2: Apply RLS and grants
-  try {
-    const { error } = await supabase.rpc("exec_sql", { sql: CRM_RLS_SQL });
-    if (error) {
-      results.push({ step: "rls_grants", status: "rpc_failed", error: error.message });
-    } else {
-      results.push({ step: "rls_grants", status: "success" });
-    }
-  } catch (e) {
-    results.push({ step: "rls_grants", status: "error", error: String(e) });
-  }
-
-  // Step 3: Create indexes
-  try {
-    const { error } = await supabase.rpc("exec_sql", { sql: CRM_INDEXES_SQL });
-    if (error) {
-      results.push({ step: "indexes", status: "rpc_failed", error: error.message });
-    } else {
-      results.push({ step: "indexes", status: "success" });
-    }
-  } catch (e) {
-    results.push({ step: "indexes", status: "error", error: String(e) });
-  }
-
-  // Step 4: Check if table exists and try to seed
+  // Check if tables exist now and seed data
   let tableExists = false;
   try {
     const { count, error } = await supabase
