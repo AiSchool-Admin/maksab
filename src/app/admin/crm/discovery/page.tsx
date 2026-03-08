@@ -115,19 +115,7 @@ export default function CrmDiscoveryPage() {
             <ExternalLink size={14} className="mr-auto text-gray-300 group-hover:text-[#1B7A3D]" />
           </div>
         </Link>
-        <button onClick={() => window.location.href = '/admin/crm/customers'}
-          className="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow text-right group">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-              <Plus size={18} className="text-green-600" />
-            </div>
-            <div>
-              <h3 className="font-bold text-sm">إضافة سريعة</h3>
-              <p className="text-xs text-gray-500">إضافة عميل محتمل يدوياً</p>
-            </div>
-          </div>
-        </button>
-        <button onClick={() => window.location.href = '/admin/crm/customers'}
+        <Link href="/admin/crm/discovery/bulk-import"
           className="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow text-right group">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
@@ -137,8 +125,22 @@ export default function CrmDiscoveryPage() {
               <h3 className="font-bold text-sm">استيراد CSV</h3>
               <p className="text-xs text-gray-500">استيراد قائمة عملاء من ملف</p>
             </div>
+            <ExternalLink size={14} className="mr-auto text-gray-300 group-hover:text-[#1B7A3D]" />
           </div>
-        </button>
+        </Link>
+        <Link href="/admin/crm/discovery/competitor-sources"
+          className="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow text-right group">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+              <Globe size={18} className="text-green-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm">مصادر المنافسين</h3>
+              <p className="text-xs text-gray-500">إدارة وتتبع مصادر الاكتشاف</p>
+            </div>
+            <ExternalLink size={14} className="mr-auto text-gray-300 group-hover:text-[#1B7A3D]" />
+          </div>
+        </Link>
       </div>
 
       {/* Recent Leads */}
