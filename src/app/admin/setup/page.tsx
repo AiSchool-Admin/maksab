@@ -504,7 +504,7 @@ export default function AdminSetupPage() {
             <h3 className="text-sm font-bold text-dark">إعداد جداول CRM</h3>
             <p className="text-[10px] text-gray-text">
               {hasMissingCrmTables
-                ? `${missingCrmTables.length} جدول CRM ناقص — محتاج تتعمل`
+                ? `${missingCrmTables.length} جدول CRM ناقص — هيتعمل تلقائي عند أول زيارة لصفحة CRM`
                 : "كل جداول CRM موجودة"}
             </p>
           </div>
