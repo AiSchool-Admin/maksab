@@ -58,6 +58,10 @@ export async function POST(req: NextRequest) {
       messages: body.messages || [],
       status: body.status || "draft",
       scheduled_at: body.scheduled_at || null,
+      daily_send_limit: body.daily_send_limit || 500,
+      hourly_send_limit: body.hourly_send_limit || 50,
+      send_window_start: body.send_window_start || "09:00",
+      send_window_end: body.send_window_end || "21:00",
     })
     .select()
     .single();
@@ -67,4 +71,83 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ campaign: data }, { status: 201 });
+}
+
+export async function PATCH(req: NextRequest) {
+  const supabase = getServiceClient();
+  const body = await req.json();
+
+  if (!body.id) {
+    return NextResponse.json({ error: "معرف الحملة مطلوب" }, { status: 400 });
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (body.name !== undefined) updates.name = body.name;
+  if (body.description !== undefined) updates.description = body.description;
+  if (body.campaign_type !== undefined) updates.campaign_type = body.campaign_type;
+  if (body.target_filters !== undefined) updates.target_filters = body.target_filters;
+  if (body.messages !== undefined) updates.messages = body.messages;
+  if (body.status !== undefined) updates.status = body.status;
+  if (body.scheduled_at !== undefined) updates.scheduled_at = body.scheduled_at;
+  if (body.daily_send_limit !== undefined) updates.daily_send_limit = body.daily_send_limit;
+  if (body.hourly_send_limit !== undefined) updates.hourly_send_limit = body.hourly_send_limit;
+  if (body.send_window_start !== undefined) updates.send_window_start = body.send_window_start;
+  if (body.send_window_end !== undefined) updates.send_window_end = body.send_window_end;
+  if (body.stats !== undefined) updates.stats = body.stats;
+
+  // Handle status transitions
+  if (body.status === "active" && !updates.started_at) {
+    updates.started_at = new Date().toISOString();
+  }
+  if (body.status === "completed") {
+    updates.completed_at = new Date().toISOString();
+  }
+
+  const { data, error } = await supabase
+    .from("crm_campaigns")
+    .update(updates)
+    .eq("id", body.id)
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ campaign: data });
+}
+
+export async function DELETE(req: NextRequest) {
+  const supabase = getServiceClient();
+  const url = req.nextUrl;
+  const id = url.searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json({ error: "معرف الحملة مطلوب" }, { status: 400 });
+  }
+
+  // Only allow deleting draft or cancelled campaigns
+  const { data: campaign } = await supabase
+    .from("crm_campaigns")
+    .select("status")
+    .eq("id", id)
+    .single();
+
+  if (campaign && !["draft", "cancelled"].includes(campaign.status)) {
+    return NextResponse.json(
+      { error: "لا يمكن حذف حملة نشطة أو مكتملة. قم بإلغائها أولاً" },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await supabase
+    .from("crm_campaigns")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ message: "تم حذف الحملة" });
 }
