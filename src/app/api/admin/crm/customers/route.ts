@@ -8,6 +8,26 @@ function getServiceClient() {
   );
 }
 
+/**
+ * Auto-setup CRM tables by calling the setup endpoint internally.
+ * Returns true if setup succeeded.
+ */
+async function autoSetupCrmTables(): Promise<boolean> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000";
+    const res = await fetch(`${baseUrl}/api/admin/crm/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    return data.table_exists === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const supabase = getServiceClient();
   const url = req.nextUrl;
@@ -64,6 +84,28 @@ export async function GET(req: NextRequest) {
     const isPermissionError = error.message.includes("permission denied") || error.code === "42501";
 
     if (isTableMissing) {
+      // Auto-setup CRM tables instead of requiring manual setup
+      const setupOk = await autoSetupCrmTables();
+      if (setupOk) {
+        // Retry the query after setup
+        const retryQuery = supabase
+          .from("crm_customers")
+          .select("*", { count: "exact" })
+          .order(sortBy, { ascending })
+          .range(offset, offset + limit - 1);
+        const { data: retryData, error: retryError, count: retryCount } = await retryQuery;
+        if (!retryError) {
+          return NextResponse.json({
+            customers: retryData || [],
+            total: retryCount || 0,
+            page,
+            limit,
+            total_pages: Math.ceil((retryCount || 0) / limit),
+            auto_setup: true,
+          });
+        }
+      }
+      // If auto-setup failed, return the error
       return NextResponse.json({
         error: "جداول CRM غير موجودة — يجب إعداد النظام أولاً",
         error_code: "TABLE_NOT_FOUND",
