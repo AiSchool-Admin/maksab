@@ -16,6 +16,11 @@ import {
   Shield,
   ChevronLeft,
   Database,
+  UserSearch,
+  Target,
+  Megaphone,
+  Inbox,
+  BarChart3,
 } from "lucide-react";
 
 const ADMIN_SESSION_KEY = "maksab_admin_session";
@@ -49,6 +54,11 @@ const navItems = [
   { href: "/admin/locations", label: "المواقع", icon: MapPin },
   { href: "/admin/settings", label: "الإعدادات", icon: Settings },
   { href: "/admin/setup", label: "إعداد DB", icon: Database },
+  { href: "/admin/crm/customers", label: "CRM — العملاء", icon: UserSearch },
+  { href: "/admin/crm/discovery", label: "CRM — الاكتشاف", icon: Target },
+  { href: "/admin/crm/campaigns", label: "CRM — الحملات", icon: Megaphone },
+  { href: "/admin/crm/inbox", label: "CRM — الوارد", icon: Inbox },
+  { href: "/admin/crm/analytics", label: "CRM — تحليلات", icon: BarChart3 },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
