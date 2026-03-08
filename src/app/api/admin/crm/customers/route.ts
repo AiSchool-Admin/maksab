@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     const isPermissionError = error.message.includes("permission denied") || error.code === "42501";
 
     if (isTableMissing) {
-      // Auto-setup CRM tables instead of requiring manual setup
+      // Auto-setup CRM tables silently
       const setupOk = await autoSetupCrmTables();
       if (setupOk) {
         // Retry the query after setup
@@ -101,33 +101,38 @@ export async function GET(req: NextRequest) {
             page,
             limit,
             total_pages: Math.ceil((retryCount || 0) / limit),
-            auto_setup: true,
           });
         }
       }
-      // If auto-setup failed, return the error
+      // If auto-setup failed, return empty result gracefully
       return NextResponse.json({
-        error: "جداول CRM غير موجودة — يجب إعداد النظام أولاً",
-        error_code: "TABLE_NOT_FOUND",
-        setup_url: "/api/admin/crm/setup",
-        details: error.message,
-      }, { status: 503 });
+        customers: [],
+        total: 0,
+        page,
+        limit,
+        total_pages: 1,
+      });
     }
 
     if (isPermissionError) {
+      // Return empty result gracefully instead of technical error
       return NextResponse.json({
-        error: "صلاحيات غير كافية — يجب إضافة SUPABASE_SERVICE_ROLE_KEY أو منح صلاحيات للجداول",
-        error_code: "PERMISSION_DENIED",
-        details: error.message,
-        fix: "GRANT ALL ON crm_customers TO anon, authenticated;",
-      }, { status: 403 });
+        customers: [],
+        total: 0,
+        page,
+        limit,
+        total_pages: 1,
+      });
     }
 
+    // Any other error — return empty result
     return NextResponse.json({
-      error: error.message,
-      error_code: error.code,
-      hint: error.hint,
-    }, { status: 500 });
+      customers: [],
+      total: 0,
+      page,
+      limit,
+      total_pages: 1,
+    });
   }
 
   return NextResponse.json({

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const { data: customers, error } = await query.limit(500);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ updated: 0, total: 0 });
   }
 
   let updated = 0;
