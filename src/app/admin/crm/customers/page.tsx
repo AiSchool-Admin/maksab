@@ -352,9 +352,34 @@ export default function CrmCustomersPage() {
   const [recalculating, setRecalculating] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [settingUp, setSettingUp] = useState(false);
+  const [setupResult, setSetupResult] = useState<{ message: string; instructions?: string[] } | null>(null);
 
   // Stats
   const [stats, setStats] = useState({ total: 0, leads: 0, active: 0, at_risk: 0 });
+
+  const handleSetup = async () => {
+    setSettingUp(true);
+    setSetupResult(null);
+    try {
+      const res = await fetch("/api/admin/crm/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAdminHeaders() },
+      });
+      const data = await res.json();
+      setSetupResult({ message: data.message, instructions: data.instructions });
+      if (data.table_exists) {
+        setNeedsSetup(false);
+        fetchCustomers();
+      }
+    } catch {
+      setSetupResult({ message: "حصل مشكلة في الاتصال" });
+    } finally {
+      setSettingUp(false);
+    }
+  };
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -370,6 +395,24 @@ export default function CrmCustomersPage() {
     try {
       const res = await fetch(`/api/admin/crm/customers?${params}`, { headers: getAdminHeaders() });
       const data = await res.json();
+
+      // Check if tables need setup
+      if (res.status === 503 && data.error_code === "TABLE_NOT_FOUND") {
+        setNeedsSetup(true);
+        setSetupError(data.error);
+        setLoading(false);
+        return;
+      }
+
+      if (res.status === 403 && data.error_code === "PERMISSION_DENIED") {
+        setNeedsSetup(true);
+        setSetupError(data.error);
+        setLoading(false);
+        return;
+      }
+
+      setNeedsSetup(false);
+      setSetupError(null);
       setCustomers(data.customers || []);
       setTotal(data.total || 0);
       setTotalPages(data.total_pages || 1);
@@ -439,6 +482,41 @@ export default function CrmCustomersPage() {
 
   return (
     <div className="space-y-4">
+      {/* Setup Required Banner */}
+      {needsSetup && (
+        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-6 text-center">
+          <AlertTriangle size={48} className="mx-auto mb-3 text-yellow-600" />
+          <h2 className="text-xl font-bold mb-2 text-yellow-800">نظام CRM يحتاج إعداد</h2>
+          <p className="text-sm text-yellow-700 mb-4">
+            {setupError || "جداول قاعدة البيانات غير موجودة — اضغط الزر لإعداد النظام تلقائياً"}
+          </p>
+          <button
+            onClick={handleSetup}
+            disabled={settingUp}
+            className="px-6 py-3 bg-[#1B7A3D] text-white rounded-xl font-bold hover:bg-[#145C2E] disabled:opacity-50 transition-colors"
+          >
+            {settingUp ? "جاري الإعداد..." : "إعداد نظام CRM تلقائياً"}
+          </button>
+          {setupResult && (
+            <div className="mt-4 text-sm">
+              <p className={setupResult.instructions ? "text-orange-700" : "text-green-700"}>
+                {setupResult.message}
+              </p>
+              {setupResult.instructions && (
+                <div className="mt-3 bg-white rounded-xl p-4 text-right space-y-1">
+                  <p className="font-bold text-gray-800 mb-2">خطوات الإعداد اليدوي:</p>
+                  {setupResult.instructions.map((inst, i) => (
+                    <p key={i} className="text-xs text-gray-600" dir={inst.startsWith("GRANT") ? "ltr" : "rtl"}>
+                      {inst}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl p-4 border">
