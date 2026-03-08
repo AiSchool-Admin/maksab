@@ -89,7 +89,7 @@ export async function processMessageQueue(): Promise<{
   }
 
   // 2. Get campaign limits if needed
-  const campaignIds = [...new Set(messages.filter(m => m.campaign_id).map(m => m.campaign_id!))];
+  const campaignIds = Array.from(new Set(messages.filter(m => m.campaign_id).map(m => m.campaign_id!)));
   const campaignLimits: Record<string, CampaignLimits> = {};
 
   if (campaignIds.length > 0) {
@@ -235,7 +235,7 @@ export async function processMessageQueue(): Promise<{
 }
 
 async function markFailed(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ReturnType<typeof getServiceClient>,
   messageId: string,
   errorMessage: string
 ) {
