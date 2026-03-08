@@ -2430,3 +2430,739 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ✅ Part 14: Buy Requests & Smart Matching tables created!
+
+
+-- ============================================
+-- PART 15: Admin Role & Stats
+-- ============================================
+
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Admin stats overview
+CREATE OR REPLACE VIEW admin_stats_overview AS
+SELECT
+  (SELECT COUNT(*) FROM public.profiles) AS total_users,
+  (SELECT COUNT(*) FROM public.profiles WHERE created_at >= NOW() - INTERVAL '24 hours') AS new_users_today,
+  (SELECT COUNT(*) FROM public.profiles WHERE created_at >= NOW() - INTERVAL '7 days') AS new_users_week,
+  (SELECT COUNT(*) FROM ads) AS total_ads,
+  (SELECT COUNT(*) FROM ads WHERE status = 'active') AS active_ads,
+  (SELECT COUNT(*) FROM ads WHERE status = 'sold') AS sold_ads,
+  (SELECT COUNT(*) FROM ads WHERE created_at >= NOW() - INTERVAL '24 hours') AS new_ads_today,
+  (SELECT COALESCE(SUM(price), 0) FROM ads WHERE status = 'sold' AND price IS NOT NULL) AS total_sold_value,
+  (SELECT COALESCE(SUM(views_count), 0) FROM ads) AS total_views,
+  (SELECT COUNT(*) FROM conversations) AS total_conversations,
+  (SELECT COUNT(*) FROM messages) AS total_messages;
+
+-- ✅ Part 15: Admin Role created!
+
+
+-- ============================================
+-- PART 16: App Settings
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key VARCHAR(100) PRIMARY KEY,
+  value TEXT NOT NULL,
+  description TEXT,
+  is_secret BOOLEAN DEFAULT FALSE,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_by UUID REFERENCES public.profiles(id)
+);
+
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'app_settings' AND policyname = 'No public access to settings') THEN
+    CREATE POLICY "No public access to settings" ON app_settings FOR ALL USING (false);
+  END IF;
+END $$;
+
+-- ✅ Part 16: App Settings created!
+
+
+-- ============================================
+-- PART 17: Reports, Blocks & Rate Limiting
+-- ============================================
+
+-- Reports
+CREATE TABLE IF NOT EXISTS reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  target_type VARCHAR(10) NOT NULL CHECK (target_type IN ('ad', 'user')),
+  target_ad_id UUID REFERENCES ads(id) ON DELETE SET NULL,
+  target_user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  reason VARCHAR(50) NOT NULL CHECK (reason IN (
+    'spam', 'fake', 'offensive', 'wrong_category', 'wrong_price',
+    'stolen_photos', 'prohibited', 'harassment', 'scam', 'other'
+  )),
+  details TEXT,
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'action_taken', 'dismissed')),
+  admin_notes TEXT,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT report_has_target CHECK (
+    (target_type = 'ad' AND target_ad_id IS NOT NULL) OR
+    (target_type = 'user' AND target_user_id IS NOT NULL)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reports_target_ad ON reports(target_ad_id) WHERE target_ad_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_reports_target_user ON reports(target_user_id) WHERE target_user_id IS NOT NULL;
+
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'reports' AND policyname = 'Users can create reports') THEN
+    CREATE POLICY "Users can create reports" ON reports FOR INSERT WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'reports' AND policyname = 'Users can see own reports') THEN
+    CREATE POLICY "Users can see own reports" ON reports FOR SELECT USING (reporter_id = auth.uid());
+  END IF;
+END $$;
+
+-- Blocked Users
+CREATE TABLE IF NOT EXISTS blocked_users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  blocker_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  blocked_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_block UNIQUE (blocker_id, blocked_id),
+  CONSTRAINT no_self_block CHECK (blocker_id != blocked_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_blocked_blocker ON blocked_users(blocker_id);
+CREATE INDEX IF NOT EXISTS idx_blocked_blocked ON blocked_users(blocked_id);
+
+ALTER TABLE blocked_users ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'blocked_users' AND policyname = 'Users can manage own blocks') THEN
+    CREATE POLICY "Users can manage own blocks" ON blocked_users FOR ALL USING (blocker_id = auth.uid());
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'blocked_users' AND policyname = 'Users can see if they are blocked') THEN
+    CREATE POLICY "Users can see if they are blocked" ON blocked_users FOR SELECT USING (blocked_id = auth.uid());
+  END IF;
+END $$;
+
+-- Rate Limits
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  identifier VARCHAR(100) NOT NULL,
+  action VARCHAR(30) NOT NULL CHECK (action IN ('otp_send', 'ad_create', 'report', 'message')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limits_lookup ON rate_limits(identifier, action, created_at DESC);
+
+CREATE OR REPLACE FUNCTION cleanup_rate_limits() RETURNS void AS $$
+BEGIN
+  DELETE FROM rate_limits WHERE created_at < NOW() - INTERVAL '24 hours';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION check_rate_limit(
+  p_identifier VARCHAR, p_action VARCHAR, p_max_count INTEGER, p_window_minutes INTEGER
+) RETURNS BOOLEAN AS $$
+DECLARE v_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_count FROM rate_limits
+  WHERE identifier = p_identifier AND action = p_action
+    AND created_at > NOW() - (p_window_minutes || ' minutes')::INTERVAL;
+  RETURN v_count < p_max_count;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION record_rate_limit(p_identifier VARCHAR, p_action VARCHAR) RETURNS void AS $$
+BEGIN
+  INSERT INTO rate_limits (identifier, action) VALUES (p_identifier, p_action);
+END;
+$$ LANGUAGE plpgsql;
+
+ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
+
+-- Soft delete for profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS deletion_reason TEXT;
+
+CREATE OR REPLACE FUNCTION anonymize_deleted_profile() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.is_deleted = TRUE AND OLD.is_deleted = FALSE THEN
+    NEW.display_name := 'مستخدم محذوف';
+    NEW.avatar_url := NULL;
+    NEW.bio := NULL;
+    NEW.deleted_at := NOW();
+    UPDATE ads SET status = 'deleted' WHERE user_id = NEW.id AND status = 'active';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_anonymize_deleted_profile ON profiles;
+CREATE TRIGGER trigger_anonymize_deleted_profile
+  BEFORE UPDATE ON profiles FOR EACH ROW
+  EXECUTE FUNCTION anonymize_deleted_profile();
+
+-- ✅ Part 17: Reports, Blocks, Rate Limiting created!
+
+
+-- ============================================
+-- PART 18: Notification Preferences
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+  chat_enabled BOOLEAN DEFAULT TRUE,
+  auction_enabled BOOLEAN DEFAULT TRUE,
+  price_drop_enabled BOOLEAN DEFAULT TRUE,
+  recommendation_enabled BOOLEAN DEFAULT TRUE,
+  system_enabled BOOLEAN DEFAULT TRUE,
+  push_enabled BOOLEAN DEFAULT TRUE,
+  quiet_hours_start TIME DEFAULT '23:00',
+  quiet_hours_end TIME DEFAULT '07:00',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'notification_preferences' AND policyname = 'Users manage own notification prefs') THEN
+    CREATE POLICY "Users manage own notification prefs" ON notification_preferences
+      FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- ✅ Part 18: Notification Preferences created!
+
+
+-- ============================================
+-- PART 19: CRM Core Tables (13 tables)
+-- ============================================
+
+-- CRM Agents
+CREATE TABLE IF NOT EXISTS crm_agents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+  full_name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  avatar_url TEXT,
+  employee_id TEXT,
+  role TEXT NOT NULL DEFAULT 'agent',
+  permissions JSONB DEFAULT '[]',
+  specialties TEXT[] DEFAULT '{}',
+  assigned_governorates TEXT[] DEFAULT '{}',
+  max_customers INTEGER DEFAULT 500,
+  current_customers_count INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  is_online BOOLEAN DEFAULT false,
+  last_online_at TIMESTAMPTZ,
+  current_status TEXT DEFAULT 'available',
+  performance JSONB DEFAULT '{}',
+  monthly_targets JSONB DEFAULT '{}',
+  base_salary_egp NUMERIC DEFAULT 0,
+  compensation_structure JSONB DEFAULT '{}',
+  total_earned_egp NUMERIC DEFAULT 0,
+  current_month_earned_egp NUMERIC DEFAULT 0,
+  work_schedule JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- CRM Customers
+CREATE TABLE IF NOT EXISTS crm_customers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name TEXT NOT NULL,
+  display_name TEXT,
+  phone TEXT UNIQUE NOT NULL,
+  phone_verified BOOLEAN DEFAULT false,
+  whatsapp TEXT,
+  email TEXT,
+  avatar_url TEXT,
+  account_type TEXT NOT NULL DEFAULT 'individual',
+  role TEXT NOT NULL DEFAULT 'both',
+  is_verified BOOLEAN DEFAULT false,
+  verification_level TEXT DEFAULT 'none',
+  business_name TEXT,
+  business_category TEXT,
+  subscription_plan TEXT DEFAULT 'free',
+  max_active_listings INTEGER DEFAULT 5,
+  governorate TEXT,
+  city TEXT,
+  area TEXT,
+  primary_category TEXT,
+  interests TEXT[] DEFAULT '{}',
+  source TEXT NOT NULL DEFAULT 'organic',
+  source_detail TEXT,
+  referral_code TEXT,
+  referred_by UUID REFERENCES crm_customers(id),
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  lifecycle_stage TEXT DEFAULT 'lead',
+  lifecycle_changed_at TIMESTAMPTZ DEFAULT now(),
+  lifecycle_history JSONB DEFAULT '[]',
+  acquisition_score INTEGER DEFAULT 0,
+  engagement_score INTEGER DEFAULT 0,
+  value_score INTEGER DEFAULT 0,
+  churn_risk_score INTEGER DEFAULT 0,
+  health_score INTEGER DEFAULT 0,
+  total_listings INTEGER DEFAULT 0,
+  active_listings INTEGER DEFAULT 0,
+  total_sales INTEGER DEFAULT 0,
+  total_purchases INTEGER DEFAULT 0,
+  total_gmv_egp NUMERIC DEFAULT 0,
+  total_commission_paid_egp NUMERIC DEFAULT 0,
+  is_commission_supporter BOOLEAN DEFAULT false,
+  preferred_channel TEXT DEFAULT 'whatsapp',
+  notification_enabled BOOLEAN DEFAULT true,
+  marketing_consent BOOLEAN DEFAULT true,
+  do_not_contact BOOLEAN DEFAULT false,
+  outreach_attempts INTEGER DEFAULT 0,
+  last_outreach_at TIMESTAMPTZ,
+  last_active_at TIMESTAMPTZ,
+  last_listing_posted_at TIMESTAMPTZ,
+  assigned_agent_id UUID REFERENCES crm_agents(id),
+  loyalty_tier TEXT DEFAULT 'bronze',
+  loyalty_points INTEGER DEFAULT 0,
+  lifetime_value_egp NUMERIC DEFAULT 0,
+  tags TEXT[] DEFAULT '{}',
+  internal_notes TEXT,
+  app_user_id UUID,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_crm_cust_lifecycle ON crm_customers(lifecycle_stage);
+CREATE INDEX IF NOT EXISTS idx_crm_cust_gov ON crm_customers(governorate);
+CREATE INDEX IF NOT EXISTS idx_crm_cust_health ON crm_customers(health_score DESC);
+CREATE INDEX IF NOT EXISTS idx_crm_cust_source ON crm_customers(source);
+CREATE INDEX IF NOT EXISTS idx_crm_cust_agent ON crm_customers(assigned_agent_id);
+CREATE INDEX IF NOT EXISTS idx_crm_cust_phone ON crm_customers(phone);
+
+CREATE OR REPLACE FUNCTION update_crm_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN NEW.updated_at = now(); RETURN NEW; END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_crm_customers_updated ON crm_customers;
+CREATE TRIGGER trg_crm_customers_updated
+  BEFORE UPDATE ON crm_customers FOR EACH ROW EXECUTE FUNCTION update_crm_updated_at();
+
+-- CRM Campaigns
+CREATE TABLE IF NOT EXISTS crm_campaigns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  campaign_type TEXT NOT NULL,
+  target_filters JSONB NOT NULL DEFAULT '{}',
+  messages JSONB NOT NULL DEFAULT '[]',
+  status TEXT DEFAULT 'draft',
+  scheduled_at TIMESTAMPTZ,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  daily_send_limit INTEGER DEFAULT 500,
+  stats JSONB DEFAULT '{}',
+  created_by UUID REFERENCES crm_agents(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- CRM Conversations (Unified Inbox)
+CREATE TABLE IF NOT EXISTS crm_conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID REFERENCES crm_customers(id) ON DELETE CASCADE NOT NULL,
+  channel TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  message_type TEXT DEFAULT 'text',
+  content TEXT,
+  media_urls TEXT[],
+  template_id TEXT,
+  status TEXT DEFAULT 'sent',
+  campaign_id UUID REFERENCES crm_campaigns(id),
+  agent_id UUID REFERENCES crm_agents(id),
+  is_automated BOOLEAN DEFAULT false,
+  sentiment TEXT,
+  external_message_id TEXT,
+  sent_at TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ,
+  read_at TIMESTAMPTZ,
+  replied_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_customer ON crm_conversations(customer_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conv_agent ON crm_conversations(agent_id) WHERE agent_id IS NOT NULL;
+
+-- CRM Message Templates
+CREATE TABLE IF NOT EXISTS crm_message_templates (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  channel TEXT NOT NULL,
+  category TEXT,
+  campaign_type TEXT,
+  language TEXT DEFAULT 'ar',
+  subject TEXT,
+  body TEXT NOT NULL,
+  media_url TEXT,
+  times_sent INTEGER DEFAULT 0,
+  times_delivered INTEGER DEFAULT 0,
+  times_responded INTEGER DEFAULT 0,
+  response_rate NUMERIC(5,2) DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  version INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- CRM Promotions
+CREATE TABLE IF NOT EXISTS crm_promotions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  name_ar TEXT NOT NULL,
+  description_ar TEXT,
+  promo_type TEXT NOT NULL,
+  value_type TEXT,
+  value_amount NUMERIC,
+  target_lifecycle_stages TEXT[] DEFAULT '{}',
+  start_date TIMESTAMPTZ NOT NULL,
+  end_date TIMESTAMPTZ,
+  max_redemptions INTEGER,
+  current_redemptions INTEGER DEFAULT 0,
+  promo_code TEXT UNIQUE,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- CRM Loyalty Transactions
+CREATE TABLE IF NOT EXISTS crm_loyalty_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID REFERENCES crm_customers(id) ON DELETE CASCADE NOT NULL,
+  transaction_type TEXT NOT NULL,
+  points INTEGER NOT NULL,
+  balance_after INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  reference_type TEXT,
+  reference_id TEXT,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_loyalty_customer ON crm_loyalty_transactions(customer_id, created_at DESC);
+
+-- CRM Listing Assists
+CREATE TABLE IF NOT EXISTS crm_listing_assists (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID REFERENCES crm_customers(id) NOT NULL,
+  agent_id UUID REFERENCES crm_agents(id),
+  assist_type TEXT NOT NULL,
+  source_url TEXT,
+  total_items INTEGER DEFAULT 0,
+  processed_items INTEGER DEFAULT 0,
+  published_items INTEGER DEFAULT 0,
+  items JSONB DEFAULT '[]',
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  completed_at TIMESTAMPTZ
+);
+
+-- CRM Activity Log
+CREATE TABLE IF NOT EXISTS crm_activity_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID REFERENCES crm_customers(id) ON DELETE CASCADE NOT NULL,
+  activity_type TEXT NOT NULL,
+  description TEXT,
+  metadata JSONB DEFAULT '{}',
+  agent_id UUID REFERENCES crm_agents(id),
+  is_system BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_customer ON crm_activity_log(customer_id, created_at DESC);
+
+-- CRM Competitor Sources
+CREATE TABLE IF NOT EXISTS crm_competitor_sources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  url TEXT,
+  category TEXT,
+  governorate TEXT,
+  estimated_sellers INTEGER,
+  is_monitored BOOLEAN DEFAULT true,
+  sellers_discovered INTEGER DEFAULT 0,
+  sellers_acquired INTEGER DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- CRM Referrals
+CREATE TABLE IF NOT EXISTS crm_referrals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id UUID REFERENCES crm_customers(id) NOT NULL,
+  referrer_code TEXT NOT NULL,
+  referred_phone TEXT,
+  referred_name TEXT,
+  referred_customer_id UUID REFERENCES crm_customers(id),
+  status TEXT DEFAULT 'pending',
+  referrer_reward_type TEXT,
+  referrer_reward_amount NUMERIC,
+  referrer_reward_granted BOOLEAN DEFAULT false,
+  channel TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  activated_at TIMESTAMPTZ
+);
+
+-- CRM Daily Metrics
+CREATE TABLE IF NOT EXISTS crm_daily_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  metric_date DATE NOT NULL UNIQUE,
+  new_leads INTEGER DEFAULT 0,
+  new_activated INTEGER DEFAULT 0,
+  daily_active_users INTEGER DEFAULT 0,
+  listings_posted INTEGER DEFAULT 0,
+  listings_sold INTEGER DEFAULT 0,
+  commission_revenue_egp NUMERIC DEFAULT 0,
+  total_revenue_egp NUMERIC DEFAULT 0,
+  total_gmv_egp NUMERIC DEFAULT 0,
+  churned INTEGER DEFAULT 0,
+  reactivated INTEGER DEFAULT 0,
+  messages_sent INTEGER DEFAULT 0,
+  by_category JSONB DEFAULT '{}',
+  by_governorate JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- CRM Subscription History
+CREATE TABLE IF NOT EXISTS crm_subscription_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID REFERENCES crm_customers(id) NOT NULL,
+  action TEXT NOT NULL,
+  plan_from TEXT,
+  plan_to TEXT,
+  amount_egp NUMERIC NOT NULL,
+  payment_method TEXT,
+  period_start TIMESTAMPTZ,
+  period_end TIMESTAMPTZ,
+  agent_id UUID REFERENCES crm_agents(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sub_history_customer ON crm_subscription_history(customer_id, created_at DESC);
+
+-- RLS for all CRM tables
+ALTER TABLE crm_agents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_message_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_promotions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_loyalty_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_listing_assists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_activity_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_competitor_sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_referrals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_daily_metrics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm_subscription_history ENABLE ROW LEVEL SECURITY;
+
+-- CRM RLS policies (allow all for authenticated — admin enforced at app level)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_agents' AND policyname = 'crm_agents_read') THEN
+    CREATE POLICY crm_agents_read ON crm_agents FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_agents' AND policyname = 'crm_agents_write') THEN
+    CREATE POLICY crm_agents_write ON crm_agents FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_customers' AND policyname = 'crm_customers_read') THEN
+    CREATE POLICY crm_customers_read ON crm_customers FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_customers' AND policyname = 'crm_customers_write') THEN
+    CREATE POLICY crm_customers_write ON crm_customers FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_conversations' AND policyname = 'crm_conversations_read') THEN
+    CREATE POLICY crm_conversations_read ON crm_conversations FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_conversations' AND policyname = 'crm_conversations_write') THEN
+    CREATE POLICY crm_conversations_write ON crm_conversations FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_campaigns' AND policyname = 'crm_campaigns_read') THEN
+    CREATE POLICY crm_campaigns_read ON crm_campaigns FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_campaigns' AND policyname = 'crm_campaigns_write') THEN
+    CREATE POLICY crm_campaigns_write ON crm_campaigns FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_message_templates' AND policyname = 'crm_templates_read') THEN
+    CREATE POLICY crm_templates_read ON crm_message_templates FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_message_templates' AND policyname = 'crm_templates_write') THEN
+    CREATE POLICY crm_templates_write ON crm_message_templates FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_promotions' AND policyname = 'crm_promotions_read') THEN
+    CREATE POLICY crm_promotions_read ON crm_promotions FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_promotions' AND policyname = 'crm_promotions_write') THEN
+    CREATE POLICY crm_promotions_write ON crm_promotions FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_loyalty_transactions' AND policyname = 'crm_loyalty_read') THEN
+    CREATE POLICY crm_loyalty_read ON crm_loyalty_transactions FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_loyalty_transactions' AND policyname = 'crm_loyalty_write') THEN
+    CREATE POLICY crm_loyalty_write ON crm_loyalty_transactions FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_listing_assists' AND policyname = 'crm_listing_assists_read') THEN
+    CREATE POLICY crm_listing_assists_read ON crm_listing_assists FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_listing_assists' AND policyname = 'crm_listing_assists_write') THEN
+    CREATE POLICY crm_listing_assists_write ON crm_listing_assists FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_activity_log' AND policyname = 'crm_activity_read') THEN
+    CREATE POLICY crm_activity_read ON crm_activity_log FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_activity_log' AND policyname = 'crm_activity_write') THEN
+    CREATE POLICY crm_activity_write ON crm_activity_log FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_competitor_sources' AND policyname = 'crm_competitor_read') THEN
+    CREATE POLICY crm_competitor_read ON crm_competitor_sources FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_competitor_sources' AND policyname = 'crm_competitor_write') THEN
+    CREATE POLICY crm_competitor_write ON crm_competitor_sources FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_referrals' AND policyname = 'crm_referrals_read') THEN
+    CREATE POLICY crm_referrals_read ON crm_referrals FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_referrals' AND policyname = 'crm_referrals_write') THEN
+    CREATE POLICY crm_referrals_write ON crm_referrals FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_daily_metrics' AND policyname = 'crm_metrics_read') THEN
+    CREATE POLICY crm_metrics_read ON crm_daily_metrics FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_daily_metrics' AND policyname = 'crm_metrics_write') THEN
+    CREATE POLICY crm_metrics_write ON crm_daily_metrics FOR ALL USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_subscription_history' AND policyname = 'crm_sub_history_read') THEN
+    CREATE POLICY crm_sub_history_read ON crm_subscription_history FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crm_subscription_history' AND policyname = 'crm_sub_history_write') THEN
+    CREATE POLICY crm_sub_history_write ON crm_subscription_history FOR ALL USING (true);
+  END IF;
+END $$;
+
+-- CRM Triggers
+DROP TRIGGER IF EXISTS trg_crm_agents_updated ON crm_agents;
+CREATE TRIGGER trg_crm_agents_updated
+  BEFORE UPDATE ON crm_agents FOR EACH ROW EXECUTE FUNCTION update_crm_updated_at();
+
+DROP TRIGGER IF EXISTS trg_crm_campaigns_updated ON crm_campaigns;
+CREATE TRIGGER trg_crm_campaigns_updated
+  BEFORE UPDATE ON crm_campaigns FOR EACH ROW EXECUTE FUNCTION update_crm_updated_at();
+
+DROP TRIGGER IF EXISTS trg_crm_templates_updated ON crm_message_templates;
+CREATE TRIGGER trg_crm_templates_updated
+  BEFORE UPDATE ON crm_message_templates FOR EACH ROW EXECUTE FUNCTION update_crm_updated_at();
+
+-- ✅ Part 19: CRM Core Tables created!
+
+
+-- ============================================
+-- PART 20: Realtime Subscriptions
+-- ============================================
+
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE auction_bids;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ✅ Part 20: Realtime Subscriptions enabled!
+
+
+-- ============================================
+-- PART 21: exec_sql helper (for auto-setup)
+-- ============================================
+
+CREATE OR REPLACE FUNCTION exec_sql(query text)
+RETURNS void AS $$
+BEGIN
+  EXECUTE query;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ✅ Part 21: exec_sql helper created!
+
+
+-- ============================================
+-- FINAL VERIFICATION
+-- ============================================
+DO $$
+DECLARE
+  cat_count INTEGER;
+  sub_count INTEGER;
+  gov_count INTEGER;
+  city_count INTEGER;
+  tbl_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO cat_count FROM categories;
+  SELECT COUNT(*) INTO sub_count FROM subcategories;
+  SELECT COUNT(*) INTO gov_count FROM governorates;
+  SELECT COUNT(*) INTO city_count FROM cities;
+  SELECT COUNT(*) INTO tbl_count FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+
+  RAISE NOTICE '══════════════════════════════════════';
+  RAISE NOTICE '✅ مكسب — Setup Complete!';
+  RAISE NOTICE '   Tables: %', tbl_count;
+  RAISE NOTICE '   Categories: %', cat_count;
+  RAISE NOTICE '   Subcategories: %', sub_count;
+  RAISE NOTICE '   Governorates: %', gov_count;
+  RAISE NOTICE '   Cities: %', city_count;
+  RAISE NOTICE '══════════════════════════════════════';
+END;
+$$;

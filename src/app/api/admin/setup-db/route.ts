@@ -17,17 +17,41 @@ import { governorates, citiesByGovernorate } from "@/lib/data/governorates";
 
 // Tables to check
 const REQUIRED_TABLES = [
+  // Core
   "profiles",
   "categories",
   "subcategories",
+  "governorates",
+  "cities",
   "ads",
   "favorites",
   "conversations",
   "messages",
   "auction_bids",
+  "commissions",
+  // Recommendations
+  "user_signals",
+  "user_interest_profiles",
+  "notifications",
+  "push_subscriptions",
+  // Reviews & verification
+  "reviews",
+  "price_offers",
+  // Stores
+  "stores",
+  "store_categories",
+  "store_followers",
+  "store_reviews",
+  // Analytics & buy requests
   "analytics_events",
   "buy_requests",
   "buy_request_matches",
+  // Admin & settings
+  "app_settings",
+  "reports",
+  "blocked_users",
+  "rate_limits",
+  // CRM
   "crm_customers",
   "crm_agents",
   "crm_campaigns",
