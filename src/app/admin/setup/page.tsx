@@ -198,6 +198,26 @@ export default function AdminSetupPage() {
         setCrmSetupResult(data.message || "تم إعداد CRM بنجاح");
         await checkTables();
       } else {
+        // Fallback: try using execute-sql endpoint with the CRM SQL
+        try {
+          const sqlRes = await fetch("/api/admin/crm-setup-sql");
+          const sqlText = await sqlRes.text();
+          const execRes = await fetch("/api/admin/execute-sql", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getAdminHeaders() },
+            body: JSON.stringify({ sql: sqlText }),
+          });
+          const execData = await execRes.json();
+          if (execData.success) {
+            setCrmSetupStatus("success");
+            setCrmSetupResult("تم إعداد جداول CRM بنجاح (عبر execute-sql)");
+            await checkTables();
+            return;
+          }
+        } catch {
+          // Fallback failed too
+        }
+
         setCrmSetupStatus("error");
         setCrmSetupResult(
           data.instructions
