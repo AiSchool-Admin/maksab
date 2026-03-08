@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   AlertTriangle,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 
@@ -28,14 +29,34 @@ const TABLE_LABELS: Record<string, string> = {
   profiles: "بروفايلات المستخدمين",
   categories: "الأقسام",
   subcategories: "الأقسام الفرعية",
+  governorates: "المحافظات",
+  cities: "المدن",
   ads: "الإعلانات",
   favorites: "المفضلة",
   conversations: "المحادثات",
   messages: "الرسائل",
   auction_bids: "المزايدات",
+  commissions: "العمولات",
+  user_signals: "إشارات المستخدم",
+  notifications: "الإشعارات",
+  reviews: "التقييمات",
+  stores: "المحلات",
   analytics_events: "تتبع الأحداث",
   buy_requests: "طلبات الشراء",
-  buy_request_matches: "مطابقات طلبات الشراء",
+  buy_request_matches: "مطابقات الطلبات",
+  app_settings: "إعدادات التطبيق",
+  reports: "البلاغات",
+  blocked_users: "المستخدمين المحظورين",
+  rate_limits: "حدود المعدل",
+  crm_customers: "CRM — العملاء",
+  crm_agents: "CRM — الوكلاء",
+  crm_campaigns: "CRM — الحملات",
+  crm_conversations: "CRM — المحادثات",
+  crm_activity_log: "CRM — سجل النشاط",
+  crm_message_templates: "CRM — القوالب",
+  crm_promotions: "CRM — العروض",
+  crm_loyalty_transactions: "CRM — الولاء",
+  crm_daily_metrics: "CRM — المقاييس",
 };
 
 export default function SetupPage() {
@@ -43,10 +64,14 @@ export default function SetupPage() {
   const [sqlCopied, setSqlCopied] = useState(false);
   const [step1Status, setStep1Status] = useState<StepStatus>("idle");
   const [step2Status, setStep2Status] = useState<StepStatus>("idle");
-  const [step2Results, setStep2Results] = useState<Record<string, string> | null>(null);
+  const [step2Results, setStep2Results] = useState<Record<
+    string,
+    string
+  > | null>(null);
   const [step2Error, setStep2Error] = useState<string | null>(null);
+  const [autoExecStatus, setAutoExecStatus] = useState<StepStatus>("idle");
+  const [autoExecMessage, setAutoExecMessage] = useState<string | null>(null);
 
-  // Auto-check tables on load
   const [tableCheck, setTableCheck] = useState<TableCheckResult | null>(null);
   const [checking, setChecking] = useState(true);
 
@@ -60,7 +85,6 @@ export default function SetupPage() {
     ? `https://supabase.com/dashboard/project/${supabaseRef}/sql/new`
     : "https://supabase.com/dashboard";
 
-  // Check tables on page load
   useEffect(() => {
     checkTables();
   }, []);
@@ -75,7 +99,7 @@ export default function SetupPage() {
         setStep1Status("success");
       }
     } catch {
-      // Ignore — will show manual check
+      // Ignore
     } finally {
       setChecking(false);
     }
@@ -89,8 +113,52 @@ export default function SetupPage() {
       setSqlCopied(true);
       setTimeout(() => setSqlCopied(false), 3000);
     } catch {
-      // Fallback: show alert
-      alert("مش قادر ينسخ — جرب تفتح الرابط /api/admin/complete-setup-sql وانسخ من هناك");
+      alert(
+        "مش قادر ينسخ — جرب تفتح الرابط /api/admin/complete-setup-sql وانسخ من هناك"
+      );
+    }
+  };
+
+  const handleAutoExecute = async () => {
+    if (!serviceKey.trim()) {
+      setAutoExecMessage("لازم تدخل الـ Service Role Key");
+      return;
+    }
+
+    setAutoExecStatus("loading");
+    setAutoExecMessage("جاري تنفيذ SQL... ده ممكن ياخد شوية وقت");
+
+    try {
+      // Get the full SQL
+      const sqlRes = await fetch("/api/admin/complete-setup-sql");
+      const sql = await sqlRes.text();
+
+      // Execute it
+      const execRes = await fetch("/api/admin/execute-sql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sql, serviceKey: serviceKey.trim() }),
+      });
+
+      const result = await execRes.json();
+
+      if (result.success) {
+        setAutoExecStatus("success");
+        setAutoExecMessage("تم تنفيذ SQL بنجاح! جاري التحقق...");
+        // Re-check tables
+        await checkTables();
+        setStep1Status("success");
+      } else {
+        setAutoExecStatus("error");
+        setAutoExecMessage(
+          result.details ||
+            result.error ||
+            "فشل التنفيذ — جرب الطريقة اليدوية"
+        );
+      }
+    } catch {
+      setAutoExecStatus("error");
+      setAutoExecMessage("حصل خطأ. جرب الطريقة اليدوية (انسخ SQL يدوي).");
     }
   };
 
@@ -105,9 +173,9 @@ export default function SetupPage() {
     setStep2Results(null);
 
     try {
-      const res = await fetch(
-        `/api/admin/setup-db?secret=${encodeURIComponent(serviceKey.trim())}`,
-      );
+      const res = await fetch("/api/admin/setup-db", {
+        headers: { "x-admin-secret": serviceKey.trim() },
+      });
       const data = await res.json();
 
       if (data.results) {
@@ -128,13 +196,21 @@ export default function SetupPage() {
 
   const hasMissingTables =
     tableCheck && tableCheck.missingTables && tableCheck.missingTables.length > 0;
+  const presentCount = tableCheck
+    ? Object.values(tableCheck.tables).filter(Boolean).length
+    : 0;
+  const totalCount = tableCheck
+    ? Object.keys(tableCheck.tables).length
+    : 0;
 
   return (
     <main className="min-h-screen bg-white">
       {/* Header */}
       <div className="bg-brand-green text-white px-5 py-6">
         <h1 className="text-3xl font-bold mb-1">إعداد قاعدة بيانات مكسب</h1>
-        <p className="text-sm text-white/80">خطوتين بس وكل حاجة هتشتغل</p>
+        <p className="text-sm text-white/80">
+          أدخل الـ Service Role Key وخلينا نعمل كل حاجة
+        </p>
       </div>
 
       <div className="px-5 py-6 space-y-8">
@@ -151,7 +227,7 @@ export default function SetupPage() {
             <div className="flex items-center gap-2">
               <CheckCircle2 size={20} className="text-green-600" />
               <span className="text-sm font-bold text-green-700">
-                كل الجداول موجودة وشغالة!
+                كل الجداول موجودة وشغالة! ({presentCount}/{totalCount})
               </span>
             </div>
             <p className="text-xs text-green-600">
@@ -165,13 +241,14 @@ export default function SetupPage() {
             <div className="flex items-center gap-2">
               <AlertTriangle size={20} className="text-red-500" />
               <span className="text-sm font-bold text-red-700">
-                في {tableCheck!.missingTables.length} جدول ناقص!
+                {presentCount}/{totalCount} جدول موجود —{" "}
+                {tableCheck!.missingTables.length} ناقص
               </span>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-40 overflow-y-auto">
               {tableCheck!.missingTables.map((table) => (
                 <div key={table} className="flex items-center gap-2 text-xs">
-                  <XCircle size={14} className="text-red-400" />
+                  <XCircle size={14} className="text-red-400 flex-shrink-0" />
                   <span className="text-red-600 font-mono">{table}</span>
                   <span className="text-red-400">
                     — {TABLE_LABELS[table] || table}
@@ -179,13 +256,45 @@ export default function SetupPage() {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-red-500">
-              لازم تشغّل الـ SQL في الخطوة 1 عشان تعمل الجداول دي
-            </p>
           </div>
         )}
 
-        {/* ── Step 1: Run SQL ──────────────────────── */}
+        {/* ── Service Role Key Input ──────────────────── */}
+        <section className="space-y-3">
+          <h2 className="text-lg font-bold text-dark">
+            الـ Service Role Key
+          </h2>
+          <p className="text-xs text-gray-text">
+            من Supabase Dashboard → Settings → API → service_role (secret)
+          </p>
+
+          {supabaseRef && (
+            <a
+              href={`https://supabase.com/dashboard/project/${supabaseRef}/settings/api`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-brand-green font-semibold flex items-center gap-1 hover:underline"
+            >
+              <ExternalLink size={12} />
+              افتح صفحة الـ API Keys
+            </a>
+          )}
+
+          <input
+            type="password"
+            value={serviceKey}
+            onChange={(e) => {
+              setServiceKey(e.target.value);
+              setStep2Error(null);
+              setAutoExecMessage(null);
+            }}
+            placeholder="eyJhbGci... (الـ service_role key)"
+            className="w-full px-4 py-3 bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:outline-none transition-all text-dark text-sm placeholder:text-gray-text"
+            dir="ltr"
+          />
+        </section>
+
+        {/* ── Step 1: Create Tables (Auto or Manual) ──── */}
         <section className="space-y-4">
           <div className="flex items-center gap-3">
             <div
@@ -206,56 +315,102 @@ export default function SetupPage() {
                 الخطوة 1: إنشاء الجداول
               </h2>
               <p className="text-xs text-gray-text">
-                مرة واحدة بس — بتعمل كل جداول التطبيق
+                {totalCount}+ جدول — أقسام، إعلانات، محادثات، CRM، وأكتر
               </p>
             </div>
           </div>
 
-          <div className="bg-gray-light rounded-xl p-4 space-y-3">
-            <p className="text-sm text-dark">
-              <strong>1.</strong> دوس على الزرار ده عشان تنسخ كود الـ SQL:
-            </p>
+          <div className="bg-gray-light rounded-xl p-4 space-y-4">
+            {/* Option A: Auto Execute */}
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-dark flex items-center gap-2">
+                <Zap size={16} className="text-brand-gold" />
+                طريقة سريعة — تنفيذ تلقائي
+              </p>
 
-            <button
-              onClick={handleCopySQL}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-white rounded-xl border-2 border-brand-green text-brand-green font-semibold hover:bg-brand-green/5 transition-all"
-            >
-              {sqlCopied ? (
-                <>
-                  <Check size={18} />
-                  تم النسخ!
-                </>
-              ) : (
-                <>
-                  <Copy size={18} />
-                  انسخ كود SQL الكامل
-                </>
+              <Button
+                fullWidth
+                size="lg"
+                isLoading={autoExecStatus === "loading"}
+                onClick={handleAutoExecute}
+                disabled={
+                  !serviceKey.trim() || autoExecStatus === "loading"
+                }
+              >
+                {autoExecStatus === "success"
+                  ? "تم بنجاح!"
+                  : autoExecStatus === "loading"
+                    ? "جاري التنفيذ..."
+                    : "نفّذ كل الجداول تلقائياً"}
+              </Button>
+
+              {autoExecMessage && (
+                <div
+                  className={`flex items-start gap-2 text-xs p-2 rounded-lg ${
+                    autoExecStatus === "success"
+                      ? "bg-green-50 text-green-700"
+                      : autoExecStatus === "error"
+                        ? "bg-red-50 text-red-700"
+                        : "bg-blue-50 text-blue-700"
+                  }`}
+                >
+                  {autoExecStatus === "success" ? (
+                    <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
+                  ) : autoExecStatus === "error" ? (
+                    <XCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <Loader2
+                      size={14}
+                      className="flex-shrink-0 mt-0.5 animate-spin"
+                    />
+                  )}
+                  <span>{autoExecMessage}</span>
+                </div>
               )}
-            </button>
+            </div>
 
-            <p className="text-sm text-dark">
-              <strong>2.</strong> افتح Supabase SQL Editor:
-            </p>
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-300" />
+              <span className="text-xs text-gray-text">أو</span>
+              <div className="flex-1 h-px bg-gray-300" />
+            </div>
 
-            <a
-              href={sqlEditorUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 py-3 bg-brand-green text-white rounded-xl font-semibold hover:bg-brand-green-dark transition-all"
-            >
-              <ExternalLink size={18} />
-              افتح SQL Editor
-            </a>
+            {/* Option B: Manual */}
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-dark">
+                طريقة يدوية — نسخ ولصق
+              </p>
 
-            <p className="text-sm text-dark">
-              <strong>3.</strong> الصق الكود في SQL Editor ودوس{" "}
-              <strong>Run</strong>
-            </p>
+              <button
+                onClick={handleCopySQL}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-white rounded-xl border-2 border-brand-green text-brand-green font-semibold hover:bg-brand-green/5 transition-all text-sm"
+              >
+                {sqlCopied ? (
+                  <>
+                    <Check size={18} />
+                    تم النسخ!
+                  </>
+                ) : (
+                  <>
+                    <Copy size={18} />
+                    انسخ كود SQL الكامل
+                  </>
+                )}
+              </button>
 
-            <p className="text-sm text-dark">
-              <strong>4.</strong> لما ينجح، دوس هنا عشان نتأكد:
-            </p>
+              <a
+                href={sqlEditorUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-3 bg-brand-green text-white rounded-xl font-semibold hover:bg-brand-green-dark transition-all text-sm"
+              >
+                <ExternalLink size={18} />
+                افتح SQL Editor والصق الكود
+              </a>
+            </div>
 
+            {/* Check Button */}
             <button
               onClick={async () => {
                 setStep1Status("loading");
@@ -266,7 +421,7 @@ export default function SetupPage() {
                   setStep1Status("error");
                 }
               }}
-              className={`w-full py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+              className={`w-full py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-sm ${
                 step1Status === "success"
                   ? "bg-green-100 text-green-700"
                   : step1Status === "loading"
@@ -320,43 +475,12 @@ export default function SetupPage() {
                 الخطوة 2: تعبئة البيانات
               </h2>
               <p className="text-xs text-gray-text">
-                أقسام، محافظات، مدن، وبروفايلات المستخدمين
+                أقسام، محافظات، مدن (لو ما اتعبوش تلقائي)
               </p>
             </div>
           </div>
 
           <div className="bg-gray-light rounded-xl p-4 space-y-3">
-            <p className="text-sm text-dark">
-              أدخل الـ <strong>Service Role Key</strong> من:
-            </p>
-            <p className="text-xs text-gray-text">
-              Supabase Dashboard → Settings → API → service_role (secret)
-            </p>
-
-            {supabaseRef && (
-              <a
-                href={`https://supabase.com/dashboard/project/${supabaseRef}/settings/api`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-brand-green font-semibold flex items-center gap-1 hover:underline"
-              >
-                <ExternalLink size={12} />
-                افتح صفحة الـ API Keys
-              </a>
-            )}
-
-            <input
-              type="password"
-              value={serviceKey}
-              onChange={(e) => {
-                setServiceKey(e.target.value);
-                setStep2Error(null);
-              }}
-              placeholder="eyJhbGci... (الـ service_role key)"
-              className="w-full px-4 py-3 bg-white rounded-xl border-2 border-transparent focus:border-brand-green focus:outline-none transition-all text-dark text-sm placeholder:text-gray-text"
-              dir="ltr"
-            />
-
             {step2Error && (
               <div className="flex items-start gap-2 text-error text-xs">
                 <XCircle size={14} className="flex-shrink-0 mt-0.5" />
@@ -371,10 +495,9 @@ export default function SetupPage() {
               onClick={handleSeedData}
               disabled={!serviceKey.trim() || step2Status === "loading"}
             >
-              {step2Status === "success" ? "تم بنجاح!" : "شغّل التعبئة"}
+              {step2Status === "success" ? "تم بنجاح!" : "تعبئة البيانات"}
             </Button>
 
-            {/* Results */}
             {step2Results && (
               <div className="bg-white rounded-xl p-3 space-y-1.5">
                 {Object.entries(step2Results).map(([key, value]) => (
@@ -406,7 +529,7 @@ export default function SetupPage() {
         </section>
 
         {/* ── All Done ──────────────────────────── */}
-        {step1Status === "success" && step2Status === "success" && (
+        {step1Status === "success" && (
           <section className="bg-green-50 border border-green-200 rounded-xl p-5 text-center space-y-3">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
               <CheckCircle2 size={32} className="text-green-600" />
@@ -441,12 +564,11 @@ export default function SetupPage() {
             لو عملت الجداول بس لسه بتظهر أخطاء؟
           </h3>
           <p className="text-xs text-gray-text">
-            التطبيق بيحفظ cache عشان ما يبعتش طلبات كتير. دوس هنا عشان تمسحه:
+            دوس هنا عشان تمسح الـ cache وترجع للرئيسية:
           </p>
           <button
             onClick={() => {
               if (typeof window !== "undefined") {
-                // Clear all table-existence caches
                 localStorage.removeItem("maksab_buy_requests_available");
                 localStorage.removeItem("maksab_analytics_flush_disabled");
                 localStorage.removeItem("maksab_analytics_queue");
