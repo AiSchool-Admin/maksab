@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getServiceClient } from "@/lib/crm/auth";
 import { calculateAllScores } from "@/lib/crm/scoring";
 import type { CrmCustomer } from "@/types/crm";
-
-function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-  );
-}
 
 interface ImportRow {
   full_name: string;
@@ -59,6 +52,10 @@ export async function POST(req: NextRequest) {
 
   const existingPhones = new Set((existingCustomers || []).map(c => c.phone));
 
+  // Prepare valid rows for batch insert
+  const validRows: Record<string, unknown>[] = [];
+  const validRowIndexes: number[] = [];
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const phone = (row.phone || '').replace(/[\s-]/g, '');
@@ -81,9 +78,12 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    // Mark as seen to prevent duplicates within same batch
+    existingPhones.add(phone);
+
     const tags = row.tags ? row.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
 
-    const { error } = await supabase.from("crm_customers").insert({
+    const customerData = {
       full_name: row.full_name,
       phone,
       whatsapp: row.whatsapp || phone,
@@ -102,15 +102,53 @@ export async function POST(req: NextRequest) {
       business_name: row.business_name || null,
       lifecycle_stage: "lead",
       lifecycle_history: [{ stage: "lead", at: new Date().toISOString() }],
+    };
+
+    // Calculate scores for new customer
+    const scores = calculateAllScores(customerData as unknown as CrmCustomer);
+
+    validRows.push({
+      ...customerData,
+      ...scores,
+      scores_updated_at: new Date().toISOString(),
     });
+    validRowIndexes.push(i);
+  }
+
+  // Batch insert in chunks of 50
+  const BATCH_SIZE = 50;
+  for (let b = 0; b < validRows.length; b += BATCH_SIZE) {
+    const batch = validRows.slice(b, b + BATCH_SIZE);
+    const batchIndexes = validRowIndexes.slice(b, b + BATCH_SIZE);
+
+    const { data: inserted, error } = await supabase
+      .from("crm_customers")
+      .insert(batch)
+      .select("id");
 
     if (error) {
-      results.errors++;
-      results.details.push({ row: i + 1, phone, status: "error", error: error.message });
+      // If batch fails, try individual inserts as fallback
+      for (let j = 0; j < batch.length; j++) {
+        const { error: singleError } = await supabase
+          .from("crm_customers")
+          .insert(batch[j]);
+
+        const phone = (batch[j].phone as string) || '';
+        if (singleError) {
+          results.errors++;
+          results.details.push({ row: batchIndexes[j] + 1, phone, status: "error", error: singleError.message });
+        } else {
+          results.imported++;
+          results.details.push({ row: batchIndexes[j] + 1, phone, status: "imported" });
+        }
+      }
     } else {
-      results.imported++;
-      results.details.push({ row: i + 1, phone, status: "imported" });
-      existingPhones.add(phone); // Prevent duplicates within same batch
+      // Batch succeeded
+      results.imported += (inserted || batch).length;
+      for (const idx of batchIndexes) {
+        const phone = (rows[idx].phone || '').replace(/[\s-]/g, '');
+        results.details.push({ row: idx + 1, phone, status: "imported" });
+      }
     }
   }
 

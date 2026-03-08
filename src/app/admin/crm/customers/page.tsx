@@ -346,6 +346,7 @@ export default function CrmCustomersPage() {
   const [accountType, setAccountType] = useState("");
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState("desc");
+  const [governorate, setGovernorate] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -365,6 +366,7 @@ export default function CrmCustomersPage() {
     if (lifecycle) params.set("lifecycle", lifecycle);
     if (category) params.set("category", category);
     if (source) params.set("source", source);
+    if (governorate) params.set("governorate", governorate);
     if (accountType) params.set("account_type", accountType);
 
     try {
@@ -374,28 +376,20 @@ export default function CrmCustomersPage() {
       setCustomers(data.customers || []);
       setTotal(data.total || 0);
       setTotalPages(data.total_pages || 1);
+      // Update stats from API response (real counts from DB)
+      if (data.stats) {
+        setStats(data.stats);
+      }
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [page, search, lifecycle, category, source, accountType, sortBy, sortOrder]);
+  }, [page, search, lifecycle, category, source, governorate, accountType, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
-
-  // Fetch stats
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const res = await fetch("/api/admin/crm/customers?limit=1", { headers: getAdminHeaders() });
-        const data = await res.json();
-        setStats(s => ({ ...s, total: data.total || 0 }));
-      } catch { /* ignore */ }
-    }
-    fetchStats();
-  }, []);
 
   const handleRecalculateScores = async () => {
     setRecalculating(true);
@@ -447,28 +441,28 @@ export default function CrmCustomersPage() {
             <Users size={16} className="text-blue-600" />
             <span className="text-xs text-gray-500">إجمالي العملاء</span>
           </div>
-          <p className="text-2xl font-bold">{total.toLocaleString()}</p>
+          <p className="text-2xl font-bold">{stats.total.toLocaleString()}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 mb-1">
             <UserPlus size={16} className="text-green-600" />
             <span className="text-xs text-gray-500">عملاء محتملين</span>
           </div>
-          <p className="text-2xl font-bold">{customers.filter(c => c.lifecycle_stage === 'lead').length}</p>
+          <p className="text-2xl font-bold">{stats.leads.toLocaleString()}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={16} className="text-emerald-600" />
             <span className="text-xs text-gray-500">نشطين</span>
           </div>
-          <p className="text-2xl font-bold">{customers.filter(c => ['active', 'power_user', 'champion'].includes(c.lifecycle_stage)).length}</p>
+          <p className="text-2xl font-bold">{stats.active.toLocaleString()}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle size={16} className="text-orange-600" />
             <span className="text-xs text-gray-500">معرضين للخطر</span>
           </div>
-          <p className="text-2xl font-bold">{customers.filter(c => c.lifecycle_stage === 'at_risk').length}</p>
+          <p className="text-2xl font-bold">{stats.at_risk.toLocaleString()}</p>
         </div>
       </div>
 
@@ -507,7 +501,7 @@ export default function CrmCustomersPage() {
 
         {/* Filters */}
         {showFilters && (
-          <div className="mt-3 pt-3 border-t grid grid-cols-2 md:grid-cols-5 gap-2">
+          <div className="mt-3 pt-3 border-t grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
             <select value={lifecycle} onChange={e => { setLifecycle(e.target.value); setPage(1); }}
               className="px-3 py-2 border rounded-xl text-xs">
               <option value="">كل المراحل</option>
@@ -522,6 +516,11 @@ export default function CrmCustomersPage() {
               className="px-3 py-2 border rounded-xl text-xs">
               <option value="">كل المصادر</option>
               {Object.entries(SOURCE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <select value={governorate} onChange={e => { setGovernorate(e.target.value); setPage(1); }}
+              className="px-3 py-2 border rounded-xl text-xs">
+              <option value="">كل المحافظات</option>
+              {["القاهرة","الإسكندرية","الجيزة","الشرقية","الدقهلية","القليوبية","الغربية","المنوفية","البحيرة","الفيوم","المنيا","أسيوط","سوهاج","بورسعيد","الإسماعيلية","السويس","دمياط","كفر الشيخ","المنصورة"].map(g => <option key={g} value={g}>{g}</option>)}
             </select>
             <select value={accountType} onChange={e => { setAccountType(e.target.value); setPage(1); }}
               className="px-3 py-2 border rounded-xl text-xs">

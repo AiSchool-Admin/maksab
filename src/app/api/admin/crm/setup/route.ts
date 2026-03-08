@@ -1,14 +1,7 @@
 export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-  );
-}
+import { getServiceClient } from "@/lib/crm/auth";
 
 /**
  * Execute SQL against Supabase using multiple methods (with fallbacks).
@@ -522,8 +515,11 @@ CREATE TABLE IF NOT EXISTS crm_subscription_history (
 );
 `;
 
+// RLS: Enable RLS on all tables but do NOT create permissive policies.
+// Admin access is handled via service_role key (bypasses RLS) in API routes.
+// Migration 00037 creates proper admin-only RLS policies.
 const CRM_RLS_SQL = `
--- Enable RLS on all tables
+-- Enable RLS on all tables (service_role bypasses RLS automatically)
 ALTER TABLE crm_agents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crm_customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crm_conversations ENABLE ROW LEVEL SECURITY;
@@ -537,54 +533,6 @@ ALTER TABLE crm_competitor_sources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crm_referrals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crm_daily_metrics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crm_subscription_history ENABLE ROW LEVEL SECURITY;
-
--- Drop existing policies to avoid conflicts
-DO $$
-DECLARE
-  tbl TEXT;
-  pol RECORD;
-BEGIN
-  FOR tbl IN SELECT unnest(ARRAY[
-    'crm_agents','crm_customers','crm_conversations','crm_campaigns',
-    'crm_message_templates','crm_promotions','crm_loyalty_transactions',
-    'crm_listing_assists','crm_activity_log','crm_competitor_sources',
-    'crm_referrals','crm_daily_metrics','crm_subscription_history'
-  ]) LOOP
-    FOR pol IN SELECT policyname FROM pg_policies WHERE tablename = tbl LOOP
-      EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, tbl);
-    END LOOP;
-  END LOOP;
-END $$;
-
--- Create permissive policies for all CRM tables
-CREATE POLICY "crm_full_access" ON crm_agents FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_customers FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_conversations FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_campaigns FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_message_templates FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_promotions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_loyalty_transactions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_listing_assists FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_activity_log FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_competitor_sources FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_referrals FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_daily_metrics FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_subscription_history FOR ALL USING (true) WITH CHECK (true);
-
--- Grant permissions to anon and authenticated roles
-GRANT ALL ON crm_agents TO anon, authenticated;
-GRANT ALL ON crm_customers TO anon, authenticated;
-GRANT ALL ON crm_conversations TO anon, authenticated;
-GRANT ALL ON crm_campaigns TO anon, authenticated;
-GRANT ALL ON crm_message_templates TO anon, authenticated;
-GRANT ALL ON crm_promotions TO anon, authenticated;
-GRANT ALL ON crm_loyalty_transactions TO anon, authenticated;
-GRANT ALL ON crm_listing_assists TO anon, authenticated;
-GRANT ALL ON crm_activity_log TO anon, authenticated;
-GRANT ALL ON crm_competitor_sources TO anon, authenticated;
-GRANT ALL ON crm_referrals TO anon, authenticated;
-GRANT ALL ON crm_daily_metrics TO anon, authenticated;
-GRANT ALL ON crm_subscription_history TO anon, authenticated;
 `;
 
 const CRM_INDEXES_SQL = `
@@ -603,391 +551,8 @@ CREATE INDEX IF NOT EXISTS idx_loyalty_customer ON crm_loyalty_transactions(cust
 CREATE INDEX IF NOT EXISTS idx_sub_history_customer ON crm_subscription_history(customer_id, created_at DESC);
 `;
 
-const DEMO_CUSTOMERS = [
-  {
-    full_name: "أحمد محمد حسن",
-    phone: "01012345678",
-    whatsapp: "01012345678",
-    email: "ahmed.m@example.com",
-    account_type: "individual",
-    role: "seller",
-    governorate: "القاهرة",
-    city: "مدينة نصر",
-    primary_category: "cars",
-    source: "organic",
-    lifecycle_stage: "active",
-    total_listings: 8,
-    active_listings: 3,
-    total_sales: 5,
-    total_gmv_egp: 450000,
-    health_score: 82,
-    acquisition_score: 70,
-    engagement_score: 85,
-    value_score: 75,
-    churn_risk_score: 15,
-    tags: ["vip", "بائع_نشط"],
-    internal_notes: "بائع سيارات مستعملة — نشط جداً",
-  },
-  {
-    full_name: "فاطمة علي إبراهيم",
-    phone: "01123456789",
-    whatsapp: "01123456789",
-    email: "fatma.ali@example.com",
-    account_type: "store",
-    role: "seller",
-    governorate: "الإسكندرية",
-    city: "سيدي بشر",
-    primary_category: "fashion",
-    source: "facebook_ad",
-    lifecycle_stage: "power_user",
-    business_name: "بوتيك فاطمة",
-    business_name_ar: "بوتيك فاطمة للأزياء",
-    total_listings: 35,
-    active_listings: 20,
-    total_sales: 120,
-    total_gmv_egp: 85000,
-    total_commission_paid_egp: 850,
-    is_commission_supporter: true,
-    health_score: 95,
-    acquisition_score: 90,
-    engagement_score: 95,
-    value_score: 80,
-    churn_risk_score: 5,
-    subscription_plan: "gold",
-    loyalty_tier: "gold",
-    loyalty_points: 2500,
-    tags: ["متجر", "موضة", "champion"],
-    internal_notes: "صاحبة متجر أزياء — أفضل بائعة في الإسكندرية",
-  },
-  {
-    full_name: "محمود عبدالله سعيد",
-    phone: "01098765432",
-    whatsapp: "01098765432",
-    account_type: "individual",
-    role: "both",
-    governorate: "الجيزة",
-    city: "الدقي",
-    primary_category: "phones",
-    source: "google_ad",
-    lifecycle_stage: "active",
-    total_listings: 5,
-    active_listings: 2,
-    total_sales: 3,
-    total_purchases: 2,
-    total_gmv_egp: 65000,
-    health_score: 68,
-    acquisition_score: 55,
-    engagement_score: 70,
-    value_score: 60,
-    churn_risk_score: 25,
-    tags: ["موبايلات"],
-    internal_notes: "يبيع ويشتري موبايلات مستعملة",
-  },
-  {
-    full_name: "سارة أحمد عبدالرحمن",
-    phone: "01234567890",
-    whatsapp: "01234567890",
-    email: "sara.ahmed@example.com",
-    account_type: "individual",
-    role: "buyer",
-    governorate: "القاهرة",
-    city: "المعادي",
-    primary_category: "real_estate",
-    source: "referral",
-    lifecycle_stage: "lead",
-    total_listings: 0,
-    active_listings: 0,
-    total_purchases: 0,
-    total_gmv_egp: 0,
-    health_score: 25,
-    acquisition_score: 40,
-    engagement_score: 20,
-    value_score: 10,
-    churn_risk_score: 60,
-    tags: ["عميل_محتمل", "عقارات"],
-    internal_notes: "بتدور على شقة في المعادي — تم التواصل معاها",
-  },
-  {
-    full_name: "عمر حسين محمد",
-    phone: "01556789012",
-    whatsapp: "01556789012",
-    email: "omar.h@example.com",
-    account_type: "wholesaler",
-    role: "seller",
-    governorate: "القاهرة",
-    city: "العتبة",
-    primary_category: "scrap",
-    source: "cs_agent",
-    lifecycle_stage: "champion",
-    business_name: "عمر للخردة والمعادن",
-    business_name_ar: "عمر للخردة والمعادن",
-    total_listings: 50,
-    active_listings: 15,
-    total_sales: 200,
-    total_gmv_egp: 1200000,
-    total_commission_paid_egp: 5000,
-    is_commission_supporter: true,
-    health_score: 98,
-    acquisition_score: 95,
-    engagement_score: 98,
-    value_score: 95,
-    churn_risk_score: 2,
-    subscription_plan: "platinum",
-    loyalty_tier: "platinum",
-    loyalty_points: 8000,
-    estimated_competitor_listings: 30,
-    tags: ["vip", "platinum", "خردة", "أعلى_قيمة"],
-    internal_notes: "أكبر تاجر خردة على المنصة — عميل استراتيجي",
-  },
-  {
-    full_name: "نورا خالد مصطفى",
-    phone: "01078901234",
-    whatsapp: "01078901234",
-    account_type: "individual",
-    role: "seller",
-    governorate: "المنصورة",
-    city: "المنصورة",
-    primary_category: "gold",
-    source: "instagram",
-    lifecycle_stage: "at_risk",
-    total_listings: 12,
-    active_listings: 0,
-    total_sales: 8,
-    total_gmv_egp: 95000,
-    health_score: 30,
-    acquisition_score: 65,
-    engagement_score: 25,
-    value_score: 55,
-    churn_risk_score: 75,
-    tags: ["معرض_للخطر", "ذهب"],
-    internal_notes: "كانت نشطة — توقفت من شهرين — محتاجة متابعة",
-  },
-  {
-    full_name: "يوسف إبراهيم علي",
-    phone: "01145678901",
-    whatsapp: "01145678901",
-    email: "youssef.i@example.com",
-    account_type: "store",
-    role: "seller",
-    governorate: "القاهرة",
-    city: "وسط البلد",
-    primary_category: "luxury",
-    source: "whatsapp_campaign",
-    lifecycle_stage: "active",
-    business_name: "يوسف للساعات الفاخرة",
-    business_name_ar: "يوسف للساعات الفاخرة",
-    total_listings: 15,
-    active_listings: 8,
-    total_sales: 25,
-    total_gmv_egp: 350000,
-    total_commission_paid_egp: 1500,
-    is_commission_supporter: true,
-    health_score: 78,
-    acquisition_score: 75,
-    engagement_score: 80,
-    value_score: 85,
-    churn_risk_score: 18,
-    subscription_plan: "silver",
-    loyalty_tier: "silver",
-    loyalty_points: 1200,
-    tags: ["متجر", "ساعات", "فاخر"],
-    internal_notes: "متجر ساعات فاخرة — عميل مميز",
-  },
-  {
-    full_name: "هند محمد سالم",
-    phone: "01289012345",
-    whatsapp: "01289012345",
-    account_type: "individual",
-    role: "both",
-    governorate: "الجيزة",
-    city: "6 أكتوبر",
-    primary_category: "home_appliances",
-    source: "sms_campaign",
-    lifecycle_stage: "dormant",
-    total_listings: 3,
-    active_listings: 0,
-    total_sales: 1,
-    total_purchases: 2,
-    total_gmv_egp: 15000,
-    health_score: 12,
-    acquisition_score: 30,
-    engagement_score: 10,
-    value_score: 20,
-    churn_risk_score: 88,
-    tags: ["خامل"],
-    internal_notes: "آخر نشاط من 4 شهور — محتاجة حملة إعادة تنشيط",
-  },
-  {
-    full_name: "كريم سامي عبدالعزيز",
-    phone: "01567890123",
-    whatsapp: "01567890123",
-    email: "karim.sami@example.com",
-    account_type: "individual",
-    role: "seller",
-    governorate: "القاهرة",
-    city: "مصر الجديدة",
-    primary_category: "hobbies",
-    source: "facebook_group",
-    lifecycle_stage: "qualified",
-    total_listings: 2,
-    active_listings: 2,
-    total_sales: 0,
-    total_gmv_egp: 0,
-    health_score: 45,
-    acquisition_score: 50,
-    engagement_score: 55,
-    value_score: 15,
-    churn_risk_score: 40,
-    estimated_competitor_listings: 5,
-    tags: ["جديد", "هوايات"],
-    internal_notes: "بيبيع بلايستيشن وألعاب — جاي من جروب فيسبوك",
-  },
-  {
-    full_name: "ياسمين عادل حسني",
-    phone: "01034567891",
-    whatsapp: "01034567891",
-    email: "yasmin.a@example.com",
-    account_type: "chain",
-    role: "seller",
-    governorate: "القاهرة",
-    city: "التجمع الخامس",
-    primary_category: "furniture",
-    source: "partnership",
-    lifecycle_stage: "onboarding",
-    business_name: "ياسمين هوم",
-    business_name_ar: "ياسمين هوم للأثاث",
-    total_listings: 0,
-    active_listings: 0,
-    total_sales: 0,
-    total_gmv_egp: 0,
-    health_score: 35,
-    acquisition_score: 80,
-    engagement_score: 30,
-    value_score: 10,
-    churn_risk_score: 35,
-    estimated_competitor_listings: 50,
-    tags: ["سلسلة", "أثاث", "شراكة"],
-    internal_notes: "سلسلة أثاث — 3 فروع — في مرحلة التسجيل",
-  },
-  {
-    full_name: "حسن جمال الدين",
-    phone: "01190123456",
-    whatsapp: "01190123456",
-    account_type: "individual",
-    role: "seller",
-    governorate: "أسيوط",
-    city: "أسيوط",
-    primary_category: "tools",
-    source: "offline_event",
-    lifecycle_stage: "contacted",
-    total_listings: 0,
-    active_listings: 0,
-    total_gmv_egp: 0,
-    health_score: 20,
-    acquisition_score: 45,
-    engagement_score: 15,
-    value_score: 5,
-    churn_risk_score: 50,
-    tags: ["صعيد", "عدد"],
-    internal_notes: "عنده ورشة — تم التواصل معاه في معرض أسيوط",
-  },
-  {
-    full_name: "منى عبدالفتاح",
-    phone: "01201234567",
-    whatsapp: "01201234567",
-    email: "mona.af@example.com",
-    account_type: "individual",
-    role: "both",
-    governorate: "الإسكندرية",
-    city: "العصافرة",
-    primary_category: "services",
-    source: "organic",
-    lifecycle_stage: "active",
-    total_listings: 4,
-    active_listings: 2,
-    total_sales: 10,
-    total_gmv_egp: 25000,
-    health_score: 72,
-    acquisition_score: 60,
-    engagement_score: 75,
-    value_score: 50,
-    churn_risk_score: 20,
-    tags: ["خدمات", "تنظيف"],
-    internal_notes: "بتقدم خدمات تنظيف — تقييمات ممتازة",
-  },
-  {
-    full_name: "طارق عبدالحميد النجار",
-    phone: "01567891234",
-    whatsapp: "01567891234",
-    account_type: "manufacturer",
-    role: "seller",
-    governorate: "الشرقية",
-    city: "العاشر من رمضان",
-    primary_category: "home_appliances",
-    source: "competitor_migration",
-    lifecycle_stage: "interested",
-    business_name: "النجار للأجهزة",
-    business_name_ar: "النجار للأجهزة المنزلية",
-    total_listings: 0,
-    active_listings: 0,
-    total_gmv_egp: 0,
-    health_score: 40,
-    acquisition_score: 85,
-    engagement_score: 35,
-    value_score: 15,
-    churn_risk_score: 30,
-    estimated_competitor_listings: 100,
-    tags: ["مصنع", "أجهزة", "هجرة_منافس"],
-    internal_notes: "مصنع أجهزة — عنده 100 إعلان على OLX — محتاج عرض خاص",
-  },
-  {
-    full_name: "رانيا محمد فؤاد",
-    phone: "01023456790",
-    whatsapp: "01023456790",
-    email: "rania.f@example.com",
-    account_type: "individual",
-    role: "buyer",
-    governorate: "القاهرة",
-    city: "الزمالك",
-    primary_category: "luxury",
-    source: "tiktok_ad",
-    lifecycle_stage: "lead",
-    total_listings: 0,
-    active_listings: 0,
-    total_purchases: 3,
-    total_gmv_egp: 45000,
-    health_score: 38,
-    acquisition_score: 35,
-    engagement_score: 40,
-    value_score: 45,
-    churn_risk_score: 45,
-    tags: ["مشتري", "فاخر"],
-    internal_notes: "مهتمة بالماركات — اشترت 3 حاجات في أول شهر",
-  },
-  {
-    full_name: "إبراهيم خليل عثمان",
-    phone: "01112345670",
-    whatsapp: "01112345670",
-    account_type: "individual",
-    role: "seller",
-    governorate: "الفيوم",
-    city: "الفيوم",
-    primary_category: "cars",
-    source: "qr_code",
-    lifecycle_stage: "churned",
-    total_listings: 6,
-    active_listings: 0,
-    total_sales: 2,
-    total_gmv_egp: 180000,
-    health_score: 8,
-    acquisition_score: 50,
-    engagement_score: 5,
-    value_score: 40,
-    churn_risk_score: 95,
-    tags: ["مفقود", "سيارات"],
-    internal_notes: "كان بيبيع سيارات — مارجعش من 6 شهور",
-  },
-];
+// Demo data is managed in the dedicated seed endpoint:
+// /api/admin/crm/customers/seed
 
 export async function POST(req: NextRequest) {
   const supabase = getServiceClient();
@@ -1042,42 +607,20 @@ export async function POST(req: NextRequest) {
       tableExists = true;
       results.push({ step: "table_check", status: "exists", error: `${count || 0} rows found` });
 
-      // Seed only if empty
+      // Seed only if empty — delegate to the dedicated seed endpoint
       if ((count || 0) === 0) {
-        let imported = 0;
-        let errors = 0;
-        const errorDetails: string[] = [];
-
-        for (const customer of DEMO_CUSTOMERS) {
-          const { data, error: insertError } = await supabase
-            .from("crm_customers")
-            .insert({
-              ...customer,
-              lifecycle_history: [{ stage: customer.lifecycle_stage, at: new Date().toISOString() }],
-            })
-            .select("id")
-            .single();
-
-          if (insertError) {
-            errors++;
-            errorDetails.push(`${customer.full_name}: ${insertError.message}`);
-          } else {
-            imported++;
-            await supabase.from("crm_activity_log").insert({
-              customer_id: data.id,
-              activity_type: "lifecycle_change",
-              description: "تم إنشاء العميل (بيانات تجريبية)",
-              metadata: { from: null, to: customer.lifecycle_stage, source: "setup" },
-              is_system: true,
-            });
-          }
+        try {
+          const baseUrl = req.nextUrl.origin;
+          const seedRes = await fetch(`${baseUrl}/api/admin/crm/customers/seed`, { method: "POST" });
+          const seedData = await seedRes.json();
+          results.push({
+            step: "seed_data",
+            status: seedRes.ok ? "success" : "partial",
+            error: `${seedData.imported || 0} customers seeded`,
+          });
+        } catch (seedErr) {
+          results.push({ step: "seed_data", status: "failed", error: String(seedErr) });
         }
-
-        results.push({
-          step: "seed_data",
-          status: errors === 0 ? "success" : "partial",
-          error: errors > 0 ? `${imported} imported, ${errors} failed: ${errorDetails.join("; ")}` : `${imported} customers seeded`,
-        });
       } else {
         results.push({ step: "seed_data", status: "skipped", error: "Data already exists" });
       }
@@ -1100,12 +643,7 @@ export async function POST(req: NextRequest) {
       "1. افتح Supabase Dashboard → SQL Editor",
       "2. انسخ محتوى ملف supabase/migrations/00021_crm_core_tables.sql",
       "3. نفذ الـ SQL",
-      "4. ثم نفذ الأوامر التالية لمنح الصلاحيات:",
-      "GRANT ALL ON crm_customers TO anon, authenticated;",
-      "GRANT ALL ON crm_activity_log TO anon, authenticated;",
-      "GRANT ALL ON crm_agents TO anon, authenticated;",
-      "GRANT ALL ON crm_conversations TO anon, authenticated;",
-      "GRANT ALL ON crm_campaigns TO anon, authenticated;",
+      "4. تأكد أن SUPABASE_SERVICE_ROLE_KEY متعرف في .env.local (الوصول عبر service_role يتجاوز RLS)",
       "5. بعد ذلك ارجع اضغط Setup تاني لإضافة البيانات التجريبية",
     ] : undefined,
   }, { status: allSuccess ? 200 : 207 });

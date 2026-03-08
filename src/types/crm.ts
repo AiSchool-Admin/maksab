@@ -262,6 +262,7 @@ export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {
+  // CRM spec keys
   phones: 'موبايلات وتابلت',
   electronics: 'إلكترونيات وكمبيوتر',
   vehicles: 'سيارات ومركبات',
@@ -274,6 +275,15 @@ export const CATEGORY_LABELS: Record<string, string> = {
   jobs: 'وظائف',
   services: 'خدمات',
   other: 'أخرى',
+  // App/seed data keys
+  cars: 'سيارات ومركبات',
+  real_estate: 'عقارات',
+  gold: 'ذهب وفضة',
+  scrap: 'خردة',
+  luxury: 'سلع فاخرة',
+  home_appliances: 'أجهزة منزلية',
+  hobbies: 'هوايات',
+  tools: 'عدد وأدوات',
 };
 
 export const SUBSCRIPTION_LABELS: Record<string, string> = {

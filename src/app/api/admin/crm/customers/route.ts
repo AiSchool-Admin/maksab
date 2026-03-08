@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-  );
-}
+import { getServiceClient } from "@/lib/crm/auth";
 
 /**
  * Auto-setup CRM tables by calling the setup endpoint internally.
@@ -135,12 +128,29 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // Fetch lifecycle stats in parallel (only on first page or if no filters)
+  let stats = undefined;
+  if (page === 1 && !search && !lifecycle && !category && !source && !accountType) {
+    const [leadsRes, activeRes, atRiskRes] = await Promise.all([
+      supabase.from("crm_customers").select("*", { count: "exact", head: true }).eq("lifecycle_stage", "lead"),
+      supabase.from("crm_customers").select("*", { count: "exact", head: true }).in("lifecycle_stage", ["active", "power_user", "champion"]),
+      supabase.from("crm_customers").select("*", { count: "exact", head: true }).eq("lifecycle_stage", "at_risk"),
+    ]);
+    stats = {
+      total: count || 0,
+      leads: leadsRes.count || 0,
+      active: activeRes.count || 0,
+      at_risk: atRiskRes.count || 0,
+    };
+  }
+
   return NextResponse.json({
     customers: data || [],
     total: count || 0,
     page,
     limit,
     total_pages: Math.ceil((count || 0) / limit),
+    ...(stats ? { stats } : {}),
   });
 }
 
