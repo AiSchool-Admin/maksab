@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getServiceClient } from "@/lib/crm/auth";
 import { calculateAllScores } from "@/lib/crm/scoring";
 import type { CrmCustomer } from "@/types/crm";
-
-function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-  );
-}
 
 export async function GET(
   _req: NextRequest,

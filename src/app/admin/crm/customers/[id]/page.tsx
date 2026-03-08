@@ -16,10 +16,18 @@ import {
 } from "@/types/crm";
 import { getAdminHeaders } from "@/app/admin/layout";
 
+// Safely convert possible null/string to number
+function n(val: unknown): number {
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') return parseFloat(val) || 0;
+  return 0;
+}
+
 function ScoreCircle({ label, score, color }: { label: string; score: number; color: string }) {
+  const safeScore = n(score);
   const radius = 28;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
+  const offset = circumference - (safeScore / 100) * circumference;
 
   return (
     <div className="flex flex-col items-center">
@@ -30,7 +38,7 @@ function ScoreCircle({ label, score, color }: { label: string; score: number; co
             strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
             className="transition-all duration-500" />
         </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{score}</span>
+        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{safeScore}</span>
       </div>
       <span className="text-[10px] text-gray-500 mt-1">{label}</span>
     </div>
@@ -207,7 +215,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             className="px-3 py-1.5 border rounded-lg text-xs">
             {Object.entries(LIFECYCLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <a href={`https://wa.me/2${c.phone}`} target="_blank" rel="noopener noreferrer"
+          <a href={`https://wa.me/2${c.whatsapp || c.phone}`} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs hover:bg-green-200 transition-colors">
             <MessageSquare size={12} /> واتساب
           </a>
@@ -244,32 +252,32 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               <div className="space-y-2">
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-sm text-gray-600">إعلانات نشطة / كلية</span>
-                  <span className="text-sm font-bold">{c.active_listings} / {c.total_listings}</span>
+                  <span className="text-sm font-bold">{n(c.active_listings)} / {n(c.total_listings)}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-sm text-gray-600">مبيعات / مشتريات / تبادلات</span>
-                  <span className="text-sm font-bold">{c.total_sales} / {c.total_purchases} / {c.total_exchanges}</span>
+                  <span className="text-sm font-bold">{n(c.total_sales)} / {n(c.total_purchases)} / {n(c.total_exchanges)}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-sm text-gray-600">إجمالي GMV</span>
-                  <span className="text-sm font-bold">{Number(c.total_gmv_egp).toLocaleString()} جنيه</span>
+                  <span className="text-sm font-bold">{n(c.total_gmv_egp).toLocaleString()} جنيه</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-sm text-gray-600">عمولة مدفوعة</span>
-                  <span className="text-sm font-bold">{Number(c.total_commission_paid_egp).toLocaleString()} جنيه</span>
+                  <span className="text-sm font-bold">{n(c.total_commission_paid_egp).toLocaleString()} جنيه</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-sm text-gray-600">مشاهدات إعلاناته</span>
-                  <span className="text-sm font-bold">{c.total_views_received.toLocaleString()}</span>
+                  <span className="text-sm font-bold">{n(c.total_views_received).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-sm text-gray-600">متوسط وقت الرد</span>
-                  <span className="text-sm font-bold">{c.avg_response_time_minutes ? `${c.avg_response_time_minutes} د` : '—'}</span>
+                  <span className="text-sm font-bold">{n(c.avg_response_time_minutes) > 0 ? `${n(c.avg_response_time_minutes)} د` : '—'}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-sm text-gray-600">آخر نشاط</span>
                   <span className="text-sm font-bold">
-                    {c.last_active_at ? `منذ ${c.days_since_last_active} يوم` : '—'}
+                    {c.last_active_at ? `منذ ${n(c.days_since_last_active)} يوم` : '—'}
                   </span>
                 </div>
                 <div className="flex justify-between py-2">
@@ -281,16 +289,41 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               </div>
             </div>
 
-            {/* Recent Activity */}
-            <div>
-              <h3 className="font-bold mb-3">آخر النشاط</h3>
-              {activities.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4">لا يوجد نشاط بعد</p>
-              ) : (
-                <div className="max-h-80 overflow-y-auto">
-                  {activities.slice(0, 10).map(a => <ActivityItem key={a.id} activity={a} />)}
+            {/* Lifecycle Timeline + Recent Activity */}
+            <div className="space-y-6">
+              {/* Lifecycle Timeline */}
+              {Array.isArray(c.lifecycle_history) && c.lifecycle_history.length > 0 && (
+                <div>
+                  <h3 className="font-bold mb-3">مراحل دورة الحياة</h3>
+                  <div className="relative pr-4 border-r-2 border-green-200 space-y-3">
+                    {[...c.lifecycle_history].reverse().map((entry, idx) => (
+                      <div key={idx} className="relative">
+                        <div className={`absolute -right-[13px] top-1 w-3 h-3 rounded-full border-2 border-white ${idx === 0 ? 'bg-[#1B7A3D]' : 'bg-gray-300'}`} />
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${LIFECYCLE_COLORS[entry.stage] || 'bg-gray-100'}`}>
+                            {LIFECYCLE_LABELS[entry.stage] || entry.stage}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(entry.at).toLocaleDateString("ar-EG", { day: "numeric", month: "short", year: "numeric" })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {/* Recent Activity */}
+              <div>
+                <h3 className="font-bold mb-3">آخر النشاط</h3>
+                {activities.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-4">لا يوجد نشاط بعد</p>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto">
+                    {activities.slice(0, 10).map(a => <ActivityItem key={a.id} activity={a} />)}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -308,6 +341,18 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">الإيميل</label>
                     <input type="email" value={editForm.email || ''} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-xl text-sm" dir="ltr" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">الهاتف</label>
+                    <input type="tel" value={editForm.phone || ''} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-xl text-sm" dir="ltr" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">واتساب</label>
+                    <input type="tel" value={editForm.whatsapp || ''} onChange={e => setEditForm(f => ({ ...f, whatsapp: e.target.value }))}
                       className="w-full px-3 py-2 border rounded-xl text-sm" dir="ltr" />
                   </div>
                 </div>
@@ -338,6 +383,34 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                       <option value="">— اختر —</option>
                       {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">المصدر</label>
+                    <select value={editForm.source || ''} onChange={e => setEditForm(f => ({ ...f, source: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-xl text-sm">
+                      {Object.entries(SOURCE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">الباقة</label>
+                    <select value={editForm.subscription_plan || ''} onChange={e => setEditForm(f => ({ ...f, subscription_plan: e.target.value as CrmCustomer['subscription_plan'] }))}
+                      className="w-full px-3 py-2 border rounded-xl text-sm">
+                      {Object.entries(SUBSCRIPTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">اسم النشاط</label>
+                    <input type="text" value={editForm.business_name || ''} onChange={e => setEditForm(f => ({ ...f, business_name: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-xl text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">الوسوم (مفصولة بفاصلة)</label>
+                    <input type="text" value={Array.isArray(editForm.tags) ? editForm.tags.join(', ') : ''} onChange={e => setEditForm(f => ({ ...f, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) }))}
+                      className="w-full px-3 py-2 border rounded-xl text-sm" />
                   </div>
                 </div>
                 <div>
@@ -386,8 +459,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                       ['اسم النشاط', c.business_name || '—'],
                       ['الباقة', SUBSCRIPTION_LABELS[c.subscription_plan]],
                       ['مستوى الولاء', LOYALTY_LABELS[c.loyalty_tier]],
-                      ['نقاط الولاء', c.loyalty_points.toLocaleString()],
-                      ['إعلانات المنافسين', c.estimated_competitor_listings.toString()],
+                      ['نقاط الولاء', n(c.loyalty_points).toLocaleString()],
+                      ['إعلانات المنافسين', n(c.estimated_competitor_listings).toString()],
                       ['التوثيق', c.verification_level],
                     ].map(([label, value]) => (
                       <div key={label} className="flex justify-between py-1.5 border-b text-sm">
@@ -472,27 +545,27 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   <Crown size={24} className="text-yellow-600" />
                   <div>
                     <p className="font-bold">{LOYALTY_LABELS[c.loyalty_tier]}</p>
-                    <p className="text-xs text-gray-500">{c.loyalty_points.toLocaleString()} نقطة</p>
+                    <p className="text-xs text-gray-500">{n(c.loyalty_points).toLocaleString()} نقطة</p>
                   </div>
                 </div>
                 <div className="w-full bg-white rounded-full h-2.5">
                   <div className="bg-green-500 h-2.5 rounded-full transition-all" style={{
-                    width: `${Math.min((c.loyalty_points / (c.loyalty_tier === 'bronze' ? 100 : c.loyalty_tier === 'silver' ? 500 : c.loyalty_tier === 'gold' ? 2000 : c.loyalty_tier === 'platinum' ? 10000 : 20000)) * 100, 100)}%`
+                    width: `${Math.min((n(c.loyalty_points) / (c.loyalty_tier === 'bronze' ? 100 : c.loyalty_tier === 'silver' ? 500 : c.loyalty_tier === 'gold' ? 2000 : c.loyalty_tier === 'platinum' ? 10000 : 20000)) * 100, 100)}%`
                   }} />
                 </div>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between py-1.5 border-b text-sm">
                   <span className="text-gray-500">نقاط مكتسبة (إجمالي)</span>
-                  <span className="font-bold">{c.loyalty_points_lifetime.toLocaleString()}</span>
+                  <span className="font-bold">{n(c.loyalty_points_lifetime).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b text-sm">
                   <span className="text-gray-500">رصيد حالي</span>
-                  <span className="font-bold">{c.loyalty_points.toLocaleString()}</span>
+                  <span className="font-bold">{n(c.loyalty_points).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-1.5 text-sm">
                   <span className="text-gray-500">قيمة العميل الكلية</span>
-                  <span className="font-bold">{Number(c.lifetime_value_egp).toLocaleString()} جنيه</span>
+                  <span className="font-bold">{n(c.lifetime_value_egp).toLocaleString()} جنيه</span>
                 </div>
               </div>
             </div>
@@ -501,23 +574,23 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               <div className="space-y-2">
                 <div className="flex justify-between py-1.5 border-b text-sm">
                   <span className="text-gray-500">إجمالي GMV</span>
-                  <span className="font-bold">{Number(c.total_gmv_egp).toLocaleString()} جنيه</span>
+                  <span className="font-bold">{n(c.total_gmv_egp).toLocaleString()} جنيه</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b text-sm">
                   <span className="text-gray-500">عمولة مدفوعة</span>
-                  <span className="font-bold">{Number(c.total_commission_paid_egp).toLocaleString()} جنيه</span>
+                  <span className="font-bold">{n(c.total_commission_paid_egp).toLocaleString()} جنيه</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b text-sm">
                   <span className="text-gray-500">معدل دفع العمولة</span>
-                  <span className="font-bold">{c.commission_payment_rate}%</span>
+                  <span className="font-bold">{n(c.commission_payment_rate)}%</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b text-sm">
                   <span className="text-gray-500">اشتراكات مدفوعة</span>
-                  <span className="font-bold">{Number(c.total_subscription_paid_egp).toLocaleString()} جنيه</span>
+                  <span className="font-bold">{n(c.total_subscription_paid_egp).toLocaleString()} جنيه</span>
                 </div>
                 <div className="flex justify-between py-1.5 text-sm">
                   <span className="text-gray-500">خدمات إضافية</span>
-                  <span className="font-bold">{Number(c.total_addons_paid_egp).toLocaleString()} جنيه</span>
+                  <span className="font-bold">{n(c.total_addons_paid_egp).toLocaleString()} جنيه</span>
                 </div>
               </div>
             </div>
