@@ -38,6 +38,15 @@ const TABLE_LABELS: Record<string, string> = {
   analytics_events: "تتبع الأحداث",
   buy_requests: "طلبات الشراء",
   buy_request_matches: "مطابقات طلبات الشراء",
+  crm_customers: "CRM — العملاء",
+  crm_agents: "CRM — الوكلاء",
+  crm_campaigns: "CRM — الحملات",
+  crm_conversations: "CRM — المحادثات",
+  crm_activity_log: "CRM — سجل النشاط",
+  crm_message_templates: "CRM — قوالب الرسائل",
+  crm_promotions: "CRM — العروض",
+  crm_loyalty_transactions: "CRM — الولاء",
+  crm_daily_metrics: "CRM — المقاييس اليومية",
 };
 
 export default function AdminSetupPage() {
