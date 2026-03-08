@@ -490,13 +490,21 @@ export default function CrmCustomersPage() {
           <p className="text-sm text-yellow-700 mb-4">
             {setupError || "جداول قاعدة البيانات غير موجودة — اضغط الزر لإعداد النظام تلقائياً"}
           </p>
-          <button
-            onClick={handleSetup}
-            disabled={settingUp}
-            className="px-6 py-3 bg-[#1B7A3D] text-white rounded-xl font-bold hover:bg-[#145C2E] disabled:opacity-50 transition-colors"
-          >
-            {settingUp ? "جاري الإعداد..." : "إعداد نظام CRM تلقائياً"}
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={handleSetup}
+              disabled={settingUp}
+              className="px-6 py-3 bg-[#1B7A3D] text-white rounded-xl font-bold hover:bg-[#145C2E] disabled:opacity-50 transition-colors"
+            >
+              {settingUp ? "جاري الإعداد..." : "إعداد نظام CRM تلقائياً"}
+            </button>
+            <Link
+              href="/admin/setup"
+              className="px-6 py-3 bg-white text-yellow-800 border-2 border-yellow-300 rounded-xl font-bold hover:bg-yellow-100 transition-colors"
+            >
+              صفحة الإعداد الكاملة
+            </Link>
+          </div>
           {setupResult && (
             <div className="mt-4 text-sm">
               <p className={setupResult.instructions ? "text-orange-700" : "text-green-700"}>
