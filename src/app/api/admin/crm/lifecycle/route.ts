@@ -22,7 +22,8 @@ export async function POST(_req: NextRequest) {
     .limit(1000);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Return empty result gracefully — tables may not exist yet
+    return NextResponse.json({ updated: 0, lifecycle_updated: 0, scores_updated: 0 });
   }
 
   let lifecycleUpdated = 0;

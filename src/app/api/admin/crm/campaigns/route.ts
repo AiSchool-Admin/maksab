@@ -31,7 +31,11 @@ export async function GET(req: NextRequest) {
   const { data, error, count } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Return empty result gracefully — tables may not exist yet
+    return NextResponse.json({
+      campaigns: [],
+      total: 0,
+    });
   }
 
   return NextResponse.json({

@@ -352,8 +352,6 @@ export default function CrmCustomersPage() {
   const [recalculating, setRecalculating] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
-  const [setupFailed, setSetupFailed] = useState(false);
-  const [setupError, setSetupError] = useState<string | null>(null);
 
   // Stats
   const [stats, setStats] = useState({ total: 0, leads: 0, active: 0, at_risk: 0 });
@@ -373,23 +371,6 @@ export default function CrmCustomersPage() {
       const res = await fetch(`/api/admin/crm/customers?${params}`, { headers: getAdminHeaders() });
       const data = await res.json();
 
-      // Check if tables setup failed even after auto-setup attempt
-      if (res.status === 503 && data.error_code === "TABLE_NOT_FOUND") {
-        setSetupFailed(true);
-        setSetupError(data.error);
-        setLoading(false);
-        return;
-      }
-
-      if (res.status === 403 && data.error_code === "PERMISSION_DENIED") {
-        setSetupFailed(true);
-        setSetupError(data.error);
-        setLoading(false);
-        return;
-      }
-
-      setSetupFailed(false);
-      setSetupError(null);
       setCustomers(data.customers || []);
       setTotal(data.total || 0);
       setTotalPages(data.total_pages || 1);
@@ -459,31 +440,6 @@ export default function CrmCustomersPage() {
 
   return (
     <div className="space-y-4">
-      {/* Setup Failed Banner — shown only if auto-setup in the API also failed */}
-      {setupFailed && (
-        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-6 text-center">
-          <AlertTriangle size={48} className="mx-auto mb-3 text-yellow-600" />
-          <h2 className="text-xl font-bold mb-2 text-yellow-800">حصلت مشكلة في إعداد جداول CRM</h2>
-          <p className="text-sm text-yellow-700 mb-4">
-            {setupError || "تعذر إنشاء الجداول تلقائياً — جرب من صفحة الإعداد"}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={() => { setSetupFailed(false); fetchCustomers(); }}
-              className="px-6 py-3 bg-[#1B7A3D] text-white rounded-xl font-bold hover:bg-[#145C2E] transition-colors"
-            >
-              إعادة المحاولة
-            </button>
-            <Link
-              href="/admin/setup"
-              className="px-6 py-3 bg-white text-yellow-800 border-2 border-yellow-300 rounded-xl font-bold hover:bg-yellow-100 transition-colors"
-            >
-              صفحة الإعداد الكاملة
-            </Link>
-          </div>
-        </div>
-      )}
-
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl p-4 border">

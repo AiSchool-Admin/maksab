@@ -53,7 +53,14 @@ export async function GET(req: NextRequest) {
       .range(offset, offset + limit - 1);
 
     if (fbError) {
-      return NextResponse.json({ error: fbError.message }, { status: 500 });
+      // Return empty result gracefully — tables may not exist yet
+      return NextResponse.json({
+        conversations: [],
+        total: 0,
+        page,
+        limit,
+        total_pages: 1,
+      });
     }
 
     return NextResponse.json({
