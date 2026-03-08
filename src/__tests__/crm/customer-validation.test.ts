@@ -160,8 +160,8 @@ describe('التحقق من بيانات العملاء — Customer Validation'
     });
 
     it('يتعامل مع تاجز فاضية', () => {
-      const rawTags = '';
-      const tags = rawTags ? rawTags.split(',').map(t => t.trim()).filter(Boolean) : [];
+      const rawTags: string = '';
+      const tags = rawTags ? rawTags.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
       expect(tags).toEqual([]);
     });
   });
