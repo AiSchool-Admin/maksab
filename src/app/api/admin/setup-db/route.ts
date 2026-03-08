@@ -28,6 +28,15 @@ const REQUIRED_TABLES = [
   "analytics_events",
   "buy_requests",
   "buy_request_matches",
+  "crm_customers",
+  "crm_agents",
+  "crm_campaigns",
+  "crm_conversations",
+  "crm_activity_log",
+  "crm_message_templates",
+  "crm_promotions",
+  "crm_loyalty_transactions",
+  "crm_daily_metrics",
 ];
 
 async function checkTable(
