@@ -117,7 +117,7 @@ export default function CampaignWizardPage() {
     }));
   };
 
-  const useTemplate = (idx: number, template: Template) => {
+  const applyTemplate = (idx: number, template: Template) => {
     updateMessage(idx, "content", template.body);
     updateMessage(idx, "channel", template.channel);
   };
@@ -315,10 +315,10 @@ export default function CampaignWizardPage() {
                   <button key={t.id}
                     onClick={() => {
                       const emptyIdx = form.messages.findIndex(m => !m.content.trim());
-                      if (emptyIdx >= 0) useTemplate(emptyIdx, t);
+                      if (emptyIdx >= 0) applyTemplate(emptyIdx, t);
                       else {
                         addMessage();
-                        setTimeout(() => useTemplate(form.messages.length, t), 0);
+                        setTimeout(() => applyTemplate(form.messages.length, t), 0);
                       }
                     }}
                     className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded-full hover:bg-amber-100">
