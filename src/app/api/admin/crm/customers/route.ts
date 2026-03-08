@@ -57,7 +57,10 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     // Check if table doesn't exist
-    const isTableMissing = error.message.includes("relation") && error.message.includes("does not exist");
+    const isTableMissing =
+      (error.message.includes("relation") && error.message.includes("does not exist")) ||
+      error.code === "42P01" ||
+      (error.message.includes("crm_customers") && !error.message.includes("permission"));
     const isPermissionError = error.message.includes("permission denied") || error.code === "42501";
 
     if (isTableMissing) {

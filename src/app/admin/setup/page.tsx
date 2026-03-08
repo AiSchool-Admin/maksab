@@ -71,6 +71,9 @@ export default function AdminSetupPage() {
   const [tableCheck, setTableCheck] = useState<TableCheckResult | null>(null);
   const [checking, setChecking] = useState(true);
   const [fullSqlCopied, setFullSqlCopied] = useState(false);
+  const [crmSqlCopied, setCrmSqlCopied] = useState(false);
+  const [crmSetupStatus, setCrmSetupStatus] = useState<StepStatus>("idle");
+  const [crmSetupResult, setCrmSetupResult] = useState<string | null>(null);
 
   const supabaseRef =
     (typeof window !== "undefined"
@@ -165,6 +168,48 @@ export default function AdminSetupPage() {
 
   const hasMissingTables =
     tableCheck && tableCheck.missingTables && tableCheck.missingTables.length > 0;
+
+  const missingCrmTables = tableCheck?.missingTables?.filter((t) => t.startsWith("crm_")) || [];
+  const hasMissingCrmTables = missingCrmTables.length > 0;
+
+  const handleCopyCrmSQL = async () => {
+    try {
+      const res = await fetch("/api/admin/crm-setup-sql");
+      const text = await res.text();
+      await navigator.clipboard.writeText(text);
+      setCrmSqlCopied(true);
+      setTimeout(() => setCrmSqlCopied(false), 3000);
+    } catch {
+      window.open("/api/admin/crm-setup-sql", "_blank");
+    }
+  };
+
+  const handleCrmSetup = async () => {
+    setCrmSetupStatus("loading");
+    setCrmSetupResult(null);
+    try {
+      const res = await fetch("/api/admin/crm/setup", {
+        method: "POST",
+        headers: getAdminHeaders(),
+      });
+      const data = await res.json();
+      if (data.success || data.table_exists) {
+        setCrmSetupStatus("success");
+        setCrmSetupResult(data.message || "تم إعداد CRM بنجاح");
+        await checkTables();
+      } else {
+        setCrmSetupStatus("error");
+        setCrmSetupResult(
+          data.instructions
+            ? "الجداول محتاجة تتعمل يدوياً — انسخ CRM SQL وشغّله في Supabase SQL Editor"
+            : data.message || "حصلت مشكلة"
+        );
+      }
+    } catch {
+      setCrmSetupStatus("error");
+      setCrmSetupResult("حصل خطأ في الاتصال");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -423,11 +468,126 @@ export default function AdminSetupPage() {
         )}
       </div>
 
-      {/* Step 3: Admin Setup */}
+      {/* Step 3: CRM Tables Setup */}
+      <div className={`bg-white rounded-xl border ${hasMissingCrmTables ? "border-red-200" : "border-gray-100"} p-5 space-y-4`}>
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${
+              !hasMissingCrmTables
+                ? "bg-green-100 text-green-600"
+                : "bg-red-50 text-red-600"
+            }`}
+          >
+            {!hasMissingCrmTables ? <CheckCircle2 size={16} /> : "3"}
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-dark">إعداد جداول CRM</h3>
+            <p className="text-[10px] text-gray-text">
+              {hasMissingCrmTables
+                ? `${missingCrmTables.length} جدول CRM ناقص — محتاج تتعمل`
+                : "كل جداول CRM موجودة"}
+            </p>
+          </div>
+        </div>
+
+        {hasMissingCrmTables && (
+          <>
+            <div className="bg-red-50 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-medium text-red-600">جداول CRM الناقصة:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {missingCrmTables.map((t) => (
+                  <span key={t} className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-md font-mono">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleCrmSetup}
+                disabled={crmSetupStatus === "loading"}
+                className="flex items-center gap-2 px-4 py-2.5 bg-brand-green text-white rounded-xl text-sm font-medium hover:bg-brand-green-dark transition-colors disabled:opacity-50"
+              >
+                {crmSetupStatus === "loading" ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    جاري الإعداد...
+                  </>
+                ) : crmSetupStatus === "success" ? (
+                  <>
+                    <CheckCircle2 size={14} />
+                    تم بنجاح!
+                  </>
+                ) : (
+                  <>
+                    <Database size={14} />
+                    إعداد CRM تلقائي
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleCopyCrmSQL}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-dark rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                {crmSqlCopied ? (
+                  <>
+                    <Check size={14} />
+                    تم النسخ!
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} />
+                    انسخ CRM SQL يدوياً
+                  </>
+                )}
+              </button>
+
+              <a
+                href={sqlEditorUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-dark rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                <ExternalLink size={14} />
+                افتح SQL Editor
+              </a>
+            </div>
+
+            <div className="bg-amber-50 rounded-xl p-3">
+              <p className="text-xs text-amber-700 font-medium mb-1">خطوات الإعداد اليدوي:</p>
+              <ol className="text-[10px] text-amber-600 space-y-0.5 list-decimal list-inside">
+                <li>اضغط &quot;انسخ CRM SQL يدوياً&quot;</li>
+                <li>افتح Supabase SQL Editor</li>
+                <li>الصق الكود واضغط Run</li>
+                <li>ارجع هنا واضغط &quot;إعادة الفحص&quot;</li>
+              </ol>
+            </div>
+          </>
+        )}
+
+        {crmSetupResult && (
+          <div className={`flex items-start gap-2 rounded-xl p-3 ${
+            crmSetupStatus === "success" ? "bg-green-50" : "bg-red-50"
+          }`}>
+            {crmSetupStatus === "success" ? (
+              <CheckCircle2 size={14} className="text-green-600 flex-shrink-0 mt-0.5" />
+            ) : (
+              <XCircle size={14} className="text-error flex-shrink-0 mt-0.5" />
+            )}
+            <span className={`text-xs ${crmSetupStatus === "success" ? "text-green-700" : "text-error"}`}>
+              {crmSetupResult}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Step 4: Admin Setup */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold bg-blue-50 text-blue-600">
-            3
+            4
           </div>
           <div>
             <h3 className="text-sm font-bold text-dark">إعداد نظام الأدمن</h3>

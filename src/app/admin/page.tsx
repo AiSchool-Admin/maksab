@@ -72,6 +72,8 @@ export default function AdminDashboardPage() {
   const [growth, setGrowth] = useState<DailyGrowth[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [authError, setAuthError] = useState(false);
+
   useEffect(() => {
     if (!admin) return;
 
@@ -83,6 +85,12 @@ export default function AdminDashboardPage() {
           fetch("/api/admin/stats?type=overview", { headers }),
           fetch("/api/admin/stats?type=growth&days=30", { headers }),
         ]);
+
+        if (overviewRes.status === 401 || growthRes.status === 401) {
+          setAuthError(true);
+          setIsLoading(false);
+          return;
+        }
 
         if (overviewRes.ok) setStats(await overviewRes.json());
         if (growthRes.ok) setGrowth(await growthRes.json());
@@ -103,6 +111,28 @@ export default function AdminDashboardPage() {
             <div key={i} className="bg-white rounded-xl p-4 h-28 animate-pulse border border-gray-100" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="text-center py-20 space-y-4">
+        <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto">
+          <Activity size={32} className="text-yellow-600" />
+        </div>
+        <h2 className="text-lg font-bold text-dark">الجلسة منتهية</h2>
+        <p className="text-sm text-gray-text">سجّل دخولك تاني عشان تشوف لوحة التحكم</p>
+        <button
+          onClick={() => {
+            localStorage.removeItem("maksab_session_token");
+            localStorage.removeItem("maksab_admin_session");
+            window.location.href = "/admin/login";
+          }}
+          className="px-6 py-2.5 bg-brand-green text-white rounded-xl text-sm font-medium hover:bg-brand-green-dark transition-colors"
+        >
+          تسجيل الدخول
+        </button>
       </div>
     );
   }
