@@ -14,8 +14,27 @@ export interface ScoreResult {
 // Helper: safely convert Supabase NUMERIC (returned as string) to number
 function num(val: unknown): number {
   if (typeof val === 'number') return val;
-  if (typeof val === 'string') return parseFloat(val) || 0;
+  if (typeof val === 'string') {
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? 0 : parsed;
+  }
   return 0;
+}
+
+// Helper: get days since last active, treating null/undefined as "unknown" (999)
+// but preserving 0 as a valid value (meaning "active today")
+function daysSinceActive(val: unknown): number {
+  const n = num(val);
+  if (val === null || val === undefined) return 999;
+  return n;
+}
+
+// Helper: get response time, treating null/undefined as "unknown" (999)
+// but preserving 0 as a valid value (meaning "instant response")
+function responseTime(val: unknown): number {
+  const n = num(val);
+  if (val === null || val === undefined) return 999;
+  return n;
 }
 
 export function calculateAllScores(customer: CrmCustomer): ScoreResult {
@@ -129,7 +148,7 @@ function calcEngagement(c: CrmCustomer): number {
   else if (active >= 1) s += 8;
 
   // Last active (0-25)
-  const days = num(c.days_since_last_active) || 999;
+  const days = daysSinceActive(c.days_since_last_active);
   if (days <= 1) s += 25;
   else if (days <= 3) s += 20;
   else if (days <= 7) s += 15;
@@ -137,7 +156,7 @@ function calcEngagement(c: CrmCustomer): number {
   else if (days <= 30) s += 3;
 
   // Response time (0-20)
-  const rt = num(c.avg_response_time_minutes) || 999;
+  const rt = responseTime(c.avg_response_time_minutes);
   if (rt <= 5) s += 20;
   else if (rt <= 15) s += 15;
   else if (rt <= 60) s += 10;
@@ -193,7 +212,7 @@ function calcChurnRisk(c: CrmCustomer): number {
   let r = 0;
 
   // Inactivity (0-40)
-  const days = num(c.days_since_last_active) || 999;
+  const days = daysSinceActive(c.days_since_last_active);
   if (days >= 60) r += 40;
   else if (days >= 30) r += 30;
   else if (days >= 14) r += 20;
@@ -221,7 +240,7 @@ function calcChurnRisk(c: CrmCustomer): number {
 
 // Auto lifecycle stage determination
 export function determineLifecycleStage(customer: CrmCustomer): string | null {
-  const days = num(customer.days_since_last_active) || 999;
+  const days = daysSinceActive(customer.days_since_last_active);
   const currentStage = customer.lifecycle_stage;
 
   // Blacklisted stays blacklisted

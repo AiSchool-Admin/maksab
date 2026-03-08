@@ -246,7 +246,7 @@ describe('نظام التقييم CRM — Scoring Engine', () => {
     it('عميل نشط جداً = تقييم عالي', () => {
       const customer = makeCustomer({
         active_listings: 25,
-        days_since_last_active: 1, // Note: 0 is treated as "unknown" (999) in scoring
+        days_since_last_active: 0,
         avg_response_time_minutes: 3,
         total_auctions_created: 5,
         total_exchanges: 3,
@@ -337,7 +337,7 @@ describe('نظام التقييم CRM — Scoring Engine', () => {
 
     it('عميل نشط النهارده = خطر منخفض', () => {
       const customer = makeCustomer({
-        days_since_last_active: 1, // Note: 0 is treated as "unknown" (999) in scoring via `|| 999`
+        days_since_last_active: 0,
         total_sales: 5,
         active_listings: 3,
         app_sessions_count: 50,
@@ -347,10 +347,23 @@ describe('نظام التقييم CRM — Scoring Engine', () => {
       expect(scores.churn_risk_score).toBe(0);
     });
 
-    it('⚠️ days_since_last_active = 0 يُعامل كـ "غير معروف" (999 يوم) — سلوك حالي', () => {
-      // هذا سلوك حالي في الكود: num(0) || 999 = 999
-      // يعني عميل days_since_last_active = 0 يُعتبر غايب 999 يوم
-      const customer = makeCustomer({ days_since_last_active: 0 });
+    it('days_since_last_active = 0 يُعامل كـ "نشط النهارده" مش كـ "غير معروف"', () => {
+      const customer = makeCustomer({
+        days_since_last_active: 0,
+        total_sales: 1,
+        active_listings: 1,
+        app_sessions_count: 5,
+        total_messages_received: 1,
+      });
+      const scores = calculateAllScores(customer);
+      // 0 يعني نشط النهارده — خطر المغادرة لازم يكون 0
+      expect(scores.churn_risk_score).toBe(0);
+    });
+
+    it('days_since_last_active = null يُعامل كـ "غير معروف" = خطر عالي', () => {
+      const customer = makeCustomer({
+        days_since_last_active: null as unknown as number,
+      });
       const scores = calculateAllScores(customer);
       expect(scores.churn_risk_score).toBeGreaterThanOrEqual(40);
     });

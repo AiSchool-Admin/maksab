@@ -212,29 +212,36 @@ describe('إدارة دورة حياة العميل — Lifecycle Management', (
   });
 
   describe('اكتشاف العودة (Reactivation)', () => {
-    it('عميل dormant رجع النهارده = reactivated', () => {
-      const customer = makeCustomer({
-        lifecycle_stage: 'dormant',
-        days_since_last_active: 1, // Note: 0 is treated as "unknown" (999) via `|| 999`
-      });
-      expect(determineLifecycleStage(customer)).toBe('reactivated');
-    });
-
-    it('⚠️ days_since_last_active = 0 يُعامل كـ 999 — لا يتم اكتشاف العودة', () => {
-      // هذا سلوك حالي: num(0) || 999 = 999 → يُعتبر churned مش reactivated
+    it('عميل dormant رجع النهارده (days=0) = reactivated', () => {
       const customer = makeCustomer({
         lifecycle_stage: 'dormant',
         days_since_last_active: 0,
       });
-      expect(determineLifecycleStage(customer)).toBe('churned');
+      expect(determineLifecycleStage(customer)).toBe('reactivated');
+    });
+
+    it('عميل dormant رجع امبارح (days=1) = reactivated', () => {
+      const customer = makeCustomer({
+        lifecycle_stage: 'dormant',
+        days_since_last_active: 1,
+      });
+      expect(determineLifecycleStage(customer)).toBe('reactivated');
     });
 
     it('عميل churned رجع النهارده = reactivated', () => {
       const customer = makeCustomer({
         lifecycle_stage: 'churned',
-        days_since_last_active: 1,
+        days_since_last_active: 0,
       });
       expect(determineLifecycleStage(customer)).toBe('reactivated');
+    });
+
+    it('days_since_last_active = null يُعامل كـ "غير معروف" = churned', () => {
+      const customer = makeCustomer({
+        lifecycle_stage: 'dormant',
+        days_since_last_active: null as unknown as number,
+      });
+      expect(determineLifecycleStage(customer)).toBe('churned');
     });
 
     it('عميل dormant لسه غايب = مفيش تغيير', () => {
