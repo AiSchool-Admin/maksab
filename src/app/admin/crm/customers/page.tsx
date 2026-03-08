@@ -350,6 +350,8 @@ export default function CrmCustomersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState<string | null>(null);
 
   // Stats
   const [stats, setStats] = useState({ total: 0, leads: 0, active: 0, at_risk: 0 });
@@ -405,6 +407,28 @@ export default function CrmCustomersPage() {
       fetchCustomers();
     } catch { /* ignore */ }
     setRecalculating(false);
+  };
+
+  const handleSeedDemo = async () => {
+    setSeeding(true);
+    setSeedResult(null);
+    try {
+      const res = await fetch("/api/admin/crm/customers/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAdminHeaders() },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSeedResult(`تم إضافة ${data.imported} عميل تجريبي بنجاح`);
+        fetchCustomers();
+      } else {
+        setSeedResult(data.error || "حصل مشكلة");
+      }
+    } catch {
+      setSeedResult("حصل مشكلة في الاتصال");
+    } finally {
+      setSeeding(false);
+    }
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -554,9 +578,25 @@ export default function CrmCustomersPage() {
                   <td colSpan={9} className="px-3 py-12 text-center text-gray-400">
                     <Users size={40} className="mx-auto mb-2 opacity-30" />
                     <p>لا يوجد عملاء</p>
-                    <button onClick={() => setShowAdd(true)} className="mt-2 text-[#1B7A3D] text-sm font-bold hover:underline">
-                      أضف أول عميل
-                    </button>
+                    <div className="mt-3 flex flex-col items-center gap-2">
+                      <button onClick={() => setShowAdd(true)} className="text-[#1B7A3D] text-sm font-bold hover:underline">
+                        أضف أول عميل
+                      </button>
+                      <span className="text-xs text-gray-300">أو</span>
+                      <button
+                        onClick={handleSeedDemo}
+                        disabled={seeding}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-[#D4A843] text-white rounded-xl text-sm font-bold hover:bg-[#b8922e] disabled:opacity-50 transition-colors"
+                      >
+                        <Download size={14} />
+                        {seeding ? "جاري الإضافة..." : "إضافة 15 عميل تجريبي للاختبار"}
+                      </button>
+                      {seedResult && (
+                        <p className={`text-xs mt-1 ${seedResult.includes("بنجاح") ? "text-green-600" : "text-red-600"}`}>
+                          {seedResult}
+                        </p>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
