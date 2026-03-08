@@ -56,7 +56,33 @@ export async function GET(req: NextRequest) {
   const { data, error, count } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Check if table doesn't exist
+    const isTableMissing = error.message.includes("relation") && error.message.includes("does not exist");
+    const isPermissionError = error.message.includes("permission denied") || error.code === "42501";
+
+    if (isTableMissing) {
+      return NextResponse.json({
+        error: "جداول CRM غير موجودة — يجب إعداد النظام أولاً",
+        error_code: "TABLE_NOT_FOUND",
+        setup_url: "/api/admin/crm/setup",
+        details: error.message,
+      }, { status: 503 });
+    }
+
+    if (isPermissionError) {
+      return NextResponse.json({
+        error: "صلاحيات غير كافية — يجب إضافة SUPABASE_SERVICE_ROLE_KEY أو منح صلاحيات للجداول",
+        error_code: "PERMISSION_DENIED",
+        details: error.message,
+        fix: "GRANT ALL ON crm_customers TO anon, authenticated;",
+      }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      error: error.message,
+      error_code: error.code,
+      hint: error.hint,
+    }, { status: 500 });
   }
 
   return NextResponse.json({
