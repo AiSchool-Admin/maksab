@@ -16,8 +16,6 @@ import {
   Shield,
   ChevronLeft,
   Database,
-  Target,
-  Download,
 } from "lucide-react";
 
 const ADMIN_SESSION_KEY = "maksab_admin_session";
@@ -45,8 +43,6 @@ export function getAdminHeaders(): Record<string, string> {
 
 const navItems = [
   { href: "/admin", label: "لوحة التحكم", icon: LayoutDashboard },
-  { href: "/admin/acquisition", label: "الاستحواذ", icon: Target },
-  { href: "/admin/imported-ads", label: "بيانات OLX", icon: Download },
   { href: "/admin/users", label: "المستخدمين", icon: Users },
   { href: "/admin/ads", label: "الإعلانات", icon: ShoppingBag },
   { href: "/admin/analytics", label: "التحليلات", icon: TrendingUp },
