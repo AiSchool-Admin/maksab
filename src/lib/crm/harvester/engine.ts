@@ -10,6 +10,16 @@ import { parseRelativeDate } from "./parsers/date-parser";
 import { mapLocation } from "./parsers/location-mapper";
 import type { AheScope } from "./types";
 
+// Rotating User-Agents for resilience
+const USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+];
+
 function getServiceClient(): SupabaseClient {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -217,7 +227,8 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
           newListings[i].enrichedSpecifications = details.specifications;
           newListings[i].enrichedCondition = details.condition;
 
-          const phone = extractPhone(details.description || "");
+          // Extract phone from description or detail page seller info
+          const phone = details.sellerPhone || extractPhone(details.description || "");
           if (phone) {
             newListings[i].extractedPhone = phone;
           }
@@ -522,22 +533,61 @@ function buildPageUrl(baseUrl: string, paginationPattern: string, page: number):
 }
 
 async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const maxRetries = 3;
+  let lastError: Error | null = null;
 
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "ar,en;q=0.9",
-      },
-    });
-    return response;
-  } finally {
-    clearTimeout(timeout);
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const userAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": userAgent,
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+          "Accept-Language": "ar-EG,ar;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Connection": "keep-alive",
+          "Cache-Control": "no-cache",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1",
+          "Upgrade-Insecure-Requests": "1",
+        },
+        redirect: "follow",
+      });
+
+      // If we get rate-limited (429) or server error (5xx), retry with backoff
+      if (response.status === 429 || response.status >= 500) {
+        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        clearTimeout(timeout);
+        if (attempt < maxRetries - 1) {
+          const backoffMs = Math.pow(2, attempt + 1) * 2000 + Math.random() * 2000;
+          await delay(backoffMs);
+          continue;
+        }
+        return response; // Return the last response even if it's an error
+      }
+
+      return response;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      clearTimeout(timeout);
+
+      if (attempt < maxRetries - 1) {
+        const backoffMs = Math.pow(2, attempt + 1) * 2000 + Math.random() * 2000;
+        await delay(backoffMs);
+        continue;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  throw lastError || new Error(`Failed to fetch ${url} after ${maxRetries} retries`);
 }
 
 function delay(ms: number): Promise<void> {

@@ -1,6 +1,7 @@
 /**
  * Dubizzle.com.eg Parser
  * يحلل صفحات القوائم وصفحات التفاصيل من دوبيزل مصر
+ * يدعم 4 استراتيجيات: __NEXT_DATA__ → JSON-LD → inline state → HTML regex
  */
 
 export interface ListPageListing {
@@ -33,11 +34,12 @@ export interface ListingDetails {
   sellerName: string | null;
   sellerProfileUrl: string | null;
   sellerMemberSince: string | null;
+  sellerPhone: string | null;
 }
 
 /**
  * Parse a Dubizzle listing page (search results)
- * Dubizzle uses a React-based SPA, so we parse the JSON data embedded in the page
+ * Supports multiple parsing strategies for resilience
  */
 export function parseDubizzleList(html: string): ListPageListing[] {
   const listings: ListPageListing[] = [];
@@ -49,17 +51,44 @@ export function parseDubizzleList(html: string): ListPageListing[] {
   if (nextDataMatch) {
     try {
       const data = JSON.parse(nextDataMatch[1]);
+      const pageProps = data?.props?.pageProps;
+
+      // Try multiple possible data paths (dubizzle changes structure)
       const results =
-        data?.props?.pageProps?.searchResult?.results ||
-        data?.props?.pageProps?.listings ||
+        pageProps?.searchResult?.results ||
+        pageProps?.searchResult?.data ||
+        pageProps?.listings ||
+        pageProps?.ads ||
+        pageProps?.searchData?.results ||
+        pageProps?.initialData?.results ||
         [];
 
-      for (const item of results) {
+      // Handle nested arrays
+      const adsArray = Array.isArray(results)
+        ? results
+        : (results?.ads || results?.data || []);
+
+      for (const item of adsArray) {
         const listing = parseNextDataListing(item);
         if (listing) listings.push(listing);
       }
 
       if (listings.length > 0) return listings;
+
+      // Try dehydrated state (React Query pattern)
+      if (pageProps?.dehydratedState?.queries) {
+        for (const query of pageProps.dehydratedState.queries) {
+          const queryData = query?.state?.data;
+          const items =
+            queryData?.results || queryData?.ads || queryData?.data || [];
+          const queryItems = Array.isArray(items) ? items : [];
+          for (const item of queryItems) {
+            const listing = parseNextDataListing(item);
+            if (listing) listings.push(listing);
+          }
+        }
+        if (listings.length > 0) return listings;
+      }
     } catch {
       // Fall through to other strategies
     }
@@ -78,6 +107,14 @@ export function parseDubizzleList(html: string): ListPageListing[] {
           if (listing) listings.push(listing);
         }
       }
+      if (Array.isArray(data)) {
+        for (const item of data) {
+          if (item["@type"] === "Product" || item["@type"] === "Offer") {
+            const listing = parseJsonLdListing(item);
+            if (listing) listings.push(listing);
+          }
+        }
+      }
     } catch {
       continue;
     }
@@ -85,8 +122,60 @@ export function parseDubizzleList(html: string): ListPageListing[] {
 
   if (listings.length > 0) return listings;
 
-  // Strategy 3: Regex-based HTML parsing (fallback)
+  // Strategy 3: Parse inline JSON state
+  const inlineDataPatterns = [
+    /window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});\s*<\/script>/,
+    /window\.__DATA__\s*=\s*({[\s\S]*?});\s*<\/script>/,
+    /window\.searchResults\s*=\s*({[\s\S]*?});\s*<\/script>/,
+  ];
+
+  for (const pattern of inlineDataPatterns) {
+    const inlineMatch = html.match(pattern);
+    if (inlineMatch) {
+      try {
+        const data = JSON.parse(inlineMatch[1]);
+        const items =
+          data?.search?.results || data?.listings || data?.ads || [];
+        for (const item of items) {
+          const listing = parseNextDataListing(item);
+          if (listing) listings.push(listing);
+        }
+        if (listings.length > 0) return listings;
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  // Strategy 4: Regex-based HTML parsing (fallback)
   return parseHtmlListings(html);
+}
+
+/**
+ * Parse a JSON API response from Dubizzle
+ */
+export function parseDubizzleApiResponse(
+  json: unknown
+): ListPageListing[] {
+  const listings: ListPageListing[] = [];
+
+  if (!json || typeof json !== "object") return listings;
+
+  const data = json as Record<string, unknown>;
+  const results =
+    (data.results as unknown[]) ||
+    (data.ads as unknown[]) ||
+    (data.data as unknown[]) ||
+    ((data.searchResult as Record<string, unknown>)
+      ?.results as unknown[]) ||
+    [];
+
+  for (const item of results) {
+    const listing = parseNextDataListing(item as Record<string, unknown>);
+    if (listing) listings.push(listing);
+  }
+
+  return listings;
 }
 
 /**
@@ -104,6 +193,7 @@ export function parseDubizzleDetail(html: string): ListingDetails {
     sellerName: null,
     sellerProfileUrl: null,
     sellerMemberSince: null,
+    sellerPhone: null,
   };
 
   // Try __NEXT_DATA__ first
@@ -113,79 +203,137 @@ export function parseDubizzleDetail(html: string): ListingDetails {
   if (nextDataMatch) {
     try {
       const data = JSON.parse(nextDataMatch[1]);
+      const pageProps = data?.props?.pageProps;
       const ad =
-        data?.props?.pageProps?.ad ||
-        data?.props?.pageProps?.listing ||
-        data?.props?.pageProps;
+        pageProps?.ad ||
+        pageProps?.listing ||
+        pageProps?.adDetail ||
+        pageProps?.item ||
+        pageProps;
 
-      if (ad) {
-        result.description = ad.description || ad.body || "";
+      // Also check dehydrated state
+      const dehydratedAd =
+        pageProps?.dehydratedState?.queries?.[0]?.state?.data;
+
+      const source = ad?.id ? ad : dehydratedAd || ad;
+
+      if (source) {
+        result.description =
+          source.description || source.body || source.text || "";
 
         // Images
-        const images = ad.images || ad.photos || [];
-        result.allImageUrls = images.map(
-          (img: { url?: string; src?: string }) => img.url || img.src || ""
-        );
+        const images =
+          source.images ||
+          source.photos ||
+          source.gallery ||
+          source.media ||
+          [];
+        if (Array.isArray(images)) {
+          result.allImageUrls = images
+            .map((img: unknown) => {
+              if (typeof img === "string") return img;
+              if (typeof img === "object" && img !== null) {
+                const o = img as Record<string, unknown>;
+                return (o.url ||
+                  o.src ||
+                  o.uri ||
+                  o.image ||
+                  o.original ||
+                  o.large ||
+                  "") as string;
+              }
+              return "";
+            })
+            .filter((u: string) => u.length > 0);
+        }
         result.mainImageUrl = result.allImageUrls[0] || "";
 
         // Specifications
         const attrs =
-          ad.attributes ||
-          ad.specifications ||
-          ad.details ||
-          ad.properties ||
+          source.attributes ||
+          source.specifications ||
+          source.details ||
+          source.properties ||
+          source.params ||
+          source.extra_fields ||
           [];
         if (Array.isArray(attrs)) {
           for (const attr of attrs) {
-            const key = attr.label || attr.name || attr.key;
+            if (!attr) continue;
+            const key = attr.label || attr.name || attr.key || attr.title;
             const value =
-              attr.value || attr.value_name || attr.displayValue;
+              attr.value || attr.value_name || attr.displayValue || attr.text;
             if (key && value) {
-              result.specifications[key] = String(value);
+              result.specifications[String(key)] = String(value);
             }
           }
-        } else if (typeof attrs === "object") {
-          Object.assign(result.specifications, attrs);
+        } else if (typeof attrs === "object" && attrs !== null) {
+          const attrsObj = attrs as Record<string, unknown>;
+          for (const [k, v] of Object.entries(attrsObj)) {
+            if (v !== null && v !== undefined) {
+              result.specifications[k] = String(v);
+            }
+          }
         }
 
         // Condition
         result.condition =
           result.specifications["الحالة"] ||
           result.specifications["Condition"] ||
-          ad.condition ||
+          result.specifications["condition"] ||
+          source.condition ||
           null;
 
         // Seller info
-        const seller = ad.seller || ad.user || ad.owner;
-        if (seller) {
-          result.sellerName = seller.name || seller.display_name || null;
-          result.sellerProfileUrl = seller.profile_url || seller.url || null;
+        const seller =
+          source.seller || source.user || source.owner || source.contact;
+        if (seller && typeof seller === "object") {
+          const s = seller as Record<string, unknown>;
+          result.sellerName =
+            (s.name || s.display_name || s.username || null) as string | null;
+          result.sellerProfileUrl =
+            (s.profile_url || s.url || s.link || null) as string | null;
           result.sellerMemberSince =
-            seller.member_since || seller.created_at || null;
+            (s.member_since ||
+              s.created_at ||
+              s.join_date ||
+              null) as string | null;
+          result.sellerPhone =
+            (s.phone || s.mobile || s.phone_number || null) as string | null;
         }
 
         result.hasWarranty =
-          result.description.includes("ضمان") ||
-          result.description.includes("warranty");
+          (typeof result.description === "string" &&
+            (result.description.includes("ضمان") ||
+              result.description.includes("warranty"))) ||
+          result.specifications["الضمان"] === "نعم" ||
+          false;
       }
     } catch {
       // Fall through to HTML parsing
     }
   }
 
-  // Fallback: HTML parsing
+  // Fallback: HTML parsing for description
   if (!result.description) {
-    const descMatch = html.match(
-      /<div[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i
-    );
-    result.description = descMatch
-      ? descMatch[1].replace(/<[^>]+>/g, "").trim()
-      : "";
+    const descPatterns = [
+      /<div[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]*data-testid="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<section[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/section>/i,
+    ];
+    for (const pattern of descPatterns) {
+      const match = html.match(pattern);
+      if (match) {
+        result.description = match[1].replace(/<[^>]+>/g, "").trim();
+        break;
+      }
+    }
   }
 
+  // Fallback: HTML parsing for images
   if (result.allImageUrls.length === 0) {
     const imgMatches = html.matchAll(
-      /src="(https:\/\/[^"]*dubizzle[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/gi
+      /src="(https:\/\/[^"]*(?:dubizzle|olx|classistatic)[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/gi
     );
     for (const match of imgMatches) {
       if (!result.allImageUrls.includes(match[1])) {
@@ -195,79 +343,170 @@ export function parseDubizzleDetail(html: string): ListingDetails {
     result.mainImageUrl = result.allImageUrls[0] || "";
   }
 
+  // Fallback: extract seller phone from page
+  if (!result.sellerPhone) {
+    const phonePatterns = [
+      /data-phone="(\+?2?0?1[0-25]\d{8})"/,
+      /tel:(\+?2?0?1[0-25]\d{8})"/,
+      /"phone"\s*:\s*"(\+?2?0?1[0-25]\d{8})"/,
+    ];
+    for (const pattern of phonePatterns) {
+      const match = html.match(pattern);
+      if (match) {
+        result.sellerPhone = match[1];
+        break;
+      }
+    }
+  }
+
   return result;
 }
 
 // ═══ Helper Functions ═══
 
-function parseNextDataListing(item: Record<string, unknown>): ListPageListing | null {
+function parseNextDataListing(
+  item: Record<string, unknown>
+): ListPageListing | null {
   if (!item) return null;
 
+  // Handle nested item structure
+  const actualItem = (item.item || item.ad || item) as Record<
+    string,
+    unknown
+  >;
+
   const url =
-    (item.url as string) ||
-    (item.absolute_url as string) ||
-    (item.link as string) ||
+    (actualItem.url as string) ||
+    (actualItem.absolute_url as string) ||
+    (actualItem.link as string) ||
+    (actualItem.href as string) ||
+    (actualItem.slug ? `/${actualItem.slug}` : "") ||
     "";
   const title =
-    (item.title as string) || (item.name as string) || "";
+    (actualItem.title as string) ||
+    (actualItem.name as string) ||
+    (actualItem.subject as string) ||
+    "";
 
   if (!url || !title) return null;
 
   const fullUrl = url.startsWith("http")
     ? url
-    : `https://www.dubizzle.com.eg${url}`;
+    : `https://www.dubizzle.com.eg${url.startsWith("/") ? "" : "/"}${url}`;
 
-  const price = item.price as Record<string, unknown> | undefined;
-  const seller = item.seller as Record<string, unknown> | undefined;
+  // Handle price
+  const priceField = actualItem.price;
+  let price: number | null = null;
+  if (typeof priceField === "number") {
+    price = priceField;
+  } else if (typeof priceField === "string") {
+    price = extractNumericPrice(priceField);
+  } else if (typeof priceField === "object" && priceField !== null) {
+    const p = priceField as Record<string, unknown>;
+    price = extractNumericPrice(p.value ?? p.amount ?? p.price ?? p.raw);
+  }
+
+  // Seller info
+  const seller = actualItem.seller as Record<string, unknown> | undefined;
+  const user = actualItem.user as Record<string, unknown> | undefined;
+  const sellerInfo = seller || user;
+
+  // Location
+  let location = "";
+  const locationField =
+    actualItem.location || actualItem.locations || actualItem.area;
+  if (typeof locationField === "string") {
+    location = locationField;
+  } else if (typeof locationField === "object" && locationField !== null) {
+    const loc = locationField as Record<string, unknown>;
+    location = (loc.name || loc.city || loc.area || loc.display || "") as string;
+    if (loc.parent && typeof loc.parent === "object") {
+      const parent = loc.parent as Record<string, unknown>;
+      if (parent.name) location = `${location}, ${parent.name}`;
+    }
+  }
+
+  // Date
+  const dateText =
+    (actualItem.created_at as string) ||
+    (actualItem.date as string) ||
+    (actualItem.age as string) ||
+    (actualItem.published_at as string) ||
+    (actualItem.created as string) ||
+    "";
+
+  // Thumbnail
+  let thumbnailUrl: string | null = null;
+  const imageField =
+    actualItem.thumbnail || actualItem.image || actualItem.cover || actualItem.photo;
+  if (typeof imageField === "string") {
+    thumbnailUrl = imageField;
+  } else if (typeof imageField === "object" && imageField !== null) {
+    const img = imageField as Record<string, unknown>;
+    thumbnailUrl = (img.url || img.src || img.uri || "") as string;
+  }
+  if (!thumbnailUrl && Array.isArray(actualItem.images)) {
+    const first = actualItem.images[0];
+    thumbnailUrl =
+      typeof first === "string"
+        ? first
+        : ((first as Record<string, unknown>)?.url as string) || null;
+  }
 
   return {
     url: fullUrl,
     title,
-    price: extractNumericPrice(price?.value ?? item.price),
+    price,
     currency: "EGP",
-    thumbnailUrl:
-      (item.thumbnail as string) ||
-      (item.image as string) ||
-      ((item.images as string[])?.[0]) ||
-      null,
-    location:
-      (item.location as string) ||
-      ((item.locations as Record<string, unknown>)?.name as string) ||
-      "",
-    dateText:
-      (item.created_at as string) ||
-      (item.date as string) ||
-      (item.age as string) ||
-      "",
+    thumbnailUrl,
+    location,
+    dateText,
     sellerName:
-      (seller?.name as string) ||
-      (item.seller_name as string) ||
+      (sellerInfo?.name as string) ||
+      (sellerInfo?.display_name as string) ||
+      (actualItem.seller_name as string) ||
       null,
     sellerProfileUrl:
-      (seller?.url as string) ||
-      (seller?.profile_url as string) ||
+      (sellerInfo?.url as string) ||
+      (sellerInfo?.profile_url as string) ||
       null,
-    sellerAvatarUrl: (seller?.avatar as string) || null,
-    isVerified: !!(seller?.is_verified || item.verified),
-    isBusiness: !!(
-      seller?.is_business ||
-      seller?.is_shop ||
-      item.is_business
+    sellerAvatarUrl:
+      (sellerInfo?.avatar as string) ||
+      (sellerInfo?.image as string) ||
+      null,
+    isVerified: !!(
+      sellerInfo?.is_verified ||
+      sellerInfo?.verified ||
+      actualItem.verified
     ),
-    isFeatured: !!(item.is_featured || item.featured || item.is_premium),
+    isBusiness: !!(
+      sellerInfo?.is_business ||
+      sellerInfo?.is_shop ||
+      sellerInfo?.account_type === "business" ||
+      actualItem.is_business
+    ),
+    isFeatured: !!(
+      actualItem.is_featured ||
+      actualItem.featured ||
+      actualItem.is_premium ||
+      actualItem.is_promoted
+    ),
     supportsExchange: !!(
-      item.exchange ||
+      actualItem.exchange ||
+      actualItem.supports_exchange ||
       (title + "").includes("تبادل") ||
       (title + "").includes("بدل")
     ),
     isNegotiable: !!(
-      item.negotiable ||
+      actualItem.negotiable ||
+      actualItem.is_negotiable ||
       (title + "").includes("قابل للتفاوض") ||
       (title + "").includes("negotiable")
     ),
     category:
-      (item.category as string) ||
-      ((item.category as Record<string, unknown>)?.name as string) ||
+      (actualItem.category as string) ||
+      ((actualItem.category as Record<string, unknown>)?.name as string) ||
+      ((actualItem.category as Record<string, unknown>)?.slug as string) ||
       null,
   };
 }
@@ -277,21 +516,25 @@ function parseJsonLdListing(
 ): ListPageListing | null {
   if (!item) return null;
 
-  const url = (item.url as string) || "";
-  const title = (item.name as string) || "";
+  const actualItem = (item.item || item) as Record<string, unknown>;
+
+  const url = (actualItem.url as string) || "";
+  const title = (actualItem.name as string) || "";
 
   if (!url || !title) return null;
 
-  const offers = item.offers as Record<string, unknown> | undefined;
+  const offers = actualItem.offers as Record<string, unknown> | undefined;
 
   return {
-    url,
+    url: url.startsWith("http")
+      ? url
+      : `https://www.dubizzle.com.eg${url}`,
     title,
     price: extractNumericPrice(offers?.price),
     currency: (offers?.priceCurrency as string) || "EGP",
-    thumbnailUrl: (item.image as string) || null,
+    thumbnailUrl: (actualItem.image as string) || null,
     location: "",
-    dateText: (item.datePosted as string) || "",
+    dateText: (actualItem.datePosted as string) || "",
     sellerName: null,
     sellerProfileUrl: null,
     sellerAvatarUrl: null,
@@ -307,15 +550,6 @@ function parseJsonLdListing(
 function parseHtmlListings(html: string): ListPageListing[] {
   const listings: ListPageListing[] = [];
 
-  // Look for listing card patterns (common in classified sites)
-  const cardPatterns = [
-    // Dubizzle-style listing cards
-    /<a[^>]*href="(\/[^"]*?)"[^>]*>[\s\S]*?<\/a>/g,
-    // aria-label based
-    /<div[^>]*aria-label="[^"]*listing[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-  ];
-
-  // Extract all links that look like listing URLs
   const linkPattern =
     /href="((?:https?:\/\/(?:www\.)?dubizzle\.com\.eg)?\/(?:ar\/)?[a-z\-]+\/[a-z\-]+\/[^"]+)"/g;
   let linkMatch;
@@ -326,11 +560,15 @@ function parseHtmlListings(html: string): ListPageListing[] {
       ? linkMatch[1]
       : `https://www.dubizzle.com.eg${linkMatch[1]}`;
 
-    if (seenUrls.has(url) || url.includes("/search") || url.includes("/login"))
+    if (
+      seenUrls.has(url) ||
+      url.includes("/search") ||
+      url.includes("/login") ||
+      url.includes("/signup")
+    )
       continue;
     seenUrls.add(url);
 
-    // Try to extract surrounding context
     const start = Math.max(0, linkMatch.index - 500);
     const end = Math.min(html.length, linkMatch.index + 2000);
     const context = html.slice(start, end);
@@ -339,6 +577,7 @@ function parseHtmlListings(html: string): ListPageListing[] {
       /aria-label="([^"]+)"/,
       /title="([^"]+)"/,
       /<h[23][^>]*>([^<]+)<\/h[23]>/,
+      /data-testid="[^"]*title[^"]*"[^>]*>([^<]+)</i,
     ]);
 
     if (!title) continue;
@@ -346,16 +585,19 @@ function parseHtmlListings(html: string): ListPageListing[] {
     const priceText = extractFromContext(context, [
       /(\d[\d,]*)\s*(?:جنيه|ج\.م|EGP|LE)/,
       /price[^>]*>([^<]*\d[^<]*)</i,
+      /data-testid="[^"]*price[^"]*"[^>]*>([^<]+)</i,
     ]);
 
     const locationText = extractFromContext(context, [
       /location[^>]*>([^<]+)</i,
       /address[^>]*>([^<]+)</i,
+      /data-testid="[^"]*location[^"]*"[^>]*>([^<]+)</i,
     ]);
 
     const dateText = extractFromContext(context, [
       /(?:منذ|ago)[^<]*/i,
       /time[^>]*>([^<]+)</i,
+      /data-testid="[^"]*date[^"]*"[^>]*>([^<]+)</i,
     ]);
 
     listings.push({
@@ -369,11 +611,14 @@ function parseHtmlListings(html: string): ListPageListing[] {
       sellerName: null,
       sellerProfileUrl: null,
       sellerAvatarUrl: null,
-      isVerified: context.includes("verified") || context.includes("موثق"),
+      isVerified:
+        context.includes("verified") || context.includes("موثق"),
       isBusiness:
         context.includes("business") || context.includes("متجر"),
       isFeatured:
-        context.includes("featured") || context.includes("مميز"),
+        context.includes("featured") ||
+        context.includes("مميز") ||
+        context.includes("promoted"),
       supportsExchange:
         context.includes("تبادل") || context.includes("بدل"),
       isNegotiable:
