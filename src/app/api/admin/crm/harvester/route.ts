@@ -25,7 +25,9 @@ export async function GET(req: NextRequest) {
         || statusError.code === "PGRST301";
       const isTableMissing = statusError.message?.includes("relation")
         && statusError.message?.includes("does not exist")
-        || statusError.code === "42P01";
+        || statusError.message?.includes("schema cache")
+        || statusError.code === "42P01"
+        || statusError.code === "PGRST204";
       const isNoRows = statusError.code === "PGRST116";
 
       if (isAccessDenied || isTableMissing || isNoRows) {
