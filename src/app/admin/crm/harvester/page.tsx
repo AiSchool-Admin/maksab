@@ -23,16 +23,23 @@ export default function HarvesterDashboard() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  const [error, setError] = useState<{ error: string; setup_required?: boolean; details?: string } | null>(null);
+
   const loadData = useCallback(async () => {
     try {
+      setError(null);
       const res = await fetch("/api/admin/crm/harvester", {
         headers: getAdminHeaders(),
       });
       if (res.ok) {
         setData(await res.json());
+      } else {
+        const errBody = await res.json().catch(() => ({ error: "فشل في تحميل البيانات" }));
+        setError(errBody);
       }
     } catch (err) {
       console.error("Load error:", err);
+      setError({ error: "خطأ في الاتصال بالخادم" });
     } finally {
       setLoading(false);
     }
@@ -70,14 +77,40 @@ export default function HarvesterDashboard() {
 
   if (!data) {
     return (
-      <div className="p-8 text-center">
-        <p className="text-red-600 text-lg">فشل في تحميل البيانات</p>
-        <button
-          onClick={loadData}
-          className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-        >
-          إعادة المحاولة
-        </button>
+      <div className="p-8 text-center max-w-lg mx-auto" dir="rtl">
+        {error?.setup_required ? (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 space-y-4">
+            <p className="text-yellow-800 text-lg font-bold">⚙️ إعداد مطلوب</p>
+            <p className="text-yellow-700 text-sm">{error.details}</p>
+            <div className="bg-yellow-100 rounded-lg p-4 text-right text-sm text-yellow-800 space-y-2">
+              <p className="font-bold">خطوات الإعداد:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>أضف <code className="bg-yellow-200 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code> في متغيرات البيئة (Vercel أو .env.local)</li>
+                <li>تأكد من تشغيل migration رقم 00039</li>
+                <li>أعد تشغيل التطبيق</li>
+              </ol>
+            </div>
+            <button
+              onClick={loadData}
+              className="mt-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+            >
+              إعادة المحاولة
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p className="text-red-600 text-lg">{error?.error || "فشل في تحميل البيانات"}</p>
+            {error?.details && (
+              <p className="text-red-400 text-sm mt-2">{error.details}</p>
+            )}
+            <button
+              onClick={loadData}
+              className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              إعادة المحاولة
+            </button>
+          </div>
+        )}
       </div>
     );
   }
