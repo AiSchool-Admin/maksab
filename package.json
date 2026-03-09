@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "منصة مكسب - منصة تعليمية عربية",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "prebuild": "node scripts/bump-sw-version.js",
@@ -12,10 +15,6 @@
     "test": "jest",
     "test:ci": "jest --ci --coverage --forceExit",
     "test:watch": "jest --watch"
-  },
-  "repository": {
-    "type": "git",
-    "url": "http://local_proxy@127.0.0.1:50356/git/AiSchool-Admin/maksab"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.38.0",
@@ -27,9 +26,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
     "next": "^16.1.6",
-    "next-pwa": "^5.6.0",
     "papaparse": "^5.5.3",
-    "pg": "^8.18.0",
     "posthog-js": "^1.352.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.4",
