@@ -4,12 +4,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminRequest, getServiceClient } from "@/lib/crm/auth";
+import { getServiceClient } from "@/lib/crm/auth";
 
 export async function GET(req: NextRequest) {
-  const authError = await validateAdminRequest(req);
-  if (authError) return authError;
-
   const supabase = getServiceClient();
   const { searchParams } = req.nextUrl;
 
