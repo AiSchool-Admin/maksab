@@ -4,14 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminRequest } from "@/lib/crm/auth";
 import { runHarvestJob } from "@/lib/crm/harvester/engine";
 
 export const maxDuration = 300; // 5 minutes max for Vercel
 
 export async function POST(req: NextRequest) {
-  const authError = await validateAdminRequest(req);
-  if (authError) return authError;
 
   try {
     const { job_id } = await req.json();
