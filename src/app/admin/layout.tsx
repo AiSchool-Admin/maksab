@@ -20,6 +20,7 @@ import {
   Megaphone,
   Inbox,
   BarChart3,
+  Wheat,
 } from "lucide-react";
 
 const ADMIN_SESSION_KEY = "maksab_admin_session";
@@ -57,6 +58,7 @@ const navItems = [
   { href: "/admin/crm/campaigns", label: "CRM — الحملات", icon: Megaphone },
   { href: "/admin/crm/inbox", label: "CRM — الوارد", icon: Inbox },
   { href: "/admin/crm/analytics", label: "CRM — تحليلات", icon: BarChart3 },
+  { href: "/admin/crm/harvester", label: "CRM — الحصاد", icon: Wheat },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
