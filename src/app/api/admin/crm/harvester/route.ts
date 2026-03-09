@@ -19,6 +19,30 @@ export async function GET(req: NextRequest) {
       .single();
 
     if (statusError) {
+      // Check if it's a missing table or RLS/permission issue
+      const isAccessDenied = statusError.message?.includes("permission denied")
+        || statusError.code === "42501"
+        || statusError.code === "PGRST301";
+      const isTableMissing = statusError.message?.includes("relation")
+        && statusError.message?.includes("does not exist")
+        || statusError.code === "42P01";
+      const isNoRows = statusError.code === "PGRST116";
+
+      if (isAccessDenied || isTableMissing || isNoRows) {
+        return NextResponse.json(
+          {
+            error: "تحتاج لإعداد مفتاح الخدمة",
+            setup_required: true,
+            details: !process.env.SUPABASE_SERVICE_ROLE_KEY
+              ? "SUPABASE_SERVICE_ROLE_KEY غير مُعرّف — أضفه في متغيرات البيئة"
+              : isTableMissing
+                ? "جداول محرك الحصاد غير موجودة — شغّل الـ migration رقم 00039"
+                : statusError.message
+          },
+          { status: 503 }
+        );
+      }
+
       return NextResponse.json(
         { error: "فشل في جلب حالة المحرك", details: statusError.message },
         { status: 500 }
