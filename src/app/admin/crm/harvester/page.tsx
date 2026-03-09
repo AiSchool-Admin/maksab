@@ -47,9 +47,14 @@ export default function HarvesterDashboard() {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  // Auto-refresh only when data loaded successfully (avoids spamming 500s on setup errors)
+  useEffect(() => {
+    if (!data || error) return;
     const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
-  }, [loadData]);
+  }, [data, error, loadData]);
 
   async function controlEngine(action: string) {
     setActionLoading(action);
