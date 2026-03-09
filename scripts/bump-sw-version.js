@@ -28,6 +28,6 @@ try {
   fs.writeFileSync(SW_PATH, content, "utf-8");
   console.log(`[bump-sw-version] Updated SW version to ${version}`);
 } catch (err) {
-  console.error("[bump-sw-version] Failed:", err.message);
-  process.exit(1);
+  console.warn("[bump-sw-version] Skipped:", err.message);
+  // Non-fatal — build should continue even if SW version bump fails
 }
