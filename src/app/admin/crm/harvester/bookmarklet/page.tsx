@@ -47,6 +47,7 @@ export default function BookmarkletPage() {
   // Selected token + scope for bookmarklet generation
   const [selectedTokenId, setSelectedTokenId] = useState("");
   const [overrideScopeCode, setOverrideScopeCode] = useState("");
+  const [codeCopied, setCodeCopied] = useState(false);
 
   useEffect(() => {
     setAppUrl(window.location.origin);
@@ -357,51 +358,117 @@ export default function BookmarkletPage() {
             </p>
           </div>
 
-          {/* Drag to install */}
-          <div className="bg-green-50 rounded-lg p-4 mb-4 flex items-center gap-4">
-            {appUrl ? (
-              <a
-                href={bookmarkletCode}
-                className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold text-lg cursor-grab hover:bg-green-700 inline-block select-none"
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert(
-                    "اسحب الزر ده لشريط المفضلة (Bookmarks Bar) في المتصفح — متضغطش عليه هنا!"
-                  );
-                }}
-                draggable
-              >
-                🌾 حصاد مكسب
-              </a>
-            ) : (
-              <span className="text-gray-400">جاري التحميل...</span>
-            )}
-            <div className="text-sm">
-              <p className="font-bold text-green-800">
-                اسحب لشريط المفضلة ←
-              </p>
-              <p className="text-green-600 text-xs">
-                الـ Token: {selectedToken.token.substring(0, 8)}...
-                {effectiveScopeCode && ` | Scope: ${effectiveScopeCode}`}
-              </p>
+          {/* ═══ Method 1: Drag & Drop (Primary) ═══ */}
+          <div className="bg-green-50 rounded-lg p-4 mb-4">
+            <h3 className="font-bold text-green-800 mb-3">الطريقة 1 — اسحب للمفضلة (الأساسية)</h3>
+            <div className="flex items-center gap-4 mb-3">
+              {appUrl ? (
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: `<a href="${bookmarkletCode}" style="display:inline-block;padding:12px 24px;background:#1B5E20;color:white;border-radius:12px;text-decoration:none;font-weight:bold;font-size:16px;cursor:grab;user-select:none;box-shadow:0 2px 8px rgba(0,0,0,0.2);" onclick="event.preventDefault();alert('اسحب الزر ده بالماوس لشريط المفضلة — متضغطش عليه هنا!');">🌾 حصاد مكسب — اسحبني لشريط المفضلة</a>`,
+                  }}
+                />
+              ) : (
+                <span className="text-gray-400">جاري التحميل...</span>
+              )}
             </div>
+            <p className="text-green-600 text-xs mb-2">
+              الـ Token: {selectedToken.token.substring(0, 8)}...
+              {effectiveScopeCode && ` | Scope: ${effectiveScopeCode}`}
+            </p>
+            <p className="text-gray-500 text-xs">
+              اسحب الزر الأخضر بالماوس إلى شريط المفضلة (Bookmarks Bar) — اضغط Ctrl+Shift+B لإظهاره
+            </p>
           </div>
 
-          {/* Setup steps */}
-          <ol className="space-y-3 text-sm">
-            <li className="flex gap-3">
-              <span className="flex-shrink-0 w-7 h-7 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold text-xs">1</span>
-              <span>اسحب الزر لشريط المفضلة (Ctrl+Shift+B لإظهاره)</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex-shrink-0 w-7 h-7 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold text-xs">2</span>
-              <span>افتح صفحة قوائم دوبيزل (مثل: موبايلات الإسكندرية)</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex-shrink-0 w-7 h-7 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold text-xs">3</span>
-              <span>اضغط &quot;🌾 حصاد مكسب&quot; — هيرسل الإعلانات تلقائياً</span>
-            </li>
-          </ol>
+          {/* ═══ Method 2: Copy Code (Alternative) ═══ */}
+          <div className="bg-blue-50 rounded-lg p-4 mb-4">
+            <h3 className="font-bold text-blue-800 mb-3">الطريقة 2 — نسخ الكود يدوياً</h3>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(bookmarkletCode).then(() => {
+                  setCodeCopied(true);
+                  setTimeout(() => setCodeCopied(false), 3000);
+                });
+              }}
+              className={`px-6 py-3 rounded-xl font-bold text-lg mb-3 transition-colors ${
+                codeCopied
+                  ? "bg-green-600 text-white"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {codeCopied ? "✅ تم النسخ!" : "📋 انسخ كود الـ Bookmarklet"}
+            </button>
+            <ol className="space-y-2 text-sm text-blue-900">
+              <li className="flex gap-2">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-200 text-blue-800 rounded-full flex items-center justify-center font-bold text-xs">1</span>
+                <span>اضغط الزر لنسخ الكود</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-200 text-blue-800 rounded-full flex items-center justify-center font-bold text-xs">2</span>
+                <span>اعمل كليك يمين على شريط المفضلة ← Add Page / إضافة صفحة</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-200 text-blue-800 rounded-full flex items-center justify-center font-bold text-xs">3</span>
+                <span>في حقل الاسم اكتب: <strong>حصاد مكسب</strong></span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-200 text-blue-800 rounded-full flex items-center justify-center font-bold text-xs">4</span>
+                <span>في حقل الـ URL الصق الكود المنسوخ</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-200 text-blue-800 rounded-full flex items-center justify-center font-bold text-xs">5</span>
+                <span>احفظ — وبعدها افتح صفحة دوبيزل واضغط عليه</span>
+              </li>
+            </ol>
+          </div>
+
+          {/* ═══ Method 3: Direct Test Run ═══ */}
+          <div className="bg-yellow-50 rounded-lg p-4 mb-4">
+            <h3 className="font-bold text-yellow-800 mb-3">الطريقة 3 — تشغيل تجريبي مباشر</h3>
+            <p className="text-yellow-700 text-sm mb-3">
+              ⚠️ للاختبار فقط — يعمل فقط لو فاتح صفحة دوبيزل في تاب تاني. هيفتح نافذة جديدة وينفذ الكود عليها.
+            </p>
+            <button
+              onClick={() => {
+                // Extract the raw JS code (without the javascript: prefix)
+                const rawCode = decodeURIComponent(
+                  bookmarkletCode.replace(/^javascript:/, "")
+                );
+                try {
+                  const fn = new Function(rawCode);
+                  fn();
+                } catch (err) {
+                  alert(
+                    "⚠️ الكود يحتاج يتنفذ على صفحة دوبيزل مش هنا.\n\nجرب افتح صفحة دوبيزل واستخدم الطريقة 1 أو 2.\n\nالخطأ: " +
+                      (err instanceof Error ? err.message : String(err))
+                  );
+                }
+              }}
+              className="px-6 py-3 bg-yellow-600 text-white rounded-xl font-bold text-lg hover:bg-yellow-700"
+            >
+              🧪 تشغيل تجريبي
+            </button>
+          </div>
+
+          {/* Setup steps summary */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-bold text-gray-700 mb-3">خطوات الاستخدام بعد التثبيت:</h3>
+            <ol className="space-y-3 text-sm">
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-7 h-7 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold text-xs">1</span>
+                <span>ثبّت الـ Bookmarklet بأي طريقة من الطرق أعلاه</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-7 h-7 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold text-xs">2</span>
+                <span>افتح صفحة قوائم دوبيزل (مثل: موبايلات الإسكندرية)</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-7 h-7 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold text-xs">3</span>
+                <span>اضغط &quot;🌾 حصاد مكسب&quot; من شريط المفضلة — هيرسل الإعلانات تلقائياً</span>
+              </li>
+            </ol>
+          </div>
         </div>
       )}
 
@@ -448,11 +515,21 @@ export default function BookmarkletPage() {
         </div>
       </div>
 
-      {/* Bookmarklet Raw Code (for debugging / manual copy) */}
+      {/* Bookmarklet Raw Code (for debugging) */}
       {selectedToken && (
         <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h2 className="text-lg font-bold mb-3">🔧 الكود (للنسخ اليدوي)</h2>
-          <p className="text-gray-400 text-xs mb-2">لو السحب مش شغال، انسخ الكود ده وأضفه كـ bookmark يدوياً:</p>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold">🔧 الكود الخام (للتصحيح)</h2>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(bookmarkletCode);
+                alert("تم نسخ الكود!");
+              }}
+              className="px-3 py-1 bg-gray-200 text-gray-700 rounded-lg text-xs hover:bg-gray-300"
+            >
+              📋 نسخ
+            </button>
+          </div>
           <div className="bg-gray-900 text-green-400 rounded-lg p-4 text-xs font-mono overflow-x-auto max-h-40" dir="ltr">
             {bookmarkletCode || "اختار توكن موظف الأول..."}
           </div>
