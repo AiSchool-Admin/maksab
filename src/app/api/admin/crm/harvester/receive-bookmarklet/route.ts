@@ -298,7 +298,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body: BookmarkletPayload = await req.json();
+    // Read as text then parse — allows Content-Type: text/plain
+    // which avoids CORS preflight (simple request)
+    const rawText = await req.text();
+    const body: BookmarkletPayload = JSON.parse(rawText);
 
     if (!body.listings || !Array.isArray(body.listings) || body.listings.length === 0) {
       return NextResponse.json(
