@@ -1,63 +1,36 @@
 /**
- * AHE Dry-Run Test API
+ * AHE Diagnostic Test API
  * POST — يجلب ويحلل صفحة واحدة أو أكتر من scope معين
+ * يعرض تفاصيل كاملة عن كل خطوة (HTTP status, strategy, HTML preview)
  * ⚠️ لا يكتب في قاعدة البيانات — فقط fetch + parse + dedup + عرض
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/crm/auth";
-import { parseDubizzleList, parseDubizzleDetail } from "@/lib/crm/harvester/parsers/dubizzle";
+import {
+  parseDubizzleList,
+  parseDubizzleDetail,
+  BROWSER_HEADERS,
+} from "@/lib/crm/harvester/parsers/dubizzle";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
 import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
 import type { AheScope } from "@/lib/crm/harvester/types";
 
-export const maxDuration = 60; // Vercel Hobby plan max
+export const maxDuration = 60;
 
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
-interface TestListingResult {
+interface FetchDiagnostic {
   url: string;
-  title: string;
-  price: number | null;
-  location: string;
-  mappedLocation: { governorate: string | null; city: string | null; area: string | null };
-  dateText: string;
-  estimatedDate: string | null;
-  sellerName: string | null;
-  isVerified: boolean;
-  isBusiness: boolean;
-  isFeatured: boolean;
-  supportsExchange: boolean;
-  isNegotiable: boolean;
-  thumbnailUrl: string | null;
-  // Detail enrichment (if enabled)
-  description: string | null;
-  extractedPhone: string | null;
-  specifications: Record<string, string>;
-  imageCount: number;
-  // Dedup
-  isDuplicate: boolean;
-}
-
-interface TestResult {
-  scope: {
-    code: string;
-    name: string;
-    base_url: string;
-    governorate: string;
-    maksab_category: string;
-  };
-  pages_fetched: number;
-  total_listings: number;
-  new_listings: number;
-  duplicate_listings: number;
-  phones_extracted: number;
-  sample_listings: TestListingResult[];
-  errors: string[];
-  duration_seconds: number;
-  fetch_details_enabled: boolean;
+  strategy: string;
+  http_status: number | null;
+  response_size: number;
+  content_type: string | null;
+  html_preview: string;
+  has_next_data: boolean;
+  has_json_ld: boolean;
+  listings_found: number;
+  error: string | null;
+  duration_ms: number;
 }
 
 export async function POST(req: NextRequest) {
@@ -65,29 +38,19 @@ export async function POST(req: NextRequest) {
   const errors: string[] = [];
 
   try {
-    const { scope_code, max_pages, fetch_details } = await req.json();
+    const body = await req.json();
+    const { scope_code, max_pages, fetch_details } = body;
 
     if (!scope_code) {
-      return NextResponse.json({ error: "scope_code مطلوب" }, { status: 400 });
+      return NextResponse.json(
+        { error: "scope_code مطلوب" },
+        { status: 400 }
+      );
     }
 
     const supabase = getServiceClient();
 
-    // 1. Verify engine is stopped
-    const { data: engineStatus } = await supabase
-      .from("ahe_engine_status")
-      .select("status")
-      .eq("id", 1)
-      .single();
-
-    if (engineStatus && engineStatus.status === "running") {
-      return NextResponse.json(
-        { error: "المحرك يعمل حالياً — أوقفه أولاً قبل الاختبار اليدوي" },
-        { status: 409 }
-      );
-    }
-
-    // 2. Get scope by code
+    // Get scope by code
     const { data: scope, error: scopeError } = await supabase
       .from("ahe_scopes")
       .select("*")
@@ -96,99 +59,143 @@ export async function POST(req: NextRequest) {
 
     if (scopeError || !scope) {
       return NextResponse.json(
-        { error: `النطاق '${scope_code}' غير موجود` },
+        {
+          error: `النطاق '${scope_code}' غير موجود`,
+          details: scopeError?.message,
+          hint: !process.env.SUPABASE_SERVICE_ROLE_KEY
+            ? "⚠️ SUPABASE_SERVICE_ROLE_KEY غير موجود — RLS يمنع الوصول لجداول AHE"
+            : undefined,
+        },
         { status: 404 }
       );
     }
 
     const typedScope = scope as AheScope;
-    const pagesToFetch = Math.min(max_pages || 2, typedScope.max_pages_per_harvest, 5);
-    const shouldFetchDetails = fetch_details !== undefined ? fetch_details : typedScope.detail_fetch_enabled;
+    const pagesToFetch = Math.min(max_pages || 1, 3);
+    const shouldFetchDetails = fetch_details ?? false;
 
-    // ═══ PHASE 1: FETCH LIST PAGES ═══
-    const allListings: TestListingResult[] = [];
-    let page = 1;
-    let shouldStop = false;
+    // ═══ Fetch diagnostics — try all strategies ═══
+    const diagnostics: FetchDiagnostic[] = [];
+    const allListings: Array<{
+      url: string;
+      title: string;
+      price: number | null;
+      location: string;
+      dateText: string;
+      sellerName: string | null;
+      thumbnailUrl: string | null;
+      isVerified: boolean;
+      isBusiness: boolean;
+      isDuplicate: boolean;
+    }> = [];
 
-    while (page <= pagesToFetch && !shouldStop) {
+    const strategies: Array<{
+      name: string;
+      headers: Record<string, string>;
+    }> = [
+      { name: "browser_desktop", headers: { ...BROWSER_HEADERS } },
+      {
+        name: "browser_mobile",
+        headers: {
+          ...BROWSER_HEADERS,
+          "User-Agent":
+            "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+          "Sec-Ch-Ua-Mobile": "?1",
+          "Sec-Ch-Ua-Platform": '"Android"',
+        },
+      },
+      {
+        name: "simple_fetch",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (compatible; Maksab/1.0; +https://maksab.app)",
+          Accept: "text/html,application/json",
+          "Accept-Language": "ar",
+        },
+      },
+    ];
+
+    for (const strategy of strategies) {
+      const fetchStart = Date.now();
+      const diag: FetchDiagnostic = {
+        url: typedScope.base_url,
+        strategy: strategy.name,
+        http_status: null,
+        response_size: 0,
+        content_type: null,
+        html_preview: "",
+        has_next_data: false,
+        has_json_ld: false,
+        listings_found: 0,
+        error: null,
+        duration_ms: 0,
+      };
+
       try {
-        const pageUrl = page === 1
-          ? typedScope.base_url
-          : typedScope.base_url + typedScope.pagination_pattern.replace("{page}", page.toString());
-
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 15000);
 
-        const response = await fetch(pageUrl, {
+        const response = await fetch(typedScope.base_url, {
           signal: controller.signal,
-          headers: {
-            "User-Agent": USER_AGENT,
-            "Accept": "text/html",
-            "Accept-Language": "ar,en",
-          },
+          headers: strategy.headers,
           redirect: "follow",
         });
         clearTimeout(timeout);
 
-        if (!response.ok) {
-          errors.push(`صفحة ${page}: HTTP ${response.status} ${response.statusText}`);
-          break;
-        }
+        diag.http_status = response.status;
+        diag.content_type = response.headers.get("content-type");
 
-        const html = await response.text();
-        const listings = parseDubizzleList(html);
+        if (response.ok) {
+          const html = await response.text();
+          diag.response_size = html.length;
+          diag.html_preview = html.substring(0, 500).replace(/\n/g, "\\n");
+          diag.has_next_data = html.includes("__NEXT_DATA__");
+          diag.has_json_ld = html.includes("application/ld+json");
 
-        if (listings.length === 0) {
-          if (page === 1) {
-            errors.push("لم يتم العثور على إعلانات في الصفحة الأولى — تحقق من الـ URL أو الـ parser");
+          const listings = parseDubizzleList(html);
+          diag.listings_found = listings.length;
+
+          // Store listings from the first successful strategy
+          if (listings.length > 0 && allListings.length === 0) {
+            for (const listing of listings) {
+              allListings.push({
+                url: listing.url,
+                title: listing.title,
+                price: listing.price,
+                location: listing.location,
+                dateText: listing.dateText,
+                sellerName: listing.sellerName,
+                thumbnailUrl: listing.thumbnailUrl,
+                isVerified: listing.isVerified,
+                isBusiness: listing.isBusiness,
+                isDuplicate: false,
+              });
+            }
           }
-          shouldStop = true;
-          break;
+        } else {
+          diag.error = `HTTP ${response.status} ${response.statusText}`;
+          // Try to read error body
+          try {
+            const body = await response.text();
+            diag.html_preview = body.substring(0, 300);
+          } catch {
+            // ignore
+          }
         }
-
-        for (const listing of listings) {
-          const estimatedDate = parseRelativeDate(listing.dateText, new Date());
-          const mapped = mapLocation(listing.location || "", typedScope.source_platform);
-
-          allListings.push({
-            url: listing.url,
-            title: listing.title,
-            price: listing.price,
-            location: listing.location,
-            mappedLocation: mapped,
-            dateText: listing.dateText,
-            estimatedDate: estimatedDate?.toISOString() || null,
-            sellerName: listing.sellerName,
-            isVerified: listing.isVerified,
-            isBusiness: listing.isBusiness,
-            isFeatured: listing.isFeatured,
-            supportsExchange: listing.supportsExchange,
-            isNegotiable: listing.isNegotiable,
-            thumbnailUrl: listing.thumbnailUrl,
-            description: null,
-            extractedPhone: null,
-            specifications: {},
-            imageCount: 0,
-            isDuplicate: false,
-          });
-        }
-
-        page++;
-
-        // Delay between pages (polite)
-        if (page <= pagesToFetch && !shouldStop) {
-          await delay(typedScope.delay_between_requests_ms);
-        }
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : String(error);
-        errors.push(`صفحة ${page}: ${errMsg}`);
-        shouldStop = true;
+      } catch (err) {
+        diag.error =
+          err instanceof Error ? err.message : String(err);
       }
+
+      diag.duration_ms = Date.now() - fetchStart;
+      diagnostics.push(diag);
+
+      // Small delay between strategies
+      await delay(1000);
     }
 
-    // ═══ PHASE 2: DEDUP (check DB for existing URLs) ═══
+    // ═══ Dedup check ═══
     let duplicateCount = 0;
-
     for (const listing of allListings) {
       try {
         const { data: existing } = await supabase
@@ -203,72 +210,13 @@ export async function POST(req: NextRequest) {
           duplicateCount++;
         }
       } catch {
-        // If table doesn't exist, skip dedup
-      }
-    }
-
-    // ═══ PHASE 3: FETCH DETAILS (for first 5 new listings only) ═══
-    const newListings = allListings.filter((l) => !l.isDuplicate);
-    let phonesExtracted = 0;
-
-    if (shouldFetchDetails && newListings.length > 0) {
-      const detailLimit = Math.min(5, newListings.length);
-
-      for (let i = 0; i < detailLimit; i++) {
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 15000);
-
-          const response = await fetch(newListings[i].url, {
-            signal: controller.signal,
-            headers: {
-              "User-Agent": USER_AGENT,
-              "Accept": "text/html",
-              "Accept-Language": "ar,en",
-            },
-            redirect: "follow",
-          });
-          clearTimeout(timeout);
-
-          if (!response.ok) {
-            errors.push(`تفاصيل ${i + 1}: HTTP ${response.status}`);
-            continue;
-          }
-
-          const detailHtml = await response.text();
-          const details = parseDubizzleDetail(detailHtml);
-
-          newListings[i].description = details.description || null;
-          newListings[i].specifications = details.specifications;
-          newListings[i].imageCount = details.allImageUrls.length;
-
-          // Extract phone from description
-          const phone = extractPhone(details.description || "");
-          if (phone) {
-            newListings[i].extractedPhone = phone;
-            phonesExtracted++;
-          }
-
-          // Polite delay
-          if (i < detailLimit - 1) {
-            await delay(typedScope.detail_delay_between_requests_ms);
-          }
-        } catch (error) {
-          const errMsg = error instanceof Error ? error.message : String(error);
-          errors.push(`تفاصيل ${i + 1}: ${errMsg}`);
-        }
+        // Skip dedup if table issue
       }
     }
 
     const durationSeconds = Math.round((Date.now() - startTime) / 1000);
 
-    // Build sample (first 5 listings, preferring new ones)
-    const sampleListings = [
-      ...newListings.slice(0, 5),
-      ...allListings.filter((l) => l.isDuplicate).slice(0, Math.max(0, 5 - newListings.length)),
-    ].slice(0, 5);
-
-    const result: TestResult = {
+    return NextResponse.json({
       scope: {
         code: typedScope.code,
         name: typedScope.name,
@@ -276,23 +224,37 @@ export async function POST(req: NextRequest) {
         governorate: typedScope.governorate,
         maksab_category: typedScope.maksab_category,
       },
-      pages_fetched: page - 1,
-      total_listings: allListings.length,
-      new_listings: newListings.length,
-      duplicate_listings: duplicateCount,
-      phones_extracted: phonesExtracted,
-      sample_listings: sampleListings,
+      environment: {
+        has_service_role_key: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        has_app_url: !!process.env.NEXT_PUBLIC_APP_URL,
+        has_cron_secret: !!process.env.CRON_SECRET,
+        supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL
+          ? process.env.NEXT_PUBLIC_SUPABASE_URL.substring(0, 30) + "..."
+          : "NOT SET",
+      },
+      fetch_diagnostics: diagnostics,
+      summary: {
+        total_listings: allListings.length,
+        new_listings: allListings.length - duplicateCount,
+        duplicate_listings: duplicateCount,
+        best_strategy: diagnostics.find((d) => d.listings_found > 0)
+          ?.strategy || "none",
+        all_blocked:
+          diagnostics.every((d) => d.http_status === 403) ||
+          diagnostics.every(
+            (d) => d.http_status !== 200 && d.http_status !== null
+          ),
+      },
+      sample_listings: allListings.slice(0, 10),
       errors,
       duration_seconds: durationSeconds,
-      fetch_details_enabled: shouldFetchDetails,
-    };
-
-    return NextResponse.json(result);
+    });
   } catch (error) {
     return NextResponse.json(
       {
         error: "خطأ في الخادم",
-        details: error instanceof Error ? error.message : String(error),
+        details:
+          error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );

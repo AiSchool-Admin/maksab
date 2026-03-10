@@ -4,7 +4,7 @@
   "crons": [
     {
       "path": "/api/cron/harvester",
-      "schedule": "0 8 * * *"
+      "schedule": "*/10 * * * *"
     }
   ],
   "headers": [
@@ -68,7 +68,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://ui-avatars.com https://lh3.googleusercontent.com https://www.facebook.com; connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com https://vercel.live wss://vercel.live; frame-src https://vercel.live; object-src 'none'; base-uri 'self'; form-action 'self'"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com https://vercel.live https://*.vercel.live; script-src-elem 'self' 'unsafe-inline' https://*.sentry.io https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com https://vercel.live https://*.vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://ui-avatars.com https://lh3.googleusercontent.com https://www.facebook.com https://images.dubizzle.com.eg; connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io wss://*.supabase.co https://www.google-analytics.com https://*.facebook.com https://analytics.tiktok.com https://vercel.live https://*.vercel.live wss://vercel.live wss://*.vercel.live; frame-src https://vercel.live https://*.vercel.live; object-src 'none'; base-uri 'self'; form-action 'self'"
         }
       ]
     }
