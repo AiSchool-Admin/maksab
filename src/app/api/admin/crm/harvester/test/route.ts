@@ -12,7 +12,7 @@ import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
 import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
 import type { AheScope } from "@/lib/crm/harvester/types";
 
-export const maxDuration = 120; // 2 minutes max
+export const maxDuration = 60; // Vercel Hobby plan max
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";

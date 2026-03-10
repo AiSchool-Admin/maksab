@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runHarvestJob } from "@/lib/crm/harvester/engine";
 
-export const maxDuration = 300; // 5 minutes max for Vercel
+export const maxDuration = 60; // Vercel Hobby plan max
 
 export async function POST(req: NextRequest) {
 
