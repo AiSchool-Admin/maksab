@@ -595,7 +595,7 @@ function buildBookmarkletCode(appUrl: string, token: string, scopeCode: string):
 
   const code = `
 (function(){
-var API='${appUrl}/api/admin/crm/harvester/receive-bookmarklet';
+var MAKSAB='${appUrl}';
 var TOKEN='${token}';
 var SCOPE='${scopeCode}';
 var listings=[];
@@ -809,43 +809,60 @@ if(listings.length===0){
   return;
 }
 
-var statusDiv=document.createElement('div');
-statusDiv.style.cssText='position:fixed;top:20px;right:20px;background:#1B7A3D;color:white;padding:16px 24px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:16px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-statusDiv.textContent='🌾 جاري إرسال '+listings.length+' إعلان لمكسب... ('+strategy+')';
-document.body.appendChild(statusDiv);
-
-var xhr=new XMLHttpRequest();
-xhr.open('POST',API+'?token='+encodeURIComponent(TOKEN),true);
-xhr.setRequestHeader('Content-Type','text/plain');
-xhr.onload=function(){
-  if(xhr.status===200){
-    var r=JSON.parse(xhr.responseText);
-    statusDiv.style.background='#1B7A3D';
-    statusDiv.innerHTML='✅ تم إرسال '+r.received+' إعلان لمكسب<br><span style="font-size:13px">'+r.new+' جديد — '+r.duplicate+' مكرر — طريقة: '+strategy+'</span>';
-    setTimeout(function(){statusDiv.remove();},8000);
-  }else if(xhr.status===401){
-    statusDiv.style.background='#DC2626';
-    statusDiv.textContent='🔒 التوكن غير صالح — اطلب bookmarklet جديد من المسؤول';
-    setTimeout(function(){statusDiv.remove();},8000);
-  }else{
-    statusDiv.style.background='#DC2626';
-    statusDiv.textContent='❌ خطأ في الإرسال: HTTP '+xhr.status;
-    setTimeout(function(){statusDiv.remove();},5000);
-  }
-};
-xhr.onerror=function(){
-  statusDiv.style.background='#DC2626';
-  statusDiv.textContent='❌ خطأ في الاتصال بمكسب';
-  setTimeout(function(){statusDiv.remove();},5000);
-};
-xhr.send(JSON.stringify({
+/* ═══ Send via popup window (no CORS needed!) ═══ */
+var payload=JSON.stringify({
   url:window.location.href,
   listings:listings,
   timestamp:new Date().toISOString(),
   source:'bookmarklet',
   strategy:strategy,
   scope_code:SCOPE||null
-}));
+});
+
+var statusDiv=document.createElement('div');
+statusDiv.style.cssText='position:fixed;top:20px;right:20px;background:#1B7A3D;color:white;padding:16px 24px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:16px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+statusDiv.textContent='🌾 جاري إرسال '+listings.length+' إعلان لمكسب... ('+strategy+')';
+document.body.appendChild(statusDiv);
+
+var popup=window.open(MAKSAB+'/admin/crm/harvester/receive','maksab_harvest','width=500,height=400,scrollbars=yes');
+if(!popup){
+  statusDiv.style.background='#DC2626';
+  statusDiv.textContent='❌ المتصفح منع فتح النافذة — اسمح بالـ popups لموقع مكسب';
+  setTimeout(function(){statusDiv.remove();},8000);
+  return;
+}
+
+var checkReady=setInterval(function(){
+  try{
+    popup.postMessage({type:'harvest_data',payload:payload,token:TOKEN},MAKSAB);
+  }catch(e){}
+},500);
+
+var timeout=setTimeout(function(){
+  clearInterval(checkReady);
+  statusDiv.style.background='#DC2626';
+  statusDiv.textContent='❌ انتهت المهلة — النافذة لم تستجب';
+  setTimeout(function(){statusDiv.remove();},5000);
+  try{popup.close();}catch(e){}
+},30000);
+
+window.addEventListener('message',function handler(e){
+  if(e.origin!==MAKSAB)return;
+  if(e.data&&e.data.type==='harvest_result'){
+    clearInterval(checkReady);
+    clearTimeout(timeout);
+    window.removeEventListener('message',handler);
+    if(e.data.error){
+      statusDiv.style.background='#DC2626';
+      statusDiv.textContent='❌ خطأ: '+e.data.error;
+    }else{
+      statusDiv.style.background='#1B7A3D';
+      statusDiv.innerHTML='✅ تم إرسال '+e.data.received+' إعلان لمكسب<br><span style="font-size:13px">'+e.data.new_count+' جديد — '+e.data.duplicate+' مكرر — طريقة: '+strategy+'</span>';
+    }
+    setTimeout(function(){statusDiv.remove();},8000);
+    setTimeout(function(){try{popup.close();}catch(e){}},2000);
+  }
+});
 })();
 `.trim().replace(/\n\s*/g, '');
 
