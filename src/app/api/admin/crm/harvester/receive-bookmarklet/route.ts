@@ -38,15 +38,14 @@ function corsHeaders(req?: NextRequest): Record<string, string> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
   // Allow dubizzle origins + our own app origin (for test button)
-  const allowedOrigin =
-    ALLOWED_ORIGINS.includes(origin) || (appUrl && origin === appUrl)
-      ? origin
-      : ALLOWED_ORIGINS[0]; // Fallback — won't match browser's origin so request will be blocked
+  const isAllowed =
+    ALLOWED_ORIGINS.includes(origin) || (appUrl && origin === appUrl);
 
   return {
-    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Origin": isAllowed ? origin : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Bookmarklet-Token",
+    "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
 }
