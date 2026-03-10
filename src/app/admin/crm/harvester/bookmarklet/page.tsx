@@ -747,8 +747,46 @@ if(listings.length===0){
 /* Instead of scanning all <a> links, start from dubizzle CDN thumbnail images */
 if(listings.length===0){
   strategy='DOM-images';
-  var adImages=document.querySelectorAll('img[src*="images.dubizzle.com.eg/thumbnails/"],img[src*="dbzl.com/images/thumbnails/"],img[src*="dubizzle"][src*="thumbnail"],img[data-src*="images.dubizzle.com.eg"]');
+  var adImages=document.querySelectorAll('img[src*="images.dubizzle.com.eg"],img[src*="dbzl.com/images"],img[data-src*="images.dubizzle.com.eg"],img[src*="dubizzle"][src*="thumbnail"]');
   console.log('Maksab: DOM-images strategy — found '+adImages.length+' dubizzle CDN images');
+  /* ═══ DEBUG: Parent chain for first 3 images ═══ */
+  for(var dbg=0;dbg<Math.min(3,adImages.length);dbg++){
+    var dbgImg=adImages[dbg];
+    console.log('Maksab IMG #'+dbg+':', {
+      src: dbgImg.src,
+      alt: dbgImg.alt||dbgImg.title||'(no alt)',
+      p1_tag: dbgImg.parentElement?dbgImg.parentElement.tagName:null,
+      p1_class: dbgImg.parentElement?dbgImg.parentElement.className.substring(0,80):null,
+      p2_tag: dbgImg.parentElement&&dbgImg.parentElement.parentElement?dbgImg.parentElement.parentElement.tagName:null,
+      p2_class: dbgImg.parentElement&&dbgImg.parentElement.parentElement?dbgImg.parentElement.parentElement.className.substring(0,80):null,
+      p3_tag: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.tagName:null,
+      p3_class: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.className.substring(0,80):null,
+      p4_tag: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.parentElement.tagName:null,
+      p4_class: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.parentElement.className.substring(0,80):null,
+      p5_tag: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement.tagName:null,
+      p5_class: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement.className.substring(0,80):null,
+      closest_a: dbgImg.closest('a')?(dbgImg.closest('a').href||'').substring(0,100):'(no <a>)',
+      p3_text_sample: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement?(dbgImg.parentElement.parentElement.parentElement.textContent||'').substring(0,200):'',
+      p5_text_sample: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement?(dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement.textContent||'').substring(0,200):''
+    });
+  }
+  /* ═══ DEBUG: Ad links with /ad/ ═══ */
+  var adLinks=document.querySelectorAll('a[href*="/ad/"]');
+  console.log('Maksab: عدد روابط /ad/:', adLinks.length);
+  if(adLinks.length>0){
+    console.log('Maksab: أول رابط إعلان:', adLinks[0].href);
+    console.log('Maksab: parent:', adLinks[0].parentElement?(adLinks[0].parentElement.className||'').substring(0,100):'');
+    console.log('Maksab: text:', (adLinks[0].textContent||'').substring(0,200));
+  }
+  /* ═══ DEBUG: aria/data-testid/class ad elements ═══ */
+  var adElements=document.querySelectorAll('[aria-label*="ad"],[data-testid*="ad"],[data-testid*="listing"],[class*="listing-card"],[class*="ad-card"]');
+  console.log('Maksab: عناصر ad/listing:', adElements.length);
+  if(adElements.length>0){
+    for(var ae=0;ae<Math.min(3,adElements.length);ae++){
+      console.log('Maksab: ad element #'+ae+':', {tag:adElements[ae].tagName, class:(adElements[ae].className||'').substring(0,100), testid:adElements[ae].getAttribute('data-testid'), aria:adElements[ae].getAttribute('aria-label'), text:(adElements[ae].textContent||'').substring(0,150)});
+    }
+  }
+  /* ═══ END DEBUG ═══ */
   var seen={};
   for(var di=0;di<adImages.length;di++){
     var img=adImages[di];
