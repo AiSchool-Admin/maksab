@@ -229,6 +229,24 @@ export default function HarvesterTestPage() {
         </button>
       </div>
 
+      {/* Bookmarklet Section */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-md font-bold text-blue-800">🔖 اختبار Bookmarklet</h2>
+            <p className="text-blue-600 text-sm mt-1">
+              للمنصات المحظورة (مثل دوبيزل) — الموظف يفتح الصفحة في متصفحه ويضغط الـ Bookmarklet
+            </p>
+          </div>
+          <Link
+            href="/admin/crm/harvester/bookmarklet"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex-shrink-0"
+          >
+            🔖 صفحة الـ Bookmarklet
+          </Link>
+        </div>
+      </div>
+
       {/* Error */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
