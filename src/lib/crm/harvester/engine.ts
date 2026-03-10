@@ -2,10 +2,9 @@
  * AHE Engine — محرك الحصاد الآلي الرئيسي
  * 6 مراحل: جلب → استبعاد → تفاصيل → إثراء + تخزين → طابور CRM → مقاييس
  *
- * استراتيجيات الجلب:
- * 1. JSON API مباشرة (الأسرع)
- * 2. HTML مع __NEXT_DATA__ parsing
- * 3. HTML regex fallback
+ * وضعين للعمل:
+ * 1. Server-side fetch — للمنصات اللي تسمح (تلقائي 24/7)
+ * 2. Bookmarklet — لدوبيزل أو أي منصة تحظر (يحتاج موظف يضغط زر)
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
@@ -13,7 +12,6 @@ import {
   parseDubizzleList,
   parseDubizzleDetail,
   BROWSER_HEADERS,
-  API_HEADERS,
   type ListPageListing,
 } from "./parsers/dubizzle";
 import { extractPhone } from "./parsers/phone-extractor";
@@ -77,107 +75,54 @@ async function safeRpc(
 }
 
 /**
- * Fetch strategies for Dubizzle
- * Tries multiple approaches to bypass bot detection
+ * Simple fetch — single attempt, no rotation strategies
+ * If 403 → mark scope as server_fetch_blocked
  */
 async function fetchPage(
   url: string,
   timeoutMs: number
 ): Promise<{ html: string; status: number; strategy: string }> {
-  const strategies = [
-    {
-      name: "browser_html",
-      headers: { ...BROWSER_HEADERS },
-      transform: (u: string) => u,
-    },
-    {
-      name: "api_json",
-      headers: { ...API_HEADERS },
-      transform: (u: string) => {
-        // Try adding .json or using API path
-        if (u.includes("/api/")) return u;
-        // Convert page URL to a potential API URL
-        return u;
-      },
-    },
-    {
-      name: "english_path",
-      headers: { ...BROWSER_HEADERS },
-      transform: (u: string) => {
-        // Try /en/ path variant
-        const urlObj = new URL(u);
-        if (!urlObj.pathname.startsWith("/en/")) {
-          urlObj.pathname = "/en" + urlObj.pathname;
-        }
-        return urlObj.toString();
-      },
-    },
-    {
-      name: "mobile_ua",
-      headers: {
-        ...BROWSER_HEADERS,
-        "User-Agent":
-          "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
-        "Sec-Ch-Ua-Mobile": "?1",
-        "Sec-Ch-Ua-Platform": '"Android"',
-      },
-      transform: (u: string) => u,
-    },
-  ];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  let lastError: Error | null = null;
-  let lastStatus = 0;
+  try {
+    console.log(`[AHE] 🔄 Fetching: ${url.substring(0, 80)}...`);
 
-  for (const strategy of strategies) {
-    const targetUrl = strategy.transform(url);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: BROWSER_HEADERS,
+      redirect: "follow",
+    });
 
-    try {
+    if (response.ok) {
+      const html = await response.text();
       console.log(
-        `[AHE] 🔄 Trying strategy "${strategy.name}" for: ${targetUrl.substring(0, 80)}...`
+        `[AHE] ✅ Success — ${html.length} bytes, status ${response.status}`
       );
-
-      const response = await fetch(targetUrl, {
-        signal: controller.signal,
-        headers: strategy.headers,
-        redirect: "follow",
-      });
-
-      lastStatus = response.status;
-
-      if (response.ok) {
-        const html = await response.text();
-        console.log(
-          `[AHE] ✅ Strategy "${strategy.name}" succeeded — ${html.length} bytes, status ${response.status}`
-        );
-        return { html, status: response.status, strategy: strategy.name };
-      }
-
-      console.log(
-        `[AHE] ❌ Strategy "${strategy.name}" failed — HTTP ${response.status}`
-      );
-
-      // If 429 (rate limited), don't try more strategies
-      if (response.status === 429) {
-        throw new Error(`Rate limited (429) — waiting required`);
-      }
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      console.log(
-        `[AHE] ❌ Strategy "${strategy.name}" error: ${lastError.message}`
-      );
-    } finally {
-      clearTimeout(timeout);
+      return { html, status: response.status, strategy: "server_fetch" };
     }
 
-    // Small delay between strategies
-    await delay(2000);
-  }
+    // 403 = WAF block (e.g., Dubizzle's Imperva)
+    if (response.status === 403) {
+      throw new ServerFetchBlockedError(
+        `HTTP 403 — المنصة تحظر server-side fetch. استخدم Bookmarklet بدلاً من ذلك.`
+      );
+    }
 
-  throw new Error(
-    `All fetch strategies failed for ${url}. Last status: ${lastStatus}. Last error: ${lastError?.message || "unknown"}`
-  );
+    throw new Error(`HTTP ${response.status}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Custom error for 403 blocks — engine uses this to mark scope
+ */
+export class ServerFetchBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ServerFetchBlockedError";
+  }
 }
 
 /**
@@ -227,6 +172,30 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
     );
     console.log(`[AHE] 📍 URL: ${scope.base_url}`);
 
+    // Check if scope is server_fetch_blocked
+    if (scope.server_fetch_blocked) {
+      const msg = `Scope "${scope.code}" محظور من server-side fetch — يحتاج Bookmarklet`;
+      console.log(`[AHE] ⚠️ ${msg}`);
+      await updateJob(supabase, jobId, {
+        status: "failed",
+        errors: [msg],
+        completed_at: new Date().toISOString(),
+        duration_seconds: 0,
+      });
+      return {
+        success: false,
+        listings_new: 0,
+        listings_duplicate: 0,
+        sellers_new: 0,
+        phones_extracted: 0,
+        auto_queued: 0,
+        errors: [msg],
+        warnings: [],
+        duration_seconds: 0,
+        fetch_strategy: "blocked",
+      };
+    }
+
     // Increment running jobs count
     await supabase
       .from("ahe_engine_status")
@@ -264,30 +233,21 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         // Increment hourly request counter
         await safeRpc(supabase, "increment_hourly_requests");
 
-        // Log response preview for diagnostics
-        const preview = result.html.substring(0, 200).replace(/\n/g, " ");
-        console.log(`[AHE] 📝 Response preview: ${preview}...`);
-
         const listings = parseDubizzleList(result.html);
 
         console.log(
-          `[AHE] 📊 Page ${page}: Found ${listings.length} listings (strategy: ${result.strategy})`
+          `[AHE] 📊 Page ${page}: Found ${listings.length} listings`
         );
 
         if (listings.length === 0) {
           warnings.push(
-            `Page ${page}: 0 listings found (${result.html.length} bytes received, strategy: ${result.strategy})`
+            `Page ${page}: 0 listings found (${result.html.length} bytes received)`
           );
-
-          // If first page returns nothing, the parser might not match the HTML structure
           if (page === 1) {
-            // Store a diagnostic snippet
-            const diagnosticSnippet = result.html.substring(0, 500);
             warnings.push(
-              `First page HTML snippet: ${diagnosticSnippet.replace(/\n/g, "\\n")}`
+              `First page HTML snippet: ${result.html.substring(0, 500).replace(/\n/g, "\\n")}`
             );
           }
-
           shouldStop = true;
           break;
         }
@@ -323,6 +283,27 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
           await delay(scope.delay_between_requests_ms);
         }
       } catch (error) {
+        // 403 = WAF block → mark scope as server_fetch_blocked
+        if (error instanceof ServerFetchBlockedError) {
+          console.log(
+            `[AHE] 🚫 Server-side fetch blocked for scope "${scope.code}" — marking as blocked`
+          );
+          await supabase
+            .from("ahe_scopes")
+            .update({
+              server_fetch_blocked: true,
+              server_fetch_blocked_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", scope.id);
+
+          errors.push(
+            `المنصة تحظر server-side fetch (403). تم تسجيل الحظر. استخدم Bookmarklet.`
+          );
+          shouldStop = true;
+          break;
+        }
+
         const errMsg =
           error instanceof Error ? error.message : String(error);
         errors.push(`Page ${page}: ${errMsg}`);
@@ -407,11 +388,9 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         current_step: "جلب التفاصيل",
       });
 
-      // Limit detail fetches to avoid timeout (Vercel 60s limit)
       const maxDetailFetches = Math.min(newListings.length, 5);
 
       for (let i = 0; i < maxDetailFetches; i++) {
-        // Check time budget — leave 15s for remaining phases
         const elapsed = (Date.now() - startTime) / 1000;
         if (elapsed > 40) {
           warnings.push(
@@ -433,30 +412,25 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
           newListings[i].enrichedCondition = details.condition;
 
           const phone = extractPhone(details.description || "");
-          if (phone) {
-            newListings[i].extractedPhone = phone;
-          }
-
-          if (details.sellerName) {
-            newListings[i].sellerNameFromDetail = details.sellerName;
-          }
-          if (details.sellerProfileUrl) {
-            newListings[i].sellerProfileUrlFromDetail =
-              details.sellerProfileUrl;
-          }
+          if (phone) newListings[i].extractedPhone = phone;
+          if (details.sellerName) newListings[i].sellerNameFromDetail = details.sellerName;
+          if (details.sellerProfileUrl)
+            newListings[i].sellerProfileUrlFromDetail = details.sellerProfileUrl;
 
           await updateJob(supabase, jobId, {
             details_fetched: i + 1,
-            progress_percentage:
-              40 + Math.round(((i + 1) / maxDetailFetches) * 30),
+            progress_percentage: 40 + Math.round(((i + 1) / maxDetailFetches) * 30),
           });
 
           if (i < maxDetailFetches - 1) {
             await delay(scope.detail_delay_between_requests_ms);
           }
         } catch (error) {
-          const errMsg =
-            error instanceof Error ? error.message : String(error);
+          if (error instanceof ServerFetchBlockedError) {
+            warnings.push("Detail fetch also blocked (403) — skipping remaining details");
+            break;
+          }
+          const errMsg = error instanceof Error ? error.message : String(error);
           errors.push(`Detail ${newListings[i].url}: ${errMsg}`);
         }
       }
@@ -472,19 +446,12 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
     let phonesExtracted = 0;
 
     for (const listing of newListings) {
-      const location = mapLocation(
-        listing.location || "",
-        scope.source_platform
-      );
+      const location = mapLocation(listing.location || "", scope.source_platform);
 
       const sellerId = await upsertSeller(supabase, {
         phone: listing.extractedPhone || null,
-        profileUrl:
-          listing.sellerProfileUrlFromDetail ||
-          listing.sellerProfileUrl ||
-          null,
-        name:
-          listing.sellerNameFromDetail || listing.sellerName || null,
+        profileUrl: listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl || null,
+        name: listing.sellerNameFromDetail || listing.sellerName || null,
         platform: scope.source_platform,
         isVerified: listing.isVerified,
         isBusiness: listing.isBusiness,
@@ -507,8 +474,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         supports_exchange: listing.supportsExchange,
         is_featured: listing.isFeatured,
         thumbnail_url: listing.thumbnailUrl,
-        main_image_url:
-          listing.enrichedMainImageUrl || listing.thumbnailUrl,
+        main_image_url: listing.enrichedMainImageUrl || listing.thumbnailUrl,
         all_image_urls: listing.enrichedAllImageUrls || [],
         source_category: listing.category,
         maksab_category: scope.maksab_category,
@@ -519,11 +485,8 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         area: location.area,
         source_date_text: listing.dateText,
         estimated_posted_at: listing.estimatedDate || null,
-        seller_name:
-          listing.sellerNameFromDetail || listing.sellerName,
-        seller_profile_url:
-          listing.sellerProfileUrlFromDetail ||
-          listing.sellerProfileUrl,
+        seller_name: listing.sellerNameFromDetail || listing.sellerName,
+        seller_profile_url: listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl,
         seller_is_verified: listing.isVerified,
         seller_is_business: listing.isBusiness,
         ahe_seller_id: sellerId?.id || null,
@@ -577,8 +540,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         const { data: customer } = await supabase
           .from("crm_customers")
           .insert({
-            full_name:
-              seller.name || "معلن من " + seller.source_platform,
+            full_name: seller.name || "معلن من " + seller.source_platform,
             phone: seller.phone,
             lifecycle_stage: "lead",
             source: "competitor_migration",
@@ -598,7 +560,6 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
               pipeline_status: "auto_queued",
             })
             .eq("id", seller.id);
-
           autoQueuedCount++;
         }
       } catch {
@@ -625,9 +586,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         sellers_new: newSellersCount,
         phones_extracted: phonesExtracted,
         auto_queued: autoQueuedCount,
-        fetch_duration_seconds: Math.floor(
-          (Date.now() - startTime) / 1000
-        ),
+        fetch_duration_seconds: Math.floor((Date.now() - startTime) / 1000),
         pages_fetched: page - 1,
         errors_count: errors.length,
       },
@@ -649,12 +608,9 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         last_harvest_new_listings: newListings.length,
         last_harvest_new_sellers: newSellersCount,
         total_harvests: scope.total_harvests + 1,
-        total_listings_found:
-          scope.total_listings_found + newListings.length,
-        total_sellers_found:
-          scope.total_sellers_found + newSellersCount,
-        total_phones_extracted:
-          scope.total_phones_extracted + phonesExtracted,
+        total_listings_found: scope.total_listings_found + newListings.length,
+        total_sellers_found: scope.total_sellers_found + newSellersCount,
+        total_phones_extracted: scope.total_phones_extracted + phonesExtracted,
         consecutive_failures:
           allListings.length === 0 && errors.length > 0
             ? scope.consecutive_failures + 1
@@ -663,9 +619,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       })
       .eq("id", scope.id);
 
-    const durationSeconds = Math.floor(
-      (Date.now() - startTime) / 1000
-    );
+    const durationSeconds = Math.floor((Date.now() - startTime) / 1000);
 
     await updateJob(supabase, jobId, {
       status: "completed",
@@ -682,10 +636,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
     await supabase
       .from("ahe_engine_status")
       .update({
-        running_jobs_count: Math.max(
-          0,
-          currentEngine.running_jobs_count - 1
-        ),
+        running_jobs_count: Math.max(0, currentEngine.running_jobs_count - 1),
       })
       .eq("id", 1);
 
@@ -707,8 +658,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       http_status: httpStatus,
     };
   } catch (error) {
-    const errMsg =
-      error instanceof Error ? error.message : String(error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     errors.push(errMsg);
     console.error(`[AHE] 💥 Job ${jobId} fatal error: ${errMsg}`);
 
@@ -717,9 +667,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       current_step: null,
       errors,
       completed_at: new Date().toISOString(),
-      duration_seconds: Math.floor(
-        (Date.now() - startTime) / 1000
-      ),
+      duration_seconds: Math.floor((Date.now() - startTime) / 1000),
     });
 
     const engineState = await getEngineStatus(supabase);
@@ -729,10 +677,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         consecutive_errors: engineState.consecutive_errors + 1,
         last_error_at: new Date().toISOString(),
         last_error_message: errMsg,
-        running_jobs_count: Math.max(
-          0,
-          engineState.running_jobs_count - 1
-        ),
+        running_jobs_count: Math.max(0, engineState.running_jobs_count - 1),
       })
       .eq("id", 1);
 
@@ -747,9 +692,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       auto_queued: 0,
       errors,
       warnings,
-      duration_seconds: Math.floor(
-        (Date.now() - startTime) / 1000
-      ),
+      duration_seconds: Math.floor((Date.now() - startTime) / 1000),
       fetch_strategy: fetchStrategy,
     };
   }
@@ -762,10 +705,7 @@ async function updateJob(
   jobId: string,
   updates: Record<string, unknown>
 ) {
-  await supabase
-    .from("ahe_harvest_jobs")
-    .update(updates)
-    .eq("id", jobId);
+  await supabase.from("ahe_harvest_jobs").update(updates).eq("id", jobId);
 }
 
 async function getEngineStatus(supabase: SupabaseClient) {
@@ -869,4 +809,3 @@ function calculatePriorityScore(data: {
   if (data.phone) score += 25;
   return Math.min(score, 100);
 }
-

@@ -159,6 +159,12 @@ export default function HarvesterDashboard() {
           >
             👥 المعلنين
           </Link>
+          <Link
+            href="/admin/crm/harvester/bookmarklet"
+            className="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700"
+          >
+            🔖 Bookmarklet
+          </Link>
         </div>
       </div>
 
@@ -261,6 +267,44 @@ export default function HarvesterDashboard() {
           highlight
         />
       </div>
+
+      {/* Blocked Scopes Warning */}
+      {data.scopes?.some((s: AheScope) => s.server_fetch_blocked) && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <h2 className="text-md font-bold text-orange-800 mb-2">
+            ⚠️ نطاقات محظورة من Server-side Fetch
+          </h2>
+          <p className="text-orange-600 text-sm mb-3">
+            هذه النطاقات تحتاج Bookmarklet — server-side محظور (403)
+          </p>
+          <div className="space-y-2">
+            {data.scopes
+              .filter((s: AheScope) => s.server_fetch_blocked)
+              .map((s: AheScope) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between bg-white rounded-lg p-3 border border-orange-100"
+                >
+                  <div>
+                    <span className="font-bold text-sm">{s.name}</span>
+                    <span className="text-gray-400 text-xs mr-2">({s.code})</span>
+                    {s.server_fetch_blocked_at && (
+                      <span className="text-orange-400 text-xs mr-2">
+                        محظور منذ {new Date(s.server_fetch_blocked_at).toLocaleDateString("ar-EG")}
+                      </span>
+                    )}
+                  </div>
+                  <Link
+                    href="/admin/crm/harvester/bookmarklet"
+                    className="px-3 py-1 bg-orange-600 text-white rounded-lg text-xs hover:bg-orange-700"
+                  >
+                    🔖 استخدم Bookmarklet
+                  </Link>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent Jobs */}
       <div className="bg-white rounded-xl shadow-sm border p-6">

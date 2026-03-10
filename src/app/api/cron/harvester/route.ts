@@ -1,7 +1,8 @@
 /**
  * Cron Job — مجدول محرك الحصاد
- * يُستدعى كل 5 دقائق بواسطة Vercel Cron
+ * يُستدعى كل 10 دقائق بواسطة Vercel Cron
  * يفحص النطاقات الجاهزة وينشئ عمليات حصاد
+ * يتخطى النطاقات المحظورة (server_fetch_blocked = true)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -98,6 +99,7 @@ export async function GET(req: NextRequest) {
       .select("*")
       .eq("is_active", true)
       .eq("is_paused", false)
+      .or("server_fetch_blocked.is.null,server_fetch_blocked.eq.false")
       .or(
         `next_harvest_at.is.null,next_harvest_at.lte.${now.toISOString()}`
       )

@@ -51,6 +51,8 @@ export interface AheScope {
   total_phones_extracted: number;
   avg_new_listings_per_harvest: number;
   consecutive_failures: number;
+  server_fetch_blocked: boolean;
+  server_fetch_blocked_at: string | null;
   priority: number;
   created_at: string;
   updated_at: string;
