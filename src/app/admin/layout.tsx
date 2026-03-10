@@ -94,6 +94,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const handleLogout = () => {
     localStorage.removeItem(ADMIN_SESSION_KEY);
+    localStorage.removeItem("maksab_session_token");
     router.replace("/admin/login");
   };
 
