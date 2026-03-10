@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+const BATCH_SIZE = 20;
+
 export default function HarvesterReceivePage() {
   const [status, setStatus] = useState("في انتظار البيانات...");
   const [icon, setIcon] = useState("⏳");
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
@@ -13,49 +16,169 @@ export default function HarvesterReceivePage() {
       setStatus("جاري المعالجة...");
       setIcon("🔄");
 
-      const body = e.data.payload;
+      const payload = JSON.parse(e.data.payload);
       const token = e.data.token || "";
+      const allListings = payload.listings || [];
+      const total = allListings.length;
 
-      fetch("/api/admin/crm/harvester/receive-bookmarklet?token=" + encodeURIComponent(token), {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: body,
-      })
-        .then((r) => r.json())
-        .then((result) => {
+      if (total === 0) {
+        setIcon("⚠️");
+        setStatus("لا توجد إعلانات في البيانات");
+        window.opener?.postMessage(
+          { type: "harvest_result", error: "لا توجد إعلانات" },
+          "*"
+        );
+        return;
+      }
+
+      // If small enough, send in one request
+      if (total <= BATCH_SIZE) {
+        sendBatch(e.data.payload, token, total);
+        return;
+      }
+
+      // Split into batches
+      processBatches(payload, token, allListings, total);
+    }
+
+    async function sendBatch(body: string, token: string, total: number) {
+      try {
+        const r = await fetch(
+          "/api/admin/crm/harvester/receive-bookmarklet?token=" + encodeURIComponent(token),
+          {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: body,
+          }
+        );
+        const result = await r.json();
+        if (result.error) {
+          setIcon("❌");
+          setStatus("خطأ: " + result.error);
+          window.opener?.postMessage(
+            { type: "harvest_result", error: result.error },
+            "*"
+          );
+          return;
+        }
+        setIcon("✅");
+        setProgress(null);
+        setStatus(
+          `تم! ${result.received} إعلان (${result.new} جديد — ${result.duplicate} مكرر)`
+        );
+        window.opener?.postMessage(
+          {
+            type: "harvest_result",
+            received: result.received,
+            new_count: result.new,
+            duplicate: result.duplicate,
+            employee: result.employee,
+            scope_matched: result.scope_matched,
+          },
+          "*"
+        );
+      } catch (err) {
+        setIcon("❌");
+        setStatus("خطأ في الاتصال: " + (err instanceof Error ? err.message : String(err)));
+        window.opener?.postMessage(
+          { type: "harvest_result", error: err instanceof Error ? err.message : String(err) },
+          "*"
+        );
+      }
+    }
+
+    async function processBatches(
+      payload: { url: string; timestamp: string; source: string; strategy?: string; scope_code?: string },
+      token: string,
+      allListings: unknown[],
+      total: number
+    ) {
+      let totalNew = 0;
+      let totalDup = 0;
+      let totalReceived = 0;
+      let lastEmployee = "";
+      let lastScopeMatched = false;
+      let hadError = false;
+
+      const batches = [];
+      for (let i = 0; i < total; i += BATCH_SIZE) {
+        batches.push(allListings.slice(i, i + BATCH_SIZE));
+      }
+
+      for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+        const batch = batches[batchIdx];
+        const processed = Math.min((batchIdx + 1) * BATCH_SIZE, total);
+        setProgress({ current: batchIdx * BATCH_SIZE, total });
+        setStatus(`جارِ المعالجة... ${batchIdx * BATCH_SIZE}/${total}`);
+
+        const batchPayload = JSON.stringify({
+          url: payload.url,
+          listings: batch,
+          timestamp: payload.timestamp,
+          source: payload.source,
+          strategy: payload.strategy,
+          scope_code: payload.scope_code,
+        });
+
+        try {
+          const r = await fetch(
+            "/api/admin/crm/harvester/receive-bookmarklet?token=" + encodeURIComponent(token),
+            {
+              method: "POST",
+              headers: { "Content-Type": "text/plain" },
+              body: batchPayload,
+            }
+          );
+          const result = await r.json();
           if (result.error) {
             setIcon("❌");
-            setStatus("خطأ: " + result.error);
-            window.opener?.postMessage(
-              { type: "harvest_result", error: result.error },
-              "*"
-            );
-            return;
+            setStatus(`خطأ في الدفعة ${batchIdx + 1}: ${result.error}`);
+            hadError = true;
+            break;
           }
-          setIcon("✅");
-          setStatus(
-            `تم! ${result.received} إعلان (${result.new} جديد — ${result.duplicate} مكرر)`
-          );
-          window.opener?.postMessage(
-            {
-              type: "harvest_result",
-              received: result.received,
-              new_count: result.new,
-              duplicate: result.duplicate,
-              employee: result.employee,
-              scope_matched: result.scope_matched,
-            },
-            "*"
-          );
-        })
-        .catch((err) => {
+          totalNew += result.new || 0;
+          totalDup += result.duplicate || 0;
+          totalReceived += result.received || 0;
+          lastEmployee = result.employee || "";
+          lastScopeMatched = result.scope_matched || false;
+          setProgress({ current: processed, total });
+          setStatus(`جارِ المعالجة... ${processed}/${total}`);
+        } catch (err) {
           setIcon("❌");
-          setStatus("خطأ في الاتصال: " + (err instanceof Error ? err.message : String(err)));
-          window.opener?.postMessage(
-            { type: "harvest_result", error: err instanceof Error ? err.message : String(err) },
-            "*"
+          setStatus(
+            `خطأ في الدفعة ${batchIdx + 1}: ${err instanceof Error ? err.message : String(err)}`
           );
-        });
+          hadError = true;
+          break;
+        }
+      }
+
+      if (!hadError) {
+        setIcon("✅");
+        setProgress({ current: total, total });
+        setStatus(
+          `تم! ${totalReceived} إعلان (${totalNew} جديد — ${totalDup} مكرر)`
+        );
+        window.opener?.postMessage(
+          {
+            type: "harvest_result",
+            received: totalReceived,
+            new_count: totalNew,
+            duplicate: totalDup,
+            employee: lastEmployee,
+            scope_matched: lastScopeMatched,
+          },
+          "*"
+        );
+      } else {
+        window.opener?.postMessage(
+          {
+            type: "harvest_result",
+            error: `توقف عند ${totalReceived}/${total} — ${totalNew} جديد`,
+          },
+          "*"
+        );
+      }
     }
 
     window.addEventListener("message", handleMessage);
@@ -101,6 +224,31 @@ export default function HarvesterReceivePage() {
         <p style={{ fontSize: "16px", color: "#374151", lineHeight: 1.6 }}>
           {status}
         </p>
+        {progress && (
+          <div style={{ marginTop: "16px" }}>
+            <div
+              style={{
+                background: "#e5e7eb",
+                borderRadius: "8px",
+                height: "8px",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  background: "#1B7A3D",
+                  height: "100%",
+                  width: `${Math.round((progress.current / progress.total) * 100)}%`,
+                  transition: "width 0.3s ease",
+                  borderRadius: "8px",
+                }}
+              />
+            </div>
+            <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px" }}>
+              {progress.current} / {progress.total}
+            </p>
+          </div>
+        )}
         <p
           style={{
             fontSize: "12px",
