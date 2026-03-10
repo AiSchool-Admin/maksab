@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -45,16 +44,20 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Only wrap with Sentry when credentials are available
-const finalConfig = process.env.SENTRY_AUTH_TOKEN
-  ? withSentryConfig(nextConfig, {
-      silent: true,
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
-      sourcemaps: {
-        disable: false,
-      },
-    })
-  : nextConfig;
+// Only wrap with Sentry when credentials are available (dynamic import
+// avoids loading the Sentry build plugin when it's not needed).
+let finalConfig: NextConfig = nextConfig;
+
+if (process.env.SENTRY_AUTH_TOKEN) {
+  const { withSentryConfig } = require("@sentry/nextjs");
+  finalConfig = withSentryConfig(nextConfig, {
+    silent: true,
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
+    sourcemaps: {
+      disable: false,
+    },
+  });
+}
 
 export default finalConfig;
