@@ -5,7 +5,7 @@
  * send-otp, verify-otp, and session-token all use the same logic.
  */
 
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 
 /**
  * Dev fallback secret — generated once per process to avoid hardcoded secrets.
@@ -29,15 +29,45 @@ export function isNonProduction(): boolean {
 }
 
 /**
+ * Derive a stable fallback secret from other available env vars.
+ * This ensures tokens survive across serverless cold starts when OTP_SECRET
+ * is not explicitly set. NOT as secure as a dedicated secret, but prevents
+ * session breakage.
+ */
+function getStableFallback(): string | null {
+  const material =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!material) return null;
+  return createHash("sha256")
+    .update(`maksab-otp-fallback:${material}`)
+    .digest("hex");
+}
+
+/**
  * Return the OTP signing secret.
  *
- * - In production: reads OTP_SECRET from the environment (throws if missing).
- * - In non-production: generates a random per-process secret so that
- *   the app works without configuring the variable during local development.
+ * Priority:
+ * 1. OTP_SECRET env var (best — set this in production!)
+ * 2. Stable fallback derived from Supabase keys (works across cold starts)
+ * 3. Random per-process secret (dev only — tokens don't survive restarts)
  */
 export function getOtpSecret(): string {
   const secret = process.env.OTP_SECRET;
   if (secret) return secret;
+
+  // Try stable fallback so sessions survive serverless cold starts
+  const stable = getStableFallback();
+  if (stable) {
+    if (!isNonProduction()) {
+      console.warn(
+        "[otp-secret] ⚠️ OTP_SECRET مش موجود — بنستخدم مفتاح مشتق. " +
+        "حط OTP_SECRET في Vercel Environment Variables عشان الأمان: " +
+        "openssl rand -hex 32"
+      );
+    }
+    return stable;
+  }
 
   if (isNonProduction()) {
     return getDevFallback();
