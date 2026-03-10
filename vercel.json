@@ -3,27 +3,6 @@
   "framework": "nextjs",
   "headers": [
     {
-      "source": "/api/admin/crm/harvester/receive-bookmarklet",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://www.dubizzle.com.eg"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization, X-Bookmarklet-Token"
-        },
-        {
-          "key": "Access-Control-Max-Age",
-          "value": "86400"
-        }
-      ]
-    },
-    {
       "source": "/sw.js",
       "headers": [
         {

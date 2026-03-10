@@ -33,7 +33,7 @@ function getServiceClient() {
 /**
  * Build CORS headers — only allows dubizzle.com.eg + same-origin
  */
-function corsHeaders(req?: NextRequest): Record<string, string> {
+function corsHeaders(req?: NextRequest | Request): Record<string, string> {
   const origin = req?.headers.get("origin") || "";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
@@ -42,7 +42,7 @@ function corsHeaders(req?: NextRequest): Record<string, string> {
     ALLOWED_ORIGINS.includes(origin) || (appUrl && origin === appUrl);
 
   return {
-    "Access-Control-Allow-Origin": isAllowed ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Origin": isAllowed ? origin : "",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Bookmarklet-Token",
     "Access-Control-Max-Age": "86400",
@@ -461,6 +461,7 @@ export async function POST(req: NextRequest) {
 }
 
 // OPTIONS — CORS preflight for bookmarklet cross-origin requests
-export async function OPTIONS(req: NextRequest) {
-  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
+// Uses plain Response (not NextResponse) to ensure headers are sent correctly
+export async function OPTIONS(request: Request) {
+  return new Response(null, { status: 204, headers: corsHeaders(request) });
 }
