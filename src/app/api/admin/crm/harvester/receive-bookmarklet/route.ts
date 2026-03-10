@@ -5,7 +5,7 @@
  *
  * Security:
  *   - Auth: كل bookmarklet فيه token فريد للموظف
- *   - CORS: dubizzle.com.eg فقط (+ same-origin للاختبار)
+ *   - No CORS needed: requests come from same-origin popup (/admin/crm/harvester/receive)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -15,12 +15,6 @@ import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
 
 export const maxDuration = 30;
 
-// ── Allowed origins for CORS ──
-const ALLOWED_ORIGINS = [
-  "https://www.dubizzle.com.eg",
-  "https://dubizzle.com.eg",
-];
-
 function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -28,26 +22,6 @@ function getServiceClient() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
       ""
   );
-}
-
-/**
- * Build CORS headers — only allows dubizzle.com.eg + same-origin
- */
-function corsHeaders(req?: NextRequest | Request): Record<string, string> {
-  const origin = req?.headers.get("origin") || "";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-
-  // Allow dubizzle origins + our own app origin (for test button)
-  const isAllowed =
-    ALLOWED_ORIGINS.includes(origin) || (appUrl && origin === appUrl);
-
-  return {
-    "Access-Control-Allow-Origin": isAllowed ? origin : "",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Bookmarklet-Token",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  };
 }
 
 /**
@@ -231,8 +205,6 @@ interface BookmarkletPayload {
 
 // GET — return recent bookmarklet results
 export async function GET(req: NextRequest) {
-  const headers = corsHeaders(req);
-
   try {
     const supabase = getServiceClient();
 
@@ -274,18 +246,17 @@ export async function GET(req: NextRequest) {
       if (currentBatch.received > 0) batches.push(currentBatch);
     }
 
-    return NextResponse.json({ results: batches.slice(0, 10) }, { headers });
+    return NextResponse.json({ results: batches.slice(0, 10) });
   } catch (error) {
     return NextResponse.json(
       { error: "خطأ", details: error instanceof Error ? error.message : String(error) },
-      { status: 500, headers }
+      { status: 500 }
     );
   }
 }
 
 // POST — receive listings from bookmarklet
 export async function POST(req: NextRequest) {
-  const headers = corsHeaders(req);
   const supabase = getServiceClient();
 
   // ── Auth: validate bookmarklet token ──
@@ -293,7 +264,7 @@ export async function POST(req: NextRequest) {
   if (!employee) {
     return NextResponse.json(
       { error: "توكن غير صالح أو مفقود — تأكد إنك بتستخدم آخر نسخة من الـ Bookmarklet" },
-      { status: 401, headers }
+      { status: 401 }
     );
   }
 
@@ -306,7 +277,7 @@ export async function POST(req: NextRequest) {
     if (!body.listings || !Array.isArray(body.listings) || body.listings.length === 0) {
       return NextResponse.json(
         { error: "لا توجد إعلانات في الطلب" },
-        { status: 400, headers }
+        { status: 400 }
       );
     }
 
@@ -451,20 +422,14 @@ export async function POST(req: NextRequest) {
       `[AHE Bookmarklet] 📬 ${employee.employee_name}: ${result.received} listings — ${result.new} new, ${result.duplicate} dup, scope: ${scopeId || "none"}`
     );
 
-    return NextResponse.json(result, { headers });
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       {
         error: "خطأ في معالجة البيانات",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500, headers }
+      { status: 500 }
     );
   }
-}
-
-// OPTIONS — CORS preflight for bookmarklet cross-origin requests
-// Uses plain Response (not NextResponse) to ensure headers are sent correctly
-export async function OPTIONS(request: Request) {
-  return new Response(null, { status: 204, headers: corsHeaders(request) });
 }
