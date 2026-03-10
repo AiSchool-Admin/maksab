@@ -803,22 +803,36 @@ if(listings.length===0){
   }
 }
 
-/* ═══ Filter: real listings only ═══ */
-function isRealListing(item){
-  if(!item.title||item.title.length<5)return false;
-  if(!item.price||item.price<=0)return false;
-  if(item.url){
-    if(!/\\d{6,}/.test(item.url))return false;
-    if(item.url.indexOf('/q-')>-1)return false;
-    if(item.url.indexOf('/search')>-1)return false;
-  }else{return false;}
-  var t=item.title;
-  if(/^\\s*\\S+\\s+\\(\\d+\\)\\s*$/.test(t))return false;
-  return true;
-}
+/* ═══ DEBUG: log first 5 raw items before filter ═══ */
+console.log('Maksab DEBUG — أول 5 عناصر قبل الفلتر:');
+console.log(JSON.stringify(listings.slice(0,5),null,2));
+
+/* ═══ Filter: real listings only (with debug) ═══ */
 var beforeFilter=listings.length;
-listings=listings.filter(isRealListing);
-console.log('Maksab: filtered '+beforeFilter+' → '+listings.length+' real listings');
+var rejected=[];
+listings=listings.filter(function(item,idx){
+  var reasons=[];
+  if(!item.title||item.title.length<5)reasons.push('short title: "'+String(item.title||'').substring(0,30)+'"');
+  if(!item.price||item.price<=0)reasons.push('no price: '+String(item.price));
+  if(!item.url){reasons.push('no url');}
+  else{
+    if(!/\\d{6,}/.test(item.url))reasons.push('no 6+digit ID in URL: '+item.url.substring(0,120));
+    if(item.url.indexOf('/q-')>-1)reasons.push('filter/q- URL');
+    if(item.url.indexOf('/search')>-1)reasons.push('search URL');
+  }
+  var t=item.title||'';
+  if(/^\\s*\\S+\\s+\\(\\d+\\)\\s*$/.test(t))reasons.push('category pattern title');
+  if(reasons.length>0){
+    if(rejected.length<10){
+      rejected.push({i:idx,title:item.title,url:item.url,price:item.price,reasons:reasons});
+    }
+    return false;
+  }
+  return true;
+});
+console.log('Maksab DEBUG — فلترة: '+beforeFilter+' → '+listings.length+' real listings');
+console.log('Maksab DEBUG — أول 10 عناصر مرفوضة:');
+console.log(JSON.stringify(rejected,null,2));
 
 /* ═══ Result ═══ */
 if(listings.length===0){
