@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export const maxDuration = 300; // 5 minutes max
+export const maxDuration = 60; // Vercel Hobby plan max
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 

@@ -13,7 +13,7 @@
  * serviceKey in body. Never exposes the key in responses.
  */
 
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from "next/server";
 
