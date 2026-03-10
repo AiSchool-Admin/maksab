@@ -803,9 +803,26 @@ if(listings.length===0){
   }
 }
 
+/* ═══ Filter: real listings only ═══ */
+function isRealListing(item){
+  if(!item.title||item.title.length<5)return false;
+  if(!item.price||item.price<=0)return false;
+  if(item.url){
+    if(!/\\d{6,}/.test(item.url))return false;
+    if(item.url.indexOf('/q-')>-1)return false;
+    if(item.url.indexOf('/search')>-1)return false;
+  }else{return false;}
+  var t=item.title;
+  if(/^\\s*\\S+\\s+\\(\\d+\\)\\s*$/.test(t))return false;
+  return true;
+}
+var beforeFilter=listings.length;
+listings=listings.filter(isRealListing);
+console.log('Maksab: filtered '+beforeFilter+' → '+listings.length+' real listings');
+
 /* ═══ Result ═══ */
 if(listings.length===0){
-  alert('لم يتم العثور على إعلانات في هذه الصفحة\\n\\nتأكد إنك على صفحة قوائم (مش صفحة إعلان واحد).\\nStrategy tried: '+strategy);
+  alert('لم يتم العثور على إعلانات حقيقية في هذه الصفحة\\n\\nتم فحص '+beforeFilter+' عنصر — لم يطابق أي منها شروط الإعلان الحقيقي.\\nتأكد إنك على صفحة قوائم (مش صفحة إعلان واحد).\\nStrategy tried: '+strategy);
   return;
 }
 
@@ -821,7 +838,7 @@ var payload=JSON.stringify({
 
 var statusDiv=document.createElement('div');
 statusDiv.style.cssText='position:fixed;top:20px;right:20px;background:#1B7A3D;color:white;padding:16px 24px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:16px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-statusDiv.textContent='🌾 جاري إرسال '+listings.length+' إعلان لمكسب... ('+strategy+')';
+statusDiv.textContent='🌾 جاري إرسال '+listings.length+' إعلان حقيقي لمكسب... (من '+beforeFilter+' عنصر — '+strategy+')';
 document.body.appendChild(statusDiv);
 
 var popup=window.open(MAKSAB+'/admin/crm/harvester/receive','maksab_harvest','width=500,height=400,scrollbars=yes');

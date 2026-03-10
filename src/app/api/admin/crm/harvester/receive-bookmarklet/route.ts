@@ -289,16 +289,26 @@ export async function POST(req: NextRequest) {
     const effectiveScopeCode = body.scope_code || employee.scope_code || null;
     const scopeId = await matchScopeFromUrl(body.url || "", effectiveScopeCode, supabase);
 
+    // Deduplicate within the batch itself first
+    const seenUrls = new Set<string>();
+    const uniqueListings: BookmarkletListing[] = [];
     for (const listing of body.listings) {
       if (!listing.url || !listing.title) continue;
+      if (seenUrls.has(listing.url)) {
+        dupCount++;
+        continue;
+      }
+      seenUrls.add(listing.url);
+      uniqueListings.push(listing);
+    }
 
+    for (const listing of uniqueListings) {
       try {
-        // Check duplicate
+        // Check duplicate — any existing listing with same URL
         const { data: existing } = await supabase
           .from("ahe_listings")
           .select("id")
           .eq("source_listing_url", listing.url)
-          .eq("is_duplicate", false)
           .maybeSingle();
 
         if (existing) {
@@ -409,7 +419,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = {
-      received: body.listings.length,
+      received: newCount + dupCount,
       new: newCount,
       duplicate: dupCount,
       errors,
