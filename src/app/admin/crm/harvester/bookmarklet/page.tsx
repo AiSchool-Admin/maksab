@@ -778,6 +778,19 @@ if(listings.length===0){
     console.log('Maksab: parent:', adLinks[0].parentElement?(adLinks[0].parentElement.className||'').substring(0,100):'');
     console.log('Maksab: text:', (adLinks[0].textContent||'').substring(0,200));
   }
+  /* ═══ DEBUG: AD LINK outerHTML — deep card structure ═══ */
+  if(adLinks.length>0){
+    var firstAd=adLinks[0];
+    console.log('=== Maksab AD LINK DEBUG ===');
+    console.log('href:', firstAd.href);
+    console.log('link innerHTML length:', firstAd.innerHTML.length);
+    console.log('link text:', firstAd.textContent.substring(0,100));
+    var ancestor=firstAd;
+    for(var i=0;i<5;i++){
+      if(ancestor.parentElement) ancestor=ancestor.parentElement;
+    }
+    console.log('ancestor (5 up) outerHTML:', ancestor.outerHTML.substring(0,3000));
+  }
   /* ═══ DEBUG: aria/data-testid/class ad elements ═══ */
   var adElements=document.querySelectorAll('[aria-label*="ad"],[data-testid*="ad"],[data-testid*="listing"],[class*="listing-card"],[class*="ad-card"]');
   console.log('Maksab: عناصر ad/listing:', adElements.length);
