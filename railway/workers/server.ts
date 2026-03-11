@@ -364,6 +364,12 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     .single();
 
   if (scopeErr || !scope) {
+    // Debug: list available scopes
+    const { data: availableScopes } = await supabase
+      .from("ahe_scopes")
+      .select("code, name, is_active")
+      .limit(20);
+
     return {
       success: false,
       scope_code: scopeCode,
@@ -374,6 +380,15 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       sellers_new: 0,
       crm_queued: 0,
       errors: [`Scope not found: ${scopeCode}`],
+      debug: {
+        scope_found: false,
+        db_error: scopeErr?.message || null,
+        available_scopes: (availableScopes || []).map((s: any) => s.code),
+        env_check: {
+          has_supabase_url: !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
+          has_service_key: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        },
+      },
       duration_ms: Date.now() - startTime,
     };
   }
@@ -412,6 +427,14 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
 
       if (status !== 200) {
         errors.push(`Page ${page}: HTTP ${status}`);
+        errors.push(JSON.stringify({
+          debug: {
+            scope_found: true,
+            url_used: pageUrl,
+            fetch_status: status,
+            response_snippet: html.substring(0, 300),
+          },
+        }));
         break;
       }
 
@@ -745,6 +768,11 @@ async function getHarvestStatus(): Promise<Record<string, any>> {
   );
 
   return {
+    env_check: {
+      has_supabase_url: !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
+      has_service_key: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      supabase_url_prefix: (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").substring(0, 30),
+    },
     engine: {
       status: engine?.status || "unknown",
       requests_this_hour: engine?.current_requests_this_hour || 0,
@@ -908,7 +936,17 @@ async function handleHarvest(req: IncomingMessage, res: ServerResponse) {
     sendJson(res, result);
   } catch (err: any) {
     console.error(`[API] /harvest error: ${err.message}`);
-    sendJson(res, { error: err.message }, 500);
+    sendJson(res, {
+      error: err.message,
+      debug: {
+        scope_code,
+        error_stack: err.stack?.split("\n").slice(0, 5),
+        env_check: {
+          has_supabase_url: !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
+          has_service_key: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        },
+      },
+    }, 500);
   }
 }
 
