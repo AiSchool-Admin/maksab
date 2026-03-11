@@ -497,20 +497,12 @@ export default function BookmarkletPage() {
 
       {/* Extraction Strategy */}
       <div className="bg-white rounded-xl shadow-sm border p-6">
-        <h2 className="text-lg font-bold mb-3">🧠 استراتيجيات الاستخراج</h2>
-        <p className="text-gray-500 text-sm mb-3">الـ Bookmarklet يجرب 3 طرق بالترتيب:</p>
+        <h2 className="text-lg font-bold mb-3">🧠 استراتيجية الاستخراج</h2>
+        <p className="text-gray-500 text-sm mb-3">الـ Bookmarklet يستخدم استراتيجية واحدة مباشرة:</p>
         <div className="space-y-3 text-sm">
           <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-            <span className="font-bold text-green-700">1. __NEXT_DATA__</span>
-            <span className="text-green-600 mr-2">— الأفضل والأدق (deep recursive search)</span>
-          </div>
-          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-            <span className="font-bold text-blue-700">2. JSON-LD</span>
-            <span className="text-blue-600 mr-2">— بديل من schema.org</span>
-          </div>
-          <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-            <span className="font-bold text-yellow-700">3. DOM-images</span>
-            <span className="text-yellow-600 mr-2">— يبدأ من صور CDN دوبيزل ويطلع للـ card</span>
+            <span className="font-bold text-green-700">Article-based</span>
+            <span className="text-green-600 mr-2">— يبحث في عناصر {'<article>'} ويستخرج البيانات من a[href*=&quot;/ad/&quot;] + img[src*=&quot;-400x300&quot;]</span>
           </div>
         </div>
       </div>
@@ -598,282 +590,66 @@ function buildBookmarkletCode(appUrl: string, token: string, scopeCode: string):
 var MAKSAB='${appUrl}';
 var TOKEN='${token}';
 var SCOPE='${scopeCode}';
-var listings=[];
-var strategy='unknown';
+var strategy='article-based';
 
-/* ═══ Helper: deep-search any object for arrays of ad-like items ═══ */
-function findAdArrays(obj,depth){
-  if(!obj||depth>6)return null;
-  if(Array.isArray(obj)){
-    if(obj.length>0&&obj[0]&&typeof obj[0]==='object'){
-      var hasTitle=obj[0].title||obj[0].name||obj[0].display_title;
-      if(hasTitle)return obj;
-    }
-    return null;
-  }
-  if(typeof obj==='object'){
-    var keys=Object.keys(obj);
-    for(var k=0;k<keys.length;k++){
-      var found=findAdArrays(obj[keys[k]],depth+1);
-      if(found&&found.length>2)return found;
-    }
-  }
-  return null;
-}
-
-/* ═══ Helper: parse one ad object into a listing ═══ */
-function parseAdObject(ad){
-  if(!ad)return null;
-  var title=ad.title||ad.name||ad.display_title||'';
-  if(!title)return null;
-  var price=null;
-  if(typeof ad.price==='number')price=ad.price;
-  else if(ad.price&&typeof ad.price==='object')price=ad.price.value||ad.price.amount||null;
-  else if(ad.price)price=parseFloat(String(ad.price).replace(/[,\\u066C]/g,''))||null;
-  var adUrl=ad.url||ad.absolute_url||(ad.slug?'/'+ad.slug:'')||(ad.id?'/listing/'+ad.id:'');
-  if(adUrl&&adUrl.charAt(0)==='/')adUrl='https://www.dubizzle.com.eg'+adUrl;
-  var thumb=null;
-  if(ad.images&&ad.images.length>0){
-    var fi=ad.images[0];
-    thumb=(typeof fi==='string')?fi:(fi.url||fi.src||fi.thumbnail||null);
-  }else if(ad.image){
-    thumb=(typeof ad.image==='string')?ad.image:(ad.image.url||null);
-  }else if(ad.thumbnail){thumb=ad.thumbnail;}
-  else if(ad.main_photo){thumb=ad.main_photo;}
-  var loc='';
-  if(ad.locations_resolved){
-    var lv=Object.values(ad.locations_resolved);
-    var ln=[];for(var li=0;li<lv.length;li++){var lx=lv[li];ln.push(lx.name_ar||lx.name||'');}
-    loc=ln.filter(Boolean).join(', ');
-  }else if(ad.location){
-    if(typeof ad.location==='string')loc=ad.location;
-    else loc=ad.location.region_name_ar||ad.location.city_name_ar||ad.location.name||'';
-  }
-  var dateText=ad.created_at||ad.date||ad.display_date||ad.created_at_first||'';
-  var sellerName=null,sellerUrl=null,isVerified=false,isBusiness=false;
-  if(ad.user){
-    sellerName=ad.user.name||ad.user.display_name||null;
-    if(ad.user.id)sellerUrl='https://www.dubizzle.com.eg/profile/'+ad.user.id;
-    isVerified=!!(ad.user.is_verified||ad.user.verified||ad.user.phone_verified);
-    isBusiness=!!(ad.user.is_business||ad.user.account_type==='business'||ad.user.is_dealer);
-  }
-  return{
-    url:adUrl||'',title:title,price:price,currency:'EGP',
-    thumbnailUrl:thumb,location:loc,dateText:dateText,
-    sellerName:sellerName,sellerProfileUrl:sellerUrl,
-    isVerified:isVerified,isBusiness:isBusiness,
-    isFeatured:!!(ad.is_featured||ad.featured||ad.is_promoted),
-    supportsExchange:!!(ad.exchange_enabled)||(title.indexOf('تبادل')>-1)||(title.indexOf('بدل')>-1),
-    isNegotiable:!!(ad.is_negotiable||ad.negotiable)||(title.indexOf('قابل للتفاوض')>-1),
-    category:ad.category_name||ad.category||null
-  };
-}
-
-/* ═══ Strategy 1: __NEXT_DATA__ (deep recursive search) ═══ */
-try{
-  var nd=document.getElementById('__NEXT_DATA__');
-  if(nd){
-    var json=JSON.parse(nd.textContent);
-    var pp=json.props&&json.props.pageProps;
-    console.log('Maksab DEBUG: __NEXT_DATA__ found, pageProps keys:', pp?Object.keys(pp):'(no pageProps)');
-    console.log('Maksab DEBUG: __NEXT_DATA__ sample:', JSON.stringify(pp).substring(0,2000));
-    if(pp){
-      var items=findAdArrays(pp,0);
-      if(items&&items.length>0){
-        strategy='__NEXT_DATA__';
-        console.log('Maksab: __NEXT_DATA__ found '+items.length+' ad objects');
-        console.log('Maksab: Sample ad keys:', Object.keys(items[0]));
-        for(var i=0;i<items.length;i++){
-          var parsed=parseAdObject(items[i]);
-          if(parsed)listings.push(parsed);
-        }
-      }else{
-        console.log('Maksab: __NEXT_DATA__ exists but no ad arrays found via deep search');
-      }
-    }
-  }else{
-    console.log('Maksab: No __NEXT_DATA__ element on page');
-  }
-}catch(e){console.log('Maksab: __NEXT_DATA__ error',e);}
-
-/* ═══ Strategy 2: JSON-LD ═══ */
-if(listings.length===0){
-  try{
-    var scripts=document.querySelectorAll('script[type="application/ld+json"]');
-    console.log('Maksab: Checking '+scripts.length+' JSON-LD scripts');
-    for(var si=0;si<scripts.length;si++){
-      try{
-        var ld=JSON.parse(scripts[si].textContent);
-        if(ld['@type']==='ItemList'&&ld.itemListElement){
-          strategy='JSON-LD';
-          for(var li=0;li<ld.itemListElement.length;li++){
-            var it=ld.itemListElement[li].item||ld.itemListElement[li];
-            if(!it.name)continue;
-            listings.push({
-              url:it.url||'',title:it.name,
-              price:it.offers&&it.offers.price?parseFloat(it.offers.price):null,
-              currency:'EGP',thumbnailUrl:it.image||null,
-              location:it.contentLocation?it.contentLocation.name:'',
-              dateText:it.datePublished||'',
-              sellerName:it.seller?it.seller.name:null,
-              sellerProfileUrl:null,isVerified:false,isBusiness:false,
-              isFeatured:false,supportsExchange:false,isNegotiable:false,
-              category:null
-            });
-          }
-        }
-        if(Array.isArray(ld)){
-          for(var ai=0;ai<ld.length;ai++){
-            if(ld[ai]['@type']==='Product'&&ld[ai].name){
-              strategy='JSON-LD';
-              listings.push({
-                url:ld[ai].url||'',title:ld[ai].name,
-                price:ld[ai].offers&&ld[ai].offers.price?parseFloat(ld[ai].offers.price):null,
-                currency:'EGP',thumbnailUrl:ld[ai].image||null,
-                location:'',dateText:'',sellerName:null,sellerProfileUrl:null,
-                isVerified:false,isBusiness:false,isFeatured:false,
-                supportsExchange:false,isNegotiable:false,category:null
-              });
-            }
-          }
-        }
-      }catch(e2){}
-    }
-    if(listings.length>0)console.log('Maksab: JSON-LD found '+listings.length+' listings');
-  }catch(e){console.log('Maksab: JSON-LD error',e);}
-}
-
-/* ═══ Strategy 3: Image-based DOM extraction ═══ */
-/* Instead of scanning all <a> links, start from dubizzle CDN thumbnail images */
-if(listings.length===0){
-  strategy='DOM-images';
-  /* ═══ DEBUG: 400x300 focused analysis (ad images only, skip 120x90 logos) ═══ */
-  var adImages400=document.querySelectorAll('img[src*="-400x300"]');
-  console.log('=== Maksab 400x300 DEBUG ===');
-  console.log('عدد صور 400x300:', adImages400.length);
-  if(adImages400.length>0){
-    var dbgImg400=adImages400[0];
-    console.log('img src:', dbgImg400.src);
-    console.log('img alt:', dbgImg400.alt);
-    var el400=dbgImg400;
-    for(var level=1;level<=8;level++){
-      el400=el400.parentElement;
-      if(!el400)break;
-      var text400=el400.textContent||'';
-      var hasPrice400=text400.indexOf('ج.م')>-1;
-      var hasDate400=text400.indexOf('منذ')>-1;
-      var hasLocation400=/[\u0600-\u06FF]+،/.test(text400);
-      var adLink400=el400.querySelector('a[href*="/ad/"]');
-      console.log('Level '+level+':', {
-        tag:el400.tagName,
-        class:(el400.className||'').substring(0,50),
-        hasPrice:hasPrice400,
-        hasDate:hasDate400,
-        hasLocation:hasLocation400,
-        hasAdLink:adLink400?adLink400.href.substring(0,60):null,
-        textLength:text400.length,
-        textSample:text400.substring(0,150)
-      });
-      if(hasPrice400&&hasDate400){
-        console.log('=== FOUND CARD at Level '+level+' ===');
-        console.log('Card outerHTML (first 2000):', el400.outerHTML.substring(0,2000));
-        break;
-      }
-    }
-  }
-  /* ═══ END 400x300 DEBUG ═══ */
-  var adImages=document.querySelectorAll('img[src*="images.dubizzle.com.eg"],img[src*="dbzl.com/images"],img[data-src*="images.dubizzle.com.eg"],img[src*="dubizzle"][src*="thumbnail"]');
-  console.log('Maksab: DOM-images strategy — found '+adImages.length+' dubizzle CDN images');
-  var seen={};
-  for(var di=0;di<adImages.length;di++){
-    var img=adImages[di];
-    /* Walk up to find the card container (usually an <a> or a wrapper) */
-    var card=img.closest('a[href*="dubizzle"]')||img.closest('[class*="card"]')||img.closest('li')||img.closest('article')||img.closest('[role="article"]');
-    if(!card){
-      /* Try walking up manually 5 levels */
-      var el=img;
-      for(var up=0;up<5;up++){
-        el=el.parentElement;
-        if(!el)break;
-        if(el.tagName==='A'||el.querySelector('a[href*="dubizzle"]')){card=el;break;}
-      }
-    }
-    if(!card)continue;
-    /* Find the link */
-    var link=null;
-    if(card.tagName==='A'&&card.href){link=card.href;}
-    else{
-      var aEl=card.querySelector('a[href*="dubizzle.com.eg"]');
-      if(aEl)link=aEl.href;
-    }
-    if(!link||seen[link])continue;
-    seen[link]=true;
-    /* Extract title */
-    var title='';
-    var hEl=card.querySelector('h2,h3,h4,[data-testid*="title"],[class*="title"]');
-    if(hEl)title=hEl.textContent.trim();
-    if(!title){
-      var aTitle=card.querySelector('a[aria-label]');
-      if(aTitle)title=aTitle.getAttribute('aria-label');
-    }
-    if(!title&&card.tagName==='A')title=card.getAttribute('aria-label')||card.getAttribute('title')||'';
+/* ═══ Single strategy: article-based extraction ═══ */
+function extractListings(){
+  var articles=document.querySelectorAll('article');
+  console.log('Maksab: Found',articles.length,'article elements');
+  var listings=[];
+  var seenUrls={};
+  for(var i=0;i<articles.length;i++){
+    var article=articles[i];
+    var adLink=article.querySelector('a[href*="/ad/"]');
+    if(!adLink)continue;
+    var url=adLink.href;
+    var idMatch=url.match(/ID(\\d+)\\.html/);
+    if(!idMatch)continue;
+    if(seenUrls[url])continue;
+    seenUrls[url]=true;
+    var title=adLink.getAttribute('title')||adLink.textContent.trim()||'';
     if(!title||title.length<3)continue;
-    /* Extract price from card text */
-    var price=null;
-    var priceEl=card.querySelector('[data-testid*="price"],[class*="price"],[class*="Price"]');
-    if(priceEl){
-      var pt=priceEl.textContent.replace(/[^0-9]/g,'');
-      if(pt)price=parseInt(pt);
-    }
-    if(!price){
-      var cardText=card.textContent||'';
-      var pm=cardText.match(/(\\d[\\d,\\u066C]*(?:\\.\\d+)?)\\s*(?:ج\\.م|جنيه|EGP|LE)/);
-      if(pm)price=parseInt(pm[1].replace(/[,\\u066C]/g,''));
-    }
-    /* Extract location */
-    var loc='';
-    var locEl=card.querySelector('[data-testid*="location"],[class*="location"],[class*="Location"],[class*="address"]');
-    if(locEl)loc=locEl.textContent.trim();
-    if(!loc){
-      var locMatch=(card.textContent||'').match(/([\\u0600-\\u06FF][\\u0600-\\u06FF\\s]+)[,،]\\s*([\\u0600-\\u06FF][\\u0600-\\u06FF\\s]+)/);
-      if(locMatch)loc=locMatch[1].trim()+', '+locMatch[2].trim();
-    }
-    /* Extract date */
-    var dateText='';
-    var dateEl=card.querySelector('[data-testid*="date"],time,[class*="date"],[class*="time"]');
-    if(dateEl)dateText=dateEl.textContent.trim();
-    if(!dateText){
-      var dm=(card.textContent||'').match(/(?:منذ[^,،]*|\\d+\\s+\\w+\\s+ago)/);
-      if(dm)dateText=dm[0].trim();
-    }
-    /* Thumbnail URL */
-    var thumb=img.src||img.getAttribute('data-src')||null;
-    /* Seller info */
-    var sellerName=null;
-    var selEl=card.querySelector('[data-testid*="seller"],[class*="seller"],[class*="Seller"]');
-    if(selEl)sellerName=selEl.textContent.trim();
-    var ct=card.textContent||'';
+    var img=article.querySelector('img[src*="-400x300"]');
+    var thumbnail=img?img.src:null;
+    var cardText=article.textContent||'';
+    var priceMatch=cardText.match(/([\\d,]+)\\s*ج\\.م/);
+    var price=priceMatch?parseInt(priceMatch[1].replace(/,/g,'')):null;
+    var locationMatch=cardText.match(/([\\u0600-\\u06FF\\s]+)[،,]\\s*([\\u0600-\\u06FF\\s]+)/);
+    var location=locationMatch?(locationMatch[1].trim()+'، '+locationMatch[2].trim()):'';
+    var dateMatch=cardText.match(/منذ\\s+[^\\n\\r]+/);
+    var dateText=dateMatch?dateMatch[0].trim():'';
+    if(dateText.length>30)dateText=dateText.substring(0,30);
+    var supportsExchange=cardText.indexOf('متوفر التبادل')>-1||cardText.indexOf('تبادل')>-1;
+    var isNegotiable=cardText.indexOf('قابل للتفاوض')>-1;
+    var isFeatured=cardText.indexOf('مميز')>-1;
+    var isElite=cardText.indexOf('إيليت')>-1||!!article.querySelector('[aria-label="Elite"]');
+    var isVerified=cardText.indexOf('موثق')>-1;
+    var isBusiness=cardText.indexOf('صاحب عمل')>-1;
+    var sellerLink=article.querySelector('a[href*="/companies/"]');
+    var sellerName=sellerLink?sellerLink.textContent.trim():null;
+    var sellerProfileUrl=sellerLink?sellerLink.href:null;
     listings.push({
-      url:link,title:title,price:price,currency:'EGP',
-      thumbnailUrl:thumb,location:loc,dateText:dateText,
-      sellerName:sellerName,sellerProfileUrl:null,
-      isVerified:ct.indexOf('موثق')>-1,isBusiness:false,
-      isFeatured:ct.indexOf('مميز')>-1,
-      supportsExchange:ct.indexOf('تبادل')>-1||ct.indexOf('بدل')>-1,
-      isNegotiable:ct.indexOf('قابل للتفاوض')>-1,
-      category:null
+      url:url,title:title,price:price,currency:'EGP',
+      thumbnailUrl:thumbnail,location:location,dateText:dateText,
+      sellerName:sellerName,sellerProfileUrl:sellerProfileUrl,
+      isVerified:isVerified,isBusiness:isBusiness,
+      isFeatured:isFeatured||isElite,
+      supportsExchange:supportsExchange,
+      isNegotiable:isNegotiable
     });
   }
-  console.log('Maksab: DOM-images extracted '+listings.length+' listings from image cards');
+  console.log('Maksab: Strategy: article-based');
+  console.log('Maksab: Extracted',listings.length,'listings from',articles.length,'articles');
+  if(listings.length>0){
+    console.log('Maksab: Sample:',JSON.stringify(listings[0],null,2));
+    console.log('Maksab: Titles:',listings.slice(0,5).map(function(l){return l.title.substring(0,40);}).join(' | '));
+    console.log('Maksab: Prices:',listings.slice(0,5).map(function(l){return l.price;}).join(' | '));
+  }
+  return listings;
 }
 
-/* ═══ DEBUG: final summary ═══ */
-console.log('Maksab: Strategy used:', strategy);
-console.log('Maksab: Found', listings.length, 'real listings');
-if(listings.length>0){
-  console.log('Maksab: Sample:', JSON.stringify(listings[0]));
-  console.log('Maksab: All titles:', listings.map(function(l){return l.title;}).join(' | '));
-}
+var listings=extractListings();
+console.log('Maksab: Found',listings.length,'real listings');
 
 /* ═══ Result ═══ */
 if(listings.length===0){
