@@ -614,9 +614,9 @@ function extractListings(){
     var cardText=article.textContent||'';
     var priceMatch=cardText.match(/([\\d,]+)\\s*ج\\.م/);
     var price=priceMatch?parseInt(priceMatch[1].replace(/,/g,'')):null;
-    var location=(function(text){var govs=['الإسكندرية','القاهرة','الجيزة','القليوبية','الشرقية','الدقهلية','الغربية','المنوفية','البحيرة','دمياط','بورسعيد','الإسماعيلية','السويس','الفيوم','المنيا','أسيوط','سوهاج','قنا','الأقصر','أسوان','البحر الأحمر','الوادي الجديد','مطروح','شمال سيناء','جنوب سيناء','كفر الشيخ','بني سويف'];for(var g=0;g<govs.length;g++){var govIdx=text.indexOf(govs[g]);if(govIdx===-1)continue;var before=text.substring(Math.max(0,govIdx-30),govIdx);var ci=before.lastIndexOf('،');if(ci===-1)ci=before.lastIndexOf(',');if(ci!==-1){var areaText=before.substring(ci+1).trim();var am=areaText.match(/([\u0600-\u06FF\s]{2,})$/);var area=am?am[1].trim():areaText.trim();if(area.length>=2&&area.length<=30)return area+'\u060C '+govs[g];}return govs[g];}return '';})(cardText);
-    var dateMatch=cardText.match(/منذ\\s+\\d+\\s*(?:دقيقة|دقائق|ساعة|ساعات|يوم|أيام|أسبوع|أسابيع|شهر|أشهر|سنة|سنوات)/);
-    var dateText=dateMatch?dateMatch[0].trim():'';
+    var locDate=(function(text){var dm=text.match(/\u0645\u0646\u0630\\s+\\d+\\s*(\u062F\u0642\u064A\u0642\u0629|\u062F\u0642\u0627\u0626\u0642|\u0633\u0627\u0639\u0629|\u0633\u0627\u0639\u0627\u062A|\u064A\u0648\u0645|\u0623\u064A\u0627\u0645|\u0623\u0633\u0628\u0648\u0639|\u0623\u0633\u0627\u0628\u064A\u0639|\u0634\u0647\u0631|\u0623\u0634\u0647\u0631)/);var dateText=dm?dm[0].trim():'';var lm=text.match(/([\u0600-\u06FF\u0020\u060C,]{2,40}?)\\s*[\u2022\u00B7]\\s*\u0645\u0646\u0630/);var loc='';if(lm){loc=lm[1].trim();if(loc.length>40){var lc=loc.lastIndexOf('\u060C');if(lc===-1)lc=loc.lastIndexOf(',');if(lc>0){var bc=loc.substring(0,lc);var ac=loc.substring(lc+1).trim();var ar=bc.match(/([\u0600-\u06FF\u0020]{2,30})$/);loc=(ar?ar[1].trim():'')+'\u060C '+ac;}}}return{location:loc,dateText:dateText};})(cardText);
+    var location=locDate.location;var dateText=locDate.dateText;
+    if(listings.length<3){console.log('Maksab loc/date #'+listings.length+':',{location:location,dateText:dateText,sample:cardText.substring(0,120)});}
     var supportsExchange=cardText.indexOf('متوفر التبادل')>-1||cardText.indexOf('تبادل')>-1;
     var isNegotiable=cardText.indexOf('قابل للتفاوض')>-1;
     var isFeatured=cardText.indexOf('مميز')>-1;
