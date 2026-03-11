@@ -94,18 +94,12 @@ export async function GET(req: NextRequest) {
     const availableSlots =
       engine.global_max_concurrent_jobs - engine.running_jobs_count;
 
-    // Debug: First get ALL scopes to compare
-    const { data: allScopes, error: allScopesError } = await supabase
-      .from("ahe_scopes")
-      .select("*");
-
-    // Debug: Try the filtered query
-    const { data: readyScopes, error: readyScopesError } = await supabase
+    const { data: readyScopes } = await supabase
       .from("ahe_scopes")
       .select("*")
       .eq("is_active", true)
       .eq("is_paused", false)
-      .or("server_fetch_blocked.is.null,server_fetch_blocked.eq.false")
+      .or("server_fetch_blocked.eq.false,server_fetch_blocked.is.null")
       .or(
         `next_harvest_at.is.null,next_harvest_at.lte.${now.toISOString()}`
       )
@@ -113,36 +107,12 @@ export async function GET(req: NextRequest) {
       .order("next_harvest_at", { ascending: true })
       .limit(availableSlots);
 
-    // Debug: Also try with manual JS filtering (like /harvest/status does)
-    const jsFilteredScopes = (allScopes || []).filter((s: any) =>
-      s.is_active && !s.is_paused && !s.server_fetch_blocked &&
-      (!s.next_harvest_at || new Date(s.next_harvest_at) <= now)
-    );
-
     if (!readyScopes?.length) {
       return NextResponse.json({
-        message: "لا توجد نطاقات جاهزة للحصاد — debug info attached",
-        available_slots: availableSlots,
+        message: "لا توجد نطاقات جاهزة للحصاد",
         debug: {
           engine_status: engine.status,
-          now_iso: now.toISOString(),
-          all_scopes_count: allScopes?.length ?? 0,
-          all_scopes_error: allScopesError?.message ?? null,
-          supabase_filtered_count: readyScopes?.length ?? 0,
-          supabase_filter_error: readyScopesError?.message ?? null,
-          js_filtered_count: jsFilteredScopes.length,
-          js_filtered_codes: jsFilteredScopes.map((s: any) => s.code),
-          all_scopes_flags: (allScopes || []).map((s: any) => ({
-            code: s.code,
-            is_active: s.is_active,
-            is_paused: s.is_paused,
-            server_fetch_blocked: s.server_fetch_blocked,
-            server_fetch_blocked_type: typeof s.server_fetch_blocked,
-            next_harvest_at: s.next_harvest_at,
-            next_harvest_at_lte_now: s.next_harvest_at ? new Date(s.next_harvest_at) <= now : null,
-          })),
-          or_filter_1: "server_fetch_blocked.is.null,server_fetch_blocked.eq.false",
-          or_filter_2: `next_harvest_at.is.null,next_harvest_at.lte.${now.toISOString()}`,
+          scopes_found: 0,
         },
       });
     }
@@ -207,11 +177,7 @@ export async function GET(req: NextRequest) {
       scopes: readyScopes.map((s: any) => s.code),
       debug: {
         engine_status: engine.status,
-        available_slots: availableSlots,
-        all_scopes_count: allScopes?.length ?? 0,
-        supabase_filtered_count: readyScopes?.length ?? 0,
-        js_filtered_count: jsFilteredScopes.length,
-        mismatch: (readyScopes?.length ?? 0) !== jsFilteredScopes.length,
+        scopes_found: readyScopes.length,
       },
     });
   } catch (error) {
