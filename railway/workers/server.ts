@@ -873,46 +873,40 @@ async function cronHarvest(): Promise<{
     .or("server_fetch_blocked.eq.false,server_fetch_blocked.is.null")
     .or("next_harvest_at.is.null,next_harvest_at.lte.now()")
     .order("priority", { ascending: false })
-    .limit(3);
+    .limit(1);
 
   if (!scopes || scopes.length === 0) {
     console.log("[Cron] 😴 No scopes ready for harvest");
     return { scopes_processed: 0, results: [] };
   }
 
+  const scope = scopes[0];
   console.log(
-    `[Cron] 🚀 Found ${scopes.length} ready scope(s): ${scopes.map((s: any) => s.code).join(", ")}`
+    `[Cron] 🚀 Harvesting 1 scope: ${scope.code}`
   );
 
   const results: HarvestResult[] = [];
 
-  for (const scope of scopes) {
-    try {
-      const result = await harvestScope(scope.code);
-      results.push(result);
-
-      // Delay between scopes
-      if (scopes.indexOf(scope) < scopes.length - 1) {
-        await new Promise((r) => setTimeout(r, 5000));
-      }
-    } catch (err: any) {
-      console.error(`[Cron] ❌ Error harvesting ${scope.code}: ${err.message}`);
-      results.push({
-        success: false,
-        scope_code: scope.code,
-        pages_fetched: 0,
-        fetched: 0,
-        new: 0,
-        duplicate: 0,
-        sellers_new: 0,
-        crm_queued: 0,
-        errors: [err.message],
-        duration_ms: 0,
-      });
-    }
+  try {
+    const result = await harvestScope(scope.code);
+    results.push(result);
+  } catch (err: any) {
+    console.error(`[Cron] ❌ Error harvesting ${scope.code}: ${err.message}`);
+    results.push({
+      success: false,
+      scope_code: scope.code,
+      pages_fetched: 0,
+      fetched: 0,
+      new: 0,
+      duplicate: 0,
+      sellers_new: 0,
+      crm_queued: 0,
+      errors: [err.message],
+      duration_ms: 0,
+    });
   }
 
-  return { scopes_processed: scopes.length, results };
+  return { scopes_processed: 1, results };
 }
 
 // ─── HTTP Helpers ────────────────────────────────────────────
@@ -985,26 +979,55 @@ async function handleHarvest(req: IncomingMessage, res: ServerResponse) {
 }
 
 async function handleCronHarvest(req: IncomingMessage, res: ServerResponse) {
-  // Optional: validate CRON_SECRET
-  if (CRON_SECRET) {
-    const url = new URL(req.url || "/", `http://localhost:${PORT}`);
-    const secret = url.searchParams.get("secret") || "";
-    const authHeader = req.headers.authorization || "";
-    if (secret !== CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
-      return sendJson(res, { error: "Unauthorized" }, 401);
-    }
-  }
-
   try {
+    // Optional: validate CRON_SECRET
+    if (CRON_SECRET) {
+      const url = new URL(req.url || "/", `http://localhost:${PORT}`);
+      const secret = url.searchParams.get("secret") || "";
+      const authHeader = req.headers.authorization || "";
+      if (secret !== CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+        return sendJson(res, { error: "Unauthorized" }, 401);
+      }
+    }
+
     console.log("[API] GET /cron/harvest — starting cron cycle");
-    const result = await cronHarvest();
-    sendJson(res, {
-      message: "Cron harvest cycle complete",
-      ...result,
+
+    // Timeout protection: 5 minutes max
+    const TIMEOUT_MS = 5 * 60 * 1000;
+    let timedOut = false;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        timedOut = true;
+        reject(new Error("TIMEOUT: Cron harvest exceeded 5 minutes"));
+      }, TIMEOUT_MS);
     });
-  } catch (err: any) {
-    console.error(`[API] /cron/harvest error: ${err.message}`);
-    sendJson(res, { error: err.message }, 500);
+
+    try {
+      const result = await Promise.race([cronHarvest(), timeoutPromise]);
+      sendJson(res, {
+        message: "Cron harvest cycle complete",
+        ...result,
+      });
+    } catch (innerErr: any) {
+      if (timedOut) {
+        console.error("[API] /cron/harvest TIMEOUT — exceeded 5 minutes");
+        sendJson(res, {
+          error: true,
+          message: "Cron harvest timed out after 5 minutes — partial results may have been saved to DB",
+          timeout: true,
+        });
+      } else {
+        throw innerErr; // re-throw to outer catch
+      }
+    }
+  } catch (error: any) {
+    console.error(`[API] /cron/harvest error: ${error.message}`);
+    sendJson(res, {
+      error: true,
+      message: error.message || "Unknown error",
+      stack: error.stack?.substring(0, 500) || null,
+    });
   }
 }
 
