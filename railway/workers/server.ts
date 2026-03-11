@@ -10,66 +10,55 @@ import { createServer, IncomingMessage, ServerResponse } from 'http';
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
 async function handleTestDubizzle(_req: IncomingMessage, res: ServerResponse) {
-  const url = 'https://www.dubizzle.com.eg/ar/mobiles-tablets/mobile-phones/alexandria/';
+  const urls = [
+    'https://www.dubizzle.com.eg/mobile-phones-tablets-accessories-numbers/mobile-phones/alexandria/',
+    'https://www.dubizzle.com.eg/ar/mobile-phones-tablets-accessories-numbers/mobile-phones/alexandria/',
+    'https://www.dubizzle.com.eg/en/mobile-phones-tablets-accessories-numbers/mobile-phones/alexandria/',
+    'https://dubizzle.com.eg/mobile-phones-tablets-accessories-numbers/mobile-phones/alexandria/',
+    'https://www.dubizzle.com.eg/',
+  ];
 
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ar,en;q=0.5',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
+  const results: Record<string, any>[] = [];
 
-    const html = await response.text();
-
-    if (!response.ok) {
-      sendJson(res, {
-        status: response.status,
-        success: false,
-        message: `Railway محظور من دوبيزل (HTTP ${response.status})`,
-        htmlSnippet: html.substring(0, 500),
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': 'ar,en;q=0.9',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(15000),
       });
-      return;
-    }
 
-    // Count articles/listings — dubizzle uses <article> or aria-label="Listing"
-    const articleMatches = html.match(/<article[\s>]/gi) || [];
-    const listingMatches = html.match(/aria-label="Listing"/gi) || [];
-    const articleCount = Math.max(articleMatches.length, listingMatches.length);
+      const html = await response.text();
+      const articleCount = (html.match(/<article/g) || []).length;
 
-    // Try to extract first title
-    let firstTitle: string | null = null;
-    const titleMatch = html.match(/aria-label="Listing"[^>]*>[\s\S]*?<h2[^>]*>(.*?)<\/h2>/i);
-    if (titleMatch) {
-      firstTitle = titleMatch[1].replace(/<[^>]*>/g, '').trim();
+      results.push({
+        url,
+        status: response.status,
+        redirected: response.redirected,
+        finalUrl: response.url,
+        htmlLength: html.length,
+        hasArticles: articleCount > 0,
+        articleCount,
+        snippet: html.substring(0, 300),
+      });
+    } catch (error: any) {
+      results.push({
+        url,
+        error: error.message,
+      });
     }
-    if (!firstTitle) {
-      const h2Match = html.match(/<h2[^>]*class="[^"]*"[^>]*>(.*?)<\/h2>/i);
-      if (h2Match) {
-        firstTitle = h2Match[1].replace(/<[^>]*>/g, '').trim();
-      }
-    }
-
-    sendJson(res, {
-      status: response.status,
-      htmlLength: html.length,
-      hasArticles: articleCount > 0,
-      articleCount,
-      firstTitle: firstTitle || '(لم يتم استخراج عنوان)',
-      success: true,
-      message: 'Railway يقدر يجلب من دوبيزل! ✅',
-    });
-  } catch (error: any) {
-    sendJson(res, {
-      status: 0,
-      success: false,
-      message: `خطأ في الاتصال: ${error.message}`,
-      errorType: error.name,
-    });
   }
+
+  sendJson(res, {
+    message: 'Dubizzle URL Test from Railway',
+    railwayRegion: process.env.RAILWAY_REGION || 'unknown',
+    results,
+  });
 }
 
 function sendJson(res: ServerResponse, data: Record<string, any>) {
