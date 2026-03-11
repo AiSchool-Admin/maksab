@@ -10,10 +10,19 @@ import type {
   AheScope,
 } from "@/lib/crm/harvester/types";
 
+interface ScopesBreakdown {
+  total: number;
+  active: number;
+  paused: number;
+  blocked: number;
+  inactive: number;
+}
+
 interface DashboardData {
   engine: AheEngineStatus;
   daily_metrics: AheDailyMetrics;
   active_scopes_count: number;
+  scopes_breakdown: ScopesBreakdown;
   recent_jobs: (AheHarvestJob & { ahe_scopes?: { name: string; code: string } })[];
   scopes: AheScope[];
 }
@@ -120,7 +129,7 @@ export default function HarvesterDashboard() {
     );
   }
 
-  const { engine, daily_metrics, active_scopes_count, recent_jobs } = data;
+  const { engine, daily_metrics, active_scopes_count, scopes_breakdown, recent_jobs } = data;
 
   const statusConfig = {
     running: { color: "bg-green-500", text: "يعمل", icon: "🟢" },
@@ -211,8 +220,30 @@ export default function HarvesterDashboard() {
         {/* Engine Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-xs text-gray-500">نطاقات نشطة</p>
-            <p className="text-2xl font-bold">{active_scopes_count}</p>
+            <p className="text-xs text-gray-500">النطاقات</p>
+            <p className="text-2xl font-bold">{scopes_breakdown?.total ?? active_scopes_count}</p>
+            {scopes_breakdown && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                  {scopes_breakdown.active} نشط
+                </span>
+                {scopes_breakdown.paused > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
+                    {scopes_breakdown.paused} متوقف
+                  </span>
+                )}
+                {scopes_breakdown.blocked > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                    {scopes_breakdown.blocked} محظور
+                  </span>
+                )}
+                {scopes_breakdown.inactive > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">
+                    {scopes_breakdown.inactive} غير مفعّل
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="bg-gray-50 p-3 rounded-lg">
             <p className="text-xs text-gray-500">عمليات جارية</p>
