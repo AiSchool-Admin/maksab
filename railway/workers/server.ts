@@ -870,7 +870,7 @@ async function cronHarvest(): Promise<{
     .select("*")
     .eq("is_active", true)
     .eq("is_paused", false)
-    .eq("server_fetch_blocked", false)
+    .or("server_fetch_blocked.eq.false,server_fetch_blocked.is.null")
     .or("next_harvest_at.is.null,next_harvest_at.lte.now()")
     .order("priority", { ascending: false })
     .limit(3);
