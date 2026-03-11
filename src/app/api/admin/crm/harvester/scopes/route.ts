@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get category and governorate mappings for the wizard
-    const [{ data: categories }, { data: governorates }] = await Promise.all([
+    const [{ data: categories }, { data: governorates }, { data: subcategories }] = await Promise.all([
       supabase
         .from("ahe_category_mappings")
         .select("*")
@@ -34,12 +34,18 @@ export async function GET(req: NextRequest) {
         .select("*")
         .eq("is_active", true)
         .order("estimated_daily_listings", { ascending: false }),
+      supabase
+        .from("ahe_subcategory_mappings")
+        .select("*")
+        .eq("is_active", true)
+        .order("display_order"),
     ]);
 
     return NextResponse.json({
       scopes: scopes || [],
       categories: categories || [],
       governorates: governorates || [],
+      subcategories: subcategories || [],
     });
   } catch (error) {
     return NextResponse.json(
@@ -68,6 +74,16 @@ export async function POST(req: NextRequest) {
       priority,
       delay_between_requests_ms,
       detail_fetch_enabled,
+      // Phase 3: Advanced Parameters
+      subcategory,
+      subcategory_ar,
+      price_min,
+      price_max,
+      product_condition,
+      target_seller_type,
+      target_listing_type,
+      scope_group,
+      description,
     } = body;
 
     if (!name || !code || !source_platform || !maksab_category || !governorate || !base_url) {
@@ -93,6 +109,16 @@ export async function POST(req: NextRequest) {
         delay_between_requests_ms: delay_between_requests_ms || 5000,
         detail_fetch_enabled: detail_fetch_enabled !== false,
         is_active: false,
+        // Phase 3
+        subcategory: subcategory || null,
+        subcategory_ar: subcategory_ar || null,
+        price_min: price_min || null,
+        price_max: price_max || null,
+        product_condition: product_condition || null,
+        target_seller_type: target_seller_type || "all",
+        target_listing_type: target_listing_type || "all",
+        scope_group: scope_group || "general",
+        description: description || null,
       })
       .select()
       .single();
@@ -132,6 +158,16 @@ export async function PUT(req: NextRequest) {
       "priority",
       "listing_max_age_days",
       "listing_not_seen_hours",
+      // Phase 3
+      "subcategory",
+      "subcategory_ar",
+      "price_min",
+      "price_max",
+      "product_condition",
+      "target_seller_type",
+      "target_listing_type",
+      "scope_group",
+      "description",
     ];
 
     const safeUpdates: Record<string, unknown> = {};

@@ -54,6 +54,18 @@ export interface AheScope {
   server_fetch_blocked: boolean;
   server_fetch_blocked_at: string | null;
   priority: number;
+  // Phase 3: Advanced Parameters
+  subcategory: string | null;
+  subcategory_ar: string | null;
+  price_min: number | null;
+  price_max: number | null;
+  product_condition: "new" | "used" | null;
+  target_seller_type: "all" | "business" | "individual" | "verified" | "whales";
+  target_listing_type: "all" | "featured" | "elite" | "featured_and_elite";
+  scope_group: "general" | "whale_hunting" | "high_value" | "seasonal";
+  description: string | null;
+  total_whales_found: number;
+  total_filtered_out: number;
   created_at: string;
   updated_at: string;
 }
@@ -160,8 +172,29 @@ export interface AheSeller {
   campaign_id: string | null;
   first_outreach_at: string | null;
   last_response_at: string | null;
+  // Phase 3: Whale Detection
+  whale_score: number;
+  is_whale: boolean;
+  whale_detected_at: string | null;
+  has_featured_listings: boolean;
+  has_elite_listings: boolean;
+  featured_listings_count: number;
+  elite_listings_count: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface AheSubcategoryMapping {
+  id: string;
+  maksab_category: string;
+  subcategory: string;
+  subcategory_ar: string;
+  source_platform: string;
+  source_query: string;
+  source_url_segment: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface AheDailyMetrics {
