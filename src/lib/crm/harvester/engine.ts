@@ -17,6 +17,8 @@ import {
 import { extractPhone } from "./parsers/phone-extractor";
 import { parseRelativeDate } from "./parsers/date-parser";
 import { mapLocation } from "./parsers/location-mapper";
+import { applyScopeFilters, type FilterableListing } from "./scope-filter";
+import { updateWhaleScoresAfterHarvest } from "./whale-detector";
 import type { AheScope } from "./types";
 
 function getServiceClient(): SupabaseClient {
@@ -462,6 +464,11 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       if (sellerId?.isNew) newSellersCount++;
       if (listing.extractedPhone) phonesExtracted++;
 
+      // حفظ sellerId للاستخدام في Phase 5.6 (whale detection)
+      if (sellerId?.id) {
+        (listing as unknown as Record<string, unknown>).__sellerId = sellerId.id;
+      }
+
       await supabase.from("ahe_listings").insert({
         scope_id: scope.id,
         harvest_job_id: jobId,
@@ -493,6 +500,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         extracted_phone: listing.extractedPhone || null,
         phone_source: listing.extractedPhone ? "description" : null,
         condition: listing.enrichedCondition || null,
+        listing_type: listing.isFeatured ? "featured" : "regular",
       });
     }
 
@@ -501,6 +509,58 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       phones_extracted: phonesExtracted,
       progress_percentage: 80,
     });
+
+    // ═══ PHASE 5.5: SCOPE-LEVEL FILTERING ═══
+    // فلترة ما بعد الجلب بناءً على معاملات النطاق المتقدمة (Phase 3)
+    let filteredOutCount = 0;
+    const hasAdvancedFilters =
+      (scope.target_seller_type && scope.target_seller_type !== "all") ||
+      (scope.target_listing_type && scope.target_listing_type !== "all") ||
+      scope.price_min != null ||
+      scope.price_max != null ||
+      scope.product_condition != null;
+
+    if (hasAdvancedFilters && newListings.length > 0) {
+      await updateJob(supabase, jobId, {
+        current_step: "فلترة متقدمة",
+      });
+
+      const filterableListings: FilterableListing[] = newListings.map((l) => ({
+        url: l.url,
+        title: l.title,
+        price: l.price,
+        isFeatured: l.isFeatured,
+        isBusiness: l.isBusiness,
+        isVerified: l.isVerified,
+        condition: l.enrichedCondition || null,
+      }));
+
+      const filterResult = applyScopeFilters(filterableListings, scope);
+      filteredOutCount = filterResult.filtered_out.length;
+
+      if (filteredOutCount > 0) {
+        // حذف الإعلانات المفلترة من القائمة
+        const passedUrls = new Set(filterResult.passed.map((l) => l.url));
+        const originalLength = newListings.length;
+        const filteredNewListings = newListings.filter((l) =>
+          passedUrls.has(l.url)
+        );
+        newListings.length = 0;
+        newListings.push(...filteredNewListings);
+
+        console.log(
+          `[AHE] 🔍 Phase 5.5: Filtered ${filteredOutCount}/${originalLength} — ` +
+            `seller_type: ${filterResult.stats.filtered_by_seller_type}, ` +
+            `listing_type: ${filterResult.stats.filtered_by_listing_type}, ` +
+            `price: ${filterResult.stats.filtered_by_price}, ` +
+            `condition: ${filterResult.stats.filtered_by_condition}`
+        );
+
+        warnings.push(
+          `فلترة متقدمة: ${filteredOutCount} إعلان مستبعد من ${originalLength}`
+        );
+      }
+    }
 
     // ═══ PHASE 5: AUTO-QUEUE TO CRM ═══
     await updateJob(supabase, jobId, {
@@ -567,6 +627,38 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       }
     }
 
+    // ═══ PHASE 5.6: WHALE DETECTION UPDATE ═══
+    // إعادة حساب whale_score للبائعين المتأثرين (Phase 3)
+    let newWhalesCount = 0;
+    const affectedSellerIds = new Set<string>();
+    for (const listing of newListings) {
+      const sellerId = (listing as unknown as Record<string, unknown>).__sellerId as string | undefined;
+      if (sellerId) affectedSellerIds.add(sellerId);
+    }
+
+    if (affectedSellerIds.size > 0) {
+      await updateJob(supabase, jobId, {
+        current_step: "تحليل الحيتان 🐋",
+      });
+
+      try {
+        const whaleResult = await updateWhaleScoresAfterHarvest(
+          supabase,
+          Array.from(affectedSellerIds)
+        );
+        newWhalesCount = whaleResult.new_whales;
+
+        if (whaleResult.new_whales > 0) {
+          console.log(
+            `[AHE] 🐋 Phase 5.6: ${whaleResult.new_whales} new whales detected! (total: ${whaleResult.total_whales})`
+          );
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        warnings.push(`Whale detection warning: ${errMsg}`);
+      }
+    }
+
     // ═══ PHASE 6: METRICS ═══
     await updateJob(supabase, jobId, {
       status: "recording_metrics",
@@ -611,6 +703,8 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         total_listings_found: scope.total_listings_found + newListings.length,
         total_sellers_found: scope.total_sellers_found + newSellersCount,
         total_phones_extracted: scope.total_phones_extracted + phonesExtracted,
+        total_whales_found: (scope.total_whales_found || 0) + newWhalesCount,
+        total_filtered_out: (scope.total_filtered_out || 0) + filteredOutCount,
         consecutive_failures:
           allListings.length === 0 && errors.length > 0
             ? scope.consecutive_failures + 1
