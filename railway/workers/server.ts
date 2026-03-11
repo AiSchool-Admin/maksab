@@ -2,9 +2,15 @@
  * مكسب Workers Server — Railway
  *
  * Endpoints:
- *   POST /harvest         — Harvest a specific scope (fetch + parse + store)
- *   GET  /cron/harvest    — Automated: pick ready scopes & harvest them
- *   GET  /health          — Health check
+ *   GET|POST /harvest         — Harvest a specific scope (GET ?scope_code=XXX or POST { scope_code })
+ *   GET  /harvest/status      — Engine status + scopes overview
+ *   GET  /cron/harvest        — Automated: pick ready scopes & harvest them
+ *   GET  /health              — Health check
+ *
+ * Features:
+ *   - Cheerio-based article parsing for Dubizzle listings
+ *   - Auto-queue new sellers with phones to CRM as leads
+ *   - 5s delay between requests for rate limiting
  *
  * Also starts the auction-cron worker in background.
  */
@@ -64,6 +70,7 @@ interface HarvestResult {
   new: number;
   duplicate: number;
   sellers_new: number;
+  crm_queued: number;
   errors: string[];
   duration_ms: number;
 }
@@ -365,6 +372,7 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       new: 0,
       duplicate: 0,
       sellers_new: 0,
+      crm_queued: 0,
       errors: [`Scope not found: ${scopeCode}`],
       duration_ms: Date.now() - startTime,
     };
@@ -590,9 +598,15 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     { onConflict: "scope_id,hour_start" }
   );
 
+  // 6. Auto-queue new sellers with phones to CRM
+  let crmQueued = 0;
+  if (sellersNew > 0) {
+    crmQueued = await autoQueueSellersToCrm(supabase, scope);
+  }
+
   const durationMs = Date.now() - startTime;
   console.log(
-    `[Harvest] ✅ Done in ${durationMs}ms — ${newCount} new, ${dupCount} dup, ${sellersNew} sellers, ${errors.length} errors`
+    `[Harvest] ✅ Done in ${durationMs}ms — ${newCount} new, ${dupCount} dup, ${sellersNew} sellers, ${crmQueued} CRM queued, ${errors.length} errors`
   );
 
   return {
@@ -606,8 +620,153 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     new: newCount,
     duplicate: dupCount,
     sellers_new: sellersNew,
+    crm_queued: crmQueued,
     errors,
     duration_ms: durationMs,
+  };
+}
+
+// ─── Auto-Queue Sellers to CRM ───────────────────────────────
+async function autoQueueSellersToCrm(
+  supabase: SupabaseClient,
+  scope: any
+): Promise<number> {
+  try {
+    // Find new sellers with phones that aren't yet in CRM
+    const { data: sellers } = await supabase
+      .from("ahe_sellers")
+      .select("id, name, phone, primary_category, primary_governorate, is_verified, is_business, profile_url")
+      .eq("pipeline_status", "discovered")
+      .not("phone", "is", null)
+      .is("crm_customer_id", null)
+      .order("priority_score", { ascending: false })
+      .limit(50);
+
+    if (!sellers || sellers.length === 0) return 0;
+
+    let queued = 0;
+    for (const seller of sellers) {
+      // Check if phone already exists in CRM
+      const { data: existing } = await supabase
+        .from("crm_customers")
+        .select("id")
+        .eq("phone", seller.phone)
+        .maybeSingle();
+
+      if (existing) {
+        // Link existing CRM customer to seller
+        await supabase
+          .from("ahe_sellers")
+          .update({ crm_customer_id: existing.id, pipeline_status: "crm_linked" })
+          .eq("id", seller.id);
+        continue;
+      }
+
+      // Create new CRM customer
+      const { data: newCustomer, error: crmErr } = await supabase
+        .from("crm_customers")
+        .insert({
+          full_name: seller.name || "معلن من دوبيزل",
+          phone: seller.phone,
+          source: "platform",
+          source_platform: scope.source_platform || "dubizzle",
+          source_detail: `AHE harvest — ${scope.code}`,
+          source_url: seller.profile_url,
+          lifecycle_stage: "lead",
+          primary_category: seller.primary_category,
+          governorate: seller.primary_governorate,
+          account_type: seller.is_business ? "business" : "individual",
+          is_verified: seller.is_verified,
+        })
+        .select("id")
+        .single();
+
+      if (crmErr) {
+        console.error(`[CRM] Error creating customer for ${seller.phone}: ${crmErr.message}`);
+        continue;
+      }
+
+      if (newCustomer) {
+        // Link CRM customer back to seller
+        await supabase
+          .from("ahe_sellers")
+          .update({ crm_customer_id: newCustomer.id, pipeline_status: "crm_linked" })
+          .eq("id", seller.id);
+        queued++;
+      }
+    }
+
+    if (queued > 0) {
+      console.log(`[CRM] ✅ Auto-queued ${queued} new sellers as CRM leads`);
+    }
+    return queued;
+  } catch (err: any) {
+    console.error(`[CRM] Auto-queue error: ${err.message}`);
+    return 0;
+  }
+}
+
+// ─── Harvest Status ─────────────────────────────────────────
+async function getHarvestStatus(): Promise<Record<string, any>> {
+  const supabase = getSupabase();
+
+  // Get engine status
+  const { data: engine } = await supabase
+    .from("ahe_engine_status")
+    .select("*")
+    .eq("id", 1)
+    .single();
+
+  // Get all scopes with summary
+  const { data: scopes } = await supabase
+    .from("ahe_scopes")
+    .select("code, name, is_active, is_paused, server_fetch_blocked, source_platform, governorate, maksab_category, last_harvest_at, next_harvest_at, last_harvest_new_listings, last_harvest_new_sellers, total_harvests, total_listings_found, total_sellers_found, consecutive_failures, harvest_interval_minutes")
+    .order("is_active", { ascending: false })
+    .order("last_harvest_at", { ascending: false, nullsFirst: false });
+
+  // Count totals
+  const { count: totalListings } = await supabase
+    .from("ahe_listings")
+    .select("id", { count: "exact", head: true });
+
+  const { count: totalSellers } = await supabase
+    .from("ahe_sellers")
+    .select("id", { count: "exact", head: true });
+
+  const { count: crmLeads } = await supabase
+    .from("crm_customers")
+    .select("id", { count: "exact", head: true })
+    .eq("source", "platform");
+
+  const now = new Date();
+  const readyScopes = (scopes || []).filter((s: any) =>
+    s.is_active && !s.is_paused && !s.server_fetch_blocked &&
+    (!s.next_harvest_at || new Date(s.next_harvest_at) <= now)
+  );
+
+  return {
+    engine: {
+      status: engine?.status || "unknown",
+      requests_this_hour: engine?.current_requests_this_hour || 0,
+      max_requests_per_hour: engine?.global_max_requests_per_hour || 0,
+    },
+    totals: {
+      listings: totalListings || 0,
+      sellers: totalSellers || 0,
+      crm_leads_from_harvest: crmLeads || 0,
+    },
+    scopes_summary: {
+      total: (scopes || []).length,
+      active: (scopes || []).filter((s: any) => s.is_active).length,
+      blocked: (scopes || []).filter((s: any) => s.server_fetch_blocked).length,
+      ready_now: readyScopes.length,
+    },
+    scopes: (scopes || []).map((s: any) => ({
+      ...s,
+      is_ready: s.is_active && !s.is_paused && !s.server_fetch_blocked &&
+        (!s.next_harvest_at || new Date(s.next_harvest_at) <= now),
+    })),
+    server_time: now.toISOString(),
   };
 }
 
@@ -684,6 +843,7 @@ async function cronHarvest(): Promise<{
         new: 0,
         duplicate: 0,
         sellers_new: 0,
+        crm_queued: 0,
         errors: [err.message],
         duration_ms: 0,
       });
@@ -720,23 +880,30 @@ function readBody(req: IncomingMessage): Promise<string> {
 // ─── Route Handlers ──────────────────────────────────────────
 
 async function handleHarvest(req: IncomingMessage, res: ServerResponse) {
-  if (req.method !== "POST") {
-    return sendJson(res, { error: "Method not allowed. Use POST." }, 405);
-  }
-
   try {
-    const body = await readBody(req);
-    const { scope_code } = JSON.parse(body);
+    let scope_code: string | null = null;
+
+    if (req.method === "GET") {
+      // GET /harvest?scope_code=dub_phones_alex
+      const url = new URL(req.url || "/", `http://localhost:${PORT}`);
+      scope_code = url.searchParams.get("scope_code");
+    } else if (req.method === "POST") {
+      // POST /harvest { scope_code: "..." }
+      const body = await readBody(req);
+      scope_code = JSON.parse(body).scope_code;
+    } else {
+      return sendJson(res, { error: "Method not allowed. Use GET or POST." }, 405);
+    }
 
     if (!scope_code) {
       return sendJson(
         res,
-        { error: 'Missing required field: scope_code' },
+        { error: "Missing required parameter: scope_code (e.g. ?scope_code=dub_phones_alex)" },
         400
       );
     }
 
-    console.log(`[API] POST /harvest — scope_code: ${scope_code}`);
+    console.log(`[API] ${req.method} /harvest — scope_code: ${scope_code}`);
     const result = await harvestScope(scope_code);
     sendJson(res, result);
   } catch (err: any) {
@@ -769,6 +936,18 @@ async function handleCronHarvest(req: IncomingMessage, res: ServerResponse) {
   }
 }
 
+// ─── Harvest Status Handler ──────────────────────────────────
+async function handleHarvestStatus(_req: IncomingMessage, res: ServerResponse) {
+  try {
+    console.log("[API] GET /harvest/status");
+    const status = await getHarvestStatus();
+    sendJson(res, status);
+  } catch (err: any) {
+    console.error(`[API] /harvest/status error: ${err.message}`);
+    sendJson(res, { error: err.message }, 500);
+  }
+}
+
 // ─── HTTP Server ──────────────────────────────────────────────
 const server = createServer(async (req, res) => {
   // Handle CORS preflight
@@ -787,6 +966,8 @@ const server = createServer(async (req, res) => {
   try {
     if (path === "/harvest") {
       await handleHarvest(req, res);
+    } else if (path === "/harvest/status") {
+      await handleHarvestStatus(req, res);
     } else if (path === "/cron/harvest") {
       await handleCronHarvest(req, res);
     } else if (path === "/health") {
@@ -799,7 +980,9 @@ const server = createServer(async (req, res) => {
       sendJson(res, {
         message: "مكسب Workers Server — Railway",
         endpoints: {
+          "GET /harvest?scope_code=XXX": "Harvest a specific scope (browser-testable)",
           "POST /harvest": "Harvest a specific scope { scope_code }",
+          "GET /harvest/status": "Engine & scopes status overview",
           "GET /cron/harvest": "Automated harvest (picks ready scopes)",
           "GET /health": "Health check",
         },
@@ -813,7 +996,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[Server] 🟢 HTTP server running on port ${PORT}`);
-  console.log(`[Server] Endpoints: /harvest, /cron/harvest, /health`);
+  console.log(`[Server] Endpoints: /harvest, /harvest/status, /cron/harvest, /health`);
 });
 
 // Also start the auction cron worker
