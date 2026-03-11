@@ -92,7 +92,7 @@ server.listen(PORT, () => {
 
 // Also start the auction cron worker
 console.log('[Server] Starting auction cron worker...');
-import('./auction-cron.ts').catch((err) => {
+import('./auction-cron').catch((err) => {
   console.error('[Server] Failed to start auction cron:', err.message);
   // Don't crash — the test endpoint should still work
 });
