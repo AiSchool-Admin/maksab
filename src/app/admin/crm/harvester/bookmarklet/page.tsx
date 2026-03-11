@@ -614,10 +614,7 @@ function extractListings(){
     var cardText=article.textContent||'';
     var priceMatch=cardText.match(/([\\d,]+)\\s*ج\\.م/);
     var price=priceMatch?parseInt(priceMatch[1].replace(/,/g,'')):null;
-    var govs=['الإسكندرية','القاهرة','الجيزة','القليوبية','الشرقية','الدقهلية','الغربية','المنوفية','البحيرة','دمياط','بورسعيد','الإسماعيلية','السويس','الفيوم','المنيا','أسيوط','سوهاج','قنا','الأقصر','أسوان','البحر الأحمر','الوادي الجديد','مطروح','شمال سيناء','جنوب سيناء','كفر الشيخ','بني سويف'];
-    var locRegex=new RegExp('([\\\\u0600-\\\\u06FF\\\\s]+)[،,]\\\\s*(' + govs.join('|') + ')');
-    var locationMatch=cardText.match(locRegex);
-    var location=locationMatch?(locationMatch[1].trim()+'، '+locationMatch[2].trim()):'';
+    var location=(function(text){var govs=['الإسكندرية','القاهرة','الجيزة','القليوبية','الشرقية','الدقهلية','الغربية','المنوفية','البحيرة','دمياط','بورسعيد','الإسماعيلية','السويس','الفيوم','المنيا','أسيوط','سوهاج','قنا','الأقصر','أسوان','البحر الأحمر','الوادي الجديد','مطروح','شمال سيناء','جنوب سيناء','كفر الشيخ','بني سويف'];for(var g=0;g<govs.length;g++){var govIdx=text.indexOf(govs[g]);if(govIdx===-1)continue;var before=text.substring(Math.max(0,govIdx-30),govIdx);var ci=before.lastIndexOf('،');if(ci===-1)ci=before.lastIndexOf(',');if(ci!==-1){var areaText=before.substring(ci+1).trim();var am=areaText.match(/([\u0600-\u06FF\s]{2,})$/);var area=am?am[1].trim():areaText.trim();if(area.length>=2&&area.length<=30)return area+'\u060C '+govs[g];}return govs[g];}return '';})(cardText);
     var dateMatch=cardText.match(/منذ\\s+\\d+\\s*(?:دقيقة|دقائق|ساعة|ساعات|يوم|أيام|أسبوع|أسابيع|شهر|أشهر|سنة|سنوات)/);
     var dateText=dateMatch?dateMatch[0].trim():'';
     var supportsExchange=cardText.indexOf('متوفر التبادل')>-1||cardText.indexOf('تبادل')>-1;
