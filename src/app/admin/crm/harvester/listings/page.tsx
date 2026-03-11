@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { getAdminHeaders } from "@/app/admin/layout";
 import type { AheListing } from "@/lib/crm/harvester/types";
@@ -175,10 +176,13 @@ export default function ListingsPage() {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           {listing.thumbnail_url && (
-                            <img
+                            <Image
                               src={listing.thumbnail_url}
                               alt=""
+                              width={48}
+                              height={48}
                               className="w-12 h-12 object-cover rounded"
+                              unoptimized
                             />
                           )}
                           <div className="min-w-0">
