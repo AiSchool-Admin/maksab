@@ -740,12 +740,15 @@ async function getHarvestStatus(): Promise<Record<string, any>> {
     .eq("id", 1)
     .single();
 
-  // Get all scopes with summary
-  const { data: scopes } = await supabase
+  // Get all scopes with summary (no filters — fetch everything for debug)
+  const { data: scopes, error: scopesError } = await supabase
     .from("ahe_scopes")
-    .select("code, name, is_active, is_paused, server_fetch_blocked, source_platform, governorate, maksab_category, last_harvest_at, next_harvest_at, last_harvest_new_listings, last_harvest_new_sellers, total_harvests, total_listings_found, total_sellers_found, consecutive_failures, harvest_interval_minutes")
+    .select("*")
     .order("is_active", { ascending: false })
     .order("last_harvest_at", { ascending: false, nullsFirst: false });
+
+  console.log("All scopes count:", scopes?.length ?? 0);
+  console.log("All scopes error:", scopesError?.message ?? "none");
 
   // Count totals
   const { count: totalListings } = await supabase
@@ -767,6 +770,8 @@ async function getHarvestStatus(): Promise<Record<string, any>> {
     (!s.next_harvest_at || new Date(s.next_harvest_at) <= now)
   );
 
+  const allScopes = scopes || [];
+
   return {
     env_check: {
       has_supabase_url: !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
@@ -784,13 +789,42 @@ async function getHarvestStatus(): Promise<Record<string, any>> {
       crm_leads_from_harvest: crmLeads || 0,
     },
     scopes_summary: {
-      total: (scopes || []).length,
-      active: (scopes || []).filter((s: any) => s.is_active).length,
-      blocked: (scopes || []).filter((s: any) => s.server_fetch_blocked).length,
+      total: allScopes.length,
+      active: allScopes.filter((s: any) => s.is_active && !s.is_paused && !s.server_fetch_blocked).length,
+      paused: allScopes.filter((s: any) => s.is_active && s.is_paused).length,
+      blocked: allScopes.filter((s: any) => s.server_fetch_blocked).length,
+      inactive: allScopes.filter((s: any) => !s.is_active).length,
       ready_now: readyScopes.length,
     },
-    scopes: (scopes || []).map((s: any) => ({
-      ...s,
+    debug_scopes: {
+      total_in_db: allScopes.length,
+      error: scopesError?.message || null,
+      first_scope: allScopes[0]?.code || null,
+      first_scope_flags: allScopes[0] ? {
+        is_active: allScopes[0].is_active,
+        is_paused: allScopes[0].is_paused,
+        server_fetch_blocked: allScopes[0].server_fetch_blocked,
+      } : null,
+    },
+    scopes: allScopes.map((s: any) => ({
+      code: s.code,
+      name: s.name,
+      status: !s.is_active ? "inactive" : s.server_fetch_blocked ? "blocked" : s.is_paused ? "paused" : "active",
+      is_active: s.is_active,
+      is_paused: s.is_paused,
+      server_fetch_blocked: s.server_fetch_blocked,
+      source_platform: s.source_platform,
+      governorate: s.governorate,
+      maksab_category: s.maksab_category,
+      last_harvest_at: s.last_harvest_at,
+      next_harvest_at: s.next_harvest_at,
+      last_harvest_new_listings: s.last_harvest_new_listings,
+      last_harvest_new_sellers: s.last_harvest_new_sellers,
+      total_harvests: s.total_harvests,
+      total_listings_found: s.total_listings_found,
+      total_sellers_found: s.total_sellers_found,
+      consecutive_failures: s.consecutive_failures,
+      harvest_interval_minutes: s.harvest_interval_minutes,
       is_ready: s.is_active && !s.is_paused && !s.server_fetch_blocked &&
         (!s.next_harvest_at || new Date(s.next_harvest_at) <= now),
     })),
