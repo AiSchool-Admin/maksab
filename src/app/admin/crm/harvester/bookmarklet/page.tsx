@@ -747,59 +747,43 @@ if(listings.length===0){
 /* Instead of scanning all <a> links, start from dubizzle CDN thumbnail images */
 if(listings.length===0){
   strategy='DOM-images';
+  /* ═══ DEBUG: 400x300 focused analysis (ad images only, skip 120x90 logos) ═══ */
+  var adImages400=document.querySelectorAll('img[src*="-400x300"]');
+  console.log('=== Maksab 400x300 DEBUG ===');
+  console.log('عدد صور 400x300:', adImages400.length);
+  if(adImages400.length>0){
+    var dbgImg400=adImages400[0];
+    console.log('img src:', dbgImg400.src);
+    console.log('img alt:', dbgImg400.alt);
+    var el400=dbgImg400;
+    for(var level=1;level<=8;level++){
+      el400=el400.parentElement;
+      if(!el400)break;
+      var text400=el400.textContent||'';
+      var hasPrice400=text400.indexOf('ج.م')>-1;
+      var hasDate400=text400.indexOf('منذ')>-1;
+      var hasLocation400=/[\u0600-\u06FF]+،/.test(text400);
+      var adLink400=el400.querySelector('a[href*="/ad/"]');
+      console.log('Level '+level+':', {
+        tag:el400.tagName,
+        class:(el400.className||'').substring(0,50),
+        hasPrice:hasPrice400,
+        hasDate:hasDate400,
+        hasLocation:hasLocation400,
+        hasAdLink:adLink400?adLink400.href.substring(0,60):null,
+        textLength:text400.length,
+        textSample:text400.substring(0,150)
+      });
+      if(hasPrice400&&hasDate400){
+        console.log('=== FOUND CARD at Level '+level+' ===');
+        console.log('Card outerHTML (first 2000):', el400.outerHTML.substring(0,2000));
+        break;
+      }
+    }
+  }
+  /* ═══ END 400x300 DEBUG ═══ */
   var adImages=document.querySelectorAll('img[src*="images.dubizzle.com.eg"],img[src*="dbzl.com/images"],img[data-src*="images.dubizzle.com.eg"],img[src*="dubizzle"][src*="thumbnail"]');
   console.log('Maksab: DOM-images strategy — found '+adImages.length+' dubizzle CDN images');
-  /* ═══ DEBUG: Parent chain for first 3 images ═══ */
-  for(var dbg=0;dbg<Math.min(3,adImages.length);dbg++){
-    var dbgImg=adImages[dbg];
-    console.log('Maksab IMG #'+dbg+':', {
-      src: dbgImg.src,
-      alt: dbgImg.alt||dbgImg.title||'(no alt)',
-      p1_tag: dbgImg.parentElement?dbgImg.parentElement.tagName:null,
-      p1_class: dbgImg.parentElement?dbgImg.parentElement.className.substring(0,80):null,
-      p2_tag: dbgImg.parentElement&&dbgImg.parentElement.parentElement?dbgImg.parentElement.parentElement.tagName:null,
-      p2_class: dbgImg.parentElement&&dbgImg.parentElement.parentElement?dbgImg.parentElement.parentElement.className.substring(0,80):null,
-      p3_tag: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.tagName:null,
-      p3_class: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.className.substring(0,80):null,
-      p4_tag: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.parentElement.tagName:null,
-      p4_class: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.parentElement.className.substring(0,80):null,
-      p5_tag: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement.tagName:null,
-      p5_class: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement?dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement.className.substring(0,80):null,
-      closest_a: dbgImg.closest('a')?(dbgImg.closest('a').href||'').substring(0,100):'(no <a>)',
-      p3_text_sample: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement?(dbgImg.parentElement.parentElement.parentElement.textContent||'').substring(0,200):'',
-      p5_text_sample: dbgImg.parentElement&&dbgImg.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement&&dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement?(dbgImg.parentElement.parentElement.parentElement.parentElement.parentElement.textContent||'').substring(0,200):''
-    });
-  }
-  /* ═══ DEBUG: Ad links with /ad/ ═══ */
-  var adLinks=document.querySelectorAll('a[href*="/ad/"]');
-  console.log('Maksab: عدد روابط /ad/:', adLinks.length);
-  if(adLinks.length>0){
-    console.log('Maksab: أول رابط إعلان:', adLinks[0].href);
-    console.log('Maksab: parent:', adLinks[0].parentElement?(adLinks[0].parentElement.className||'').substring(0,100):'');
-    console.log('Maksab: text:', (adLinks[0].textContent||'').substring(0,200));
-  }
-  /* ═══ DEBUG: AD LINK outerHTML — deep card structure ═══ */
-  if(adLinks.length>0){
-    var firstAd=adLinks[0];
-    console.log('=== Maksab AD LINK DEBUG ===');
-    console.log('href:', firstAd.href);
-    console.log('link innerHTML length:', firstAd.innerHTML.length);
-    console.log('link text:', firstAd.textContent.substring(0,100));
-    var ancestor=firstAd;
-    for(var i=0;i<5;i++){
-      if(ancestor.parentElement) ancestor=ancestor.parentElement;
-    }
-    console.log('ancestor (5 up) outerHTML:', ancestor.outerHTML.substring(0,3000));
-  }
-  /* ═══ DEBUG: aria/data-testid/class ad elements ═══ */
-  var adElements=document.querySelectorAll('[aria-label*="ad"],[data-testid*="ad"],[data-testid*="listing"],[class*="listing-card"],[class*="ad-card"]');
-  console.log('Maksab: عناصر ad/listing:', adElements.length);
-  if(adElements.length>0){
-    for(var ae=0;ae<Math.min(3,adElements.length);ae++){
-      console.log('Maksab: ad element #'+ae+':', {tag:adElements[ae].tagName, class:(adElements[ae].className||'').substring(0,100), testid:adElements[ae].getAttribute('data-testid'), aria:adElements[ae].getAttribute('aria-label'), text:(adElements[ae].textContent||'').substring(0,150)});
-    }
-  }
-  /* ═══ END DEBUG ═══ */
   var seen={};
   for(var di=0;di<adImages.length;di++){
     var img=adImages[di];
