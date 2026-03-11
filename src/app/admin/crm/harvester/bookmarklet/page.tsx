@@ -614,11 +614,12 @@ function extractListings(){
     var cardText=article.textContent||'';
     var priceMatch=cardText.match(/([\\d,]+)\\s*ج\\.م/);
     var price=priceMatch?parseInt(priceMatch[1].replace(/,/g,'')):null;
-    var locationMatch=cardText.match(/([\\u0600-\\u06FF\\s]+)[،,]\\s*([\\u0600-\\u06FF\\s]+)/);
+    var govs=['الإسكندرية','القاهرة','الجيزة','القليوبية','الشرقية','الدقهلية','الغربية','المنوفية','البحيرة','دمياط','بورسعيد','الإسماعيلية','السويس','الفيوم','المنيا','أسيوط','سوهاج','قنا','الأقصر','أسوان','البحر الأحمر','الوادي الجديد','مطروح','شمال سيناء','جنوب سيناء','كفر الشيخ','بني سويف'];
+    var locRegex=new RegExp('([\\\\u0600-\\\\u06FF\\\\s]+)[،,]\\\\s*(' + govs.join('|') + ')');
+    var locationMatch=cardText.match(locRegex);
     var location=locationMatch?(locationMatch[1].trim()+'، '+locationMatch[2].trim()):'';
-    var dateMatch=cardText.match(/منذ\\s+[^\\n\\r]+/);
+    var dateMatch=cardText.match(/منذ\\s+\\d+\\s*(?:دقيقة|دقائق|ساعة|ساعات|يوم|أيام|أسبوع|أسابيع|شهر|أشهر|سنة|سنوات)/);
     var dateText=dateMatch?dateMatch[0].trim():'';
-    if(dateText.length>30)dateText=dateText.substring(0,30);
     var supportsExchange=cardText.indexOf('متوفر التبادل')>-1||cardText.indexOf('تبادل')>-1;
     var isNegotiable=cardText.indexOf('قابل للتفاوض')>-1;
     var isFeatured=cardText.indexOf('مميز')>-1;
