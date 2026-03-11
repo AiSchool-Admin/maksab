@@ -4,8 +4,8 @@
   "private": true,
   "description": "Background workers for مكسب (Maksab) — auction processing, notifications, ad expiry",
   "scripts": {
-    "start": "npx tsx workers/auction-cron.ts",
-    "dev": "npx tsx --watch workers/auction-cron.ts"
+    "start": "npx tsx workers/server.ts",
+    "dev": "npx tsx --watch workers/server.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",

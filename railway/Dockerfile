@@ -13,5 +13,5 @@ COPY railway/workers/ ./workers/
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD node -e "process.exit(0)" || exit 1
 
-# Start the auction cron worker using locally installed tsx
-CMD ["node_modules/.bin/tsx", "workers/auction-cron.ts"]
+# Start the server (HTTP endpoints + auction cron worker)
+CMD ["node_modules/.bin/tsx", "workers/server.ts"]
