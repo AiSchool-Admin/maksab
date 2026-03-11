@@ -59,11 +59,23 @@ export async function GET(req: NextRequest) {
       .eq("metric_date", today)
       .maybeSingle();
 
-    // Get active scopes count
-    const { count: activeScopesCount } = await supabase
+    // Get ALL scopes (no filter — so we can compute breakdown)
+    const { data: scopes } = await supabase
       .from("ahe_scopes")
-      .select("*", { count: "exact", head: true })
-      .eq("is_active", true);
+      .select("*")
+      .order("priority", { ascending: false })
+      .order("name");
+
+    const allScopes = scopes || [];
+
+    // Compute scopes breakdown
+    const scopesBreakdown = {
+      total: allScopes.length,
+      active: allScopes.filter((s) => s.is_active && !s.is_paused && !s.server_fetch_blocked).length,
+      paused: allScopes.filter((s) => s.is_active && s.is_paused).length,
+      blocked: allScopes.filter((s) => s.server_fetch_blocked).length,
+      inactive: allScopes.filter((s) => !s.is_active).length,
+    };
 
     // Get recent jobs
     const { data: recentJobs } = await supabase
@@ -71,13 +83,6 @@ export async function GET(req: NextRequest) {
       .select("*, ahe_scopes(name, code)")
       .order("created_at", { ascending: false })
       .limit(10);
-
-    // Get scopes summary
-    const { data: scopes } = await supabase
-      .from("ahe_scopes")
-      .select("*")
-      .order("priority", { ascending: false })
-      .order("name");
 
     return NextResponse.json({
       engine: engineStatus,
@@ -88,9 +93,10 @@ export async function GET(req: NextRequest) {
         total_phones_extracted: 0,
         total_auto_queued: 0,
       },
-      active_scopes_count: activeScopesCount || 0,
+      active_scopes_count: scopesBreakdown.active,
+      scopes_breakdown: scopesBreakdown,
       recent_jobs: recentJobs || [],
-      scopes: scopes || [],
+      scopes: allScopes,
     });
   } catch (error) {
     return NextResponse.json(
