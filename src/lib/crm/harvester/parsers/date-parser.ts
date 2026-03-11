@@ -23,7 +23,7 @@ export function parseRelativeDate(
   const num = numMatch ? parseInt(numMatch[1]) : 1;
 
   // دقيقة / دقائق / minutes
-  if (t.match(/دقيق|minute/i)) {
+  if (t.match(/دقيق|دقائق|minute/i)) {
     const d = new Date(referenceDate);
     d.setMinutes(d.getMinutes() - num);
     return d;
