@@ -580,9 +580,7 @@ async function fetchAndExtractDetail(
   }
 
   // ═══ Update listing ═══
-  const updateData: Record<string, any> = {
-    detail_fetched_at: new Date().toISOString(),
-  };
+  const updateData: Record<string, any> = {};
   if (phone) {
     updateData.extracted_phone = phone;
     updateData.phone_source = phoneSource;
@@ -590,10 +588,23 @@ async function fetchAndExtractDetail(
   if (sellerName) updateData.seller_name = sellerName;
   if (sellerProfileUrl) updateData.seller_profile_url = sellerProfileUrl;
 
-  await supabase
+  // Try with detail_fetched_at (may not exist yet)
+  const fullUpdate = { ...updateData, detail_fetched_at: new Date().toISOString() };
+  const { error: updateErr } = await supabase
     .from("ahe_listings")
-    .update(updateData)
+    .update(fullUpdate)
     .eq("id", listing.id);
+
+  if (updateErr) {
+    console.log(`[Detail] Update with detail_fetched_at failed: ${updateErr.message} — retrying without`);
+    // Fallback: update without detail_fetched_at
+    if (Object.keys(updateData).length > 0) {
+      await supabase
+        .from("ahe_listings")
+        .update(updateData)
+        .eq("id", listing.id);
+    }
+  }
 
   // ═══ Update seller record ═══
   if (listing.ahe_seller_id) {
@@ -904,7 +915,7 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     }
 
     // Insert listing
-    const { error: insertErr } = await supabase.from("ahe_listings").insert({
+    const insertData: Record<string, any> = {
       scope_id: scope.id,
       source_platform: scope.source_platform,
       source_listing_url: listing.url,
@@ -930,7 +941,16 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       ahe_seller_id: aheSellerId,
       extracted_phone: listing.extractedPhone,
       phone_source: listing.phoneSource,
-    });
+    };
+    let { error: insertErr } = await supabase.from("ahe_listings").insert(insertData);
+
+    // If insert fails (possibly phone_source column doesn't exist), retry without it
+    if (insertErr && insertErr.message?.includes("phone_source")) {
+      console.log(`[Harvest] Insert with phone_source failed, retrying without: ${insertErr.message}`);
+      delete insertData.phone_source;
+      const retry = await supabase.from("ahe_listings").insert(insertData);
+      insertErr = retry.error;
+    }
 
     if (insertErr) {
       errors.push(`Insert error for "${listing.title}": ${insertErr.message}`);
@@ -946,20 +966,29 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
   const DETAIL_TIMEOUT = 4 * 60 * 1000; // 4 minutes
 
   try {
-    const { data: newWithoutPhone } = await supabase
+    // Query without detail_fetched_at filter first (column may not exist yet)
+    // Then try with filter if available
+    let newWithoutPhone: any[] | null = null;
+    let detailQuery = supabase
       .from("ahe_listings")
       .select("id, source_listing_url, ahe_seller_id, seller_name")
       .eq("scope_id", scope.id)
       .is("extracted_phone", null)
-      .is("detail_fetched_at", null)
       .eq("is_duplicate", false)
       .order("created_at", { ascending: false })
       .limit(50);
 
+    const { data: queryResult, error: queryErr } = await detailQuery;
+    if (queryErr) {
+      console.log(`[Detail] Query error: ${queryErr.message}`);
+    }
+    newWithoutPhone = queryResult;
+
     console.log(`[Harvest] === Detail Fetch Debug ===`);
-    console.log(`[Harvest] 📞 New listings without phone: ${newWithoutPhone?.length ?? 0}`);
+    console.log(`[Harvest] 📞 Query returned: ${newWithoutPhone?.length ?? 0} listings, error: ${queryErr?.message || 'none'}`);
 
     if (newWithoutPhone && newWithoutPhone.length > 0) {
+      console.log(`[Detail] Starting detail fetch for ${newWithoutPhone.length} listings`);
       for (let i = 0; i < newWithoutPhone.length; i++) {
         if (Date.now() - detailStartTime > DETAIL_TIMEOUT) {
           console.log(`[Detail] Timeout after ${i} listings — stopping detail fetch`);
@@ -972,6 +1001,10 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
           const detailResult = await fetchAndExtractDetail(supabase, listing, i, "detail_page");
           if (detailResult.phone) phonesExtracted++;
         } catch (e: any) {
+          if (e.message === "HTTP_403_BLOCKED") {
+            console.log(`[Detail] 403 blocked — stopping all detail fetching`);
+            break;
+          }
           console.log(`[Harvest] 📞 Detail fetch error: ${e.message}`);
         }
       }
@@ -984,15 +1017,16 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     if (timeRemaining > 30000) { // more than 30 seconds remaining
       console.log(`[Smart Fill] Time remaining: ${Math.round(timeRemaining / 1000)}s`);
 
-      const { data: oldListings } = await supabase
+      const { data: oldListings, error: oldErr } = await supabase
         .from("ahe_listings")
         .select("id, source_listing_url, ahe_seller_id, seller_name")
         .eq("scope_id", scope.id)
         .is("extracted_phone", null)
-        .is("detail_fetched_at", null)
         .eq("is_duplicate", false)
         .order("created_at", { ascending: false })
         .limit(30);
+
+      console.log(`[Smart Fill] Query: ${oldListings?.length ?? 0} listings, error: ${oldErr?.message || 'none'}`);
 
       if (oldListings && oldListings.length > 0) {
         console.log(`[Smart Fill] Found ${oldListings.length} old listings without phone`);
@@ -1011,6 +1045,10 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
             if (result.phone) smartFillPhones++;
             smartFillProcessed++;
           } catch (e: any) {
+            if (e.message === "HTTP_403_BLOCKED") {
+              console.log(`[Smart Fill] 403 blocked — stopping`);
+              break;
+            }
             console.log(`[Smart Fill] Error: ${e.message}`);
           }
         }
@@ -1020,7 +1058,8 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       }
     }
   } catch (e: any) {
-    console.log(`[Harvest] 📞 Detail extraction error: ${e.message}`);
+    console.log(`[Harvest] 📞 FATAL Detail extraction error: ${e.message}`);
+    console.log(`[Harvest] 📞 Stack: ${e.stack?.substring(0, 300)}`);
   }
 
   // 4. Update scope stats
@@ -1288,8 +1327,13 @@ async function enrichListings(): Promise<{
   console.log('[Enrich] Starting enrichment cycle...');
   const supabase = getSupabase();
 
-  // Fetch 10 listings without phone that haven't been detail-fetched yet
-  const { data: listings, error } = await supabase
+  // Fetch 10 listings without phone
+  // Try with detail_fetched_at filter first, fallback without it if column doesn't exist
+  let listings: any[] | null = null;
+  let error: any = null;
+
+  // Try with detail_fetched_at filter
+  const result1 = await supabase
     .from("ahe_listings")
     .select("id, source_listing_url, ahe_seller_id, seller_name")
     .is("extracted_phone", null)
@@ -1297,6 +1341,25 @@ async function enrichListings(): Promise<{
     .eq("is_duplicate", false)
     .order("created_at", { ascending: false })
     .limit(10);
+
+  if (result1.error) {
+    console.log(`[Enrich] Query with detail_fetched_at failed: ${result1.error.message}`);
+    // Fallback: query without detail_fetched_at
+    const result2 = await supabase
+      .from("ahe_listings")
+      .select("id, source_listing_url, ahe_seller_id, seller_name")
+      .is("extracted_phone", null)
+      .eq("is_duplicate", false)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    listings = result2.data;
+    error = result2.error;
+  } else {
+    listings = result1.data;
+    error = result1.error;
+  }
+
+  console.log(`[Enrich] Query result: count=${listings?.length ?? 0}, error=${error?.message || 'none'}`);
 
   if (error || !listings?.length) {
     console.log('[Enrich] No listings to enrich:', error?.message || 'all enriched');
