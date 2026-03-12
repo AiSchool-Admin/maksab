@@ -73,6 +73,7 @@ interface HarvestResult {
   crm_queued: number;
   errors: string[];
   duration_ms: number;
+  debug?: Record<string, any>;
 }
 
 // ─── Cheerio-based Dubizzle Parser ───────────────────────────
@@ -936,9 +937,8 @@ function readBody(req: IncomingMessage): Promise<string> {
 // ─── Route Handlers ──────────────────────────────────────────
 
 async function handleHarvest(req: IncomingMessage, res: ServerResponse) {
+  let scope_code: string | null = null;
   try {
-    let scope_code: string | null = null;
-
     if (req.method === "GET") {
       // GET /harvest?scope_code=dub_phones_alex
       const url = new URL(req.url || "/", `http://localhost:${PORT}`);
