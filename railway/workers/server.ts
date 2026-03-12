@@ -1317,6 +1317,18 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[Server] 🟢 HTTP server running on port ${PORT}`);
   console.log(`[Server] Endpoints: /harvest, /harvest/status, /cron/harvest, /health`);
+
+  // Railway Cron بيعمل restart كل 15 دقيقة
+  // عند كل restart — شغّل حصادة واحدة تلقائياً
+  setTimeout(async () => {
+    console.log('[Auto-Cron] Server started — running automatic harvest...');
+    try {
+      const result = await cronHarvest();
+      console.log('[Auto-Cron] Complete:', JSON.stringify(result));
+    } catch (e: any) {
+      console.log('[Auto-Cron] Error:', e.message);
+    }
+  }, 10000); // 10 ثواني بعد البدء
 });
 
 // Also start the auction cron worker
