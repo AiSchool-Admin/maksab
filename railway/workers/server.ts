@@ -1394,6 +1394,276 @@ async function enrichListings(): Promise<{
   return { enriched: listings.length, phones_found: phonesFound, names_found: namesFound };
 }
 
+// ─── Template Engine (inline — mirrors src/lib/whatsapp/template-engine.ts) ──
+const CATEGORY_AR_MAP: Record<string, string> = {
+  phones: 'الموبايلات', vehicles: 'السيارات', properties: 'العقارات',
+  electronics: 'الإلكترونيات', furniture: 'الأثاث', fashion: 'الملابس',
+  gold: 'الذهب والفضة', luxury: 'السلع الفاخرة', appliances: 'الأجهزة المنزلية',
+  hobbies: 'الهوايات', tools: 'العدد والأدوات', services: 'الخدمات', scrap: 'الخردة',
+};
+
+const GOV_AR_MAP: Record<string, string> = {
+  cairo: 'القاهرة', giza: 'الجيزة', alexandria: 'الإسكندرية',
+  dakahlia: 'الدقهلية', beheira: 'البحيرة', monufia: 'المنوفية',
+  gharbia: 'الغربية', sharqia: 'الشرقية', qalyubia: 'القليوبية',
+  fayoum: 'الفيوم', minya: 'المنيا', assiut: 'أسيوط', sohag: 'سوهاج',
+  port_said: 'بورسعيد', suez: 'السويس', ismailia: 'الإسماعيلية',
+};
+
+function renderTemplate(body: string, vars: Record<string, string>): string {
+  let r = body;
+  for (const [k, v] of Object.entries(vars)) {
+    r = r.split(`{{${k}}}`).join(v || '');
+  }
+  return r;
+}
+
+function getTemplateVars(seller: any): Record<string, string> {
+  return {
+    first_name: seller.name?.split(' ')[0] || 'أهلاً',
+    customer_name: seller.name || '',
+    category_name_ar: CATEGORY_AR_MAP[seller.primary_category] || 'المنتجات',
+    listings_count: String(seller.total_listings_seen || 0),
+    governorate: GOV_AR_MAP[seller.primary_governorate] || seller.primary_governorate || 'مصر',
+    join_url: `https://maksab.app/join?ref=${seller.id || ''}`,
+    competitor_name: 'دوبيزل',
+  };
+}
+
+// ─── Outreach Engine ────────────────────────────────────────
+async function processOutreach(): Promise<{
+  new_conversations: number;
+  followups_sent: number;
+  completed: number;
+}> {
+  console.log('[Outreach] Starting outreach cycle...');
+  const supabase = getSupabase();
+  let newConversations = 0;
+  let followupsSent = 0;
+  let completedCount = 0;
+
+  try {
+    // ═══ Step 1: New sellers with phones not yet contacted ═══
+    const { data: sellers, error: sellersErr } = await supabase
+      .from("ahe_sellers")
+      .select("id, name, phone, primary_category, primary_governorate, is_verified, is_business, whale_score, priority_score, total_listings_seen, profile_url")
+      .not("phone", "is", null)
+      .in("pipeline_status", ["phone_found", "auto_queued"])
+      .order("whale_score", { ascending: false, nullsFirst: false })
+      .order("priority_score", { ascending: false })
+      .limit(5);
+
+    if (sellersErr) {
+      console.log(`[Outreach] Sellers query error: ${sellersErr.message}`);
+    }
+
+    console.log(`[Outreach] Found ${sellers?.length || 0} new sellers to contact`);
+
+    if (sellers && sellers.length > 0) {
+      // Load automation rules
+      const { data: rules } = await supabase
+        .from("wa_automation_rules")
+        .select("*")
+        .eq("trigger_type", "new_seller")
+        .eq("is_active", true)
+        .order("priority", { ascending: false });
+
+      for (const seller of sellers) {
+        try {
+          // Check if already contacted
+          const { data: existing } = await supabase
+            .from("wa_conversations")
+            .select("id")
+            .eq("phone", seller.phone)
+            .maybeSingle();
+
+          if (existing) {
+            console.log(`[Outreach] Already contacted: ${seller.phone}`);
+            continue;
+          }
+
+          // Determine seller type
+          const sellerType = (seller.whale_score && seller.whale_score >= 70) ? 'whale'
+            : seller.is_business ? 'business' : 'individual';
+
+          // Pick the best matching template
+          let matchedRule = rules?.find((r: any) => {
+            const cond = r.conditions || {};
+            if (cond.category && cond.seller_type) {
+              return cond.category === seller.primary_category && cond.seller_type === sellerType;
+            }
+            if (cond.seller_type) return cond.seller_type === sellerType;
+            return false;
+          });
+
+          // Fallback to general
+          if (!matchedRule) {
+            matchedRule = rules?.find((r: any) => r.template_id === 'acq_welcome_general_v1');
+          }
+          if (!matchedRule) {
+            console.log(`[Outreach] No matching rule for seller ${seller.phone}`);
+            continue;
+          }
+
+          // Render template
+          const vars = getTemplateVars(seller);
+          const messageBody = renderTemplate(matchedRule.template_body || '', vars);
+
+          // Create conversation
+          const { data: conv, error: convErr } = await supabase
+            .from("wa_conversations")
+            .insert({
+              seller_id: seller.id,
+              phone: seller.phone,
+              customer_name: seller.name,
+              category: seller.primary_category,
+              governorate: seller.primary_governorate,
+              seller_type: sellerType,
+              listings_count: seller.total_listings_seen || 0,
+              status: 'waiting',
+              stage: 'initial_outreach',
+              messages_sent: 1,
+              last_message_at: new Date().toISOString(),
+              last_message_direction: 'outbound',
+              next_action: 'followup_24h',
+              next_action_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            })
+            .select("id")
+            .single();
+
+          if (convErr) {
+            console.log(`[Outreach] Conv insert error: ${convErr.message}`);
+            continue;
+          }
+
+          // Create message
+          await supabase.from("wa_messages").insert({
+            conversation_id: conv.id,
+            direction: 'outbound',
+            message_type: 'template',
+            body: messageBody,
+            template_id: matchedRule.template_id,
+            ai_generated: false,
+            wa_status: 'pending',
+          });
+
+          // Update seller pipeline
+          await supabase
+            .from("ahe_sellers")
+            .update({ pipeline_status: 'contacted' })
+            .eq("id", seller.id);
+
+          newConversations++;
+          console.log(`[Outreach] ✅ New conversation: ${seller.name || seller.phone} (${sellerType})`);
+        } catch (e: any) {
+          console.log(`[Outreach] Error for seller ${seller.phone}: ${e.message}`);
+        }
+      }
+    }
+
+    // ═══ Step 2: Process scheduled follow-ups ═══
+    const { data: scheduled, error: schedErr } = await supabase
+      .from("wa_conversations")
+      .select("id, phone, customer_name, next_action, seller_id, category, seller_type")
+      .lte("next_action_at", new Date().toISOString())
+      .in("status", ["waiting", "scheduled"])
+      .not("next_action", "is", null)
+      .limit(10);
+
+    if (schedErr) {
+      console.log(`[Outreach] Scheduled query error: ${schedErr.message}`);
+    }
+
+    console.log(`[Outreach] Found ${scheduled?.length || 0} scheduled follow-ups`);
+
+    if (scheduled && scheduled.length > 0) {
+      // Load follow-up rules
+      const { data: followupRules } = await supabase
+        .from("wa_automation_rules")
+        .select("*")
+        .eq("trigger_type", "followup")
+        .eq("is_active", true);
+
+      for (const conv of scheduled) {
+        try {
+          const action = conv.next_action;
+
+          // Find matching follow-up rule
+          const rule = followupRules?.find((r: any) => r.template_id === action);
+
+          // Get seller for template vars
+          let seller: any = { name: conv.customer_name, id: conv.seller_id };
+          if (conv.seller_id) {
+            const { data: s } = await supabase
+              .from("ahe_sellers")
+              .select("id, name, total_listings_seen, primary_category, primary_governorate")
+              .eq("id", conv.seller_id)
+              .single();
+            if (s) seller = s;
+          }
+
+          const vars = getTemplateVars(seller);
+          const messageBody = rule
+            ? renderTemplate(rule.template_body || '', vars)
+            : `أهلاً ${vars.first_name}، بنتابع معاك بخصوص مكسب. لو عندك أي سؤال أنا موجود! 💚`;
+
+          // Create follow-up message
+          await supabase.from("wa_messages").insert({
+            conversation_id: conv.id,
+            direction: 'outbound',
+            message_type: 'template',
+            body: messageBody,
+            template_id: action,
+            ai_generated: false,
+            wa_status: 'pending',
+          });
+
+          // Determine next action
+          let nextAction: string | null = null;
+          let nextActionAt: string | null = null;
+          let newStatus = 'waiting';
+
+          if (action === 'followup_24h') {
+            nextAction = 'followup_48h';
+            nextActionAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+          } else if (action === 'followup_48h') {
+            nextAction = 'followup_72h';
+            nextActionAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+          } else if (action === 'followup_72h') {
+            newStatus = 'completed';
+            completedCount++;
+          }
+
+          // Update conversation
+          await supabase
+            .from("wa_conversations")
+            .update({
+              messages_sent: (conv as any).messages_sent ? (conv as any).messages_sent + 1 : 2,
+              last_message_at: new Date().toISOString(),
+              last_message_direction: 'outbound',
+              next_action: nextAction,
+              next_action_at: nextActionAt,
+              status: newStatus,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", conv.id);
+
+          followupsSent++;
+          console.log(`[Outreach] ✅ Follow-up (${action}): ${conv.customer_name || conv.phone}`);
+        } catch (e: any) {
+          console.log(`[Outreach] Follow-up error: ${e.message}`);
+        }
+      }
+    }
+  } catch (e: any) {
+    console.log(`[Outreach] FATAL error: ${e.message}`);
+    console.log(`[Outreach] Stack: ${e.stack?.substring(0, 300)}`);
+  }
+
+  console.log(`[Outreach] Complete: ${newConversations} new, ${followupsSent} follow-ups, ${completedCount} completed`);
+  return { new_conversations: newConversations, followups_sent: followupsSent, completed: completedCount };
+}
+
 // ─── Cron Harvest Logic ──────────────────────────────────────
 async function cronHarvest(): Promise<{
   scopes_processed: number;
@@ -1605,6 +1875,18 @@ async function handleEnrich(_req: IncomingMessage, res: ServerResponse) {
   }
 }
 
+// ─── Outreach Handler ────────────────────────────────────────
+async function handleOutreach(_req: IncomingMessage, res: ServerResponse) {
+  try {
+    console.log("[API] GET /cron/outreach — starting outreach cycle");
+    const result = await processOutreach();
+    sendJson(res, { message: "Outreach cycle complete", ...result });
+  } catch (err: any) {
+    console.error(`[API] /cron/outreach error: ${err.message}`);
+    sendJson(res, { error: true, message: err.message }, 500);
+  }
+}
+
 // ─── Harvest Status Handler ──────────────────────────────────
 async function handleHarvestStatus(_req: IncomingMessage, res: ServerResponse) {
   try {
@@ -1641,6 +1923,8 @@ const server = createServer(async (req, res) => {
       await handleCronHarvest(req, res);
     } else if (path === "/cron/enrich") {
       await handleEnrich(req, res);
+    } else if (path === "/cron/outreach") {
+      await handleOutreach(req, res);
     } else if (path === "/health") {
       sendJson(res, {
         ok: true,
@@ -1656,6 +1940,7 @@ const server = createServer(async (req, res) => {
           "GET /harvest/status": "Engine & scopes status overview",
           "GET /cron/harvest": "Automated harvest (picks ready scopes)",
           "GET /cron/enrich": "Enrich listings without phone/name (detail fetch)",
+          "GET /cron/outreach": "Process outreach to new sellers + follow-ups",
           "GET /health": "Health check",
         },
       });
@@ -1696,6 +1981,16 @@ server.listen(PORT, () => {
       } catch (e: any) {
         console.log(`[Auto-Enrich] Cycle ${i + 1}/5 error:`, e.message);
       }
+    }
+
+    // ثالثاً: Outreach — تواصل مع معلنين جدد + متابعات
+    try {
+      await new Promise((r) => setTimeout(r, 3000));
+      console.log('[Auto-Outreach] Starting outreach...');
+      const outreachResult = await processOutreach();
+      console.log('[Auto-Outreach] Complete:', JSON.stringify(outreachResult));
+    } catch (e: any) {
+      console.log('[Auto-Outreach] Error:', e.message);
     }
   }, 10000); // 10 ثواني بعد البدء
 });
