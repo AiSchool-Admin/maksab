@@ -1123,7 +1123,7 @@ function JobStatusBadge({ status }: { status: string }) {
 }
 
 /* ═══════════════════════════════════════════════ */
-/* Outreach Tab                                    */
+/* Outreach Tab — Hybrid (Manual WhatsApp)         */
 /* ═══════════════════════════════════════════════ */
 
 interface OutreachStats {
@@ -1153,10 +1153,41 @@ interface OutreachConversation {
   last_message_body?: string;
 }
 
+interface HybridSeller {
+  id: string;
+  name: string | null;
+  phone: string;
+  primary_category: string | null;
+  primary_governorate: string | null;
+  total_listings_seen: number;
+  is_whale: boolean;
+  whale_score: number;
+  is_business: boolean;
+  is_verified: boolean;
+  detected_account_type: string | null;
+  pipeline_status: string;
+  profile_url: string | null;
+  template_id: string;
+  rendered_message: string;
+  whatsapp_url: string;
+}
+
 const CATEGORY_ICONS: Record<string, string> = {
   phones: '📱', vehicles: '🚗', properties: '🏠', electronics: '📻',
   furniture: '🪑', fashion: '👗', gold: '💰', luxury: '💎',
   appliances: '🏠', hobbies: '🎮', tools: '🔧', services: '🛠️', scrap: '♻️',
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  phones: 'موبايلات', vehicles: 'سيارات', properties: 'عقارات', electronics: 'إلكترونيات',
+  furniture: 'أثاث', fashion: 'ملابس', gold: 'ذهب', luxury: 'فاخر',
+  appliances: 'أجهزة', hobbies: 'هوايات', tools: 'عدد', services: 'خدمات', scrap: 'خردة',
+};
+
+const GOV_LABELS: Record<string, string> = {
+  cairo: 'القاهرة', giza: 'الجيزة', alexandria: 'الإسكندرية',
+  dakahlia: 'الدقهلية', beheira: 'البحيرة', monufia: 'المنوفية',
+  gharbia: 'الغربية', sharqia: 'الشرقية', qalyubia: 'القليوبية',
 };
 
 const STAGE_LABELS: Record<string, string> = {
@@ -1168,22 +1199,34 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 function OutreachTab() {
+  const [activeSubTab, setActiveSubTab] = useState<"send" | "history">("send");
   const [stats, setStats] = useState<OutreachStats | null>(null);
   const [conversations, setConversations] = useState<OutreachConversation[]>([]);
+  const [sellers, setSellers] = useState<HybridSeller[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sentCount, setSentCount] = useState(0);
+  const [skippedCount, setSkippedCount] = useState(0);
 
-  const loadOutreach = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
       const headers = getAdminHeaders();
-      const [statsRes, convsRes] = await Promise.all([
+      const [statsRes, convsRes, sellersRes] = await Promise.all([
         fetch("/api/admin/crm/harvester/outreach/stats", { headers }),
         fetch("/api/admin/crm/harvester/outreach/conversations", { headers }),
+        fetch("/api/admin/crm/harvester/outreach/hybrid?limit=30", { headers }),
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
       if (convsRes.ok) {
         const data = await convsRes.json();
         setConversations(data.conversations || []);
+      }
+      if (sellersRes.ok) {
+        const data = await sellersRes.json();
+        setSellers(data.sellers || []);
       }
     } catch (err) {
       console.error("Outreach load error:", err);
@@ -1193,8 +1236,53 @@ function OutreachTab() {
   }, []);
 
   useEffect(() => {
-    loadOutreach();
-  }, [loadOutreach]);
+    loadData();
+  }, [loadData]);
+
+  const handleCopy = async (seller: HybridSeller) => {
+    try {
+      await navigator.clipboard.writeText(seller.rendered_message);
+      setCopiedId(seller.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = seller.rendered_message;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopiedId(seller.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
+
+  const handleWhatsApp = (seller: HybridSeller) => {
+    window.open(seller.whatsapp_url, '_blank');
+  };
+
+  const handleAction = async (sellerId: string, action: "sent" | "skip") => {
+    setActionLoading(sellerId);
+    try {
+      const headers = getAdminHeaders();
+      const res = await fetch("/api/admin/crm/harvester/outreach/hybrid", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ seller_id: sellerId, action }),
+      });
+
+      if (res.ok) {
+        // Remove from list
+        setSellers((prev) => prev.filter((s) => s.id !== sellerId));
+        if (action === "sent") setSentCount((c) => c + 1);
+        if (action === "skip") setSkippedCount((c) => c + 1);
+      }
+    } catch (err) {
+      console.error("Action error:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -1208,7 +1296,6 @@ function OutreachTab() {
 
   const todayStats = stats?.today || { messages_sent: 0, responses: 0, signups: 0, response_rate: 0 };
   const funnelData = stats?.funnel || [];
-
   const FUNNEL_COLORS = ['#6B7280', '#3B82F6', '#8B5CF6', '#F59E0B', '#10B981', '#1B7A3D'];
 
   return (
@@ -1216,7 +1303,7 @@ function OutreachTab() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
-          <p className="text-3xl font-bold text-blue-600">{todayStats.messages_sent}</p>
+          <p className="text-3xl font-bold text-blue-600">{todayStats.messages_sent + sentCount}</p>
           <p className="text-sm text-gray-500 mt-1">رسائل أرسلت (اليوم)</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
@@ -1233,89 +1320,272 @@ function OutreachTab() {
         </div>
       </div>
 
-      {/* Funnel Chart */}
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">📊 قمع التحويل</h3>
-        {funnelData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={funnelData} layout="vertical" margin={{ right: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value) => [String(value), 'عدد']} />
-              <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                {funnelData.map((entry, index) => (
-                  <Cell key={index} fill={FUNNEL_COLORS[index % FUNNEL_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <p className="text-center text-gray-400 py-8">لا توجد بيانات بعد</p>
-        )}
+      {/* Sub-tabs: Send / History */}
+      <div className="flex gap-2 border-b">
+        <button
+          onClick={() => setActiveSubTab("send")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeSubTab === "send"
+              ? "border-green-600 text-green-700"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          📨 إرسال رسائل ({sellers.length} جاهز)
+        </button>
+        <button
+          onClick={() => setActiveSubTab("history")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeSubTab === "history"
+              ? "border-green-600 text-green-700"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          📊 السجل والقمع
+        </button>
       </div>
 
-      {/* Conversations Table */}
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <div className="p-4 border-b">
-          <h3 className="text-lg font-bold text-gray-900">💬 آخر المحادثات</h3>
-        </div>
-        {conversations.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-right p-3 font-medium text-gray-600">العميل</th>
-                  <th className="text-right p-3 font-medium text-gray-600">الفئة</th>
-                  <th className="text-right p-3 font-medium text-gray-600">المرحلة</th>
-                  <th className="text-right p-3 font-medium text-gray-600">آخر رسالة</th>
-                  <th className="text-right p-3 font-medium text-gray-600">الحالة</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {conversations.map((conv) => (
-                  <tr key={conv.id} className="hover:bg-gray-50">
-                    <td className="p-3">
-                      <div className="font-medium text-gray-900">
-                        {conv.customer_name || conv.phone}
-                        {conv.seller_type === 'whale' && ' 🐋'}
-                      </div>
-                      <div className="text-xs text-gray-400">{conv.phone}</div>
-                    </td>
-                    <td className="p-3">
-                      {CATEGORY_ICONS[conv.category || ''] || '📦'}{' '}
-                      <span className="text-gray-600">{conv.category || '-'}</span>
-                    </td>
-                    <td className="p-3">
-                      <span className="text-sm font-medium">
-                        {STAGE_LABELS[conv.stage] || conv.stage}
+      {activeSubTab === "send" && (
+        <div className="space-y-4">
+          {/* Session progress */}
+          {(sentCount > 0 || skippedCount > 0) && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-4 text-sm">
+              <span className="text-green-700 font-medium">الجلسة الحالية:</span>
+              <span className="text-green-600">✅ أرسلت: {sentCount}</span>
+              <span className="text-gray-500">⏭️ تخطيت: {skippedCount}</span>
+              <span className="text-gray-400 mr-auto">متبقي: {sellers.length}</span>
+            </div>
+          )}
+
+          {/* Sellers queue */}
+          {sellers.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
+              <p className="text-4xl mb-4">🎉</p>
+              <p className="text-lg font-bold text-gray-900">مفيش بائعين جدد جاهزين للتواصل</p>
+              <p className="text-sm text-gray-500 mt-2">كل البائعين اللي عندهم رقم تم التواصل معاهم أو تم تخطيهم</p>
+              <button
+                onClick={() => { setLoading(true); loadData(); }}
+                className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
+              >
+                تحديث القائمة
+              </button>
+            </div>
+          ) : (
+            sellers.map((seller) => (
+              <div
+                key={seller.id}
+                className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-all ${
+                  seller.is_whale ? 'border-yellow-300 ring-1 ring-yellow-200' : ''
+                }`}
+              >
+                {/* Header */}
+                <div className="p-4 flex items-start gap-3">
+                  {/* Avatar/icon */}
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${
+                    seller.is_whale
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : seller.is_business
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {seller.is_whale ? '🐋' : (CATEGORY_ICONS[seller.primary_category || ''] || '👤')}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-900 truncate">
+                        {seller.name || seller.phone}
                       </span>
-                    </td>
-                    <td className="p-3">
-                      <div className="text-gray-600 max-w-[200px] truncate">
-                        {conv.last_message_body?.substring(0, 30) || '-'}
-                      </div>
-                      {conv.last_message_at && (
-                        <div className="text-xs text-gray-400">
-                          {new Date(conv.last_message_at).toLocaleDateString('ar-EG')}
-                        </div>
+                      {seller.is_whale && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                          حوت {seller.whale_score}
+                        </span>
                       )}
-                    </td>
-                    <td className="p-3">
-                      <OutreachStatusBadge
-                        status={conv.status}
-                        hasResponse={conv.messages_received > 0}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      {seller.is_business && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                          تاجر
+                        </span>
+                      )}
+                      {seller.is_verified && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          موثق
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                      <span dir="ltr">{seller.phone}</span>
+                      {seller.primary_category && (
+                        <span>{CATEGORY_ICONS[seller.primary_category] || '📦'} {CATEGORY_LABELS[seller.primary_category] || seller.primary_category}</span>
+                      )}
+                      {seller.primary_governorate && (
+                        <span>📍 {GOV_LABELS[seller.primary_governorate] || seller.primary_governorate}</span>
+                      )}
+                      <span>{seller.total_listings_seen} إعلان</span>
+                    </div>
+                  </div>
+
+                  {/* Expand toggle */}
+                  <button
+                    onClick={() => setExpandedId(expandedId === seller.id ? null : seller.id)}
+                    className="text-gray-400 hover:text-gray-600 p-1"
+                    title="عرض الرسالة"
+                  >
+                    {expandedId === seller.id ? '▲' : '▼'}
+                  </button>
+                </div>
+
+                {/* Expanded message preview */}
+                {expandedId === seller.id && (
+                  <div className="mx-4 mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-xs font-medium text-green-700 mb-2">📝 الرسالة ({seller.template_id}):</p>
+                    <pre className="text-sm text-gray-800 whitespace-pre-wrap font-[Cairo] leading-relaxed">
+                      {seller.rendered_message}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="px-4 pb-4 flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleCopy(seller)}
+                    disabled={actionLoading === seller.id}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                      copiedId === seller.id
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {copiedId === seller.id ? '✅ تم النسخ!' : '📋 نسخ الرسالة'}
+                  </button>
+
+                  <button
+                    onClick={() => handleWhatsApp(seller)}
+                    disabled={actionLoading === seller.id}
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-1"
+                  >
+                    📱 واتساب
+                  </button>
+
+                  <button
+                    onClick={() => handleAction(seller.id, "sent")}
+                    disabled={actionLoading === seller.id}
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors flex items-center gap-1"
+                  >
+                    {actionLoading === seller.id ? '...' : '✅ تم الإرسال'}
+                  </button>
+
+                  <button
+                    onClick={() => handleAction(seller.id, "skip")}
+                    disabled={actionLoading === seller.id}
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-50 text-gray-500 hover:bg-gray-100 transition-colors flex items-center gap-1"
+                  >
+                    ⏭️ تخطي
+                  </button>
+
+                  {seller.profile_url && (
+                    <a
+                      href={seller.profile_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors mr-auto"
+                    >
+                      🔗 البروفايل
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {activeSubTab === "history" && (
+        <div className="space-y-6">
+          {/* Funnel Chart */}
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">📊 قمع التحويل</h3>
+            {funnelData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={funnelData} layout="vertical" margin={{ right: 30 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" />
+                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
+                  <Tooltip formatter={(value) => [String(value), 'عدد']} />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                    {funnelData.map((_entry, index) => (
+                      <Cell key={index} fill={FUNNEL_COLORS[index % FUNNEL_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center text-gray-400 py-8">لا توجد بيانات بعد</p>
+            )}
           </div>
-        ) : (
-          <p className="text-center text-gray-400 py-8">لا توجد محادثات بعد</p>
-        )}
-      </div>
+
+          {/* Conversations Table */}
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-900">💬 آخر المحادثات</h3>
+            </div>
+            {conversations.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-right p-3 font-medium text-gray-600">العميل</th>
+                      <th className="text-right p-3 font-medium text-gray-600">الفئة</th>
+                      <th className="text-right p-3 font-medium text-gray-600">المرحلة</th>
+                      <th className="text-right p-3 font-medium text-gray-600">آخر رسالة</th>
+                      <th className="text-right p-3 font-medium text-gray-600">الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {conversations.map((conv) => (
+                      <tr key={conv.id} className="hover:bg-gray-50">
+                        <td className="p-3">
+                          <div className="font-medium text-gray-900">
+                            {conv.customer_name || conv.phone}
+                            {conv.seller_type === 'whale' && ' 🐋'}
+                          </div>
+                          <div className="text-xs text-gray-400">{conv.phone}</div>
+                        </td>
+                        <td className="p-3">
+                          {CATEGORY_ICONS[conv.category || ''] || '📦'}{' '}
+                          <span className="text-gray-600">{conv.category || '-'}</span>
+                        </td>
+                        <td className="p-3">
+                          <span className="text-sm font-medium">
+                            {STAGE_LABELS[conv.stage] || conv.stage}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <div className="text-gray-600 max-w-[200px] truncate">
+                            {conv.last_message_body?.substring(0, 30) || '-'}
+                          </div>
+                          {conv.last_message_at && (
+                            <div className="text-xs text-gray-400">
+                              {new Date(conv.last_message_at).toLocaleDateString('ar-EG')}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <OutreachStatusBadge
+                            status={conv.status}
+                            hasResponse={conv.messages_received > 0}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-center text-gray-400 py-8">لا توجد محادثات بعد</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
