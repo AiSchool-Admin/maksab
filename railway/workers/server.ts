@@ -214,12 +214,19 @@ function parseDubizzleHtml(html: string): ParsedListing[] {
       }
     }
 
-    // Debug: log first article's seller extraction
-    if (listings.length === 0) {
-      console.log("Maksab DEBUG seller extraction:", {
+    // Debug: log first 2 articles' seller extraction
+    if (listings.length < 2) {
+      console.log(`[Harvest] 🔍 Seller DEBUG article #${listings.length + 1}:`, {
+        sellerName: sellerName || "(empty)",
+        sellerProfileUrl: sellerProfileUrl || "(empty)",
+        isVerified,
+        isBusiness,
         companyLink: companyLink.length > 0,
         memberLink: article.find('a[href*="/member/"]').length > 0,
-        articleHTML: article.html()?.substring(0, 500),
+        profileLink: article.find('a[href*="/profile/"]').length > 0,
+        userLink: article.find('a[href*="/user/"]').length > 0,
+        allLinks: article.find("a").map((_: any, el: any) => cheerio.load(el)("a").attr("href")).get().slice(0, 8),
+        textSample: cardText.substring(0, 200),
       });
     }
 
@@ -534,11 +541,12 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     const governorate = loc.governorate || scope.governorate;
     const city = loc.city || scope.city;
 
-    // Upsert seller
+    // Upsert seller — create even without profile URL (use name + governorate as fallback key)
     let aheSellerId: string | null = null;
     let isNewSeller = false;
 
     if (listing.sellerProfileUrl) {
+      // Strategy 1: Match by profile URL
       const { data: existingSeller } = await supabase
         .from("ahe_sellers")
         .select("id")
@@ -547,7 +555,6 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
 
       if (existingSeller) {
         aheSellerId = existingSeller.id;
-        // Increment listings count
         try {
           await supabase.rpc("increment_seller_listings", {
             p_seller_id: existingSeller.id,
@@ -560,6 +567,54 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
           .from("ahe_sellers")
           .insert({
             profile_url: listing.sellerProfileUrl,
+            name: listing.sellerName || null,
+            source_platform: scope.source_platform,
+            is_verified: listing.isVerified,
+            is_business: listing.isBusiness,
+            primary_category: scope.maksab_category,
+            primary_governorate: governorate,
+            total_listings_seen: 1,
+            priority_score: calcPriorityScore({
+              isVerified: listing.isVerified,
+              isBusiness: listing.isBusiness,
+              phone: null,
+            }),
+            pipeline_status: "discovered",
+          })
+          .select("id")
+          .single();
+
+        if (newSeller) {
+          aheSellerId = newSeller.id;
+          isNewSeller = true;
+          sellersNew++;
+        }
+      }
+    } else if (listing.sellerName) {
+      // Strategy 2: No profile URL but have seller name — match by name + platform
+      const { data: existingSeller } = await supabase
+        .from("ahe_sellers")
+        .select("id")
+        .eq("name", listing.sellerName)
+        .eq("source_platform", scope.source_platform)
+        .eq("primary_governorate", governorate)
+        .is("profile_url", null)
+        .maybeSingle();
+
+      if (existingSeller) {
+        aheSellerId = existingSeller.id;
+        try {
+          await supabase.rpc("increment_seller_listings", {
+            p_seller_id: existingSeller.id,
+          });
+        } catch {
+          // RPC may not exist
+        }
+      } else {
+        const { data: newSeller } = await supabase
+          .from("ahe_sellers")
+          .insert({
+            profile_url: null,
             name: listing.sellerName,
             source_platform: scope.source_platform,
             is_verified: listing.isVerified,
@@ -582,6 +637,35 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
           isNewSeller = true;
           sellersNew++;
         }
+      }
+    } else {
+      // Strategy 3: No profile URL, no name — create anonymous seller record
+      // so the listing still gets linked and detail-fetch phone extraction can update it later
+      const { data: newSeller } = await supabase
+        .from("ahe_sellers")
+        .insert({
+          profile_url: null,
+          name: null,
+          source_platform: scope.source_platform,
+          is_verified: listing.isVerified,
+          is_business: listing.isBusiness,
+          primary_category: scope.maksab_category,
+          primary_governorate: governorate,
+          total_listings_seen: 1,
+          priority_score: calcPriorityScore({
+            isVerified: listing.isVerified,
+            isBusiness: listing.isBusiness,
+            phone: null,
+          }),
+          pipeline_status: "discovered",
+        })
+        .select("id")
+        .single();
+
+      if (newSeller) {
+        aheSellerId = newSeller.id;
+        isNewSeller = true;
+        sellersNew++;
       }
     }
 
@@ -632,54 +716,87 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       .order("created_at", { ascending: false })
       .limit(10);
 
+    console.log(`[Harvest] === Detail Fetch Debug ===`);
+    console.log(`[Harvest] 📞 New listings without phone: ${newWithoutPhone?.length ?? 0}`);
+
     if (newWithoutPhone && newWithoutPhone.length > 0) {
-      console.log(`[Harvest] 📞 Fetching details for ${newWithoutPhone.length} listings to extract phones...`);
       for (const listing of newWithoutPhone) {
         try {
           await new Promise((r) => setTimeout(r, 5000)); // 5s delay
+          console.log(`[Harvest] 📞 Fetching detail: ${listing.source_listing_url?.substring(0, 80)}`);
           const { html: detailHtml, status: detailStatus } = await fetchDubizzlePage(listing.source_listing_url);
+          console.log(`[Harvest] 📞 Detail response status: ${detailStatus}`);
+          console.log(`[Harvest] 📞 Detail HTML length: ${detailHtml.length}`);
 
           if (detailStatus === 403) {
             console.log("[Harvest] 📞 Detail fetch blocked (403), stopping detail extraction");
             break;
           }
 
-          if (detailStatus !== 200) continue;
+          if (detailStatus !== 200) {
+            console.log(`[Harvest] 📞 Non-200 status, skipping`);
+            continue;
+          }
 
           const $detail = cheerio.load(detailHtml);
-          const description =
-            $detail("article").text() ||
-            $detail('[data-testid*="description"]').text() ||
-            $detail("body").text();
 
-          const phoneMatch = description.match(/01[0-25][\s.\-]?\d{3,4}[\s.\-]?\d{4,5}/g);
-          if (phoneMatch) {
-            const phone = normalizePhone(phoneMatch[0]);
-            if (phone) {
-              // Update listing
-              await supabase
-                .from("ahe_listings")
-                .update({ extracted_phone: phone, phone_source: "description" })
-                .eq("id", listing.id);
-
-              // Update seller phone if not already set
-              if (listing.ahe_seller_id) {
-                await supabase
-                  .from("ahe_sellers")
-                  .update({ phone, pipeline_status: "phone_found" })
-                  .eq("id", listing.ahe_seller_id)
-                  .is("phone", null);
-              }
-
-              phonesExtracted++;
-              console.log(`[Harvest] 📞 Extracted phone ${phone} from ${listing.source_listing_url}`);
+          // Try multiple selectors to find description/phone text
+          const descParts: string[] = [];
+          // Primary: article text
+          const articleText = $detail("article").text();
+          if (articleText) descParts.push(articleText);
+          // Secondary: description area
+          const descTestId = $detail('[data-testid*="description"], [data-testid*="Description"]').text();
+          if (descTestId) descParts.push(descTestId);
+          // Tertiary: common description containers
+          const descContainers = $detail('.description, #description, [class*="description"], [class*="Description"], [class*="details"], [class*="Details"]').text();
+          if (descContainers) descParts.push(descContainers);
+          // Also check phone-specific elements (some sites put phone in dedicated elements)
+          const phoneElements = $detail('[data-testid*="phone"], [class*="phone"], [class*="Phone"], a[href^="tel:"]');
+          phoneElements.each((_: any, el: any) => {
+            const telHref = $detail(el).attr("href");
+            if (telHref && telHref.startsWith("tel:")) {
+              descParts.push(telHref.replace("tel:", ""));
             }
+            descParts.push($detail(el).text());
+          });
+          // Fallback: full body
+          if (descParts.length === 0) {
+            descParts.push($detail("body").text());
+          }
+
+          const description = descParts.join(" ");
+          console.log(`[Harvest] 📞 Description length: ${description.length}`);
+          console.log(`[Harvest] 📞 Description sample: ${description.substring(0, 300).replace(/\s+/g, ' ')}`);
+
+          // Try multiple phone extraction strategies
+          const phone = extractPhone(description);
+          console.log(`[Harvest] 📞 Phone extracted: ${phone || 'none'}`);
+
+          if (phone) {
+            // Update listing
+            await supabase
+              .from("ahe_listings")
+              .update({ extracted_phone: phone, phone_source: "detail_page" })
+              .eq("id", listing.id);
+
+            // Update seller phone if not already set
+            if (listing.ahe_seller_id) {
+              await supabase
+                .from("ahe_sellers")
+                .update({ phone, pipeline_status: "phone_found" })
+                .eq("id", listing.ahe_seller_id)
+                .is("phone", null);
+            }
+
+            phonesExtracted++;
+            console.log(`[Harvest] 📞 ✅ Saved phone ${phone} for listing ${listing.id}`);
           }
         } catch (e: any) {
           console.log(`[Harvest] 📞 Detail fetch error: ${e.message}`);
         }
       }
-      console.log(`[Harvest] 📞 Detail extraction done: ${phonesExtracted} phones found`);
+      console.log(`[Harvest] 📞 Total phones extracted: ${phonesExtracted}`);
     }
   } catch (e: any) {
     console.log(`[Harvest] 📞 Detail extraction error: ${e.message}`);

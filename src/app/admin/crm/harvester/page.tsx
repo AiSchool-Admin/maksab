@@ -646,6 +646,17 @@ function ListingsTab() {
                             className="rounded object-cover"
                             style={{ width: 60, height: 45, objectFit: "cover", borderRadius: 4 }}
                             loading="lazy"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              const img = e.currentTarget;
+                              // Replace broken image with placeholder
+                              img.style.display = "none";
+                              const placeholder = document.createElement("div");
+                              placeholder.className = "bg-gray-200 rounded flex items-center justify-center text-gray-400";
+                              placeholder.style.cssText = "width:60px;height:45px;border-radius:4px;display:flex;align-items:center;justify-content:center";
+                              placeholder.textContent = "🖼️";
+                              img.parentNode?.appendChild(placeholder);
+                            }}
                           />
                         ) : (
                           <div className="bg-gray-200 rounded flex items-center justify-center text-gray-400" style={{ width: 60, height: 45, borderRadius: 4 }}>
