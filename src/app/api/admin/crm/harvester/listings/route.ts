@@ -13,11 +13,10 @@ export async function GET(req: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "20");
   const offset = (page - 1) * limit;
-  const platform = searchParams.get("platform");
   const category = searchParams.get("category");
   const governorate = searchParams.get("governorate");
-  const hasPhone = searchParams.get("has_phone");
-  const migrationStatus = searchParams.get("migration_status");
+  const priceMin = searchParams.get("price_min");
+  const priceMax = searchParams.get("price_max");
   const search = searchParams.get("search");
 
   try {
@@ -28,11 +27,10 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (platform) query = query.eq("source_platform", platform);
     if (category) query = query.eq("maksab_category", category);
     if (governorate) query = query.eq("governorate", governorate);
-    if (hasPhone === "true") query = query.not("extracted_phone", "is", null);
-    if (migrationStatus) query = query.eq("migration_status", migrationStatus);
+    if (priceMin) query = query.gte("price", parseFloat(priceMin));
+    if (priceMax) query = query.lte("price", parseFloat(priceMax));
     if (search) query = query.ilike("title", `%${search}%`);
 
     const { data: listings, count, error } = await query;
@@ -46,7 +44,7 @@ export async function GET(req: NextRequest) {
       total: count || 0,
       page,
       limit,
-      total_pages: Math.ceil((count || 0) / limit),
+      totalPages: Math.ceil((count || 0) / limit),
     });
   } catch (error) {
     return NextResponse.json(

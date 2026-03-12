@@ -5,10 +5,19 @@ import Link from "next/link";
 import { getAdminHeaders } from "@/app/admin/layout";
 import type {
   AheEngineStatus,
-  AheDailyMetrics,
   AheHarvestJob,
   AheScope,
 } from "@/lib/crm/harvester/types";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 
 interface ScopesBreakdown {
   total: number;
@@ -20,31 +29,59 @@ interface ScopesBreakdown {
 
 interface DashboardData {
   engine: AheEngineStatus;
-  daily_metrics: AheDailyMetrics;
+  daily_metrics: {
+    total_harvests: number;
+    total_listings_new: number;
+    total_sellers_new: number;
+    total_phones_extracted: number;
+    total_auto_queued: number;
+  };
   active_scopes_count: number;
   scopes_breakdown: ScopesBreakdown;
   recent_jobs: (AheHarvestJob & { ahe_scopes?: { name: string; code: string } })[];
   scopes: AheScope[];
 }
 
+interface StatsData {
+  today: {
+    harvests: number;
+    listings: number;
+    sellers: number;
+    phones: number;
+    whales: number;
+    contacted: number;
+    signed_up: number;
+    lost: number;
+  };
+  chart: { date: string; listings: number; phones: number }[];
+}
+
 export default function HarvesterDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-
   const [error, setError] = useState<{ error: string; setup_required?: boolean; details?: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<"dashboard" | "listings" | "sellers">("dashboard");
 
   const loadData = useCallback(async () => {
     try {
       setError(null);
-      const res = await fetch("/api/admin/crm/harvester", {
-        headers: getAdminHeaders(),
-      });
-      if (res.ok) {
-        setData(await res.json());
+      const headers = getAdminHeaders();
+      const [engineRes, statsRes] = await Promise.all([
+        fetch("/api/admin/crm/harvester", { headers }),
+        fetch("/api/admin/crm/harvester/stats", { headers }),
+      ]);
+
+      if (engineRes.ok) {
+        setData(await engineRes.json());
       } else {
-        const errBody = await res.json().catch(() => ({ error: "فشل في تحميل البيانات" }));
+        const errBody = await engineRes.json().catch(() => ({ error: "فشل في تحميل البيانات" }));
         setError(errBody);
+      }
+
+      if (statsRes.ok) {
+        setStats(await statsRes.json());
       }
     } catch (err) {
       console.error("Load error:", err);
@@ -58,10 +95,9 @@ export default function HarvesterDashboard() {
     loadData();
   }, [loadData]);
 
-  // Auto-refresh only when data loaded successfully (avoids spamming 500s on setup errors)
   useEffect(() => {
     if (!data || error) return;
-    const interval = setInterval(loadData, 10000);
+    const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, [data, error, loadData]);
 
@@ -99,28 +135,20 @@ export default function HarvesterDashboard() {
             <div className="bg-yellow-100 rounded-lg p-4 text-right text-sm text-yellow-800 space-y-2">
               <p className="font-bold">خطوات الإعداد:</p>
               <ol className="list-decimal list-inside space-y-1">
-                <li>أضف <code className="bg-yellow-200 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code> في متغيرات البيئة (Vercel أو .env.local)</li>
+                <li>أضف <code className="bg-yellow-200 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code> في متغيرات البيئة</li>
                 <li>تأكد من تشغيل migration رقم 00039</li>
                 <li>أعد تشغيل التطبيق</li>
               </ol>
             </div>
-            <button
-              onClick={loadData}
-              className="mt-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
-            >
+            <button onClick={loadData} className="mt-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">
               إعادة المحاولة
             </button>
           </div>
         ) : (
           <div>
             <p className="text-red-600 text-lg">{error?.error || "فشل في تحميل البيانات"}</p>
-            {error?.details && (
-              <p className="text-red-400 text-sm mt-2">{error.details}</p>
-            )}
-            <button
-              onClick={loadData}
-              className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-            >
+            {error?.details && <p className="text-red-400 text-sm mt-2">{error.details}</p>}
+            <button onClick={loadData} className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
               إعادة المحاولة
             </button>
           </div>
@@ -129,7 +157,7 @@ export default function HarvesterDashboard() {
     );
   }
 
-  const { engine, daily_metrics, active_scopes_count, scopes_breakdown, recent_jobs } = data;
+  const { engine, scopes_breakdown, recent_jobs } = data;
 
   const statusConfig = {
     running: { color: "bg-green-500", text: "يعمل", icon: "🟢" },
@@ -139,284 +167,900 @@ export default function HarvesterDashboard() {
 
   const status = statusConfig[engine.status] || statusConfig.stopped;
 
+  const todayStats = stats?.today || {
+    harvests: 0, listings: 0, sellers: 0, phones: 0,
+    whales: 0, contacted: 0, signed_up: 0, lost: 0,
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header with tabs */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">🌾 محرك الحصاد الآلي</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            نظام جمع البيانات التلقائي من المنصات المنافسة
-          </p>
+          <p className="text-gray-500 text-sm mt-1">نظام جمع البيانات التلقائي من المنصات المنافسة</p>
         </div>
         <div className="flex gap-2">
-          <Link
-            href="/admin/crm/harvester/scopes"
-            className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-          >
+          <Link href="/admin/crm/harvester/scopes" className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
             📋 النطاقات
           </Link>
-          <Link
-            href="/admin/crm/harvester/listings"
-            className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-          >
-            📰 الإعلانات
-          </Link>
-          <Link
-            href="/admin/crm/harvester/sellers"
-            className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-          >
-            👥 المعلنين
-          </Link>
-          <Link
-            href="/admin/crm/harvester/bookmarklet"
-            className="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700"
-          >
+          <Link href="/admin/crm/harvester/bookmarklet" className="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700">
             🔖 Bookmarklet
           </Link>
         </div>
       </div>
 
-      {/* Engine Control */}
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <span className={`w-4 h-4 rounded-full ${status.color} animate-pulse`} />
-            <div>
-              <h2 className="text-lg font-bold">
-                {status.icon} حالة المحرك: {status.text}
-              </h2>
-              {engine.status_reason && (
-                <p className="text-sm text-gray-500">{engine.status_reason}</p>
-              )}
+      {/* Tab Navigation */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+        {[
+          { key: "dashboard" as const, label: "📊 الرئيسية" },
+          { key: "listings" as const, label: "📰 الإعلانات" },
+          { key: "sellers" as const, label: "👥 المعلنين" },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? "bg-white text-[#1B5E20] shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "dashboard" && (
+        <>
+          {/* Engine Control */}
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <span className={`w-4 h-4 rounded-full ${status.color} animate-pulse`} />
+                <div>
+                  <h2 className="text-lg font-bold">{status.icon} حالة المحرك: {status.text}</h2>
+                  {engine.status_reason && <p className="text-sm text-gray-500">{engine.status_reason}</p>}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => controlEngine("start")}
+                  disabled={actionLoading !== null || engine.status === "running"}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {actionLoading === "start" ? "..." : "▶️ تشغيل"}
+                </button>
+                <button
+                  onClick={() => controlEngine("pause")}
+                  disabled={actionLoading !== null || engine.status !== "running"}
+                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {actionLoading === "pause" ? "..." : "⏸️ إيقاف مؤقت"}
+                </button>
+                <button
+                  onClick={() => controlEngine("stop")}
+                  disabled={actionLoading !== null || engine.status === "stopped"}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {actionLoading === "stop" ? "..." : "⏹️ إيقاف"}
+                </button>
+              </div>
+            </div>
+
+            {/* Engine quick stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-gray-500">النطاقات</p>
+                <p className="text-2xl font-bold">{scopes_breakdown?.total ?? 0}</p>
+                {scopes_breakdown && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">{scopes_breakdown.active} نشط</span>
+                    {scopes_breakdown.paused > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700">{scopes_breakdown.paused} متوقف</span>}
+                    {scopes_breakdown.blocked > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">{scopes_breakdown.blocked} محظور</span>}
+                  </div>
+                )}
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-gray-500">عمليات جارية</p>
+                <p className="text-2xl font-bold">{engine.running_jobs_count}</p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-gray-500">طلبات/الساعة</p>
+                <p className="text-2xl font-bold">{engine.current_requests_this_hour}/{engine.global_max_requests_per_hour}</p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-gray-500">أخطاء متتالية</p>
+                <p className={`text-2xl font-bold ${engine.consecutive_errors > 5 ? "text-red-600" : ""}`}>
+                  {engine.consecutive_errors}/{engine.auto_pause_threshold}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => controlEngine("start")}
-              disabled={actionLoading !== null || engine.status === "running"}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {actionLoading === "start" ? "..." : "▶️ تشغيل"}
-            </button>
-            <button
-              onClick={() => controlEngine("pause")}
-              disabled={actionLoading !== null || engine.status !== "running"}
-              className="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {actionLoading === "pause" ? "..." : "⏸️ إيقاف مؤقت"}
-            </button>
-            <button
-              onClick={() => controlEngine("stop")}
-              disabled={actionLoading !== null || engine.status === "stopped"}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {actionLoading === "stop" ? "..." : "⏹️ إيقاف"}
-            </button>
+          {/* 8 Stat Cards (2 rows × 4) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard icon="🌾" label="حصادات اليوم" value={todayStats.harvests} />
+            <StatCard icon="📋" label="إعلانات جديدة" value={todayStats.listings} highlight />
+            <StatCard icon="👤" label="معلنين جدد" value={todayStats.sellers} />
+            <StatCard icon="📞" label="أرقام مستخرجة" value={todayStats.phones} highlight />
+            <StatCard icon="📨" label="تم التواصل" value={todayStats.contacted} />
+            <StatCard icon="✅" label="سجّلوا" value={todayStats.signed_up} highlight />
+            <StatCard icon="🐋" label="حيتان" value={todayStats.whales} />
+            <StatCard icon="❌" label="لم يردوا" value={todayStats.lost} />
           </div>
-        </div>
 
-        {/* Engine Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-xs text-gray-500">النطاقات</p>
-            <p className="text-2xl font-bold">{scopes_breakdown?.total ?? active_scopes_count}</p>
-            {scopes_breakdown && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
-                  {scopes_breakdown.active} نشط
-                </span>
-                {scopes_breakdown.paused > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
-                    {scopes_breakdown.paused} متوقف
-                  </span>
-                )}
-                {scopes_breakdown.blocked > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">
-                    {scopes_breakdown.blocked} محظور
-                  </span>
-                )}
-                {scopes_breakdown.inactive > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">
-                    {scopes_breakdown.inactive} غير مفعّل
-                  </span>
-                )}
+          {/* Chart - Last 7 days */}
+          {stats?.chart && stats.chart.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <h2 className="text-lg font-bold mb-4">📈 آخر 7 أيام</h2>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={stats.chart}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(d: string) => {
+                        const date = new Date(d);
+                        return `${date.getDate()}/${date.getMonth() + 1}`;
+                      }}
+                      fontSize={12}
+                    />
+                    <YAxis fontSize={12} />
+                    <Tooltip
+                      labelFormatter={(d) => {
+                        const date = new Date(String(d));
+                        return date.toLocaleDateString("ar-EG", {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                        });
+                      }}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="listings"
+                      name="إعلانات جديدة"
+                      stroke="#1B5E20"
+                      strokeWidth={2}
+                      dot={{ fill: "#1B5E20", r: 4 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="phones"
+                      name="أرقام مستخرجة"
+                      stroke="#D4A017"
+                      strokeWidth={2}
+                      dot={{ fill: "#D4A017", r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* Blocked Scopes Warning */}
+          {data.scopes?.some((s: AheScope) => s.server_fetch_blocked) && (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+              <h2 className="text-md font-bold text-orange-800 mb-2">⚠️ نطاقات محظورة</h2>
+              <p className="text-orange-600 text-sm mb-3">تحتاج Bookmarklet — server-side محظور</p>
+              <div className="space-y-2">
+                {data.scopes.filter((s: AheScope) => s.server_fetch_blocked).map((s: AheScope) => (
+                  <div key={s.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-orange-100">
+                    <div>
+                      <span className="font-bold text-sm">{s.name}</span>
+                      <span className="text-gray-400 text-xs mr-2">({s.code})</span>
+                    </div>
+                    <Link href="/admin/crm/harvester/bookmarklet" className="px-3 py-1 bg-orange-600 text-white rounded-lg text-xs hover:bg-orange-700">
+                      🔖 Bookmarklet
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Jobs */}
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <h2 className="text-lg font-bold mb-4">آخر عمليات الحصاد</h2>
+            {recent_jobs.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">لا توجد عمليات حصاد بعد</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b text-gray-500">
+                    <tr>
+                      <th className="text-right py-3 pr-2">الوقت</th>
+                      <th className="text-right py-3">النطاق</th>
+                      <th className="text-right py-3">الحالة</th>
+                      <th className="text-right py-3">الخطوة</th>
+                      <th className="text-right py-3">جديد</th>
+                      <th className="text-right py-3">مكرر</th>
+                      <th className="text-right py-3">أرقام</th>
+                      <th className="text-right py-3">المدة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recent_jobs.map((job) => (
+                      <tr key={job.id} className="border-b hover:bg-gray-50">
+                        <td className="py-3 pr-2 text-gray-500">
+                          {new Date(job.created_at).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td className="py-3 font-medium">{job.ahe_scopes?.name || job.scope_id.slice(0, 8)}</td>
+                        <td className="py-3"><JobStatusBadge status={job.status} /></td>
+                        <td className="py-3 text-gray-500 text-xs">{job.current_step || "—"}</td>
+                        <td className="py-3 font-bold text-green-700">{job.listings_new}</td>
+                        <td className="py-3 text-gray-400">{job.listings_duplicate}</td>
+                        <td className="py-3">{job.phones_extracted}</td>
+                        <td className="py-3 text-gray-500">{job.duration_seconds ? `${job.duration_seconds}ث` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-xs text-gray-500">عمليات جارية</p>
-            <p className="text-2xl font-bold">{engine.running_jobs_count}</p>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-xs text-gray-500">طلبات/الساعة</p>
-            <p className="text-2xl font-bold">
-              {engine.current_requests_this_hour}/{engine.global_max_requests_per_hour}
-            </p>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-xs text-gray-500">أخطاء متتالية</p>
-            <p
-              className={`text-2xl font-bold ${
-                engine.consecutive_errors > 5 ? "text-red-600" : ""
-              }`}
-            >
-              {engine.consecutive_errors}/{engine.auto_pause_threshold}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Daily Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <MetricCard
-          label="حصادات اليوم"
-          value={daily_metrics.total_harvests}
-          icon="🌾"
-        />
-        <MetricCard
-          label="إعلانات جديدة"
-          value={daily_metrics.total_listings_new}
-          icon="📰"
-          highlight
-        />
-        <MetricCard
-          label="معلنين جدد"
-          value={daily_metrics.total_sellers_new}
-          icon="👥"
-        />
-        <MetricCard
-          label="أرقام مستخرجة"
-          value={daily_metrics.total_phones_extracted}
-          icon="📱"
-        />
-        <MetricCard
-          label="أُرسلوا للـ CRM"
-          value={daily_metrics.total_auto_queued}
-          icon="🚀"
-          highlight
-        />
-      </div>
-
-      {/* Blocked Scopes Warning */}
-      {data.scopes?.some((s: AheScope) => s.server_fetch_blocked) && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-          <h2 className="text-md font-bold text-orange-800 mb-2">
-            ⚠️ نطاقات محظورة من Server-side Fetch
-          </h2>
-          <p className="text-orange-600 text-sm mb-3">
-            هذه النطاقات تحتاج Bookmarklet — server-side محظور (403)
-          </p>
-          <div className="space-y-2">
-            {data.scopes
-              .filter((s: AheScope) => s.server_fetch_blocked)
-              .map((s: AheScope) => (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between bg-white rounded-lg p-3 border border-orange-100"
-                >
-                  <div>
-                    <span className="font-bold text-sm">{s.name}</span>
-                    <span className="text-gray-400 text-xs mr-2">({s.code})</span>
-                    {s.server_fetch_blocked_at && (
-                      <span className="text-orange-400 text-xs mr-2">
-                        محظور منذ {new Date(s.server_fetch_blocked_at).toLocaleDateString("ar-EG")}
-                      </span>
-                    )}
-                  </div>
-                  <Link
-                    href="/admin/crm/harvester/bookmarklet"
-                    className="px-3 py-1 bg-orange-600 text-white rounded-lg text-xs hover:bg-orange-700"
-                  >
-                    🔖 استخدم Bookmarklet
-                  </Link>
-                </div>
-              ))}
-          </div>
-        </div>
+        </>
       )}
 
-      {/* Recent Jobs */}
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <h2 className="text-lg font-bold mb-4">آخر عمليات الحصاد</h2>
+      {activeTab === "listings" && <ListingsTab />}
+      {activeTab === "sellers" && <SellersTab />}
+    </div>
+  );
+}
 
-        {recent_jobs.length === 0 ? (
-          <p className="text-gray-400 text-center py-8">لا توجد عمليات حصاد بعد</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b text-gray-500">
-                <tr>
-                  <th className="text-right py-3 pr-2">الوقت</th>
-                  <th className="text-right py-3">النطاق</th>
-                  <th className="text-right py-3">الحالة</th>
-                  <th className="text-right py-3">الخطوة</th>
-                  <th className="text-right py-3">جديد</th>
-                  <th className="text-right py-3">مكرر</th>
-                  <th className="text-right py-3">أرقام</th>
-                  <th className="text-right py-3">المدة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent_jobs.map((job) => (
-                  <tr key={job.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 pr-2 text-gray-500">
-                      {new Date(job.created_at).toLocaleTimeString("ar-EG", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td className="py-3 font-medium">
-                      {job.ahe_scopes?.name || job.scope_id.slice(0, 8)}
-                    </td>
-                    <td className="py-3">
-                      <JobStatusBadge status={job.status} />
-                    </td>
-                    <td className="py-3 text-gray-500 text-xs">
-                      {job.current_step || "—"}
-                    </td>
-                    <td className="py-3 font-bold text-green-700">
-                      {job.listings_new}
-                    </td>
-                    <td className="py-3 text-gray-400">{job.listings_duplicate}</td>
-                    <td className="py-3">{job.phones_extracted}</td>
-                    <td className="py-3 text-gray-500">
-                      {job.duration_seconds ? `${job.duration_seconds}ث` : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+/* ═══════════════════════════════════════════════ */
+/* Listings Tab                                    */
+/* ═══════════════════════════════════════════════ */
+
+interface ListingsData {
+  listings: Array<{
+    id: string;
+    title: string;
+    price: number | null;
+    thumbnail_url: string | null;
+    source_listing_url: string;
+    governorate: string | null;
+    city: string | null;
+    created_at: string;
+    estimated_posted_at: string | null;
+    migration_status: string;
+    is_expired: boolean;
+    is_featured: boolean;
+    supports_exchange: boolean;
+    seller_name: string | null;
+    seller_is_verified: boolean;
+    seller_is_business: boolean;
+  }>;
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+function ListingsTab() {
+  const [data, setData] = useState<ListingsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState({
+    governorate: "",
+    category: "",
+    price_min: "",
+    price_max: "",
+    search: "",
+  });
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", page.toString());
+      params.set("limit", "20");
+      if (filters.category) params.set("category", filters.category);
+      if (filters.governorate) params.set("governorate", filters.governorate);
+      if (filters.price_min) params.set("price_min", filters.price_min);
+      if (filters.price_max) params.set("price_max", filters.price_max);
+      if (filters.search) params.set("search", filters.search);
+
+      const res = await fetch(
+        `/api/admin/crm/harvester/listings?${params.toString()}`,
+        { headers: getAdminHeaders() }
+      );
+      if (res.ok) {
+        setData(await res.json());
+      }
+    } catch (err) {
+      console.error("Load error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, filters]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const categoryLabels: Record<string, string> = {
+    phones: "📱 موبايلات",
+    electronics: "🖥️ إلكترونيات",
+    vehicles: "🚗 سيارات",
+    properties: "🏠 عقارات",
+    furniture: "🪑 أثاث",
+    fashion: "👗 ملابس",
+    kids: "👶 أطفال",
+    sports: "⚽ رياضة",
+    pets: "🐾 حيوانات",
+    services: "🔧 خدمات",
+    other: "📦 أخرى",
+  };
+
+  const governorateLabels: Record<string, string> = {
+    cairo: "القاهرة",
+    alexandria: "الإسكندرية",
+    giza: "الجيزة",
+    qalyubia: "القليوبية",
+    sharqia: "الشرقية",
+    dakahlia: "الدقهلية",
+    gharbia: "الغربية",
+    monufia: "المنوفية",
+    beheira: "البحيرة",
+    kafr_el_sheikh: "كفر الشيخ",
+    damietta: "دمياط",
+    port_said: "بورسعيد",
+    ismailia: "الإسماعيلية",
+    suez: "السويس",
+    fayoum: "الفيوم",
+    beni_suef: "بني سويف",
+    minya: "المنيا",
+    assiut: "أسيوط",
+    sohag: "سوهاج",
+    qena: "قنا",
+    luxor: "الأقصر",
+    aswan: "أسوان",
+    red_sea: "البحر الأحمر",
+    matrouh: "مطروح",
+  };
+
+  const priceFormatter = new Intl.NumberFormat("ar-EG");
+
+  function timeAgo(dateStr: string): string {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 60) return `منذ ${minutes} دقيقة`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `منذ ${hours} ساعة`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `منذ ${days} يوم`;
+    return new Date(dateStr).toLocaleDateString("ar-EG");
+  }
+
+  function statusIcon(status: string, isExpired: boolean): string {
+    if (isExpired) return "⚪";
+    switch (status) {
+      case "harvested": return "🟢";
+      case "ready": return "🔵";
+      case "migrated": return "✅";
+      default: return "⚪";
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Counter */}
+      {data && (
+        <p className="text-sm text-gray-500">إجمالي: <span className="font-bold text-gray-900">{data.total.toLocaleString("ar-EG")}</span> إعلان</p>
+      )}
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl shadow-sm border p-4">
+        <div className="flex flex-wrap gap-3">
+          <input
+            type="text"
+            placeholder="🔍 بحث بالعنوان..."
+            value={filters.search}
+            onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setPage(1); }}
+            className="border rounded-lg px-3 py-2 text-sm flex-1 min-w-[200px]"
+          />
+          <select
+            value={filters.governorate}
+            onChange={(e) => { setFilters({ ...filters, governorate: e.target.value }); setPage(1); }}
+            className="border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">كل المحافظات</option>
+            {Object.entries(governorateLabels).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          <select
+            value={filters.category}
+            onChange={(e) => { setFilters({ ...filters, category: e.target.value }); setPage(1); }}
+            className="border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">كل الأقسام</option>
+            {Object.entries(categoryLabels).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              placeholder="السعر من"
+              value={filters.price_min}
+              onChange={(e) => { setFilters({ ...filters, price_min: e.target.value }); setPage(1); }}
+              className="border rounded-lg px-3 py-2 text-sm w-28"
+            />
+            <span className="text-gray-400">—</span>
+            <input
+              type="number"
+              placeholder="إلى"
+              value={filters.price_max}
+              onChange={(e) => { setFilters({ ...filters, price_max: e.target.value }); setPage(1); }}
+              className="border rounded-lg px-3 py-2 text-sm w-28"
+            />
           </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        {loading ? (
+          <div className="p-8 space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-16 bg-gray-100 animate-pulse rounded" />
+            ))}
+          </div>
+        ) : !data || data.listings.length === 0 ? (
+          <div className="p-12 text-center text-gray-400">
+            <p className="text-4xl mb-4">📭</p>
+            <p>لا توجد إعلانات</p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-right py-3 px-3">الصورة</th>
+                    <th className="text-right py-3 px-3">العنوان</th>
+                    <th className="text-right py-3 px-3">السعر</th>
+                    <th className="text-right py-3 px-3">الموقع</th>
+                    <th className="text-right py-3 px-3">التاريخ</th>
+                    <th className="text-right py-3 px-3">المعلن</th>
+                    <th className="text-right py-3 px-3">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.listings.map((listing) => (
+                    <tr key={listing.id} className="border-b hover:bg-gray-50">
+                      {/* Image */}
+                      <td className="py-3 px-3">
+                        {listing.thumbnail_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={listing.thumbnail_url}
+                            alt=""
+                            width={60}
+                            height={45}
+                            className="rounded object-cover"
+                            style={{ width: 60, height: 45, objectFit: "cover", borderRadius: 4 }}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="bg-gray-200 rounded flex items-center justify-center text-gray-400" style={{ width: 60, height: 45, borderRadius: 4 }}>
+                            🖼️
+                          </div>
+                        )}
+                      </td>
+                      {/* Title */}
+                      <td className="py-3 px-3 max-w-[300px]">
+                        <a
+                          href={listing.source_listing_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-blue-600 hover:underline block truncate"
+                          title={listing.title}
+                        >
+                          {listing.title.length > 50 ? listing.title.slice(0, 50) + "..." : listing.title}
+                        </a>
+                        <div className="flex gap-1 mt-1">
+                          {(listing.seller_is_verified || listing.seller_is_business) && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">🏪</span>
+                          )}
+                          {listing.supports_exchange && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">↔ تبديل</span>
+                          )}
+                          {listing.is_featured && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700">⭐ مميز</span>
+                          )}
+                        </div>
+                      </td>
+                      {/* Price */}
+                      <td className="py-3 px-3 font-bold whitespace-nowrap">
+                        {listing.price != null ? `${priceFormatter.format(listing.price)} ج.م` : <span className="text-gray-400 font-normal">غير محدد</span>}
+                      </td>
+                      {/* Location */}
+                      <td className="py-3 px-3 text-xs text-gray-500">
+                        {listing.city && listing.governorate
+                          ? `${listing.city}، ${governorateLabels[listing.governorate] || listing.governorate}`
+                          : listing.governorate
+                            ? governorateLabels[listing.governorate] || listing.governorate
+                            : "—"
+                        }
+                      </td>
+                      {/* Date */}
+                      <td className="py-3 px-3 text-xs text-gray-400">
+                        {listing.estimated_posted_at ? timeAgo(listing.estimated_posted_at) : timeAgo(listing.created_at)}
+                      </td>
+                      {/* Seller */}
+                      <td className="py-3 px-3 text-xs">
+                        {listing.seller_name || "—"}
+                      </td>
+                      {/* Status */}
+                      <td className="py-3 px-3 text-center text-lg">
+                        {statusIcon(listing.migration_status, listing.is_expired)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {data.totalPages > 1 && (
+              <div className="flex items-center justify-between p-4 border-t">
+                <p className="text-sm text-gray-500">
+                  صفحة {data.page} من {data.totalPages}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage(Math.max(1, page - 1))}
+                    disabled={page <= 1}
+                    className="px-3 py-1.5 border rounded text-sm disabled:opacity-50"
+                  >
+                    ← السابق
+                  </button>
+                  <button
+                    onClick={() => setPage(Math.min(data.totalPages, page + 1))}
+                    disabled={page >= data.totalPages}
+                    className="px-3 py-1.5 border rounded text-sm disabled:opacity-50"
+                  >
+                    التالي →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  icon,
-  highlight,
-}: {
-  label: string;
-  value: number;
-  icon: string;
-  highlight?: boolean;
-}) {
+/* ═══════════════════════════════════════════════ */
+/* Sellers Tab                                     */
+/* ═══════════════════════════════════════════════ */
+
+interface SellersData {
+  sellers: Array<{
+    id: string;
+    name: string | null;
+    phone: string | null;
+    total_listings_seen: number;
+    whale_score: number;
+    is_whale: boolean;
+    is_business: boolean;
+    is_verified: boolean;
+    has_featured_listings: boolean;
+    pipeline_status: string;
+    crm_customer_id: string | null;
+    primary_governorate: string | null;
+  }>;
+  total: number;
+  page: number;
+  totalPages: number;
+  stats: {
+    with_phone: number;
+    whales: number;
+    contacted: number;
+    signed_up: number;
+  };
+}
+
+function SellersTab() {
+  const [data, setData] = useState<SellersData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState({
+    has_phone: false,
+    whales_only: false,
+    status: "",
+    governorate: "",
+  });
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", page.toString());
+      params.set("limit", "20");
+      if (filters.has_phone) params.set("has_phone", "true");
+      if (filters.whales_only) params.set("whales_only", "true");
+      if (filters.status) params.set("status", filters.status);
+      if (filters.governorate) params.set("governorate", filters.governorate);
+
+      const res = await fetch(
+        `/api/admin/crm/harvester/sellers?${params.toString()}`,
+        { headers: getAdminHeaders() }
+      );
+      if (res.ok) {
+        setData(await res.json());
+      }
+    } catch (err) {
+      console.error("Load error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, filters]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  async function copyPhone(sellerId: string) {
+    try {
+      const res = await fetch("/api/admin/crm/harvester/sellers/copy-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAdminHeaders() },
+        body: JSON.stringify({ seller_id: sellerId }),
+      });
+      if (res.ok) {
+        const { phone } = await res.json();
+        await navigator.clipboard.writeText(phone);
+        setCopyFeedback(sellerId);
+        setTimeout(() => setCopyFeedback(null), 2000);
+      }
+    } catch (err) {
+      console.error("Copy error:", err);
+    }
+  }
+
+  const pipelineLabels: Record<string, string> = {
+    discovered: "جديد",
+    phone_found: "وُجد رقم",
+    auto_queued: "في الطابور",
+    contacted: "تم التواصل",
+    responded: "ردّ ✅",
+    signed_up: "سجّل 🎉",
+    activated: "نشط ⭐",
+    lost: "لم يرد ❌",
+    linked_existing: "موجود بالـ CRM",
+    converted: "مُحوّل",
+    rejected: "رفض",
+  };
+
+  const governorateLabels: Record<string, string> = {
+    cairo: "القاهرة",
+    alexandria: "الإسكندرية",
+    giza: "الجيزة",
+    qalyubia: "القليوبية",
+    sharqia: "الشرقية",
+    dakahlia: "الدقهلية",
+    gharbia: "الغربية",
+    monufia: "المنوفية",
+    beheira: "البحيرة",
+  };
+
+  function whaleScoreBar(score: number) {
+    const color = score > 60 ? "bg-green-500" : score >= 30 ? "bg-yellow-500" : "bg-gray-300";
+    return (
+      <div className="flex items-center gap-2">
+        <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div className={`h-full ${color} rounded-full`} style={{ width: `${Math.min(score, 100)}%` }} />
+        </div>
+        <span className="text-xs text-gray-500">{score}</span>
+      </div>
+    );
+  }
+
+  function sellerBadges(seller: SellersData["sellers"][0]) {
+    const badges: string[] = [];
+    if (seller.is_whale) badges.push("🐋 حوت");
+    if (seller.is_business) badges.push("🏪 تاجر");
+    if (seller.is_verified) badges.push("✓ موثق");
+    if (seller.has_featured_listings) badges.push("⭐ مميز");
+    return badges;
+  }
+
   return (
-    <div
-      className={`p-4 rounded-xl shadow-sm border ${
-        highlight ? "bg-green-50 border-green-200" : "bg-white"
-      }`}
-    >
+    <div className="space-y-4">
+      {/* Quick Stats */}
+      {data?.stats && (
+        <div className="flex flex-wrap gap-4 text-sm">
+          <span className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg font-medium">📞 بأرقام: {data.stats.with_phone}</span>
+          <span className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg font-medium">🐋 حيتان: {data.stats.whales}</span>
+          <span className="px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg font-medium">📨 تم التواصل: {data.stats.contacted}</span>
+          <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg font-medium">✅ سجّلوا: {data.stats.signed_up}</span>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl shadow-sm border p-4">
+        <div className="flex flex-wrap gap-3 items-center">
+          <button
+            onClick={() => { setFilters({ ...filters, has_phone: !filters.has_phone }); setPage(1); }}
+            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              filters.has_phone ? "bg-green-100 border-green-300 text-green-700" : "bg-white border-gray-200 text-gray-600"
+            }`}
+          >
+            📞 بأرقام فقط
+          </button>
+          <button
+            onClick={() => { setFilters({ ...filters, whales_only: !filters.whales_only }); setPage(1); }}
+            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              filters.whales_only ? "bg-blue-100 border-blue-300 text-blue-700" : "bg-white border-gray-200 text-gray-600"
+            }`}
+          >
+            🐋 حيتان فقط
+          </button>
+          <select
+            value={filters.status}
+            onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setPage(1); }}
+            className="border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">كل الحالات</option>
+            {Object.entries(pipelineLabels).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          <select
+            value={filters.governorate}
+            onChange={(e) => { setFilters({ ...filters, governorate: e.target.value }); setPage(1); }}
+            className="border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">كل المحافظات</option>
+            {Object.entries(governorateLabels).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Counter */}
+      {data && (
+        <p className="text-sm text-gray-500">إجمالي: <span className="font-bold text-gray-900">{data.total.toLocaleString("ar-EG")}</span> معلن</p>
+      )}
+
+      {/* Table */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        {loading ? (
+          <div className="p-8 space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-16 bg-gray-100 animate-pulse rounded" />
+            ))}
+          </div>
+        ) : !data || data.sellers.length === 0 ? (
+          <div className="p-12 text-center text-gray-400">
+            <p className="text-4xl mb-4">👥</p>
+            <p>لا يوجد معلنين</p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-right py-3 px-3">المعلن</th>
+                    <th className="text-right py-3 px-3">الرقم</th>
+                    <th className="text-right py-3 px-3">إعلانات</th>
+                    <th className="text-right py-3 px-3">Score</th>
+                    <th className="text-right py-3 px-3">الحالة</th>
+                    <th className="text-right py-3 px-3">CRM</th>
+                    <th className="text-right py-3 px-3">تحكم</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.sellers.map((seller) => (
+                    <tr key={seller.id} className="border-b hover:bg-gray-50">
+                      {/* Name + Badges */}
+                      <td className="py-3 px-3">
+                        <p className="font-medium">{seller.name || "بدون اسم"}</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {sellerBadges(seller).map((b, i) => (
+                            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">{b}</span>
+                          ))}
+                        </div>
+                      </td>
+                      {/* Phone */}
+                      <td className="py-3 px-3">
+                        {seller.phone ? (
+                          <span className="text-green-600 font-mono text-xs">{seller.phone}</span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      {/* Listings count */}
+                      <td className="py-3 px-3 text-center font-medium">{seller.total_listings_seen}</td>
+                      {/* Whale Score */}
+                      <td className="py-3 px-3">{whaleScoreBar(seller.whale_score)}</td>
+                      {/* Pipeline Status */}
+                      <td className="py-3 px-3">
+                        <span className="text-xs">{pipelineLabels[seller.pipeline_status] || seller.pipeline_status}</span>
+                      </td>
+                      {/* CRM */}
+                      <td className="py-3 px-3">
+                        {seller.crm_customer_id ? (
+                          <Link href={`/admin/crm/customers/${seller.crm_customer_id}`} className="text-blue-600 hover:underline text-xs">
+                            🔗 ملف العميل
+                          </Link>
+                        ) : (
+                          <button className="text-xs text-green-600 hover:text-green-800">➕ نقل للـ CRM</button>
+                        )}
+                      </td>
+                      {/* Actions */}
+                      <td className="py-3 px-3">
+                        {seller.phone && (
+                          <button
+                            onClick={() => copyPhone(seller.id)}
+                            className={`text-xs px-2 py-1 rounded border transition-colors ${
+                              copyFeedback === seller.id
+                                ? "bg-green-100 border-green-300 text-green-700"
+                                : "hover:bg-gray-100 border-gray-200"
+                            }`}
+                          >
+                            {copyFeedback === seller.id ? "✅ تم النسخ" : "📋 نسخ الرقم"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {data.totalPages > 1 && (
+              <div className="flex items-center justify-between p-4 border-t">
+                <p className="text-sm text-gray-500">
+                  صفحة {data.page} من {data.totalPages}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage(Math.max(1, page - 1))}
+                    disabled={page <= 1}
+                    className="px-3 py-1.5 border rounded text-sm disabled:opacity-50"
+                  >
+                    ← السابق
+                  </button>
+                  <button
+                    onClick={() => setPage(Math.min(data.totalPages, page + 1))}
+                    disabled={page >= data.totalPages}
+                    className="px-3 py-1.5 border rounded text-sm disabled:opacity-50"
+                  >
+                    التالي →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════ */
+/* Shared Components                               */
+/* ═══════════════════════════════════════════════ */
+
+function StatCard({ icon, label, value, highlight }: { icon: string; label: string; value: number; highlight?: boolean }) {
+  return (
+    <div className={`p-4 rounded-xl shadow-sm border ${highlight ? "bg-[#E8F5E9] border-[#1B5E20]/20" : "bg-white"}`}>
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs text-gray-500">{label}</span>
         <span>{icon}</span>
       </div>
-      <p className={`text-3xl font-bold ${highlight ? "text-green-700" : ""}`}>
+      <p className={`text-3xl font-bold ${highlight ? "text-[#1B5E20]" : ""}`}>
         {value.toLocaleString("ar-EG")}
       </p>
     </div>
@@ -435,9 +1079,7 @@ function JobStatusBadge({ status }: { status: string }) {
     completed: { bg: "bg-green-100", text: "text-green-700", label: "مكتمل" },
     failed: { bg: "bg-red-100", text: "text-red-700", label: "فشل" },
   };
-
   const config = configs[status] || configs.pending;
-
   return (
     <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
       {config.label}
