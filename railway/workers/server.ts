@@ -60,6 +60,8 @@ interface ParsedListing {
   isFeatured: boolean;
   supportsExchange: boolean;
   isNegotiable: boolean;
+  extractedPhone: string | null;
+  phoneSource: string | null;
 }
 
 interface HarvestResult {
@@ -208,6 +210,19 @@ function parseDubizzleHtml(html: string): ParsedListing[] {
 
     // Method 4: REMOVED — seller name now extracted from detail page only
 
+    // Path 3: Extract phone from card text (zero cost — no extra HTTP request)
+    let extractedPhone: string | null = null;
+    let phoneSource: string | null = null;
+    const cardPhoneMatch = cardText.match(/01[0-25]\d{8}/g);
+    if (cardPhoneMatch) {
+      const candidatePhone = cardPhoneMatch[0];
+      // Make sure it's not a price (phones are 11 digits, not followed by ج.م)
+      if (candidatePhone.length === 11 && !cardText.includes(candidatePhone + ' ج.م')) {
+        extractedPhone = candidatePhone;
+        phoneSource = 'card_text';
+      }
+    }
+
     // Debug: log first 2 articles' seller extraction
     if (listings.length < 2) {
       console.log(`[Harvest] 🔍 Seller DEBUG article #${listings.length + 1}:`, {
@@ -243,6 +258,8 @@ function parseDubizzleHtml(html: string): ParsedListing[] {
       isFeatured,
       supportsExchange,
       isNegotiable,
+      extractedPhone,
+      phoneSource,
     });
   });
 
@@ -389,6 +406,227 @@ function buildPageUrl(
 ): string {
   if (page === 1) return baseUrl;
   return baseUrl + paginationPattern.replace("{page}", page.toString());
+}
+
+// ─── Detail Page Extraction Helper ──────────────────────────
+// Shared by harvest detail fetch, smart fill, and enrichment worker
+async function fetchAndExtractDetail(
+  supabase: SupabaseClient,
+  listing: { id: string; source_listing_url: string; ahe_seller_id: string | null; seller_name?: string | null },
+  index: number,
+  phoneSource: string
+): Promise<{ phone: string | null; sellerName: string | null }> {
+  console.log(`[Detail] Fetching: ${listing.source_listing_url?.substring(0, 80)}`);
+  const { html: detailHtml, status: detailStatus } = await fetchDubizzlePage(listing.source_listing_url);
+
+  if (detailStatus === 403) {
+    console.log("[Detail] Blocked (403) — stopping");
+    throw new Error("HTTP_403_BLOCKED");
+  }
+
+  if (detailStatus !== 200) {
+    console.log(`[Detail] HTTP ${detailStatus} — skipping`);
+    return { phone: null, sellerName: null };
+  }
+
+  const $detail = cheerio.load(detailHtml);
+
+  // ═══ Seller Name Extraction ═══
+  let sellerName: string | null = null;
+  let sellerProfileUrl: string | null = null;
+
+  // 1. Find "الصفحة الشخصية" link
+  const profileLink = $detail('a').filter(function() {
+    const text = $detail(this).text();
+    return text.includes('الصفحة الشخصية') || text.includes('صفحة الشخصية');
+  });
+  if (profileLink.length) {
+    const href = profileLink.first().attr('href');
+    if (href) {
+      sellerProfileUrl = href.startsWith('http') ? href : `https://www.dubizzle.com.eg${href}`;
+    }
+  }
+
+  // 2. Regex: text near "مدرجة من قبل"
+  const bodyText = $detail('body').text();
+  const sellerMatch = bodyText.match(/مدرجة من قبل[^]*?([\u0600-\u06FF\s]{3,30}?)(?:مستخدم موثق|صاحب عمل موثق|عضو منذ)/);
+  if (sellerMatch) {
+    sellerName = sellerMatch[1].trim();
+    sellerName = sellerName.replace(/مستخدم خاص/g, '').replace(/مستخدم/g, '').trim();
+    if (sellerName.length > 2 && sellerName[0] === sellerName[1]) {
+      sellerName = sellerName.substring(1);
+    }
+    if (sellerName.length < 2) sellerName = null;
+  }
+
+  // 3. Fallback: verified badge element
+  if (!sellerName) {
+    const verifiedEl = $detail('[class*="verified"], [class*="badge"], [alt*="verified"], [alt*="موثق"]');
+    if (verifiedEl.length) {
+      const parent = verifiedEl.first().parent();
+      const siblingText = parent.text().trim();
+      sellerName = siblingText
+        .replace(/مستخدم موثق/g, '')
+        .replace(/صاحب عمل موثق/g, '')
+        .replace(/موثق/g, '')
+        .trim();
+      if (sellerName.length < 2 || sellerName.length > 40) sellerName = null;
+    }
+  }
+
+  // Keep existing seller name if we didn't find a new one
+  if (!sellerName && listing.seller_name) sellerName = listing.seller_name;
+
+  // ═══ Description Extraction ═══
+  let description = '';
+
+  // Primary: find "الوصف" heading and get text after it
+  $detail('h2, h3, h4, [class*="heading"]').each(function() {
+    const heading = $detail(this).text().trim();
+    if (heading === 'الوصف' || heading.includes('الوصف')) {
+      let nextEl = $detail(this).next();
+      while (nextEl.length && !nextEl.is('h2, h3, h4')) {
+        description += nextEl.text() + ' ';
+        nextEl = nextEl.next();
+      }
+    }
+  });
+
+  if (!description || description.length < 20) {
+    const descTestId = $detail('[data-testid*="description"], [data-testid*="Description"]').text();
+    if (descTestId && descTestId.length > description.length) description = descTestId;
+  }
+  if (!description || description.length < 20) {
+    const descContainers = $detail('.description, #description, [class*="description"], [class*="Description"]').text();
+    if (descContainers && descContainers.length > description.length) description = descContainers;
+  }
+
+  // Fallback: large div with phone keywords
+  if (!description || description.length < 20) {
+    $detail('div, section').each(function() {
+      const text = $detail(this).text().trim();
+      if (text.length > 50 && text.length < 2000 && (text.includes('للتواصل') || text.includes('واتس') || text.includes('فون'))) {
+        description = text;
+        return false;
+      }
+    });
+  }
+
+  if (!description || description.length < 20) {
+    description = bodyText;
+  }
+
+  // ═══ Phone Extraction (5 strategies) ═══
+  let phone: string | null = null;
+
+  // 1. From description text
+  phone = extractPhone(description);
+
+  // 2. From wa.me / whatsapp links
+  if (!phone) {
+    const waLink = $detail('a[href*="wa.me/"], a[href*="whatsapp.com"]');
+    if (waLink.length) {
+      const waHref = waLink.first().attr('href') || '';
+      const waPhone = waHref.match(/\d{10,}/);
+      if (waPhone) phone = normalizePhone(waPhone[0]);
+    }
+  }
+
+  // 3. From tel: links
+  if (!phone) {
+    const telLink = $detail('a[href^="tel:"]');
+    if (telLink.length) {
+      const telHref = telLink.first().attr('href') || '';
+      const rawPhone = telHref.replace('tel:', '').replace(/\D/g, '');
+      phone = normalizePhone(rawPhone);
+    }
+  }
+
+  // 4. From phone-specific elements
+  if (!phone) {
+    const phoneElements = $detail('[data-testid*="phone"], [class*="phone"], [class*="Phone"]');
+    phoneElements.each((_: any, el: any) => {
+      if (phone) return;
+      const elPhone = extractPhone($detail(el).text());
+      if (elPhone) phone = elPhone;
+    });
+  }
+
+  // 5. From full page body as last resort
+  if (!phone) {
+    phone = extractPhone(bodyText);
+  }
+
+  // ═══ DEBUG: first 3 detail fetches ═══
+  if (index < 3) {
+    console.log(`Detail fetch #${index}`, {
+      url: listing.source_listing_url?.substring(0, 60),
+      htmlLength: detailHtml.length,
+      sellerName,
+      sellerProfileUrl,
+      descriptionLength: description.length,
+      descriptionSample: description.substring(0, 200),
+      phoneFound: phone || null,
+      anyPhoneInFullPage: detailHtml.match(/01[0-2,5]\d{8}/g)?.slice(0, 3) || [],
+      waLink: $detail('a[href*="wa.me"]').attr('href') || null,
+      telLink: $detail('a[href^="tel:"]').attr('href') || null,
+    });
+    console.log('Seller name DEBUG:', {
+      sellerName,
+      sellerProfileUrl,
+      hasProfileLink: profileLink.length > 0,
+      textAroundSeller: bodyText.match(/مدرجة من قبل.{0,100}/)?.[0]?.substring(0, 100),
+    });
+  }
+
+  // ═══ Update listing ═══
+  const updateData: Record<string, any> = {
+    detail_fetched_at: new Date().toISOString(),
+  };
+  if (phone) {
+    updateData.extracted_phone = phone;
+    updateData.phone_source = phoneSource;
+  }
+  if (sellerName) updateData.seller_name = sellerName;
+  if (sellerProfileUrl) updateData.seller_profile_url = sellerProfileUrl;
+
+  await supabase
+    .from("ahe_listings")
+    .update(updateData)
+    .eq("id", listing.id);
+
+  // ═══ Update seller record ═══
+  if (listing.ahe_seller_id) {
+    const sellerUpdate: Record<string, any> = {};
+    if (phone) {
+      sellerUpdate.phone = phone;
+      sellerUpdate.pipeline_status = "phone_found";
+    }
+    if (sellerName) sellerUpdate.name = sellerName;
+    if (sellerProfileUrl) sellerUpdate.profile_url = sellerProfileUrl;
+
+    if (Object.keys(sellerUpdate).length > 0) {
+      if (phone) {
+        // Only update if phone not already set
+        await supabase
+          .from("ahe_sellers")
+          .update(sellerUpdate)
+          .eq("id", listing.ahe_seller_id)
+          .is("phone", null);
+      } else {
+        await supabase
+          .from("ahe_sellers")
+          .update(sellerUpdate)
+          .eq("id", listing.ahe_seller_id);
+      }
+    }
+  }
+
+  if (phone) {
+    console.log(`[Detail] ✅ Phone ${phone} for listing ${listing.id}`);
+  }
+
+  return { phone, sellerName };
 }
 
 // ─── Core Harvest Logic ──────────────────────────────────────
@@ -568,12 +806,13 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
             primary_category: scope.maksab_category,
             primary_governorate: governorate,
             total_listings_seen: 1,
+            phone: listing.extractedPhone || null,
             priority_score: calcPriorityScore({
               isVerified: listing.isVerified,
               isBusiness: listing.isBusiness,
-              phone: null,
+              phone: listing.extractedPhone,
             }),
-            pipeline_status: "discovered",
+            pipeline_status: listing.extractedPhone ? "phone_found" : "discovered",
           })
           .select("id")
           .single();
@@ -616,12 +855,13 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
             primary_category: scope.maksab_category,
             primary_governorate: governorate,
             total_listings_seen: 1,
+            phone: listing.extractedPhone || null,
             priority_score: calcPriorityScore({
               isVerified: listing.isVerified,
               isBusiness: listing.isBusiness,
-              phone: null,
+              phone: listing.extractedPhone,
             }),
-            pipeline_status: "discovered",
+            pipeline_status: listing.extractedPhone ? "phone_found" : "discovered",
           })
           .select("id")
           .single();
@@ -688,6 +928,8 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       seller_is_verified: listing.isVerified,
       seller_is_business: listing.isBusiness,
       ahe_seller_id: aheSellerId,
+      extracted_phone: listing.extractedPhone,
+      phone_source: listing.phoneSource,
     });
 
     if (insertErr) {
@@ -698,245 +940,84 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
   }
 
   // 3b. Detail fetching — extract phone numbers + seller name from ad detail pages
-  // Fetch top 20 new listings without a phone
+  // Path 1: Fetch top 50 new listings, 3s delay, 4min timeout
   let phonesExtracted = 0;
+  const detailStartTime = Date.now();
+  const DETAIL_TIMEOUT = 4 * 60 * 1000; // 4 minutes
+
   try {
     const { data: newWithoutPhone } = await supabase
       .from("ahe_listings")
-      .select("id, source_listing_url, ahe_seller_id")
+      .select("id, source_listing_url, ahe_seller_id, seller_name")
       .eq("scope_id", scope.id)
       .is("extracted_phone", null)
+      .is("detail_fetched_at", null)
       .eq("is_duplicate", false)
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(50);
 
     console.log(`[Harvest] === Detail Fetch Debug ===`);
     console.log(`[Harvest] 📞 New listings without phone: ${newWithoutPhone?.length ?? 0}`);
 
     if (newWithoutPhone && newWithoutPhone.length > 0) {
       for (let i = 0; i < newWithoutPhone.length; i++) {
+        if (Date.now() - detailStartTime > DETAIL_TIMEOUT) {
+          console.log(`[Detail] Timeout after ${i} listings — stopping detail fetch`);
+          break;
+        }
+
         const listing = newWithoutPhone[i];
         try {
-          await new Promise((r) => setTimeout(r, 5000)); // 5s delay
-          console.log(`[Harvest] 📞 Fetching detail: ${listing.source_listing_url?.substring(0, 80)}`);
-          const { html: detailHtml, status: detailStatus } = await fetchDubizzlePage(listing.source_listing_url);
-          console.log(`[Harvest] 📞 Detail response status: ${detailStatus}`);
-          console.log(`[Harvest] 📞 Detail HTML length: ${detailHtml.length}`);
-
-          if (detailStatus === 403) {
-            console.log("[Harvest] 📞 Detail fetch blocked (403), stopping detail extraction");
-            break;
-          }
-
-          if (detailStatus !== 200) {
-            console.log(`[Harvest] 📞 Non-200 status, skipping`);
-            continue;
-          }
-
-          const $detail = cheerio.load(detailHtml);
-
-          // ═══ Seller Name Extraction ═══
-          let sellerName: string | null = null;
-          let sellerProfileUrl: string | null = null;
-
-          // 1. Find "الصفحة الشخصية" link
-          const profileLink = $detail('a').filter(function() {
-            const text = $detail(this).text();
-            return text.includes('الصفحة الشخصية') || text.includes('صفحة الشخصية');
-          });
-          if (profileLink.length) {
-            const href = profileLink.first().attr('href');
-            if (href) {
-              sellerProfileUrl = href.startsWith('http') ? href : `https://www.dubizzle.com.eg${href}`;
-            }
-          }
-
-          // 2. Regex: text near "مدرجة من قبل"
-          const bodyText = $detail('body').text();
-          const sellerMatch = bodyText.match(/مدرجة من قبل[^]*?([\u0600-\u06FF\s]{3,30}?)(?:مستخدم موثق|صاحب عمل موثق|عضو منذ)/);
-          if (sellerMatch) {
-            sellerName = sellerMatch[1].trim();
-            sellerName = sellerName.replace(/مستخدم خاص/g, '').trim();
-            if (sellerName.length < 2) sellerName = null;
-          }
-
-          // 3. Fallback: verified badge element
-          if (!sellerName) {
-            const verifiedEl = $detail('[class*="verified"], [class*="badge"], [alt*="verified"], [alt*="موثق"]');
-            if (verifiedEl.length) {
-              const parent = verifiedEl.first().parent();
-              const siblingText = parent.text().trim();
-              sellerName = siblingText
-                .replace(/مستخدم موثق/g, '')
-                .replace(/صاحب عمل موثق/g, '')
-                .replace(/موثق/g, '')
-                .trim();
-              if (sellerName.length < 2 || sellerName.length > 40) sellerName = null;
-            }
-          }
-
-          // ═══ Description Extraction (improved) ═══
-          let description = '';
-
-          // Primary: find "الوصف" heading and get text after it
-          $detail('h2, h3, h4, [class*="heading"]').each(function() {
-            const heading = $detail(this).text().trim();
-            if (heading === 'الوصف' || heading.includes('الوصف')) {
-              let nextEl = $detail(this).next();
-              while (nextEl.length && !nextEl.is('h2, h3, h4')) {
-                description += nextEl.text() + ' ';
-                nextEl = nextEl.next();
-              }
-            }
-          });
-
-          // Secondary: data-testid or class-based description containers
-          if (!description || description.length < 20) {
-            const descTestId = $detail('[data-testid*="description"], [data-testid*="Description"]').text();
-            if (descTestId && descTestId.length > description.length) description = descTestId;
-          }
-          if (!description || description.length < 20) {
-            const descContainers = $detail('.description, #description, [class*="description"], [class*="Description"]').text();
-            if (descContainers && descContainers.length > description.length) description = descContainers;
-          }
-
-          // Fallback: look for large div with phone-related keywords
-          if (!description || description.length < 20) {
-            $detail('div, section').each(function() {
-              const text = $detail(this).text().trim();
-              if (text.length > 50 && text.length < 2000 && (text.includes('للتواصل') || text.includes('واتس') || text.includes('فون'))) {
-                description = text;
-                return false; // break
-              }
-            });
-          }
-
-          if (!description || description.length < 20) {
-            description = bodyText;
-          }
-
-          // ═══ Phone Extraction (multiple strategies) ═══
-          let phone: string | null = null;
-
-          // Strategy 1: from description text
-          phone = extractPhone(description);
-
-          // Strategy 2: from wa.me / whatsapp links
-          if (!phone) {
-            const waLink = $detail('a[href*="wa.me/"], a[href*="whatsapp.com"]');
-            if (waLink.length) {
-              const waHref = waLink.first().attr('href') || '';
-              const waPhone = waHref.match(/\d{10,}/);
-              if (waPhone) {
-                phone = normalizePhone(waPhone[0]);
-              }
-            }
-          }
-
-          // Strategy 3: from tel: links
-          if (!phone) {
-            const telLink = $detail('a[href^="tel:"]');
-            if (telLink.length) {
-              const telHref = telLink.first().attr('href') || '';
-              const rawPhone = telHref.replace('tel:', '').replace(/\D/g, '');
-              phone = normalizePhone(rawPhone);
-            }
-          }
-
-          // Strategy 4: from phone-specific elements
-          if (!phone) {
-            const phoneElements = $detail('[data-testid*="phone"], [class*="phone"], [class*="Phone"]');
-            phoneElements.each((_: any, el: any) => {
-              if (phone) return;
-              const elPhone = extractPhone($detail(el).text());
-              if (elPhone) phone = elPhone;
-            });
-          }
-
-          // Strategy 5: from full page body as last resort
-          if (!phone) {
-            phone = extractPhone(bodyText);
-          }
-
-          // ═══ DEBUG: first 3 detail fetches ═══
-          if (i < 3) {
-            console.log('Detail fetch #' + i, {
-              url: listing.source_listing_url?.substring(0, 60),
-              htmlLength: detailHtml.length,
-              sellerName,
-              sellerProfileUrl,
-              descriptionLength: description.length,
-              descriptionSample: description.substring(0, 200),
-              phoneFound: phone || null,
-              anyPhoneInFullPage: detailHtml.match(/01[0-2,5]\d{8}/g)?.slice(0, 3) || [],
-              waLink: $detail('a[href*="wa.me"]').attr('href') || null,
-              telLink: $detail('a[href^="tel:"]').attr('href') || null,
-            });
-            console.log('Seller name DEBUG:', {
-              url: listing.source_listing_url?.substring(0, 60),
-              sellerName,
-              sellerProfileUrl,
-              hasProfileLink: profileLink.length > 0,
-              textAroundSeller: bodyText.match(/مدرجة من قبل.{0,100}/)?.[0]?.substring(0, 100),
-            });
-          }
-
-          // ═══ Update listing with extracted data ═══
-          const updateData: Record<string, any> = {};
-          if (phone) {
-            updateData.extracted_phone = phone;
-            updateData.phone_source = "detail_page";
-          }
-          if (sellerName) {
-            updateData.seller_name = sellerName;
-          }
-          if (sellerProfileUrl) {
-            updateData.seller_profile_url = sellerProfileUrl;
-          }
-
-          if (Object.keys(updateData).length > 0) {
-            await supabase
-              .from("ahe_listings")
-              .update(updateData)
-              .eq("id", listing.id);
-          }
-
-          // Update seller record
-          if (listing.ahe_seller_id) {
-            const sellerUpdate: Record<string, any> = {};
-            if (phone) {
-              sellerUpdate.phone = phone;
-              sellerUpdate.pipeline_status = "phone_found";
-            }
-            if (sellerName) sellerUpdate.name = sellerName;
-            if (sellerProfileUrl) sellerUpdate.profile_url = sellerProfileUrl;
-
-            if (Object.keys(sellerUpdate).length > 0) {
-              // Only update phone/name if not already set
-              if (phone) {
-                await supabase
-                  .from("ahe_sellers")
-                  .update(sellerUpdate)
-                  .eq("id", listing.ahe_seller_id)
-                  .is("phone", null);
-              } else {
-                await supabase
-                  .from("ahe_sellers")
-                  .update(sellerUpdate)
-                  .eq("id", listing.ahe_seller_id);
-              }
-            }
-          }
-
-          if (phone) {
-            phonesExtracted++;
-            console.log(`[Harvest] 📞 ✅ Saved phone ${phone} for listing ${listing.id}`);
-          }
+          await new Promise((r) => setTimeout(r, 3000)); // 3s delay
+          const detailResult = await fetchAndExtractDetail(supabase, listing, i, "detail_page");
+          if (detailResult.phone) phonesExtracted++;
         } catch (e: any) {
           console.log(`[Harvest] 📞 Detail fetch error: ${e.message}`);
         }
       }
-      console.log(`[Harvest] 📞 Total phones extracted: ${phonesExtracted}`);
+      console.log(`[Harvest] 📞 Total phones extracted (new): ${phonesExtracted}`);
+    }
+
+    // Path 2: Smart Fill — use remaining time for old listings without phone
+    const timeRemaining = DETAIL_TIMEOUT - (Date.now() - detailStartTime);
+
+    if (timeRemaining > 30000) { // more than 30 seconds remaining
+      console.log(`[Smart Fill] Time remaining: ${Math.round(timeRemaining / 1000)}s`);
+
+      const { data: oldListings } = await supabase
+        .from("ahe_listings")
+        .select("id, source_listing_url, ahe_seller_id, seller_name")
+        .eq("scope_id", scope.id)
+        .is("extracted_phone", null)
+        .is("detail_fetched_at", null)
+        .eq("is_duplicate", false)
+        .order("created_at", { ascending: false })
+        .limit(30);
+
+      if (oldListings && oldListings.length > 0) {
+        console.log(`[Smart Fill] Found ${oldListings.length} old listings without phone`);
+        let smartFillPhones = 0;
+        let smartFillProcessed = 0;
+
+        for (const oldListing of oldListings) {
+          if (Date.now() - detailStartTime > DETAIL_TIMEOUT) {
+            console.log(`[Smart Fill] Timeout — stopping`);
+            break;
+          }
+
+          try {
+            await new Promise((r) => setTimeout(r, 3000));
+            const result = await fetchAndExtractDetail(supabase, oldListing, smartFillProcessed, "smart_fill");
+            if (result.phone) smartFillPhones++;
+            smartFillProcessed++;
+          } catch (e: any) {
+            console.log(`[Smart Fill] Error: ${e.message}`);
+          }
+        }
+
+        phonesExtracted += smartFillPhones;
+        console.log(`[Smart Fill] Processed ${smartFillProcessed} old listings, ${smartFillPhones} phones found`);
+      }
     }
   } catch (e: any) {
     console.log(`[Harvest] 📞 Detail extraction error: ${e.message}`);
@@ -1197,6 +1278,55 @@ async function getHarvestStatus(): Promise<Record<string, any>> {
   };
 }
 
+// ─── Enrichment Worker ──────────────────────────────────────
+// Dedicated worker to fetch detail pages for listings without phone/name
+async function enrichListings(): Promise<{
+  enriched: number;
+  phones_found: number;
+  names_found: number;
+}> {
+  console.log('[Enrich] Starting enrichment cycle...');
+  const supabase = getSupabase();
+
+  // Fetch 10 listings without phone that haven't been detail-fetched yet
+  const { data: listings, error } = await supabase
+    .from("ahe_listings")
+    .select("id, source_listing_url, ahe_seller_id, seller_name")
+    .is("extracted_phone", null)
+    .is("detail_fetched_at", null)
+    .eq("is_duplicate", false)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error || !listings?.length) {
+    console.log('[Enrich] No listings to enrich:', error?.message || 'all enriched');
+    return { enriched: 0, phones_found: 0, names_found: 0 };
+  }
+
+  console.log(`[Enrich] Processing ${listings.length} listings`);
+
+  let phonesFound = 0;
+  let namesFound = 0;
+
+  for (const listing of listings) {
+    try {
+      await new Promise((r) => setTimeout(r, 3000)); // 3s delay
+      const result = await fetchAndExtractDetail(supabase, listing, 99, "enrichment_worker");
+      if (result.phone) phonesFound++;
+      if (result.sellerName) namesFound++;
+    } catch (e: any) {
+      if (e.message === "HTTP_403_BLOCKED") {
+        console.log('[Enrich] 403 detected — stopping enrichment');
+        break;
+      }
+      console.log(`[Enrich] Error: ${e.message}`);
+    }
+  }
+
+  console.log(`[Enrich] Complete: ${listings.length} processed, ${phonesFound} phones, ${namesFound} names`);
+  return { enriched: listings.length, phones_found: phonesFound, names_found: namesFound };
+}
+
 // ─── Cron Harvest Logic ──────────────────────────────────────
 async function cronHarvest(): Promise<{
   scopes_processed: number;
@@ -1396,6 +1526,18 @@ async function handleCronHarvest(req: IncomingMessage, res: ServerResponse) {
   }
 }
 
+// ─── Enrichment Handler ─────────────────────────────────────
+async function handleEnrich(_req: IncomingMessage, res: ServerResponse) {
+  try {
+    console.log("[API] GET /cron/enrich — starting enrichment cycle");
+    const result = await enrichListings();
+    sendJson(res, { message: "Enrichment cycle complete", ...result });
+  } catch (err: any) {
+    console.error(`[API] /cron/enrich error: ${err.message}`);
+    sendJson(res, { error: true, message: err.message }, 500);
+  }
+}
+
 // ─── Harvest Status Handler ──────────────────────────────────
 async function handleHarvestStatus(_req: IncomingMessage, res: ServerResponse) {
   try {
@@ -1430,6 +1572,8 @@ const server = createServer(async (req, res) => {
       await handleHarvestStatus(req, res);
     } else if (path === "/cron/harvest") {
       await handleCronHarvest(req, res);
+    } else if (path === "/cron/enrich") {
+      await handleEnrich(req, res);
     } else if (path === "/health") {
       sendJson(res, {
         ok: true,
@@ -1444,6 +1588,7 @@ const server = createServer(async (req, res) => {
           "POST /harvest": "Harvest a specific scope { scope_code }",
           "GET /harvest/status": "Engine & scopes status overview",
           "GET /cron/harvest": "Automated harvest (picks ready scopes)",
+          "GET /cron/enrich": "Enrich listings without phone/name (detail fetch)",
           "GET /health": "Health check",
         },
       });
@@ -1456,17 +1601,34 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[Server] 🟢 HTTP server running on port ${PORT}`);
-  console.log(`[Server] Endpoints: /harvest, /harvest/status, /cron/harvest, /health`);
+  console.log(`[Server] Endpoints: /harvest, /harvest/status, /cron/harvest, /cron/enrich, /health`);
 
   // Railway Cron بيعمل restart كل 15 دقيقة
-  // عند كل restart — شغّل حصادة واحدة تلقائياً
+  // عند كل restart — شغّل حصادة واحدة ثم 5 دورات إثراء
   setTimeout(async () => {
+    // أولاً: harvest
     console.log('[Auto-Cron] Server started — running automatic harvest...');
     try {
       const result = await cronHarvest();
-      console.log('[Auto-Cron] Complete:', JSON.stringify(result));
+      console.log('[Auto-Cron] Harvest complete:', JSON.stringify(result));
     } catch (e: any) {
-      console.log('[Auto-Cron] Error:', e.message);
+      console.log('[Auto-Cron] Harvest error:', e.message);
+    }
+
+    // ثانياً: 5 دورات إثراء (10 إعلانات × 5 = 50 إعلان)
+    for (let i = 0; i < 5; i++) {
+      try {
+        await new Promise((r) => setTimeout(r, 5000)); // 5s between cycles
+        const enrichResult = await enrichListings();
+        if (enrichResult.enriched > 0) {
+          console.log(`[Auto-Enrich] Cycle ${i + 1}/5:`, JSON.stringify(enrichResult));
+        } else {
+          console.log(`[Auto-Enrich] Cycle ${i + 1}/5: No more listings to enrich — stopping`);
+          break;
+        }
+      } catch (e: any) {
+        console.log(`[Auto-Enrich] Cycle ${i + 1}/5 error:`, e.message);
+      }
     }
   }, 10000); // 10 ثواني بعد البدء
 });
