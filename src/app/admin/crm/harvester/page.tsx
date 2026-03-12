@@ -11,12 +11,15 @@ import type {
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Legend,
+  Cell,
 } from "recharts";
 
 interface ScopesBreakdown {
@@ -62,7 +65,7 @@ export default function HarvesterDashboard() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<{ error: string; setup_required?: boolean; details?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "listings" | "sellers">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "listings" | "sellers" | "outreach">("dashboard");
 
   const loadData = useCallback(async () => {
     try {
@@ -196,6 +199,7 @@ export default function HarvesterDashboard() {
           { key: "dashboard" as const, label: "📊 الرئيسية" },
           { key: "listings" as const, label: "📰 الإعلانات" },
           { key: "sellers" as const, label: "👥 المعلنين" },
+          { key: "outreach" as const, label: "📨 التواصل" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -406,6 +410,7 @@ export default function HarvesterDashboard() {
 
       {activeTab === "listings" && <ListingsTab />}
       {activeTab === "sellers" && <SellersTab />}
+      {activeTab === "outreach" && <OutreachTab />}
     </div>
   );
 }
@@ -1115,4 +1120,210 @@ function JobStatusBadge({ status }: { status: string }) {
       {config.label}
     </span>
   );
+}
+
+/* ═══════════════════════════════════════════════ */
+/* Outreach Tab                                    */
+/* ═══════════════════════════════════════════════ */
+
+interface OutreachStats {
+  today: {
+    messages_sent: number;
+    responses: number;
+    signups: number;
+    response_rate: number;
+  };
+  funnel: { name: string; count: number; color: string }[];
+}
+
+interface OutreachConversation {
+  id: string;
+  customer_name: string | null;
+  phone: string;
+  category: string | null;
+  seller_type: string | null;
+  stage: string;
+  status: string;
+  messages_sent: number;
+  messages_received: number;
+  last_message_at: string | null;
+  last_message_direction: string | null;
+  next_action: string | null;
+  created_at: string;
+  last_message_body?: string;
+}
+
+const CATEGORY_ICONS: Record<string, string> = {
+  phones: '📱', vehicles: '🚗', properties: '🏠', electronics: '📻',
+  furniture: '🪑', fashion: '👗', gold: '💰', luxury: '💎',
+  appliances: '🏠', hobbies: '🎮', tools: '🔧', services: '🛠️', scrap: '♻️',
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  initial_outreach: '1/3',
+  conversation: '2/3',
+  signup: '3/3',
+  onboarding: '✅',
+  active_user: '🌟',
+};
+
+function OutreachTab() {
+  const [stats, setStats] = useState<OutreachStats | null>(null);
+  const [conversations, setConversations] = useState<OutreachConversation[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadOutreach = useCallback(async () => {
+    try {
+      const headers = getAdminHeaders();
+      const [statsRes, convsRes] = await Promise.all([
+        fetch("/api/admin/crm/harvester/outreach/stats", { headers }),
+        fetch("/api/admin/crm/harvester/outreach/conversations", { headers }),
+      ]);
+
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (convsRes.ok) {
+        const data = await convsRes.json();
+        setConversations(data.conversations || []);
+      }
+    } catch (err) {
+      console.error("Outreach load error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOutreach();
+  }, [loadOutreach]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-32 bg-gray-200 animate-pulse rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  const todayStats = stats?.today || { messages_sent: 0, responses: 0, signups: 0, response_rate: 0 };
+  const funnelData = stats?.funnel || [];
+
+  const FUNNEL_COLORS = ['#6B7280', '#3B82F6', '#8B5CF6', '#F59E0B', '#10B981', '#1B7A3D'];
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+          <p className="text-3xl font-bold text-blue-600">{todayStats.messages_sent}</p>
+          <p className="text-sm text-gray-500 mt-1">رسائل أرسلت (اليوم)</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+          <p className="text-3xl font-bold text-green-600">{todayStats.responses}</p>
+          <p className="text-sm text-gray-500 mt-1">ردود (اليوم)</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+          <p className="text-3xl font-bold text-purple-600">{todayStats.signups}</p>
+          <p className="text-sm text-gray-500 mt-1">سجّلوا (اليوم)</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+          <p className="text-3xl font-bold text-orange-600">{todayStats.response_rate}%</p>
+          <p className="text-sm text-gray-500 mt-1">معدل الرد</p>
+        </div>
+      </div>
+
+      {/* Funnel Chart */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">📊 قمع التحويل</h3>
+        {funnelData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={funnelData} layout="vertical" margin={{ right: 30 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" />
+              <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
+              <Tooltip formatter={(value: number) => [value, 'عدد']} />
+              <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                {funnelData.map((entry, index) => (
+                  <Cell key={index} fill={FUNNEL_COLORS[index % FUNNEL_COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-center text-gray-400 py-8">لا توجد بيانات بعد</p>
+        )}
+      </div>
+
+      {/* Conversations Table */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div className="p-4 border-b">
+          <h3 className="text-lg font-bold text-gray-900">💬 آخر المحادثات</h3>
+        </div>
+        {conversations.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-right p-3 font-medium text-gray-600">العميل</th>
+                  <th className="text-right p-3 font-medium text-gray-600">الفئة</th>
+                  <th className="text-right p-3 font-medium text-gray-600">المرحلة</th>
+                  <th className="text-right p-3 font-medium text-gray-600">آخر رسالة</th>
+                  <th className="text-right p-3 font-medium text-gray-600">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {conversations.map((conv) => (
+                  <tr key={conv.id} className="hover:bg-gray-50">
+                    <td className="p-3">
+                      <div className="font-medium text-gray-900">
+                        {conv.customer_name || conv.phone}
+                        {conv.seller_type === 'whale' && ' 🐋'}
+                      </div>
+                      <div className="text-xs text-gray-400">{conv.phone}</div>
+                    </td>
+                    <td className="p-3">
+                      {CATEGORY_ICONS[conv.category || ''] || '📦'}{' '}
+                      <span className="text-gray-600">{conv.category || '-'}</span>
+                    </td>
+                    <td className="p-3">
+                      <span className="text-sm font-medium">
+                        {STAGE_LABELS[conv.stage] || conv.stage}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="text-gray-600 max-w-[200px] truncate">
+                        {conv.last_message_body?.substring(0, 30) || '-'}
+                      </div>
+                      {conv.last_message_at && (
+                        <div className="text-xs text-gray-400">
+                          {new Date(conv.last_message_at).toLocaleDateString('ar-EG')}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <OutreachStatusBadge
+                        status={conv.status}
+                        hasResponse={conv.messages_received > 0}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-center text-gray-400 py-8">لا توجد محادثات بعد</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OutreachStatusBadge({ status, hasResponse }: { status: string; hasResponse: boolean }) {
+  if (hasResponse) return <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">✅ ردّ</span>;
+  if (status === 'completed') return <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">❌ لم يرد</span>;
+  if (status === 'waiting' || status === 'scheduled') return <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">⏳ انتظار</span>;
+  if (status === 'escalated') return <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">🚨 تصعيد</span>;
+  return <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">🤖 AI</span>;
 }
