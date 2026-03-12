@@ -1242,7 +1242,7 @@ function OutreachTab() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" />
               <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value: number) => [value, 'عدد']} />
+              <Tooltip formatter={(value) => [String(value), 'عدد']} />
               <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                 {funnelData.map((entry, index) => (
                   <Cell key={index} fill={FUNNEL_COLORS[index % FUNNEL_COLORS.length]} />
