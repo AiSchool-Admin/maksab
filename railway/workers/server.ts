@@ -453,8 +453,11 @@ async function fetchAndExtractDetail(
   if (sellerMatch) {
     sellerName = sellerMatch[1].trim();
     sellerName = sellerName
+      .replace(/User\s*photo/gi, '')
+      .replace(/صورة المستخدم/g, '')
       .replace(/مستخدم خاص/g, '')
       .replace(/مستخدم/g, '')
+      .replace(/مدرجة من قبل/g, '')
       .replace(/private user/gi, '')
       .trim();
     if (sellerName.length > 2 && sellerName[0] === sellerName[1]) {
@@ -470,16 +473,33 @@ async function fetchAndExtractDetail(
       const parent = verifiedEl.first().parent();
       const siblingText = parent.text().trim();
       sellerName = siblingText
+        .replace(/User\s*photo/gi, '')
+        .replace(/صورة المستخدم/g, '')
         .replace(/مستخدم موثق/g, '')
         .replace(/صاحب عمل موثق/g, '')
         .replace(/موثق/g, '')
+        .replace(/مدرجة من قبل/g, '')
         .trim();
+      // Remove duplicate first character
+      if (sellerName.length > 2 && sellerName[0] === sellerName[1]) {
+        sellerName = sellerName.substring(1);
+      }
       if (sellerName.length < 2 || sellerName.length > 40) sellerName = null;
     }
   }
 
-  // Keep existing seller name if we didn't find a new one
-  if (!sellerName && listing.seller_name) sellerName = listing.seller_name;
+  // Keep existing seller name if we didn't find a new one (but clean it)
+  if (!sellerName && listing.seller_name) {
+    sellerName = listing.seller_name
+      .replace(/User\s*photo/gi, '')
+      .replace(/صورة المستخدم/g, '')
+      .replace(/مدرجة من قبل/g, '')
+      .trim();
+    if (sellerName.length > 2 && sellerName[0] === sellerName[1]) {
+      sellerName = sellerName.substring(1);
+    }
+    if (sellerName.length < 2) sellerName = null;
+  }
 
   // ═══ Description Extraction ═══
   let description = '';

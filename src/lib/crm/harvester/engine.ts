@@ -11,6 +11,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import {
   parseDubizzleList,
   parseDubizzleDetail,
+  cleanSellerName,
   BROWSER_HEADERS,
   type ListPageListing,
 } from "./parsers/dubizzle";
@@ -453,7 +454,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       const sellerId = await upsertSeller(supabase, {
         phone: listing.extractedPhone || null,
         profileUrl: listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl || null,
-        name: listing.sellerNameFromDetail || listing.sellerName || null,
+        name: cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null),
         platform: scope.source_platform,
         isVerified: listing.isVerified,
         isBusiness: listing.isBusiness,
@@ -492,7 +493,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         area: location.area,
         source_date_text: listing.dateText,
         estimated_posted_at: listing.estimatedDate || null,
-        seller_name: listing.sellerNameFromDetail || listing.sellerName,
+        seller_name: cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null),
         seller_profile_url: listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl,
         seller_is_verified: listing.isVerified,
         seller_is_business: listing.isBusiness,
