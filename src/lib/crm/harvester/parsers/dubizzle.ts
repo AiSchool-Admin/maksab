@@ -7,6 +7,28 @@
  * الحل الأساسي هو Bookmarklet من متصفح الموظف.
  */
 
+/**
+ * Clean seller name — removes "User photo" prefix, duplicate first char, etc.
+ */
+export function cleanSellerName(name: string | null): string | null {
+  if (!name) return null;
+  let cleaned = name
+    .replace(/User\s*photo/gi, '')
+    .replace(/صورة المستخدم/g, '')
+    .replace(/مستخدم خاص/g, '')
+    .replace(/مستخدم/g, '')
+    .replace(/مدرجة من قبل/g, '')
+    .trim();
+
+  // Remove duplicate first character (Arabic or English)
+  if (cleaned.length > 2 && cleaned[0] === cleaned[1]) {
+    cleaned = cleaned.substring(1);
+  }
+
+  if (cleaned.length < 2) return null;
+  return cleaned;
+}
+
 export interface ListPageListing {
   url: string;
   title: string;
@@ -171,7 +193,7 @@ function parseJsonListings(json: Record<string, unknown>): ListPageListing[] {
 
     if (ad.user) {
       const user = ad.user as Record<string, unknown>;
-      sellerName = (user.name as string) || (user.display_name as string) || null;
+      sellerName = cleanSellerName((user.name as string) || (user.display_name as string) || null);
       if (user.id) {
         sellerProfileUrl = `https://www.dubizzle.com.eg/profile/${user.id}`;
       }
@@ -302,7 +324,7 @@ export function parseDubizzleDetail(html: string): ListingDetails {
 
   // Extract seller
   const sellerMatch = html.match(/<[^>]*class="[^"]*seller[^"]*name[^"]*"[^>]*>([^<]+)</i);
-  if (sellerMatch) result.sellerName = sellerMatch[1].trim();
+  if (sellerMatch) result.sellerName = cleanSellerName(sellerMatch[1].trim());
 
   const profileMatch = html.match(/href="(\/(?:ar\/)?profile\/[^"]+)"/i);
   if (profileMatch) result.sellerProfileUrl = `https://www.dubizzle.com.eg${profileMatch[1]}`;
@@ -381,7 +403,7 @@ function parseHtmlListings(html: string): ListPageListing[] {
       thumbnailUrl,
       location: locationText || "",
       dateText: dateText || "",
-      sellerName: sellerName || null,
+      sellerName: cleanSellerName(sellerName) || null,
       sellerProfileUrl,
       sellerAvatarUrl: null,
       isVerified: context.includes("verified") || context.includes("موثق"),
