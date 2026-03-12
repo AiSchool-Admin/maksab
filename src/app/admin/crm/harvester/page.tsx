@@ -432,6 +432,7 @@ interface ListingsData {
     seller_name: string | null;
     seller_is_verified: boolean;
     seller_is_business: boolean;
+    extracted_phone: string | null;
   }>;
   total: number;
   page: number;
@@ -626,6 +627,7 @@ function ListingsTab() {
                     <th className="text-right py-3 px-3">الموقع</th>
                     <th className="text-right py-3 px-3">التاريخ</th>
                     <th className="text-right py-3 px-3">المعلن</th>
+                    <th className="text-right py-3 px-3">📞 الرقم</th>
                     <th className="text-right py-3 px-3">الحالة</th>
                   </tr>
                 </thead>
@@ -694,6 +696,23 @@ function ListingsTab() {
                       {/* Seller */}
                       <td className="py-3 px-3 text-xs">
                         {listing.seller_name || "—"}
+                      </td>
+                      {/* Phone */}
+                      <td className="py-3 px-3 text-xs whitespace-nowrap">
+                        {listing.extracted_phone ? (
+                          <span className="flex items-center gap-1">
+                            <span className="font-mono">{listing.extracted_phone}</span>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(listing.extracted_phone!); }}
+                              className="text-gray-400 hover:text-gray-600"
+                              title="نسخ"
+                            >
+                              📋
+                            </button>
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </td>
                       {/* Status */}
                       <td className="py-3 px-3 text-center text-lg">

@@ -70,6 +70,7 @@ interface HarvestResult {
   new: number;
   duplicate: number;
   sellers_new: number;
+  phones_extracted: number;
   crm_queued: number;
   errors: string[];
   duration_ms: number;
@@ -177,12 +178,50 @@ function parseDubizzleHtml(html: string): ParsedListing[] {
     const isVerified = cardText.includes("موثق");
     const isBusiness = cardText.includes("صاحب عمل");
 
-    // Seller
-    const sellerLink = article.find('a[href*="/companies/"]').first();
-    const sellerName = sellerLink.length ? sellerLink.text().trim() : null;
-    const sellerProfileUrl = sellerLink.length
-      ? sellerLink.attr("href") || null
-      : null;
+    // Seller: try multiple extraction methods
+    let sellerName: string | null = null;
+    let sellerProfileUrl: string | null = null;
+
+    // Method 1: company link
+    const companyLink = article.find('a[href*="/companies/"]').first();
+    if (companyLink.length) {
+      sellerName = companyLink.text().trim() || null;
+      sellerProfileUrl = companyLink.attr("href") || null;
+    }
+
+    // Method 2: member/profile/user link
+    if (!sellerName) {
+      const memberLink = article.find('a[href*="/member/"], a[href*="/profile/"], a[href*="/user/"]').first();
+      if (memberLink.length) {
+        sellerName = memberLink.text().trim() || null;
+        sellerProfileUrl = memberLink.attr("href") || null;
+      }
+    }
+
+    // Method 3: aria-label or data-testid for seller
+    if (!sellerName) {
+      const sellerEl = article.find('[aria-label*="eller"], [aria-label*="عضو"], [data-testid*="seller"], [data-testid*="user"]').first();
+      if (sellerEl.length) {
+        sellerName = sellerEl.text().trim() || null;
+      }
+    }
+
+    // Method 4: name near "موثق" or "صاحب عمل" badges
+    if (!sellerName) {
+      const verifiedMatch = cardText.match(/([\u0600-\u06FF\s]{3,25})\s*(?:موثق|صاحب عمل)/);
+      if (verifiedMatch) {
+        sellerName = verifiedMatch[1].trim() || null;
+      }
+    }
+
+    // Debug: log first article's seller extraction
+    if (listings.length === 0) {
+      console.log("Maksab DEBUG seller extraction:", {
+        companyLink: companyLink.length > 0,
+        memberLink: article.find('a[href*="/member/"]').length > 0,
+        articleHTML: article.html()?.substring(0, 500),
+      });
+    }
 
     listings.push({
       url,
@@ -379,6 +418,7 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       new: 0,
       duplicate: 0,
       sellers_new: 0,
+      phones_extracted: 0,
       crm_queued: 0,
       errors: [`Scope not found: ${scopeCode}`],
       debug: {
@@ -579,6 +619,72 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     }
   }
 
+  // 3b. Detail fetching — extract phone numbers from ad detail pages
+  // Only fetch top 10 new listings without a phone to avoid timeout
+  let phonesExtracted = 0;
+  try {
+    const { data: newWithoutPhone } = await supabase
+      .from("ahe_listings")
+      .select("id, source_listing_url, ahe_seller_id")
+      .eq("scope_id", scope.id)
+      .is("extracted_phone", null)
+      .eq("is_duplicate", false)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (newWithoutPhone && newWithoutPhone.length > 0) {
+      console.log(`[Harvest] 📞 Fetching details for ${newWithoutPhone.length} listings to extract phones...`);
+      for (const listing of newWithoutPhone) {
+        try {
+          await new Promise((r) => setTimeout(r, 5000)); // 5s delay
+          const { html: detailHtml, status: detailStatus } = await fetchDubizzlePage(listing.source_listing_url);
+
+          if (detailStatus === 403) {
+            console.log("[Harvest] 📞 Detail fetch blocked (403), stopping detail extraction");
+            break;
+          }
+
+          if (detailStatus !== 200) continue;
+
+          const $detail = cheerio.load(detailHtml);
+          const description =
+            $detail("article").text() ||
+            $detail('[data-testid*="description"]').text() ||
+            $detail("body").text();
+
+          const phoneMatch = description.match(/01[0-25][\s.\-]?\d{3,4}[\s.\-]?\d{4,5}/g);
+          if (phoneMatch) {
+            const phone = normalizePhone(phoneMatch[0]);
+            if (phone) {
+              // Update listing
+              await supabase
+                .from("ahe_listings")
+                .update({ extracted_phone: phone, phone_source: "description" })
+                .eq("id", listing.id);
+
+              // Update seller phone if not already set
+              if (listing.ahe_seller_id) {
+                await supabase
+                  .from("ahe_sellers")
+                  .update({ phone, pipeline_status: "phone_found" })
+                  .eq("id", listing.ahe_seller_id)
+                  .is("phone", null);
+              }
+
+              phonesExtracted++;
+              console.log(`[Harvest] 📞 Extracted phone ${phone} from ${listing.source_listing_url}`);
+            }
+          }
+        } catch (e: any) {
+          console.log(`[Harvest] 📞 Detail fetch error: ${e.message}`);
+        }
+      }
+      console.log(`[Harvest] 📞 Detail extraction done: ${phonesExtracted} phones found`);
+    }
+  } catch (e: any) {
+    console.log(`[Harvest] 📞 Detail extraction error: ${e.message}`);
+  }
+
   // 4. Update scope stats
   await supabase
     .from("ahe_scopes")
@@ -644,6 +750,7 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     new: newCount,
     duplicate: dupCount,
     sellers_new: sellersNew,
+    phones_extracted: phonesExtracted,
     crm_queued: crmQueued,
     errors,
     duration_ms: durationMs,
@@ -901,6 +1008,7 @@ async function cronHarvest(): Promise<{
       new: 0,
       duplicate: 0,
       sellers_new: 0,
+      phones_extracted: 0,
       crm_queued: 0,
       errors: [err.message],
       duration_ms: 0,
