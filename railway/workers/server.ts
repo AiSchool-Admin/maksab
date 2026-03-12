@@ -449,10 +449,14 @@ async function fetchAndExtractDetail(
 
   // 2. Regex: text near "مدرجة من قبل"
   const bodyText = $detail('body').text();
-  const sellerMatch = bodyText.match(/مدرجة من قبل[^]*?([\u0600-\u06FF\s]{3,30}?)(?:مستخدم موثق|صاحب عمل موثق|عضو منذ)/);
+  const sellerMatch = bodyText.match(/مدرجة من قبل[^]*?([\u0600-\u06FFa-zA-Z0-9\s\.'-]{3,40}?)(?:مستخدم موثق|صاحب عمل موثق|عضو منذ)/);
   if (sellerMatch) {
     sellerName = sellerMatch[1].trim();
-    sellerName = sellerName.replace(/مستخدم خاص/g, '').replace(/مستخدم/g, '').trim();
+    sellerName = sellerName
+      .replace(/مستخدم خاص/g, '')
+      .replace(/مستخدم/g, '')
+      .replace(/private user/gi, '')
+      .trim();
     if (sellerName.length > 2 && sellerName[0] === sellerName[1]) {
       sellerName = sellerName.substring(1);
     }
