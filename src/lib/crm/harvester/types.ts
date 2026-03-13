@@ -66,8 +66,46 @@ export interface AheScope {
   description: string | null;
   total_whales_found: number;
   total_filtered_out: number;
+  // Phase 4: Balance fields
+  target_supply_demand_ratio: number | null;
+  gov_tier: string | null;
+  cat_demand_level: string | null;
+  auto_adjusted: boolean;
+  last_balance_check_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface MarketBalance {
+  id: string;
+  category: string;
+  governorate: string | null;
+  active_listings: number;
+  new_listings_today: number;
+  sellers_with_phone: number;
+  active_buyers: number;
+  new_buyers_today: number;
+  buy_requests_active: number;
+  supply_demand_ratio: number | null;
+  target_ratio: number | null;
+  balance_status: string;
+  recommended_action: string;
+  alert_sent: boolean;
+  alert_sent_at: string | null;
+  updated_at: string;
+}
+
+export interface AdminNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  action_url: string | null;
+  priority: string;
+  is_read: boolean;
+  read_at: string | null;
+  read_by: string | null;
+  created_at: string;
 }
 
 export interface AheHarvestJob {
@@ -238,6 +276,7 @@ export interface AheGovernorateMapping {
   estimated_daily_listings: number;
   suggested_interval_minutes: number;
   is_active: boolean;
+  gov_tier: string | null;
 }
 
 export type EngineAction =

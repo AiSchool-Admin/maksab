@@ -101,7 +101,7 @@ export default function ScopesPage() {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" dir="rtl">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Link
@@ -113,20 +113,23 @@ export default function ScopesPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mt-1">📋 إدارة النطاقات</h1>
           <p className="text-gray-500 text-sm">
-            {scopes.length} نطاق — {scopes.filter((s) => s.is_active).length} نشط
+            إجمالي النطاقات: {scopes.length} | نشط: {scopes.filter((s) => s.is_active).length} | متوقف: {scopes.filter((s) => !s.is_active).length}
             {scopes.filter((s) => s.scope_group === "whale_hunting").length > 0 && (
               <span className="mr-2">
-                — 🐋 {scopes.filter((s) => s.scope_group === "whale_hunting").length} صيد حيتان
+                | 🐋 {scopes.filter((s) => s.scope_group === "whale_hunting").length} صيد حيتان
               </span>
             )}
           </p>
         </div>
-        <button
-          onClick={() => setShowWizard(true)}
-          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-        >
-          + إضافة نطاق
-        </button>
+        <div className="flex gap-2">
+          <GenerateAllScopesButton onDone={loadData} />
+          <button
+            onClick={() => setShowWizard(true)}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+          >
+            + إضافة نطاق
+          </button>
+        </div>
       </div>
 
       {/* Group Tabs */}
@@ -1017,5 +1020,100 @@ function ScopeWizard({
         </div>
       </div>
     </div>
+  );
+}
+
+// ═══ GENERATE ALL SCOPES BUTTON ═══
+
+function GenerateAllScopesButton({ onDone }: { onDone: () => void }) {
+  const [generating, setGenerating] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [result, setResult] = useState<{
+    created: number;
+    updated: number;
+    skipped: number;
+    total: number;
+  } | null>(null);
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setShowConfirm(false);
+    try {
+      const res = await fetch("/api/admin/sales/scopes/generate-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAdminHeaders() },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setResult(data);
+        onDone();
+      }
+    } catch (err) {
+      console.error("Generate error:", err);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setShowConfirm(true)}
+        disabled={generating}
+        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+      >
+        {generating ? "جاري الإنشاء..." : "🔄 إنشاء كل النطاقات"}
+      </button>
+
+      {/* Confirmation Modal */}
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center">
+            <div className="text-4xl mb-3">🔄</div>
+            <h3 className="text-lg font-bold mb-2">إنشاء كل النطاقات</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              سيتم إنشاء ~200 نطاق جديد لكل الفئات والمحافظات.
+              النطاقات الموجودة لن تُحذف — سيتم تحديثها فقط.
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleGenerate}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                متأكد — ابدأ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Result Modal */}
+      {result && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center">
+            <div className="text-4xl mb-3">✅</div>
+            <h3 className="text-lg font-bold mb-3">تم بنجاح!</h3>
+            <div className="space-y-1 text-sm text-gray-600 mb-4">
+              <p>🆕 نطاقات جديدة: <span className="font-bold text-green-600">{result.created}</span></p>
+              <p>🔄 نطاقات محدّثة: <span className="font-bold text-blue-600">{result.updated}</span></p>
+              <p>⏭️ تم تخطيها: <span className="font-bold text-gray-400">{result.skipped}</span></p>
+              <p>📊 الإجمالي: <span className="font-bold">{result.total}</span></p>
+            </div>
+            <button
+              onClick={() => setResult(null)}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              تم
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

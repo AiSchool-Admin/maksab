@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   Users,
   ShoppingBag,
@@ -17,6 +18,7 @@ import {
   ClipboardCheck,
   CreditCard,
   Monitor,
+  Scale,
 } from "lucide-react";
 import { useAdmin, getAdminHeaders } from "../layout";
 import {
@@ -330,6 +332,9 @@ export default function CEODashboardPage() {
         </div>
       </div>
 
+      {/* Market Balance Card */}
+      <MarketBalanceCard />
+
       {/* Growth Chart */}
       <div className="bg-white rounded-xl p-4 lg:p-6 border border-gray-100 shadow-sm">
         <div className="mb-4">
@@ -413,6 +418,182 @@ export default function CEODashboardPage() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── Market Balance Card ─── */
+
+interface BalanceEntry {
+  category: string;
+  active_listings: number;
+  active_buyers: number;
+  supply_demand_ratio: number;
+  target_ratio: number;
+  balance_status: string;
+  updated_at: string;
+}
+
+const CATEGORY_ICONS: Record<string, string> = {
+  phones: "📱",
+  vehicles: "🚗",
+  properties: "🏠",
+  electronics: "💻",
+  furniture: "🛋️",
+  fashion: "👗",
+  home_appliances: "🏠",
+  hobbies: "🎮",
+  services: "🔧",
+  gold_jewelry: "💰",
+  scrap: "♻️",
+  luxury: "💎",
+};
+
+const CATEGORY_AR: Record<string, string> = {
+  phones: "موبايلات",
+  vehicles: "سيارات",
+  properties: "عقارات",
+  electronics: "إلكترونيات",
+  furniture: "أثاث",
+  fashion: "أزياء",
+  home_appliances: "أجهزة منزلية",
+  hobbies: "هوايات",
+  services: "خدمات",
+  gold_jewelry: "ذهب ومجوهرات",
+  scrap: "خُردة",
+  luxury: "سلع فاخرة",
+};
+
+const STATUS_CONFIG: Record<string, { icon: string; label: string; color: string }> = {
+  critical_buyers: { icon: "🔴", label: "محتاج مشترين عاجل", color: "text-red-600 bg-red-50" },
+  needs_buyers: { icon: "🟡", label: "محتاج مشترين", color: "text-yellow-600 bg-yellow-50" },
+  balanced: { icon: "🟢", label: "متوازن", color: "text-green-600 bg-green-50" },
+  needs_sellers: { icon: "🔵", label: "محتاج بائعين", color: "text-blue-600 bg-blue-50" },
+  no_data: { icon: "⚪", label: "لا بيانات", color: "text-gray-400 bg-gray-50" },
+};
+
+function MarketBalanceCard() {
+  const [balance, setBalance] = useState<BalanceEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/dashboard/balance", {
+        headers: getAdminHeaders(),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setBalance(json.balance || []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl p-4 lg:p-6 border border-gray-100 shadow-sm">
+        <div className="h-40 animate-pulse bg-gray-100 rounded-lg" />
+      </div>
+    );
+  }
+
+  if (balance.length === 0) {
+    return (
+      <div className="bg-white rounded-xl p-4 lg:p-6 border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <Scale size={18} className="text-brand-green" />
+          <h3 className="text-base font-bold text-dark">توازن السوق</h3>
+        </div>
+        <p className="text-sm text-gray-400 text-center py-6">
+          لا توجد بيانات بعد — سيتم حساب التوازن تلقائياً بعد أول حصادة
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 lg:p-6 border border-gray-100 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Scale size={18} className="text-brand-green" />
+          <h3 className="text-base font-bold text-dark">توازن السوق</h3>
+        </div>
+        <span className="text-[10px] text-gray-400">
+          آخر تحديث:{" "}
+          {balance[0]?.updated_at
+            ? new Date(balance[0].updated_at).toLocaleString("ar-EG", {
+                hour: "2-digit",
+                minute: "2-digit",
+                day: "2-digit",
+                month: "short",
+              })
+            : "—"}
+        </span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-gray-400 border-b">
+              <th className="text-right py-2 font-medium">الفئة</th>
+              <th className="text-center py-2 font-medium">عرض</th>
+              <th className="text-center py-2 font-medium">طلب</th>
+              <th className="text-center py-2 font-medium">النسبة</th>
+              <th className="text-center py-2 font-medium">الحالة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {balance.map((entry) => {
+              const cfg = STATUS_CONFIG[entry.balance_status] || STATUS_CONFIG.no_data;
+              return (
+                <tr key={entry.category} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <td className="py-2.5">
+                    <span className="font-medium text-dark">
+                      {CATEGORY_ICONS[entry.category] || "📦"}{" "}
+                      {CATEGORY_AR[entry.category] || entry.category}
+                    </span>
+                  </td>
+                  <td className="text-center text-gray-600">
+                    {(entry.active_listings || 0).toLocaleString()}
+                  </td>
+                  <td className="text-center text-gray-600">
+                    {(entry.active_buyers || 0).toLocaleString()}
+                  </td>
+                  <td className="text-center font-mono text-xs">
+                    {entry.supply_demand_ratio != null
+                      ? `${entry.supply_demand_ratio.toFixed(1)}:1`
+                      : "—"}
+                  </td>
+                  <td className="text-center">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${cfg.color}`}>
+                      {cfg.icon} {cfg.label}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Action link for categories needing buyers */}
+      {balance.some((b) => b.balance_status === "critical_buyers" || b.balance_status === "needs_buyers") && (
+        <div className="mt-3 pt-3 border-t">
+          <Link
+            href="/admin/sales/buyer-harvest/paste"
+            className="text-xs text-brand-green hover:text-brand-green-dark font-medium flex items-center gap-1"
+          >
+            💡 الفئات اللي محتاجة مشترين — اضغط لفتح Paste&Parse
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
