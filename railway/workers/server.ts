@@ -1966,8 +1966,8 @@ async function cronHarvest(): Promise<{
     return { scopes_processed: 0, results: [] };
   }
 
-  // Smart scope selection — Phase 4
-  // Fetch top 5 ready scopes, then pick the best one
+  // Smart scope selection — round-robin with priority
+  // Pick the scope that hasn't been harvested the longest (or never), breaking ties by priority
   const { data: readyScopes } = await supabase
     .from("ahe_scopes")
     .select("*")
@@ -1975,43 +1975,18 @@ async function cronHarvest(): Promise<{
     .eq("is_paused", false)
     .or("server_fetch_blocked.eq.false,server_fetch_blocked.is.null")
     .or("next_harvest_at.is.null,next_harvest_at.lte.now()")
+    .order("last_harvest_at", { ascending: true, nullsFirst: true })
     .order("priority", { ascending: false })
-    .limit(5);
+    .limit(1);
 
   if (!readyScopes || readyScopes.length === 0) {
     console.log("[Cron] 😴 No scopes ready for harvest");
     return { scopes_processed: 0, results: [] };
   }
 
-  // Try to get market balance data for smart selection
-  let scope = readyScopes[0]; // fallback to highest priority
-  try {
-    const categories = readyScopes.map((s: any) => s.maksab_category);
-    const { data: balanceData } = await supabase
-      .from("market_balance")
-      .select("category, balance_status")
-      .in("category", categories)
-      .is("governorate", null);
-
-    if (balanceData && balanceData.length > 0) {
-      const balanceMap = new Map(balanceData.map((b: any) => [b.category, b.balance_status]));
-
-      // Sort: needs_sellers first (rare but important), then by priority
-      // ⚠️ Never skip any scope due to oversupply — AHE always harvests
-      const sorted = [...readyScopes].sort((a: any, b: any) => {
-        const aNeeds = balanceMap.get(a.maksab_category) === "needs_sellers" ? 0 : 1;
-        const bNeeds = balanceMap.get(b.maksab_category) === "needs_sellers" ? 0 : 1;
-        if (aNeeds !== bNeeds) return aNeeds - bNeeds;
-        return (b.priority || 0) - (a.priority || 0);
-      });
-
-      scope = sorted[0];
-    }
-  } catch {
-    // Fallback to priority-based selection (already set above)
-  }
+  const scope = readyScopes[0];
   console.log(
-    `[Cron] 🚀 Harvesting 1 scope: ${scope.code}`
+    `[Cron] 🚀 Harvesting 1 scope: ${scope.code} (last_harvest: ${scope.last_harvest_at || "never"})`
   );
 
   const results: HarvestResult[] = [];
