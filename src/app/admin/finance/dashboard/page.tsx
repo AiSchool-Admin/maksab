@@ -208,8 +208,9 @@ export default function FinanceDashboardPage() {
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip
                 contentStyle={{ borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 13 }}
-                formatter={(value: number, name: string) => [
-                  `${formatPrice(value)} ج.م`,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(value: any, name: any) => [
+                  `${formatPrice(Number(value ?? 0))} ج.م`,
                   name === "revenue" ? "إيرادات" : "مصروفات",
                 ]}
                 labelStyle={{ fontWeight: "bold" }}
