@@ -21,9 +21,11 @@ export async function POST() {
     const result = await generateAllScopes(supabase);
 
     return NextResponse.json({
-      success: true,
+      success: result.errors.length === 0,
       ...result,
-      message: `تم إنشاء ${result.created} نطاق جديد وتحديث ${result.updated} نطاق (تم تخطي ${result.skipped})`,
+      message: `تم إنشاء ${result.created} نطاق جديد وتحديث ${result.updated} نطاق (تم تخطي ${result.skipped})${
+        result.errors.length > 0 ? ` — ${result.errors.length} خطأ` : ""
+      }`,
     });
   } catch (error: any) {
     console.error("[generate-all] Error:", error.message);

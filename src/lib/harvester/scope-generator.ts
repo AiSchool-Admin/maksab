@@ -56,16 +56,37 @@ export async function generateAllScopes(supabase: SupabaseClient): Promise<{
   updated: number;
   skipped: number;
   total: number;
+  errors: { code: string; error: string }[];
+  debug: {
+    categoriesCount: number;
+    governoratesCount: number;
+    sampleUrl: string | null;
+    sampleScope: string | null;
+  };
 }> {
-  const { data: categories } = await supabase
+  const { data: categories, error: catError } = await supabase
     .from("ahe_category_mappings")
     .select("*")
     .eq("source_platform", "dubizzle");
 
-  const { data: governorates } = await supabase
+  const { data: governorates, error: govError } = await supabase
     .from("ahe_governorate_mappings")
     .select("*")
     .eq("source_platform", "dubizzle");
+
+  if (catError || govError) {
+    return {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      total: 0,
+      errors: [
+        ...(catError ? [{ code: "FETCH_CATEGORIES", error: catError.message }] : []),
+        ...(govError ? [{ code: "FETCH_GOVERNORATES", error: govError.message }] : []),
+      ],
+      debug: { categoriesCount: 0, governoratesCount: 0, sampleUrl: null, sampleScope: null },
+    };
+  }
 
   const scopes: Record<string, any>[] = [];
   let skipped = 0;
@@ -118,18 +139,39 @@ export async function generateAllScopes(supabase: SupabaseClient): Promise<{
     }
   }
 
-  // Upsert — don't delete existing
+  // Upsert with proper error tracking
   let created = 0;
   let updated = 0;
+  const errors: { code: string; error: string }[] = [];
+
+  // First, try inserting one scope to detect column issues early
+  if (scopes.length > 0) {
+    const testScope = scopes[0];
+    const { error: testError } = await supabase
+      .from("ahe_scopes")
+      .select("id")
+      .limit(0);
+
+    if (testError) {
+      errors.push({ code: "TABLE_ACCESS", error: testError.message });
+    }
+  }
 
   for (const scope of scopes) {
     // Check if exists
-    const { data: existing } = await supabase
+    const { data: existing, error: lookupError } = await supabase
       .from("ahe_scopes")
-      .select("id, created_at, updated_at")
+      .select("id")
       .eq("code", scope.code)
       .limit(1)
-      .single();
+      .maybeSingle();
+
+    if (lookupError) {
+      if (errors.length < 10) {
+        errors.push({ code: scope.code, error: `lookup: ${lookupError.message}` });
+      }
+      continue;
+    }
 
     if (existing) {
       // Update only the configurable fields, preserve custom settings
@@ -145,13 +187,49 @@ export async function generateAllScopes(supabase: SupabaseClient): Promise<{
         })
         .eq("id", existing.id);
 
-      if (!error) updated++;
+      if (error) {
+        if (errors.length < 10) {
+          errors.push({ code: scope.code, error: `update: ${error.message}` });
+        }
+      } else {
+        updated++;
+      }
     } else {
       // Insert new
       const { error } = await supabase.from("ahe_scopes").insert(scope);
-      if (!error) created++;
+      if (error) {
+        if (errors.length < 10) {
+          errors.push({ code: scope.code, error: `insert: ${error.message}` });
+        }
+        // If column error, try without the new columns
+        if (error.message.includes("column") || error.message.includes("undefined")) {
+          const { target_supply_demand_ratio, gov_tier, cat_demand_level, ...safeScope } = scope;
+          const { error: retryError } = await supabase.from("ahe_scopes").insert(safeScope);
+          if (retryError) {
+            if (errors.length < 10) {
+              errors.push({ code: scope.code, error: `retry_insert: ${retryError.message}` });
+            }
+          } else {
+            created++;
+          }
+        }
+      } else {
+        created++;
+      }
     }
   }
 
-  return { created, updated, skipped, total: scopes.length };
+  return {
+    created,
+    updated,
+    skipped,
+    total: scopes.length,
+    errors,
+    debug: {
+      categoriesCount: (categories || []).length,
+      governoratesCount: (governorates || []).length,
+      sampleUrl: scopes[0]?.base_url || null,
+      sampleScope: scopes[0] ? JSON.stringify(scopes[0]) : null,
+    },
+  };
 }
