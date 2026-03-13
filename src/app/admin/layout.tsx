@@ -137,7 +137,9 @@ const navSections: NavSection[] = [
     icon: "📈",
     items: [
       { href: "/admin/sales/pipeline", label: "Pipeline", icon: PieChart },
-      { href: "/admin/sales/outreach", label: "التواصل", icon: Mail },
+      { href: "/admin/sales/outreach", label: "التواصل — بائعين", icon: Mail },
+      { href: "/admin/sales/buyer-harvest", label: "حصاد المشترين", icon: ShoppingBag },
+      { href: "/admin/sales/buyer-outreach", label: "التواصل — مشترين", icon: Inbox },
       { href: "/admin/sales/scopes", label: "النطاقات", icon: Globe },
       { href: "/admin/crm/customers", label: "العملاء (CRM)", icon: UserSearch },
       { href: "/admin/crm/discovery", label: "الاكتشاف", icon: Target },
