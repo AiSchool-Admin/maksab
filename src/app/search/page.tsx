@@ -179,15 +179,17 @@ function SearchPageInner() {
         setEmptySuggestions([]);
       }
 
-      // Fetch similar ads
+      // Fetch similar ads (enhanced from recommendation engine + regular)
       const mainIds = new Set(result.ads.map((a) => a.id));
-      const enhanced = getEnhancedSimilarAds(
-        searchFilters.query || "",
-        mainIds,
-        searchFilters.category,
-      );
-      const regular = await getSimilarSearchAds(searchFilters);
-      const seenIds = new Set(enhanced.map((a) => a.id));
+      const [enhanced, regular] = await Promise.all([
+        getEnhancedSimilarAds(
+          searchFilters.query || query || "",
+          mainIds,
+          searchFilters.category,
+        ),
+        getSimilarSearchAds(searchFilters),
+      ]);
+      const seenIds = new Set([...mainIds, ...enhanced.map((a) => a.id)]);
       const merged = [
         ...enhanced,
         ...regular.filter((a) => !seenIds.has(a.id)),

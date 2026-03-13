@@ -272,12 +272,45 @@ export async function getSellerInsights(params: {
   }
 }
 
-/* ── Enhanced similar search ads ──────────────────────────────────────── */
+/* ── Enhanced similar search ads ("شبيه اللي بتدور عليه") ─────────── */
 
-export function getEnhancedSimilarAds(
-  _query: string,
-  _mainResultIds: Set<string>,
-  _category?: string,
-): AdSummary[] {
-  return [];
+export async function getEnhancedSimilarAds(
+  query: string,
+  mainResultIds: Set<string>,
+  category?: string,
+): Promise<AdSummary[]> {
+  if (!query || query.trim().length < 2) return [];
+
+  try {
+    const response = await fetch("/api/recommendations/similar-ads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: query.trim(),
+        category: category || null,
+        excludeIds: [...mainResultIds],
+        limit: 6,
+      }),
+    });
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    return (data.ads || []).map((ad: Record<string, unknown>) => ({
+      id: ad.id as string,
+      title: ad.title as string,
+      price: ad.price as number | null,
+      saleType: ad.saleType as AdSummary["saleType"],
+      image: (ad.image as string) ?? null,
+      governorate: (ad.governorate as string) ?? null,
+      city: (ad.city as string) ?? null,
+      createdAt: ad.createdAt as string,
+      isNegotiable: (ad.isNegotiable as boolean) ?? false,
+      auctionHighestBid: ad.auctionStartPrice as number | undefined,
+      auctionEndsAt: ad.auctionEndsAt as string | undefined,
+      exchangeDescription: ad.exchangeDescription as string | undefined,
+    }));
+  } catch {
+    return [];
+  }
 }

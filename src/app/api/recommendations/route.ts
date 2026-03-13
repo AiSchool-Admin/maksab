@@ -30,13 +30,12 @@ export async function POST(request: NextRequest) {
     const [recsResult, auctionsResult] = await Promise.all([
       supabase.rpc("get_personalized_recommendations" as never, {
         p_user_id: userId,
-        p_user_governorate: governorate || null,
+        p_governorate: governorate || null,
         p_limit: limit,
-        p_offset: 0,
       } as never),
       supabase.rpc("get_matching_auctions" as never, {
         p_user_id: userId,
-        p_user_governorate: governorate || null,
+        p_governorate: governorate || null,
         p_limit: auctionLimit,
       } as never),
     ]);
