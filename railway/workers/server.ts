@@ -661,7 +661,148 @@ async function fetchAndExtractDetail(
     console.log(`[Detail] ✅ Phone ${phone} for listing ${listing.id}`);
   }
 
+  // ═══ BHE: Extract buyer comments ═══
+  try {
+    await extractBuyerComments(supabase, $detail, listing, bodyText);
+  } catch (commentErr: any) {
+    console.log(`[BHE] Comment extraction skipped: ${commentErr.message}`);
+  }
+
   return { phone, sellerName };
+}
+
+// ─── BHE: Buyer Comment Extraction from Dubizzle Detail Pages ─
+const BUYER_INTENT_REGEX = /كام|سعر|متاح|أشوف|فين|للبيع|مهتم|عايز|price|available|لسه|آخر سعر|ينفع/i;
+
+async function extractBuyerComments(
+  supabase: SupabaseClient,
+  $detail: cheerio.CheerioAPI,
+  listing: { id: string; source_listing_url: string; seller_name?: string | null },
+  bodyText: string
+): Promise<number> {
+  // Try multiple selectors for comments
+  const commentSelectors = [
+    '[class*="comment"]',
+    '[class*="Comment"]',
+    '[data-testid*="comment"]',
+    '[class*="reply"]',
+    '[class*="Reply"]',
+  ];
+
+  let commentsFound = 0;
+
+  for (const selector of commentSelectors) {
+    const commentEls = $detail(selector);
+    if (!commentEls.length) continue;
+
+    commentEls.each(function () {
+      const el = $detail(this);
+      const commentText = el.text().trim();
+      if (!commentText || commentText.length < 5 || commentText.length > 500) return;
+
+      // Extract author
+      const authorEl = el.find('a[href*="/member/"], a[href*="/profile/"], a[href*="/user/"], [class*="author"], [class*="user"]').first();
+      const authorName = authorEl.text().trim() || null;
+      const authorUrl = authorEl.attr("href") || null;
+
+      // Extract phone from comment
+      const phoneMatch = commentText.match(/01[0-2,5][\s.\-]?\d{3,4}[\s.\-]?\d{4,5}/g);
+      const phone = phoneMatch ? phoneMatch[0].replace(/[\s.\-]/g, "") : null;
+
+      // Check if buyer intent
+      const isBuyerIntent = BUYER_INTENT_REGEX.test(commentText);
+
+      if (isBuyerIntent || phone) {
+        commentsFound++;
+      }
+    });
+
+    if (commentsFound > 0) break;
+  }
+
+  // Also scan bodyText for comment-like buyer signals with phones
+  // Extract listing metadata for buyer records
+  const listingTitle = $detail('h1').first().text().trim() ||
+    $detail('[data-testid*="title"], [class*="title"]').first().text().trim() || '';
+  const listingPrice = (() => {
+    const priceMatch = bodyText.match(/([\d,]+)\s*ج\.م/);
+    return priceMatch ? parseInt(priceMatch[1].replace(/,/g, ""), 10) : null;
+  })();
+
+  // Extract category from URL
+  const category = (() => {
+    const url = listing.source_listing_url || "";
+    if (/mobile|phone|هاتف/.test(url)) return "phones";
+    if (/vehicle|car|سيار/.test(url)) return "vehicles";
+    if (/propert|عقار/.test(url)) return "properties";
+    if (/electron/.test(url)) return "electronics";
+    if (/furniture|أثاث/.test(url)) return "furniture";
+    return "general";
+  })();
+
+  // Extract governorate from listing URL or body
+  const governorate = (() => {
+    const url = listing.source_listing_url || "";
+    const govMap: Record<string, string> = {
+      "cairo": "القاهرة", "giza": "الجيزة", "alexandria": "الإسكندرية",
+      "dakahlia": "الدقهلية", "sharqia": "الشرقية", "qalyubia": "القليوبية",
+      "gharbia": "الغربية", "monufia": "المنوفية", "beheira": "البحيرة",
+      "minya": "المنيا", "asyut": "أسيوط", "sohag": "سوهاج",
+      "fayoum": "الفيوم", "port-said": "بورسعيد", "ismailia": "الإسماعيلية",
+      "suez": "السويس", "damietta": "دمياط", "luxor": "الأقصر", "aswan": "أسوان",
+    };
+    for (const [eng, ar] of Object.entries(govMap)) {
+      if (url.toLowerCase().includes(eng)) return ar;
+    }
+    return null;
+  })();
+
+  // If we found comments with buyer intent, save them
+  // For now, look for phone numbers in the body text that are NOT the seller's phone
+  // and appear near buyer-intent keywords
+  const buyerPhones = bodyText.match(/01[0-2,5]\d{8}/g) || [];
+  const uniquePhones = [...new Set(buyerPhones)];
+
+  // Filter out seller phones (already extracted as listing phones)
+  // We'll save buyers with intent even without phones
+  if (commentsFound > 0 || uniquePhones.length > 1) {
+    // The first phone is usually the seller's; subsequent ones may be buyers
+    const potentialBuyerPhones = uniquePhones.slice(1); // skip seller's phone
+
+    for (const buyerPhone of potentialBuyerPhones) {
+      try {
+        await supabase.from("bhe_buyers").upsert(
+          {
+            source: "dubizzle_comment",
+            source_url: listing.source_listing_url,
+            source_platform: "dubizzle",
+            buyer_phone: buyerPhone,
+            product_interested_in: listingTitle || null,
+            product_wanted: listingTitle || null,
+            category,
+            estimated_purchase_value: listingPrice || 0,
+            budget_min: listingPrice ? Math.floor(listingPrice * 0.7) : null,
+            budget_max: listingPrice || null,
+            governorate,
+            original_text: `تعليق على: ${listingTitle}`,
+            buyer_tier: buyerPhone ? "warm_buyer" : "cold_buyer",
+            buyer_score: buyerPhone ? 45 : 15,
+            pipeline_status: buyerPhone ? "phone_found" : "discovered",
+            harvested_at: new Date().toISOString(),
+          },
+          { onConflict: "source,source_url,buyer_profile_url", ignoreDuplicates: true }
+        );
+      } catch {
+        // Ignore upsert errors (dedup conflicts etc.)
+      }
+    }
+
+    console.log(`[BHE] Found ${commentsFound} buyer comments, ${potentialBuyerPhones.length} buyer phones for listing ${listing.id}`);
+  } else {
+    console.log(`[BHE] No buyer comments found for listing ${listing.id}`);
+  }
+
+  return commentsFound;
 }
 
 // ─── Core Harvest Logic ──────────────────────────────────────
@@ -1895,6 +2036,84 @@ async function handleEnrich(_req: IncomingMessage, res: ServerResponse) {
   }
 }
 
+// ─── BHE: Buyer Match Handler ────────────────────────────────
+async function handleBuyerMatch(_req: IncomingMessage, res: ServerResponse) {
+  try {
+    console.log("[API] GET /cron/buyer-match — starting buyer matching");
+    const result = await matchBuyersToListings();
+    sendJson(res, { message: "Buyer matching complete", ...result });
+  } catch (err: any) {
+    console.error(`[API] /cron/buyer-match error: ${err.message}`);
+    sendJson(res, { error: true, message: err.message }, 500);
+  }
+}
+
+/**
+ * BHE: Match unmatched buyers to listings (batch).
+ * Runs after each AHE harvest cycle.
+ */
+async function matchBuyersToListings(): Promise<{ processed: number; total_matches: number }> {
+  const supabase = getSupabase();
+
+  // Get unmatched buyers (discovered or phone_found, matches_count = 0)
+  const { data: buyers } = await supabase
+    .from("bhe_buyers")
+    .select("id, category, governorate, budget_min, budget_max, pipeline_status, buyer_score")
+    .in("pipeline_status", ["discovered", "phone_found"])
+    .eq("matches_count", 0)
+    .order("buyer_score", { ascending: false })
+    .limit(50);
+
+  if (!buyers || buyers.length === 0) {
+    console.log("[BHE Match] No unmatched buyers found");
+    return { processed: 0, total_matches: 0 };
+  }
+
+  console.log(`[BHE Match] Processing ${buyers.length} unmatched buyers`);
+  let totalMatches = 0;
+
+  for (const buyer of buyers) {
+    // Build query
+    let query = supabase
+      .from("ahe_listings")
+      .select("id, title, price, source_listing_url")
+      .eq("is_duplicate", false)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (buyer.category) query = query.eq("category", buyer.category);
+    if (buyer.governorate) query = query.eq("governorate", buyer.governorate);
+    if (buyer.budget_min) query = query.gte("price", buyer.budget_min);
+    if (buyer.budget_max) query = query.lte("price", buyer.budget_max);
+
+    const { data: listings } = await query;
+
+    if (listings && listings.length > 0) {
+      const matchedListings = listings.map((l: any) => ({
+        id: l.id,
+        title: l.title,
+        price: l.price,
+        url: l.source_listing_url,
+      }));
+
+      await supabase
+        .from("bhe_buyers")
+        .update({
+          matched_listings: matchedListings,
+          matches_count: listings.length,
+          last_matched_at: new Date().toISOString(),
+          pipeline_status: "matched",
+        })
+        .eq("id", buyer.id);
+
+      totalMatches += listings.length;
+    }
+  }
+
+  console.log(`[BHE Match] Done: ${buyers.length} buyers, ${totalMatches} total matches`);
+  return { processed: buyers.length, total_matches: totalMatches };
+}
+
 // ─── Outreach Handler ────────────────────────────────────────
 async function handleOutreach(_req: IncomingMessage, res: ServerResponse) {
   try {
@@ -1945,6 +2164,8 @@ const server = createServer(async (req, res) => {
       await handleEnrich(req, res);
     } else if (path === "/cron/outreach") {
       await handleOutreach(req, res);
+    } else if (path === "/cron/buyer-match") {
+      await handleBuyerMatch(req, res);
     } else if (path === "/health") {
       sendJson(res, {
         ok: true,
@@ -1961,6 +2182,7 @@ const server = createServer(async (req, res) => {
           "GET /cron/harvest": "Automated harvest (picks ready scopes)",
           "GET /cron/enrich": "Enrich listings without phone/name (detail fetch)",
           "GET /cron/outreach": "Process outreach to new sellers + follow-ups",
+          "GET /cron/buyer-match": "Match buyers to listings (BHE)",
           "GET /health": "Health check",
         },
       });
@@ -2011,6 +2233,16 @@ server.listen(PORT, () => {
       console.log('[Auto-Outreach] Complete:', JSON.stringify(outreachResult));
     } catch (e: any) {
       console.log('[Auto-Outreach] Error:', e.message);
+    }
+
+    // رابعاً: BHE — مطابقة مشترين ← إعلانات
+    try {
+      await new Promise((r) => setTimeout(r, 3000));
+      console.log('[Auto-BHE] Starting buyer matching...');
+      const buyerMatchResult = await matchBuyersToListings();
+      console.log('[Auto-BHE] Complete:', JSON.stringify(buyerMatchResult));
+    } catch (e: any) {
+      console.log('[Auto-BHE] Error:', e.message);
     }
   }, 10000); // 10 ثواني بعد البدء
 });
