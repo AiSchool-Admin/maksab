@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   CreditCard,
   Search,
@@ -10,8 +10,7 @@ import {
   Crown,
   Users,
 } from "lucide-react";
-
-/* ── Mock Data ────────────────────────────────────────────────── */
+import { getAdminHeaders } from "@/app/admin/layout";
 
 interface Subscriber {
   id: string;
@@ -23,113 +22,14 @@ interface Subscriber {
   status: "active" | "expired" | "cancelled";
 }
 
-const subscribers: Subscriber[] = [
-  {
-    id: "1",
-    name: "محمد أحمد",
-    phone: "01012345678",
-    tier: "diamond",
-    startDate: "1 يناير 2026",
-    renewalDate: "1 أبريل 2026",
-    status: "active",
-  },
-  {
-    id: "2",
-    name: "أحمد سعيد",
-    phone: "01198765432",
-    tier: "gold",
-    startDate: "15 ديسمبر 2025",
-    renewalDate: "15 مارس 2026",
-    status: "active",
-  },
-  {
-    id: "3",
-    name: "سارة محمود",
-    phone: "01055512345",
-    tier: "gold",
-    startDate: "1 فبراير 2026",
-    renewalDate: "1 مايو 2026",
-    status: "active",
-  },
-  {
-    id: "4",
-    name: "خالد عبدالله",
-    phone: "01223456789",
-    tier: "silver",
-    startDate: "10 نوفمبر 2025",
-    renewalDate: "10 فبراير 2026",
-    status: "expired",
-  },
-  {
-    id: "5",
-    name: "فاطمة حسن",
-    phone: "01567890123",
-    tier: "gold",
-    startDate: "20 يناير 2026",
-    renewalDate: "20 أبريل 2026",
-    status: "active",
-  },
-  {
-    id: "6",
-    name: "عمر يوسف",
-    phone: "01034567890",
-    tier: "silver",
-    startDate: "5 أكتوبر 2025",
-    renewalDate: "5 يناير 2026",
-    status: "cancelled",
-  },
-  {
-    id: "7",
-    name: "نور الدين",
-    phone: "01187654321",
-    tier: "gold",
-    startDate: "1 مارس 2026",
-    renewalDate: "1 يونيو 2026",
-    status: "active",
-  },
-  {
-    id: "8",
-    name: "ياسمين علي",
-    phone: "01298765432",
-    tier: "silver",
-    startDate: "15 فبراير 2026",
-    renewalDate: "15 مايو 2026",
-    status: "active",
-  },
-];
-
 const tierConfig: Record<
   string,
   { label: string; price: string; color: string; bgColor: string; icon: string }
 > = {
-  free: {
-    label: "Free",
-    price: "مجاني",
-    color: "text-gray-600",
-    bgColor: "bg-gray-100",
-    icon: "🆓",
-  },
-  silver: {
-    label: "Silver",
-    price: "99 ج.م/شهر",
-    color: "text-gray-700",
-    bgColor: "bg-gray-200",
-    icon: "🥈",
-  },
-  gold: {
-    label: "Gold",
-    price: "199 ج.م/شهر",
-    color: "text-amber-700",
-    bgColor: "bg-amber-100",
-    icon: "🥇",
-  },
-  diamond: {
-    label: "Diamond",
-    price: "499 ج.م/شهر",
-    color: "text-blue-700",
-    bgColor: "bg-blue-100",
-    icon: "💎",
-  },
+  free: { label: "Free", price: "مجاني", color: "text-gray-600", bgColor: "bg-gray-100", icon: "🆓" },
+  silver: { label: "Silver", price: "99 ج.م/شهر", color: "text-gray-700", bgColor: "bg-gray-200", icon: "🥈" },
+  gold: { label: "Gold", price: "199 ج.م/شهر", color: "text-amber-700", bgColor: "bg-amber-100", icon: "🥇" },
+  diamond: { label: "Diamond", price: "499 ج.م/شهر", color: "text-blue-700", bgColor: "bg-blue-100", icon: "💎" },
 };
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -140,11 +40,32 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 
 type FilterTab = "all" | "active" | "expired" | "cancelled";
 
-/* ── Component ────────────────────────────────────────────────── */
-
 export default function SubscriptionsPage() {
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const loadSubscribers = useCallback(async () => {
+    setLoading(true);
+    try {
+      // No subscription API exists yet — will return empty
+      const headers = getAdminHeaders();
+      const res = await fetch("/api/admin/finance/subscriptions", { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setSubscribers(data.subscribers || []);
+      }
+    } catch {
+      // Keep empty
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    // No subscriptions table yet — show empty state
+    setLoading(false);
+  }, []);
 
   const filteredSubscribers = subscribers.filter((sub) => {
     if (activeTab !== "all" && sub.status !== activeTab) return false;
@@ -159,19 +80,22 @@ export default function SubscriptionsPage() {
     return true;
   });
 
-  const tierCounts = {
-    free: 1200,
-    silver: subscribers.filter((s) => s.tier === "silver").length + 12,
-    gold: subscribers.filter((s) => s.tier === "gold").length,
-    diamond: subscribers.filter((s) => s.tier === "diamond").length,
-  };
-
   const tabs: { key: FilterTab; label: string }[] = [
     { key: "all", label: "الكل" },
     { key: "active", label: "نشط" },
     { key: "expired", label: "منتهي" },
     { key: "cancelled", label: "ملغي" },
   ];
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-xl p-4 h-16 animate-pulse border border-gray-100" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -181,29 +105,20 @@ export default function SubscriptionsPage() {
           <CreditCard size={24} className="text-[#1B7A3D]" />
           إدارة الاشتراكات
         </h2>
-        <p className="text-xs text-gray-500 mt-1">
-          باقات التجار والمشتركين المدفوعين
-        </p>
+        <p className="text-xs text-gray-500 mt-1">باقات التجار والمشتركين المدفوعين</p>
       </div>
 
-      {/* ── Tier Summary Cards ──────────────────────────────────── */}
+      {/* ── Tier Summary Cards — zeros ──────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {(["free", "silver", "gold", "diamond"] as const).map((tier) => {
           const cfg = tierConfig[tier];
           return (
-            <div
-              key={tier}
-              className="bg-white rounded-2xl border border-gray-200 p-4 text-center"
-            >
-              <div
-                className={`w-12 h-12 ${cfg.bgColor} rounded-xl mx-auto mb-3 flex items-center justify-center text-xl`}
-              >
+            <div key={tier} className="bg-white rounded-2xl border border-gray-200 p-4 text-center">
+              <div className={`w-12 h-12 ${cfg.bgColor} rounded-xl mx-auto mb-3 flex items-center justify-center text-xl`}>
                 {cfg.icon}
               </div>
               <p className={`text-sm font-bold ${cfg.color}`}>{cfg.label}</p>
-              <p className="text-2xl font-bold text-dark mt-1">
-                {tierCounts[tier].toLocaleString("en-US")}
-              </p>
+              <p className="text-2xl font-bold text-dark mt-1">0</p>
               <p className="text-[11px] text-gray-text mt-0.5">{cfg.price}</p>
             </div>
           );
@@ -213,7 +128,6 @@ export default function SubscriptionsPage() {
       {/* ── Filter Tabs + Search ────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Tabs */}
           <div className="flex items-center gap-2">
             {tabs.map((tab) => (
               <button
@@ -229,13 +143,8 @@ export default function SubscriptionsPage() {
               </button>
             ))}
           </div>
-
-          {/* Search */}
           <div className="relative">
-            <Search
-              size={16}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
+            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
@@ -246,119 +155,20 @@ export default function SubscriptionsPage() {
           </div>
         </div>
 
-        {/* ── Table ──────────────────────────────────────────────── */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-gray-500 text-xs">
-                <th className="text-right px-4 py-3 font-medium">المشترك</th>
-                <th className="text-center px-4 py-3 font-medium">الموبايل</th>
-                <th className="text-center px-4 py-3 font-medium">الباقة</th>
-                <th className="text-center px-4 py-3 font-medium hidden sm:table-cell">
-                  تاريخ البدء
-                </th>
-                <th className="text-center px-4 py-3 font-medium hidden sm:table-cell">
-                  تاريخ التجديد
-                </th>
-                <th className="text-center px-4 py-3 font-medium">الحالة</th>
-                <th className="text-center px-4 py-3 font-medium">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSubscribers.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-4 py-12 text-center text-gray-400"
-                  >
-                    <Users size={32} className="mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">لا توجد نتائج</p>
-                  </td>
-                </tr>
-              ) : (
-                filteredSubscribers.map((sub) => {
-                  const tier = tierConfig[sub.tier];
-                  const status = statusConfig[sub.status];
-                  return (
-                    <tr
-                      key={sub.id}
-                      className="border-t border-gray-50 hover:bg-gray-50/50 transition-colors"
-                    >
-                      {/* Name */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-600">
-                            {sub.name[0]}
-                          </div>
-                          <span className="font-medium text-dark">
-                            {sub.name}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Phone */}
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-gray-600 flex items-center justify-center gap-1">
-                          <Phone size={12} className="text-gray-400" />
-                          <span dir="ltr">{sub.phone}</span>
-                        </span>
-                      </td>
-
-                      {/* Tier */}
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${tier.bgColor} ${tier.color}`}
-                        >
-                          {tier.icon} {tier.label}
-                        </span>
-                      </td>
-
-                      {/* Start Date */}
-                      <td className="px-4 py-3 text-center text-gray-600 hidden sm:table-cell">
-                        <span className="flex items-center justify-center gap-1">
-                          <Calendar size={12} className="text-gray-400" />
-                          {sub.startDate}
-                        </span>
-                      </td>
-
-                      {/* Renewal Date */}
-                      <td className="px-4 py-3 text-center text-gray-600 hidden sm:table-cell">
-                        {sub.renewalDate}
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${status.color}`}
-                        >
-                          {status.label}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-3 text-center">
-                        <button className="p-1.5 text-gray-400 hover:text-dark hover:bg-gray-100 rounded-lg transition-colors">
-                          <MoreHorizontal size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+        {/* ── Table / Empty State ───────────────────────────────── */}
+        <div className="p-12 text-center">
+          <Users size={40} className="mx-auto text-gray-300 mb-3" />
+          <p className="text-sm text-gray-500">لا توجد اشتراكات بعد</p>
+          <p className="text-xs text-gray-400 mt-1">ستظهر البيانات بعد تفعيل نظام الاشتراكات</p>
         </div>
 
         {/* Footer */}
         <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
-          <p className="text-xs text-gray-500">
-            عرض {filteredSubscribers.length} من {subscribers.length} مشترك
-          </p>
+          <p className="text-xs text-gray-500">عرض 0 مشتركين</p>
           <div className="flex items-center gap-2">
             <Crown size={14} className="text-[#D4A843]" />
             <span className="text-xs text-gray-500">
-              إجمالي المشتركين المدفوعين:{" "}
-              <span className="font-bold text-dark">21</span>
+              إجمالي المشتركين المدفوعين: <span className="font-bold text-dark">0</span>
             </span>
           </div>
         </div>
