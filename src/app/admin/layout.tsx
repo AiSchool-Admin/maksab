@@ -39,20 +39,35 @@ import {
   CreditCard,
   Monitor,
   Cpu,
-  MoreHorizontal,
+  UserCog,
+  Lock,
 } from "lucide-react";
+import type { TeamRole, AdminSection, RoleConfig } from "@/lib/admin/rbac";
+import { ROLE_CONFIGS, hasAccess } from "@/lib/admin/rbac";
 
 const ADMIN_SESSION_KEY = "maksab_admin_session";
+
+// ─── Extended Admin Session with Role ────────────────────────
 
 interface AdminSession {
   id: string;
   email: string;
   name: string;
+  role: TeamRole;
+  teamMemberId?: string;
+  roleConfig?: RoleConfig;
 }
 
 const AdminContext = createContext<AdminSession | null>(null);
 export function useAdmin() {
   return useContext(AdminContext);
+}
+
+/** Check if current admin has access to a section */
+export function useHasAccess(section: AdminSection): boolean {
+  const admin = useAdmin();
+  if (!admin?.role) return false;
+  return hasAccess(admin.role, section);
 }
 
 /** Build Authorization headers for admin API calls using session token */
@@ -65,6 +80,8 @@ export function getAdminHeaders(): Record<string, string> {
   return {};
 }
 
+// ─── Navigation Definition (Unified — no legacy section) ────
+
 interface NavItem {
   href: string;
   label: string;
@@ -73,14 +90,29 @@ interface NavItem {
 
 interface NavSection {
   id: string;
+  sectionKey: AdminSection; // Maps to RBAC section for access control
   label: string;
   icon: string;
   items: NavItem[];
 }
 
+/**
+ * Unified navigation — all former "legacy/أخرى" items are now distributed
+ * to their appropriate department sections.
+ *
+ * Mapping:
+ * - المستخدمين → users section (COO, CTO, CEO)
+ * - الإعلانات → ops section (ops team)
+ * - التحليلات → analytics section (CEO, CTO, CMO, COO, CFO)
+ * - المواقع → ops section (COO)
+ * - الإعدادات → settings section (CEO, CTO)
+ * - CRM → sales/crm section (sales team)
+ * - محرك الحصاد → tech section (consolidated — no more duplicate)
+ */
 const navSections: NavSection[] = [
   {
     id: "dashboard",
+    sectionKey: "dashboard",
     label: "لوحة القيادة",
     icon: "🎯",
     items: [
@@ -89,6 +121,7 @@ const navSections: NavSection[] = [
   },
   {
     id: "cs",
+    sectionKey: "cs",
     label: "خدمة العملاء",
     icon: "📞",
     items: [
@@ -99,16 +132,23 @@ const navSections: NavSection[] = [
   },
   {
     id: "sales",
+    sectionKey: "sales",
     label: "المبيعات والاستحواذ",
     icon: "📈",
     items: [
       { href: "/admin/sales/pipeline", label: "Pipeline", icon: PieChart },
       { href: "/admin/sales/outreach", label: "التواصل", icon: Mail },
       { href: "/admin/sales/scopes", label: "النطاقات", icon: Globe },
+      { href: "/admin/crm/customers", label: "العملاء (CRM)", icon: UserSearch },
+      { href: "/admin/crm/discovery", label: "الاكتشاف", icon: Target },
+      { href: "/admin/crm/campaigns", label: "الحملات", icon: Megaphone },
+      { href: "/admin/crm/inbox", label: "الوارد", icon: Inbox },
+      { href: "/admin/crm/analytics", label: "تحليلات CRM", icon: BarChart3 },
     ],
   },
   {
     id: "marketing",
+    sectionKey: "marketing",
     label: "التسويق والنمو",
     icon: "📣",
     items: [
@@ -120,15 +160,19 @@ const navSections: NavSection[] = [
   },
   {
     id: "ops",
+    sectionKey: "ops",
     label: "العمليات والجودة",
     icon: "⚙️",
     items: [
       { href: "/admin/ops/moderation", label: "مراجعة الإعلانات", icon: ClipboardCheck },
       { href: "/admin/ops/reports", label: "البلاغات", icon: Flag },
+      { href: "/admin/ads", label: "إدارة الإعلانات", icon: ShoppingBag },
+      { href: "/admin/locations", label: "المواقع", icon: MapPin },
     ],
   },
   {
     id: "finance",
+    sectionKey: "finance",
     label: "المالية",
     icon: "💰",
     items: [
@@ -138,29 +182,48 @@ const navSections: NavSection[] = [
   },
   {
     id: "tech",
+    sectionKey: "tech",
     label: "التقنية",
     icon: "💻",
     items: [
       { href: "/admin/tech/dashboard", label: "حالة النظام", icon: Monitor },
-      { href: "/admin/tech/harvester", label: "محرك الحصاد", icon: Cpu },
+      { href: "/admin/crm/harvester", label: "محرك الحصاد", icon: Cpu },
     ],
   },
   {
-    id: "legacy",
-    label: "أخرى",
-    icon: "📁",
+    id: "users",
+    sectionKey: "users",
+    label: "المستخدمين",
+    icon: "👥",
     items: [
       { href: "/admin/users", label: "المستخدمين", icon: Users },
-      { href: "/admin/ads", label: "الإعلانات", icon: ShoppingBag },
+    ],
+  },
+  {
+    id: "analytics",
+    sectionKey: "analytics",
+    label: "التحليلات",
+    icon: "📊",
+    items: [
       { href: "/admin/analytics", label: "التحليلات", icon: TrendingUp },
-      { href: "/admin/locations", label: "المواقع", icon: MapPin },
+    ],
+  },
+  {
+    id: "team",
+    sectionKey: "team",
+    label: "إدارة الفريق",
+    icon: "🏢",
+    items: [
+      { href: "/admin/team", label: "أعضاء الفريق", icon: UserCog },
+    ],
+  },
+  {
+    id: "settings",
+    sectionKey: "settings",
+    label: "الإعدادات",
+    icon: "⚙️",
+    items: [
       { href: "/admin/settings", label: "الإعدادات", icon: Settings },
-      { href: "/admin/crm/customers", label: "CRM — العملاء", icon: UserSearch },
-      { href: "/admin/crm/discovery", label: "CRM — الاكتشاف", icon: Target },
-      { href: "/admin/crm/campaigns", label: "CRM — الحملات", icon: Megaphone },
-      { href: "/admin/crm/inbox", label: "CRM — الوارد", icon: Inbox },
-      { href: "/admin/crm/analytics", label: "CRM — تحليلات", icon: BarChart3 },
-      { href: "/admin/crm/harvester", label: "CRM — الحصاد", icon: Wheat },
     ],
   },
 ];
@@ -176,10 +239,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationCount] = useState(3);
 
-  // Collapsible sections — start all expanded except legacy
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
-    legacy: true,
-  });
+  // Collapsible sections — start all collapsed except dashboard
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const toggleSection = (sectionId: string) => {
     setCollapsedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
@@ -190,7 +251,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (isLoginPage) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous client-side init
       setIsLoading(false);
       return;
     }
@@ -202,6 +262,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         return;
       }
       const parsed = JSON.parse(stored) as AdminSession;
+
+      // If no role stored, default to CEO (legacy sessions) and fetch role
+      if (!parsed.role) {
+        parsed.role = "ceo";
+      }
+      parsed.roleConfig = ROLE_CONFIGS[parsed.role] || ROLE_CONFIGS.viewer;
+
       setSession(parsed);
     } catch {
       router.replace("/admin/login");
@@ -209,23 +276,56 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setIsLoading(false);
   }, [isLoginPage, router]);
 
+  // Fetch team member role from API (once per load)
+  useEffect(() => {
+    if (!session || isLoginPage) return;
+
+    async function fetchRole() {
+      try {
+        const headers = getAdminHeaders();
+        const res = await fetch("/api/admin/team?action=me", { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.member) {
+            const updatedSession: AdminSession = {
+              ...session!,
+              role: data.member.role,
+              teamMemberId: data.member.id,
+              roleConfig: ROLE_CONFIGS[data.member.role as TeamRole] || ROLE_CONFIGS.viewer,
+            };
+            setSession(updatedSession);
+            localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(updatedSession));
+          }
+        }
+      } catch {
+        // Silent — use stored role
+      }
+    }
+
+    fetchRole();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoginPage]);
+
   const handleLogout = () => {
     localStorage.removeItem(ADMIN_SESSION_KEY);
     localStorage.removeItem("maksab_session_token");
     router.replace("/admin/login");
   };
 
+  // Filter nav sections based on role
+  const filteredSections = navSections.filter((section) => {
+    if (!session?.role) return false;
+    return hasAccess(session.role, section.sectionKey);
+  });
+
   // Resolve header title from pathname
   const getPageTitle = (): string => {
-    // Exact match first
     const exact = allNavItems.find((n) => n.href === pathname);
     if (exact) return exact.label;
-    // Prefix match for nested pages
     const prefix = allNavItems
       .filter((n) => pathname.startsWith(n.href + "/"))
       .sort((a, b) => b.href.length - a.href.length);
     if (prefix.length > 0) return prefix[0].label;
-    // Old /admin root
     if (pathname === "/admin") return "لوحة التحكم";
     return "لوحة التحكم";
   };
@@ -250,6 +350,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (!session) return null;
 
+  const roleConfig = session.roleConfig || ROLE_CONFIGS[session.role] || ROLE_CONFIGS.viewer;
+
   return (
     <AdminContext.Provider value={session}>
       <div className="min-h-screen bg-gray-50 flex" dir="rtl">
@@ -265,7 +367,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           }`}
         >
           <div className="flex flex-col h-full">
-            {/* Logo */}
+            {/* Logo + Role Badge */}
             <div className="p-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -274,7 +376,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-dark">مكسب</h2>
-                    <p className="text-[10px] text-gray-text">إدارة العمليات</p>
+                    <p className="text-[10px] text-gray-text">إدارة العمل الموحدة</p>
                   </div>
                 </div>
                 <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1 text-gray-text">
@@ -283,15 +385,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             </div>
 
-            {/* Navigation with collapsible sections */}
+            {/* Navigation with collapsible sections — role-filtered */}
             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-              {navSections.map((section) => {
+              {filteredSections.map((section) => {
                 const isCollapsed = collapsedSections[section.id] ?? false;
                 const hasActiveItem = section.items.some(
                   (item) => pathname === item.href || pathname.startsWith(item.href + "/")
                 );
 
-                // Single-item sections (dashboard) render directly
+                // Single-item sections render directly as a link
                 if (section.items.length === 1) {
                   const item = section.items[0];
                   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -312,6 +414,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   );
                 }
 
+                // Auto-expand section that has active item
+                const shouldCollapse = hasActiveItem ? false : isCollapsed;
+
                 return (
                   <div key={section.id}>
                     {/* Section header */}
@@ -325,11 +430,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         <span className="text-sm">{section.icon}</span>
                         {section.label}
                       </span>
-                      {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                      {shouldCollapse ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                     </button>
 
                     {/* Section items */}
-                    {!isCollapsed && (
+                    {!shouldCollapse && (
                       <div className="mt-0.5 mr-3 border-r border-gray-100 space-y-0.5">
                         {section.items.map((item) => {
                           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -356,7 +461,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               })}
             </nav>
 
-            {/* Admin info & logout */}
+            {/* Admin info with role badge & logout */}
             <div className="p-3 border-t border-gray-100">
               <div className="flex items-center gap-2 px-3 py-2 mb-2">
                 <div className="w-8 h-8 bg-brand-green-light rounded-full flex items-center justify-center text-brand-green text-xs font-bold">
@@ -364,7 +469,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-dark truncate">{session.name}</p>
-                  <p className="text-[10px] text-gray-text truncate" dir="ltr">{session.email}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[10px]">{roleConfig.icon}</span>
+                    <p className="text-[10px] text-gray-text truncate">{roleConfig.label}</p>
+                  </div>
                 </div>
               </div>
               <button
@@ -389,6 +497,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {getPageTitle()}
             </h1>
             <div className="flex-1" />
+
+            {/* Role indicator in header */}
+            <span className="hidden sm:flex items-center gap-1 text-[10px] text-gray-text bg-gray-100 px-2 py-1 rounded-full">
+              <Lock size={10} />
+              {roleConfig.label}
+            </span>
 
             {/* Notifications bell */}
             <button className="relative p-2 text-gray-text hover:text-dark rounded-lg hover:bg-gray-100 transition-colors">

@@ -97,12 +97,31 @@ export default function AdminLoginPage() {
       return;
     }
 
+    // Fetch team member role before storing session
+    let role = "ceo"; // Default for legacy admins
+    try {
+      const sessionToken = localStorage.getItem("maksab_session_token");
+      if (sessionToken) {
+        const teamRes = await fetch("/api/admin/team?action=me", {
+          headers: { Authorization: `Bearer ${sessionToken}` },
+        });
+        if (teamRes.ok) {
+          const teamData = await teamRes.json();
+          if (teamData.member?.role) {
+            role = teamData.member.role;
+          }
+        }
+      }
+    } catch {
+      // Use default role
+    }
+
     localStorage.setItem(
       ADMIN_SESSION_KEY,
-      JSON.stringify({ id: userId, email: identifier, name: displayName || identifier }),
+      JSON.stringify({ id: userId, email: identifier, name: displayName || identifier, role }),
     );
 
-    router.push("/admin");
+    router.push("/admin/dashboard");
   };
 
   // ── Email + Password Login ────────────────
