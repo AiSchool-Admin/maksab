@@ -1,13 +1,92 @@
-import { NextResponse } from "next/server";
+/**
+ * GET /api/admin/cs/conversations — Real conversations from wa_conversations
+ */
 
-export async function GET() {
-  const conversations = [
-    { id: "conv_1", customerName: "أحمد محمد", phone: "01012345678", channel: "whatsapp", type: "whale", whaleScore: 85, lastMessage: "أنا مش راضي عن الخدمة...", time: "منذ 15 دقيقة", status: "escalated", handler: "human", listingCount: 18 },
-    { id: "conv_2", customerName: "محمد علي", phone: "01112345678", channel: "whatsapp", type: "individual", whaleScore: 35, lastMessage: "إزاي أنشر إعلان؟", time: "منذ 5 دقائق", status: "active", handler: "ai", listingCount: 3 },
-    { id: "conv_3", customerName: "سارة أحمد", phone: "01234567890", channel: "chat", type: "merchant", whaleScore: 60, lastMessage: "شكراً جداً!", time: "منذ ساعة", status: "resolved", handler: "ai", listingCount: 8 },
-    { id: "conv_4", customerName: "كريم حسن", phone: "01556789012", channel: "whatsapp", type: "individual", whaleScore: 20, lastMessage: "كام العمولة؟", time: "منذ 30 دقيقة", status: "active", handler: "ai", listingCount: 1 },
-    { id: "conv_5", customerName: "ليلى محمود", phone: "01078901234", channel: "email", type: "merchant", whaleScore: 70, lastMessage: "عايزة أعرف عن الباقات", time: "منذ ساعتين", status: "waiting", handler: "ai", listingCount: 12 },
-  ];
-  const stats = { active: 23, ai: 20, human: 3, waiting: 5, resolved: 45 };
-  return NextResponse.json({ conversations, stats });
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
+import { verifyAdmin } from "@/lib/admin/admin-service";
+
+function getServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Missing Supabase env vars");
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    }
+    const session = verifySessionToken(token);
+    if (!session.valid) {
+      return NextResponse.json({ error: session.error }, { status: 401 });
+    }
+    const isAdmin = await verifyAdmin(session.userId);
+    if (!isAdmin) {
+      return NextResponse.json({ error: "ليس لديك صلاحيات" }, { status: 403 });
+    }
+
+    const sb = getServiceClient();
+
+    // Try to fetch from wa_conversations
+    const { data, error } = await sb
+      .from("wa_conversations")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      // Table might not exist or be empty
+      return NextResponse.json({
+        conversations: [],
+        stats: { active: 0, ai: 0, human: 0, waiting: 0, resolved: 0 },
+      });
+    }
+
+    const conversations = (data || []).map((c: Record<string, unknown>) => ({
+      id: c.id,
+      customerName: (c.customer_name as string) || (c.phone as string) || "—",
+      phone: (c.phone as string) || "—",
+      channel: (c.channel as string) || "whatsapp",
+      type: (c.customer_type as string) || "individual",
+      whaleScore: (c.whale_score as number) || 0,
+      lastMessage: (c.last_message as string) || "",
+      time: c.updated_at ? formatTimeAgo(c.updated_at as string) : "—",
+      status: (c.status as string) || "active",
+      handler: (c.handler as string) || "ai",
+      listingCount: (c.listing_count as number) || 0,
+    }));
+
+    const stats = {
+      active: conversations.filter((c: { status: string }) => c.status !== "resolved").length,
+      ai: conversations.filter((c: { handler: string }) => c.handler === "ai").length,
+      human: conversations.filter((c: { handler: string }) => c.handler === "human").length,
+      waiting: conversations.filter((c: { status: string }) => c.status === "waiting").length,
+      resolved: conversations.filter((c: { status: string }) => c.status === "resolved").length,
+    };
+
+    return NextResponse.json({ conversations, stats });
+  } catch (error) {
+    console.error("CS conversations error:", error);
+    return NextResponse.json({
+      conversations: [],
+      stats: { active: 0, ai: 0, human: 0, waiting: 0, resolved: 0 },
+    });
+  }
+}
+
+function formatTimeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `منذ ${mins} دقيقة`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `منذ ${hours} ساعة`;
+  const days = Math.floor(hours / 24);
+  return `منذ ${days} يوم`;
 }

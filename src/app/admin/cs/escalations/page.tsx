@@ -48,108 +48,12 @@ const CUSTOMER_TYPE_LABELS: Record<string, { label: string; emoji: string }> = {
   individual: { label: "فرد", emoji: "\u{1F464}" },
 };
 
-const MOCK_ESCALATIONS: Escalation[] = [
-  {
-    id: "esc-1",
-    conversation_id: "conv-1",
-    customer_name: "أحمد محمود",
-    customer_phone: "01012345678",
-    customer_type: "whale",
-    priority: "urgent",
-    reason: "العميل غاضب ومش راضي عن الخدمة، طلب يكلم المدير مباشرة",
-    time_ago: "منذ 3 دقائق",
-    status: "pending",
-  },
-  {
-    id: "esc-2",
-    conversation_id: "conv-7",
-    customer_name: "كريم عبدالله",
-    customer_phone: "01198765432",
-    customer_type: "trader",
-    priority: "urgent",
-    reason: "مشكلة في الدفع — العميل دفع العمولة ومش ظاهرة في حسابه",
-    time_ago: "منذ 15 دقيقة",
-    status: "pending",
-  },
-  {
-    id: "esc-3",
-    conversation_id: "conv-8",
-    customer_name: "منى حسين",
-    customer_phone: "01567890123",
-    customer_type: "individual",
-    priority: "medium",
-    reason: "AI مش قادر يحل المشكلة — العميلة عايزة تعدّل إعلان محذوف",
-    time_ago: "منذ 30 دقيقة",
-    status: "pending",
-  },
-  {
-    id: "esc-4",
-    conversation_id: "conv-9",
-    customer_name: "طارق سمير",
-    customer_phone: "01234567890",
-    customer_type: "whale",
-    priority: "urgent",
-    reason: "العميل بيشتكي من بائع نصاب وعايز استرجاع فلوسه",
-    time_ago: "منذ ساعة",
-    status: "resolved",
-    resolved_at: "منذ 20 دقيقة",
-  },
-  {
-    id: "esc-5",
-    conversation_id: "conv-10",
-    customer_name: "ياسمين فؤاد",
-    customer_phone: "01087654321",
-    customer_type: "trader",
-    priority: "medium",
-    reason: "طلب خاص — عايزة باقة مخصصة لنشاط كبير (50+ إعلان/شهر)",
-    time_ago: "منذ ساعتين",
-    status: "resolved",
-    resolved_at: "منذ ساعة",
-  },
-  {
-    id: "esc-6",
-    conversation_id: "conv-11",
-    customer_name: "حسام الدين",
-    customer_phone: "01112233445",
-    customer_type: "individual",
-    priority: "medium",
-    reason: "الحساب محظور بالخطأ — العميل بيطلب فك الحظر",
-    time_ago: "منذ 3 ساعات",
-    status: "resolved",
-    resolved_at: "منذ ساعتين",
-  },
-  {
-    id: "esc-7",
-    conversation_id: "conv-12",
-    customer_name: "عمرو خالد",
-    customer_phone: "01556677889",
-    customer_type: "whale",
-    priority: "urgent",
-    reason: "العميل هدد بنشر مراجعة سلبية — محتاج تدخل سريع",
-    time_ago: "منذ 4 ساعات",
-    status: "resolved",
-    resolved_at: "منذ 3 ساعات",
-  },
-  {
-    id: "esc-8",
-    conversation_id: "conv-13",
-    customer_name: "ريم علي",
-    customer_phone: "01299887766",
-    customer_type: "individual",
-    priority: "medium",
-    reason: "مشكلة تقنية — الصور مش بتتحمّل في الإعلان",
-    time_ago: "منذ 5 ساعات",
-    status: "resolved",
-    resolved_at: "منذ 4 ساعات",
-  },
-];
-
 type FilterTab = "all" | "pending" | "resolved";
 
 export default function CSEscalationsPage() {
-  const [escalations, setEscalations] = useState<Escalation[]>(MOCK_ESCALATIONS);
+  const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const stats = {
     total: escalations.length,
@@ -174,7 +78,7 @@ export default function CSEscalationsPage() {
         if (data.escalations) setEscalations(data.escalations);
       }
     } catch {
-      // fallback to mock
+      // Network error — keep empty
     }
     setLoading(false);
   };

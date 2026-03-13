@@ -1,0 +1,89 @@
+/**
+ * GET /api/admin/tech/status — Real tech metrics from AHE tables
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { verifySessionToken } from "@/lib/auth/session-token";
+import { verifyAdmin } from "@/lib/admin/admin-service";
+
+function getServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Missing Supabase env vars");
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+async function safeCount(
+  sb: ReturnType<typeof getServiceClient>,
+  table: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  filter?: (q: any) => any
+): Promise<number> {
+  try {
+    let q = sb.from(table).select("*", { count: "exact", head: true });
+    if (filter) q = filter(q);
+    const { count, error } = await q;
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    }
+    const session = verifySessionToken(token);
+    if (!session.valid) {
+      return NextResponse.json({ error: session.error }, { status: 401 });
+    }
+    const isAdmin = await verifyAdmin(session.userId);
+    if (!isAdmin) {
+      return NextResponse.json({ error: "ليس لديك صلاحيات" }, { status: 403 });
+    }
+
+    const sb = getServiceClient();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayISO = todayStart.toISOString();
+
+    const [scopes, todayListings, todayPhones, todayJobs] = await Promise.all([
+      safeCount(sb, "ahe_scopes", (q) => q.eq("is_active", true)),
+      safeCount(sb, "ahe_listings", (q) => q.gte("created_at", todayISO)),
+      safeCount(sb, "ahe_sellers", (q) => q.not("phone", "is", null).gte("created_at", todayISO)),
+      safeCount(sb, "ahe_harvest_jobs", (q) => q.gte("started_at", todayISO)),
+    ]);
+
+    return NextResponse.json({
+      harvester: {
+        running: todayJobs > 0,
+        scopes,
+        todayListings,
+        todayPhones,
+        lastHarvestMinutes: 0,
+        todayJobs,
+        errors: 0,
+      },
+    });
+  } catch (error) {
+    console.error("Tech status error:", error);
+    return NextResponse.json({
+      harvester: {
+        running: false,
+        scopes: 0,
+        todayListings: 0,
+        todayPhones: 0,
+        lastHarvestMinutes: 0,
+        todayJobs: 0,
+        errors: 0,
+      },
+    });
+  }
+}

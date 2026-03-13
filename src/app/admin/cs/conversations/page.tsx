@@ -56,89 +56,14 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; bg: string }> 
   resolved: { label: "✅ حُلّ", dot: "bg-green-500", bg: "bg-green-50 text-green-700" },
 };
 
-const MOCK_CONVERSATIONS: Conversation[] = [
-  {
-    id: "conv-1",
-    customer_name: "أحمد محمود",
-    customer_phone: "01012345678",
-    channel: "whatsapp",
-    customer_type: "whale",
-    status: "escalation",
-    last_message: "أنا مش راضي عن الخدمة خالص، عايز أكلم المدير!",
-    time_ago: "منذ 3 دقائق",
-    unread_count: 4,
-    ai_handled: false,
-  },
-  {
-    id: "conv-2",
-    customer_name: "فاطمة حسن",
-    customer_phone: "01155678901",
-    channel: "whatsapp",
-    customer_type: "trader",
-    status: "ai_active",
-    last_message: "عايزة أعرف إزاي أضيف إعلان سيارة",
-    time_ago: "منذ 8 دقائق",
-    unread_count: 1,
-    ai_handled: true,
-  },
-  {
-    id: "conv-3",
-    customer_name: "محمد علي",
-    customer_phone: "01287654321",
-    channel: "chat",
-    customer_type: "individual",
-    status: "ai_active",
-    last_message: "إزاي أدفع العمولة؟",
-    time_ago: "منذ 15 دقيقة",
-    unread_count: 0,
-    ai_handled: true,
-  },
-  {
-    id: "conv-4",
-    customer_name: "سارة أحمد",
-    customer_phone: "01098765432",
-    channel: "whatsapp",
-    customer_type: "whale",
-    status: "human_active",
-    last_message: "تمام هستنى الرد على العرض",
-    time_ago: "منذ 25 دقيقة",
-    unread_count: 2,
-    ai_handled: false,
-  },
-  {
-    id: "conv-5",
-    customer_name: "عبدالله كريم",
-    customer_phone: "01567890123",
-    channel: "email",
-    customer_type: "trader",
-    status: "waiting",
-    last_message: "محتاج أعرف عن باقات التجار",
-    time_ago: "منذ 45 دقيقة",
-    unread_count: 1,
-    ai_handled: true,
-  },
-  {
-    id: "conv-6",
-    customer_name: "نورا سعيد",
-    customer_phone: "01234567890",
-    channel: "whatsapp",
-    customer_type: "individual",
-    status: "resolved",
-    last_message: "شكراً جداً على المساعدة 🙏",
-    time_ago: "منذ ساعة",
-    unread_count: 0,
-    ai_handled: true,
-  },
-];
-
 type FilterTab = "all" | "ai" | "human" | "escalation";
 
 export default function CSConversationsPage() {
-  const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [channelFilter, setChannelFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const stats = {
     active: conversations.filter((c) => c.status !== "resolved").length,
@@ -175,7 +100,7 @@ export default function CSConversationsPage() {
         if (data.conversations) setConversations(data.conversations);
       }
     } catch {
-      // fallback to mock
+      // Network error — keep empty
     }
     setLoading(false);
   };
@@ -297,7 +222,7 @@ export default function CSConversationsPage() {
         {filteredConversations.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
             <MessageSquare size={48} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-gray-500 text-sm">مفيش محادثات تطابق الفلتر</p>
+            <p className="text-gray-500 text-sm">{conversations.length === 0 ? "لا توجد محادثات بعد" : "مفيش محادثات تطابق الفلتر"}</p>
           </div>
         ) : (
           filteredConversations.map((conv) => {

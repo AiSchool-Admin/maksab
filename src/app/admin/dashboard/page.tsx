@@ -58,6 +58,7 @@ interface DashboardData {
     ads: number;
     revenue: number;
   }>;
+  chart_empty_message?: string;
   alerts: Array<{
     id: string;
     type: "critical" | "warning" | "info";
@@ -333,70 +334,65 @@ export default function CEODashboardPage() {
       <div className="bg-white rounded-xl p-4 lg:p-6 border border-gray-100 shadow-sm">
         <div className="mb-4">
           <h3 className="text-base font-bold text-dark">النمو — آخر 30 يوم</h3>
-          <p className="text-xs text-gray-text">مستخدمين، إعلانات، إيرادات</p>
+          <p className="text-xs text-gray-text">بائعين، إعلانات محصودة</p>
         </div>
-        <div className="h-72" dir="ltr">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data.chart_data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-              <defs>
-                <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorAds" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1B7A3D" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#1B7A3D" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#D4A843" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#D4A843" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="#9CA3AF" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#9CA3AF" />
-              <Tooltip content={<ChartTooltip />} />
-              <Legend
-                wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-                formatter={(value: string) => {
-                  const labels: Record<string, string> = {
-                    users: "المستخدمين",
-                    ads: "الإعلانات",
-                    revenue: "الإيرادات",
-                  };
-                  return labels[value] || value;
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="users"
-                name="المستخدمين"
-                stroke="#3B82F6"
-                fillOpacity={1}
-                fill="url(#colorUsers)"
-                strokeWidth={2}
-              />
-              <Area
-                type="monotone"
-                dataKey="ads"
-                name="الإعلانات"
-                stroke="#1B7A3D"
-                fillOpacity={1}
-                fill="url(#colorAds)"
-                strokeWidth={2}
-              />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                name="الإيرادات"
-                stroke="#D4A843"
-                fillOpacity={1}
-                fill="url(#colorRevenue)"
-                strokeWidth={2}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        {data.chart_data.length === 0 ? (
+          <div className="h-72 flex items-center justify-center text-gray-400">
+            <div className="text-center">
+              <BarChart3 size={40} className="mx-auto mb-3 text-gray-300" />
+              <p className="text-sm font-medium">{data.chart_empty_message || "ستظهر البيانات بعد بدء التشغيل"}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="h-72" dir="ltr">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data.chart_data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorAds" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#1B7A3D" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#1B7A3D" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="#9CA3AF" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#9CA3AF" />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend
+                  wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                  formatter={(value: string) => {
+                    const labels: Record<string, string> = {
+                      users: "البائعين",
+                      ads: "الإعلانات",
+                    };
+                    return labels[value] || value;
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="users"
+                  name="البائعين"
+                  stroke="#3B82F6"
+                  fillOpacity={1}
+                  fill="url(#colorUsers)"
+                  strokeWidth={2}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="ads"
+                  name="الإعلانات"
+                  stroke="#1B7A3D"
+                  fillOpacity={1}
+                  fill="url(#colorAds)"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* Alerts */}

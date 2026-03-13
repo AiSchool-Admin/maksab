@@ -35,80 +35,6 @@ const audiences = [
   { id: "all", label: "الكل" },
 ];
 
-const mockGeneratedContent: Record<string, string> = {
-  facebook: `🔥 عايز تبيع موبايلك القديم بأحسن سعر؟
-
-مكسب هو المكان الصح! 📱💰
-
-✅ صوّر موبايلك
-✅ حدد السعر
-✅ انشر إعلانك مجاناً
-
-في أقل من 60 ثانية إعلانك هيوصل لآلاف المشترين!
-
-محمد من المنصورة باع آيفون 14 في يومين بس! 🎉
-
-جرّب دلوقتي 👇
-maksab.app
-
-#مكسب #بيع_موبايلات #مصر #كل_صفقة_مكسب`,
-
-  instagram: `📱 بيع موبايلك في ثواني!
-
-مكسب — أسهل طريقة تبيع وتشتري 💚
-
-🔥 مجاني 100%
-🔥 آلاف المشترين
-🔥 بيع في دقيقة
-
-حمّل دلوقتي!
-🔗 الرابط في البايو
-
-#مكسب #موبايلات #بيع #شراء`,
-
-  tweet: `📱 عايز تبيع موبايلك؟
-
-على #مكسب تقدر تنشر إعلانك مجاناً في 60 ثانية!
-
-جرّب دلوقتي: maksab.app 💚
-
-#كل_صفقة_مكسب`,
-
-  seo: `# أفضل تطبيق لبيع الموبايلات المستعملة في مصر 2026
-
-هل عندك موبايل قديم وعايز تبيعه بأحسن سعر؟ مكسب هو التطبيق الأول في مصر لبيع وشراء الموبايلات المستعملة. في المقال ده هنشرحلك إزاي تبيع موبايلك بسرعة وأمان...
-
-## ليه مكسب؟
-- مجاني 100% — مفيش عمولة
-- إعلانك يوصل لآلاف المشترين
-- نظام تقييم يحميك من النصب
-
-## إزاي تنشر إعلان؟
-1. افتح التطبيق وسجّل برقم موبايلك
-2. صوّر الموبايل من كل الزوايا
-3. حدد السعر والحالة
-4. انشر الإعلان!`,
-
-  ad_desc: `آيفون 15 برو ماكس — 256GB — مستعمل زيرو 📱
-
-الموبايل في حالة ممتازة، مفيش أي خدش. البطارية 98%. مع العلبة الأصلية والشاحن.
-
-السعر: 42,000 جنيه — قابل للتفاوض البسيط
-
-📍 القاهرة — مدينة نصر
-📞 تواصل معايا على مكسب`,
-
-  marketing_msg: `مرحبا! 👋
-
-أنت مسجّل على مكسب بس لسه ما نشرتش إعلان.
-
-عندك حاجة عايز تبيعها؟ 📦
-
-دلوقتي تقدر تنشر إعلانك في أقل من دقيقة — وهيوصل لآلاف المشترين!
-
-جرّب دلوقتي: maksab.app 💚`,
-};
-
 export default function NewContentPage() {
   const [selectedType, setSelectedType] = useState("facebook");
   const [topic, setTopic] = useState("");
@@ -119,17 +45,28 @@ export default function NewContentPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    if (!topic.trim()) {
+      setError("اكتب الموضوع الأول");
+      return;
+    }
     setIsGenerating(true);
     setIsEditing(false);
+    setError("");
+
+    // TODO: Replace with real AI API call when Claude/OpenAI API is integrated
+    // For now, show a message that AI content generation is not configured yet
     setTimeout(() => {
-      setGeneratedContent(mockGeneratedContent[selectedType] || mockGeneratedContent.facebook);
+      setGeneratedContent("");
+      setError("خدمة توليد المحتوى بالـ AI غير مفعّلة بعد. سيتم تفعيلها قريباً.");
       setIsGenerating(false);
-    }, 2000);
+    }, 1500);
   };
 
   const handleCopy = async () => {
+    if (!generatedContent) return;
     try {
       await navigator.clipboard.writeText(generatedContent);
       setCopied(true);
@@ -280,6 +217,11 @@ export default function NewContentPage() {
                   <p className="text-sm font-medium">الـ AI بيكتب المحتوى...</p>
                   <p className="text-xs mt-1">ثواني وهيكون جاهز</p>
                 </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                  <Sparkles size={32} className="mb-3 text-yellow-400" />
+                  <p className="text-sm font-medium text-gray-600">{error}</p>
+                </div>
               ) : generatedContent ? (
                 isEditing ? (
                   <textarea
@@ -312,12 +254,6 @@ export default function NewContentPage() {
               >
                 {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
                 {copied ? "تم النسخ!" : "نسخ"}
-              </button>
-              <button className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-[#1877F2] text-white hover:bg-[#1565C0] transition-colors">
-                📘 نشر فيسبوك
-              </button>
-              <button className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white hover:opacity-90 transition-colors">
-                📸 نشر إنستا
               </button>
               <button
                 onClick={handleSave}
