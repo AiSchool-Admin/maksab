@@ -239,7 +239,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [session, setSession] = useState<AdminSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notificationCount] = useState(3);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // Collapsible sections — start all collapsed except dashboard
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
@@ -307,6 +309,47 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     fetchRole();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoginPage]);
+
+  // Fetch notifications
+  useEffect(() => {
+    if (!session || isLoginPage) return;
+
+    async function fetchNotifications() {
+      try {
+        const headers = getAdminHeaders();
+        const res = await fetch("/api/admin/notifications", { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setNotificationCount(data.unread_count || 0);
+          setNotifications(data.notifications || []);
+        }
+      } catch {
+        // Silent
+      }
+    }
+
+    fetchNotifications();
+    // Refresh every 2 minutes
+    const interval = setInterval(fetchNotifications, 120000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoginPage, session?.id]);
+
+  async function markAllNotificationsRead() {
+    try {
+      const headers = getAdminHeaders();
+      await fetch("/api/admin/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ action: "mark_all_read" }),
+      });
+      setNotificationCount(0);
+      setNotifications([]);
+      setShowNotifications(false);
+    } catch {
+      // Silent
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem(ADMIN_SESSION_KEY);
@@ -507,14 +550,75 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </span>
 
             {/* Notifications bell */}
-            <button className="relative p-2 text-gray-text hover:text-dark rounded-lg hover:bg-gray-100 transition-colors">
-              <Bell size={20} />
-              {notificationCount > 0 && (
-                <span className="absolute -top-0.5 -left-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {notificationCount > 9 ? "9+" : notificationCount}
-                </span>
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative p-2 text-gray-text hover:text-dark rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <Bell size={20} />
+                {notificationCount > 0 && (
+                  <span className="absolute -top-0.5 -left-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {notificationCount > 9 ? "9+" : notificationCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Dropdown */}
+              {showNotifications && (
+                <div className="absolute left-0 top-full mt-2 w-80 max-h-96 overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 z-50" dir="rtl">
+                  <div className="p-3 border-b flex items-center justify-between">
+                    <h4 className="font-bold text-sm text-dark">
+                      التنبيهات {notificationCount > 0 && `(${notificationCount} جديدة)`}
+                    </h4>
+                    {notificationCount > 0 && (
+                      <button
+                        onClick={markAllNotificationsRead}
+                        className="text-[10px] text-brand-green hover:text-brand-green-dark"
+                      >
+                        تعليم الكل كمقروء
+                      </button>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400 text-sm">
+                      لا توجد تنبيهات جديدة
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {notifications.map((n: any) => (
+                        <div key={n.id} className="p-3 hover:bg-gray-50">
+                          <p className="text-sm font-medium text-dark">{n.title}</p>
+                          {n.body && (
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>
+                          )}
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-[10px] text-gray-400">
+                              {n.created_at
+                                ? new Date(n.created_at).toLocaleString("ar-EG", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    day: "2-digit",
+                                    month: "short",
+                                  })
+                                : ""}
+                            </span>
+                            {n.action_url && (
+                              <Link
+                                href={n.action_url}
+                                onClick={() => setShowNotifications(false)}
+                                className="text-[10px] text-brand-green hover:text-brand-green-dark font-medium"
+                              >
+                                اتخذ إجراء →
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
-            </button>
+            </div>
 
             <Link href="/" className="text-xs text-brand-green hover:text-brand-green-dark flex items-center gap-1">
               <ChevronLeft size={14} />

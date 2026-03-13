@@ -1826,6 +1826,115 @@ async function processOutreach(): Promise<{
 }
 
 // ─── Cron Harvest Logic ──────────────────────────────────────
+// ─── Market Balance Calculator (Phase 4) ─────────────────────
+
+const BALANCE_CATEGORIES = [
+  "phones", "vehicles", "properties", "electronics",
+  "furniture", "fashion", "home_appliances", "hobbies",
+  "services", "gold_jewelry", "scrap", "luxury",
+];
+
+const BALANCE_TARGET_RATIOS: Record<string, number> = {
+  phones: 0.33, vehicles: 0.20, properties: 0.10,
+  electronics: 0.33, furniture: 0.25, fashion: 0.33,
+  home_appliances: 0.33, hobbies: 0.33, services: 0.50,
+  gold_jewelry: 0.25, scrap: 0.50, luxury: 0.20,
+};
+
+const BALANCE_CATEGORY_AR: Record<string, string> = {
+  phones: "موبايلات", vehicles: "سيارات", properties: "عقارات",
+  electronics: "إلكترونيات", furniture: "أثاث", fashion: "أزياء",
+  home_appliances: "أجهزة منزلية", hobbies: "هوايات", services: "خدمات",
+  gold_jewelry: "ذهب ومجوهرات", scrap: "خُردة", luxury: "سلع فاخرة",
+};
+
+async function calculateMarketBalanceWorker(): Promise<Array<{
+  category: string; supply: number; demand: number; status: string;
+}>> {
+  const supabase = getSupabase();
+  const results: Array<{ category: string; supply: number; demand: number; ratio: number; status: string }> = [];
+
+  for (const cat of BALANCE_CATEGORIES) {
+    const { count: supply } = await supabase
+      .from("ahe_listings")
+      .select("id", { count: "exact", head: true })
+      .eq("maksab_category", cat)
+      .eq("is_duplicate", false);
+
+    const { count: demand } = await supabase
+      .from("bhe_buyers")
+      .select("id", { count: "exact", head: true })
+      .eq("category", cat)
+      .eq("is_duplicate", false)
+      .in("pipeline_status", ["discovered", "phone_found", "matched"]);
+
+    const target = BALANCE_TARGET_RATIOS[cat] || 0.33;
+    const supplyN = supply || 0;
+    const demandN = demand || 0;
+    const ratio = demandN > 0 ? supplyN / demandN : (supplyN > 0 ? 999 : 0);
+
+    let status: string;
+    let action: string;
+
+    if (!supplyN && !demandN) {
+      status = "no_data"; action = "maintain";
+    } else if (ratio > target * 5) {
+      status = "critical_buyers"; action = "urgent_bhe_needed";
+    } else if (ratio > target * 2) {
+      status = "needs_buyers"; action = "increase_bhe_priority";
+    } else if (ratio < target * 0.3 && demandN > 10) {
+      status = "needs_sellers"; action = "maintain";
+    } else {
+      status = "balanced"; action = "maintain";
+    }
+
+    await supabase.from("market_balance").upsert({
+      category: cat,
+      governorate: null,
+      active_listings: supplyN,
+      active_buyers: demandN,
+      supply_demand_ratio: ratio,
+      target_ratio: target,
+      balance_status: status,
+      recommended_action: action,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "category,governorate" });
+
+    // Alerts
+    if (status === "critical_buyers") {
+      await supabase.from("admin_notifications").insert({
+        type: "balance_alert",
+        title: `🔴 ${BALANCE_CATEGORY_AR[cat]} — محتاجة مشترين عاجل!`,
+        body: `عرض: ${supplyN} | طلب: ${demandN} | النسبة: ${ratio.toFixed(1)}:1`,
+        action_url: "/admin/sales/buyer-harvest/paste",
+        priority: "urgent",
+      });
+    } else if (status === "needs_buyers") {
+      const { data: existing } = await supabase
+        .from("admin_notifications")
+        .select("id")
+        .eq("type", "balance_alert")
+        .ilike("title", `%${BALANCE_CATEGORY_AR[cat]}%`)
+        .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .limit(1);
+
+      if (!existing?.length) {
+        await supabase.from("admin_notifications").insert({
+          type: "balance_alert",
+          title: `🟡 ${BALANCE_CATEGORY_AR[cat]} — محتاجة مشترين أكتر`,
+          body: `عرض: ${supplyN} | طلب: ${demandN}`,
+          action_url: "/admin/sales/buyer-harvest/paste",
+          priority: "high",
+        });
+      }
+    }
+
+    results.push({ category: cat, supply: supplyN, demand: demandN, ratio, status });
+  }
+
+  return results;
+}
+
 async function cronHarvest(): Promise<{
   scopes_processed: number;
   results: HarvestResult[];
@@ -1857,8 +1966,9 @@ async function cronHarvest(): Promise<{
     return { scopes_processed: 0, results: [] };
   }
 
-  // Fetch ready scopes
-  const { data: scopes } = await supabase
+  // Smart scope selection — Phase 4
+  // Fetch top 5 ready scopes, then pick the best one
+  const { data: readyScopes } = await supabase
     .from("ahe_scopes")
     .select("*")
     .eq("is_active", true)
@@ -1866,14 +1976,40 @@ async function cronHarvest(): Promise<{
     .or("server_fetch_blocked.eq.false,server_fetch_blocked.is.null")
     .or("next_harvest_at.is.null,next_harvest_at.lte.now()")
     .order("priority", { ascending: false })
-    .limit(1);
+    .limit(5);
 
-  if (!scopes || scopes.length === 0) {
+  if (!readyScopes || readyScopes.length === 0) {
     console.log("[Cron] 😴 No scopes ready for harvest");
     return { scopes_processed: 0, results: [] };
   }
 
-  const scope = scopes[0];
+  // Try to get market balance data for smart selection
+  let scope = readyScopes[0]; // fallback to highest priority
+  try {
+    const categories = readyScopes.map((s: any) => s.maksab_category);
+    const { data: balanceData } = await supabase
+      .from("market_balance")
+      .select("category, balance_status")
+      .in("category", categories)
+      .is("governorate", null);
+
+    if (balanceData && balanceData.length > 0) {
+      const balanceMap = new Map(balanceData.map((b: any) => [b.category, b.balance_status]));
+
+      // Sort: needs_sellers first (rare but important), then by priority
+      // ⚠️ Never skip any scope due to oversupply — AHE always harvests
+      const sorted = [...readyScopes].sort((a: any, b: any) => {
+        const aNeeds = balanceMap.get(a.maksab_category) === "needs_sellers" ? 0 : 1;
+        const bNeeds = balanceMap.get(b.maksab_category) === "needs_sellers" ? 0 : 1;
+        if (aNeeds !== bNeeds) return aNeeds - bNeeds;
+        return (b.priority || 0) - (a.priority || 0);
+      });
+
+      scope = sorted[0];
+    }
+  } catch {
+    // Fallback to priority-based selection (already set above)
+  }
   console.log(
     `[Cron] 🚀 Harvesting 1 scope: ${scope.code}`
   );
@@ -2243,6 +2379,18 @@ server.listen(PORT, () => {
       console.log('[Auto-BHE] Complete:', JSON.stringify(buyerMatchResult));
     } catch (e: any) {
       console.log('[Auto-BHE] Error:', e.message);
+    }
+
+    // خامساً: حساب التوازن + إرسال تنبيهات (Phase 4)
+    try {
+      await new Promise((r) => setTimeout(r, 3000));
+      console.log('[Auto-Balance] Calculating market balance...');
+      const balanceResults = await calculateMarketBalanceWorker();
+      console.log('[Auto-Balance] Complete:', JSON.stringify(
+        balanceResults.map((r: any) => `${r.category}: ${r.supply}/${r.demand} = ${r.status}`)
+      ));
+    } catch (e: any) {
+      console.log('[Auto-Balance] Error:', e.message);
     }
   }, 10000); // 10 ثواني بعد البدء
 });
