@@ -29,6 +29,22 @@ export function cleanSellerName(name: string | null): string | null {
   return cleaned;
 }
 
+// ═══ Buy request detection from listing title/card ═══
+export const BUY_KEYWORDS = /مطلوب|نشتري|بنشتري|نشترى|بنشترى|عايز اشتري|عاوز تبيع|محتاج|بدور على|كلمنا بنشتري|لو عندك|wanted|wtb|looking for/i;
+
+export function detectBuyRequest(title: string, cardText?: string): boolean {
+  const hasBuyKeyword = BUY_KEYWORDS.test(title);
+  if (hasBuyKeyword) return true;
+
+  // If card text available: barter badge + buy keyword anywhere in card
+  if (cardText) {
+    const hasBarterBadge = cardText.includes('متوفر التبادل') || cardText.includes('قابل للتبديل');
+    if (hasBarterBadge && BUY_KEYWORDS.test(cardText)) return true;
+  }
+
+  return false;
+}
+
 export interface ListPageListing {
   url: string;
   title: string;
@@ -46,6 +62,7 @@ export interface ListPageListing {
   supportsExchange: boolean;
   isNegotiable: boolean;
   category: string | null;
+  isLikelyBuyRequest: boolean;
 }
 
 export interface ListingDetails {
@@ -201,6 +218,12 @@ function parseJsonListings(json: Record<string, unknown>): ListPageListing[] {
       isBusiness = !!(user.is_business || user.account_type === "business");
     }
 
+    const isLikelyBuyRequest = detectBuyRequest(title);
+
+    if (isLikelyBuyRequest) {
+      console.log('[BHE-Card] 🔥 BUY keyword in title →', 'BUYER :', title.substring(0, 40));
+    }
+
     listings.push({
       url: fullUrl,
       title,
@@ -220,6 +243,7 @@ function parseJsonListings(json: Record<string, unknown>): ListPageListing[] {
       isNegotiable:
         !!(ad.is_negotiable || ad.negotiable) || title.includes("قابل للتفاوض"),
       category: (ad.category_name as string) || null,
+      isLikelyBuyRequest,
     });
   }
 
@@ -395,6 +419,17 @@ function parseHtmlListings(html: string): ListPageListing[] {
 
     const thumbnailUrl = extractImageFromContext(context);
 
+    const isLikelyBuyRequest = detectBuyRequest(title, context);
+
+    if (isLikelyBuyRequest) {
+      const hasBuyKeyword = BUY_KEYWORDS.test(title);
+      const hasBarterBadge = context.includes('متوفر التبادل') || context.includes('قابل للتبديل');
+      console.log('[BHE-Card]',
+        hasBuyKeyword ? '🔥 BUY keyword in title' : '',
+        hasBarterBadge ? '🔄 Barter badge' : '',
+        '→ BUYER :', title.substring(0, 40));
+    }
+
     listings.push({
       url,
       title,
@@ -412,6 +447,7 @@ function parseHtmlListings(html: string): ListPageListing[] {
       supportsExchange: context.includes("تبادل") || context.includes("بدل"),
       isNegotiable: context.includes("قابل للتفاوض"),
       category: null,
+      isLikelyBuyRequest,
     });
   }
 

@@ -12,6 +12,7 @@ import {
   parseDubizzleList,
   parseDubizzleDetail,
   cleanSellerName,
+  detectBuyRequest,
   BROWSER_HEADERS,
   type ListPageListing,
 } from "./parsers/dubizzle";
@@ -384,14 +385,25 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       progress_percentage: 40,
     });
 
-    // ═══ PHASE 3: FETCH DETAILS ═══
+    // ═══ PHASE 3: FETCH DETAILS (Buyers first!) ═══
     if (scope.detail_fetch_enabled && newListings.length > 0) {
       await updateJob(supabase, jobId, {
         status: "fetching_details",
-        current_step: "جلب التفاصيل",
+        current_step: "جلب التفاصيل (المشترين أولاً)",
       });
 
-      const maxDetailFetches = Math.min(newListings.length, 5);
+      // Prioritize likely buyers — fetch their details first to get phone numbers
+      const likelyBuyers = newListings.filter(l => l.isLikelyBuyRequest);
+      const regularListings = newListings.filter(l => !l.isLikelyBuyRequest);
+      const prioritizedListings = [...likelyBuyers, ...regularListings];
+
+      // Reorder newListings in-place to match prioritized order
+      newListings.length = 0;
+      newListings.push(...prioritizedListings);
+
+      const maxDetailFetches = Math.min(newListings.length, 50);
+
+      console.log(`[AHE] 🎯 Detail fetch priority: ${likelyBuyers.length} likely buyers + ${Math.min(regularListings.length, maxDetailFetches - likelyBuyers.length)} sellers`);
 
       for (let i = 0; i < maxDetailFetches; i++) {
         const elapsed = (Date.now() - startTime) / 1000;
@@ -510,6 +522,109 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       phones_extracted: phonesExtracted,
       progress_percentage: 80,
     });
+
+    // ═══ PHASE 4.5: BHE — SAVE DETECTED BUYERS ═══
+    let buyersDetected = 0;
+    let buyersWithPhone = 0;
+
+    // Save buyers that went through detail fetch (have phone + description)
+    for (const listing of newListings) {
+      const confirmedBuyRequest = listing.enrichedDescription
+        ? detectBuyRequest(listing.enrichedDescription)
+        : false;
+      const likelyBuyRequest = listing.isLikelyBuyRequest;
+
+      if (confirmedBuyRequest || likelyBuyRequest) {
+        const phone = listing.extractedPhone || null;
+        const sellerName = cleanSellerName(
+          listing.sellerNameFromDetail || listing.sellerName || null
+        );
+        const description = listing.enrichedDescription || "";
+
+        try {
+          // Check for duplicate by source_url
+          const { data: existingBuyer } = await supabase
+            .from("bhe_buyers")
+            .select("id")
+            .eq("source_url", listing.url)
+            .maybeSingle();
+
+          if (!existingBuyer) {
+            await supabase.from("bhe_buyers").insert({
+              source: confirmedBuyRequest ? "dubizzle_wanted" : "dubizzle_title_match",
+              source_url: listing.url,
+              source_platform: "dubizzle",
+              buyer_name: sellerName,
+              buyer_phone: phone,
+              product_wanted: listing.title,
+              category: scope.maksab_category || null,
+              governorate: scope.governorate || null,
+              budget_max: listing.price || null,
+              original_text:
+                listing.title + " - " + (description).substring(0, 200),
+              buyer_tier: phone ? "hot_buyer" : "warm_buyer",
+              buyer_score: phone ? 80 : confirmedBuyRequest ? 60 : 40,
+              pipeline_status: phone ? "phone_found" : "discovered",
+            });
+            buyersDetected++;
+            if (phone) buyersWithPhone++;
+
+            console.log(
+              `[BHE] ${confirmedBuyRequest ? "Confirmed" : "Title match"} buy request:`,
+              listing.title?.substring(0, 40),
+              phone ? `📞 ${phone}` : "📵 no phone"
+            );
+          }
+        } catch {
+          // Skip on duplicate or error
+        }
+      }
+    }
+
+    // Save unfetched buyers (beyond detail limit) as warm leads without phone
+    const detailFetchedUrls = new Set(
+      newListings.slice(0, Math.min(newListings.length, 50)).map((l) => l.url)
+    );
+    const unfetchedBuyers = newListings.filter(
+      (l) => l.isLikelyBuyRequest && !detailFetchedUrls.has(l.url)
+    );
+
+    for (const buyer of unfetchedBuyers) {
+      try {
+        const { data: existingBuyer } = await supabase
+          .from("bhe_buyers")
+          .select("id")
+          .eq("source_url", buyer.url)
+          .maybeSingle();
+
+        if (!existingBuyer) {
+          await supabase.from("bhe_buyers").insert({
+            source: "dubizzle_title_match",
+            source_url: buyer.url,
+            source_platform: "dubizzle",
+            buyer_name: buyer.sellerName || null,
+            buyer_phone: null,
+            product_wanted: buyer.title,
+            category: scope.maksab_category || null,
+            governorate: scope.governorate || null,
+            budget_max: buyer.price || null,
+            original_text: buyer.title,
+            buyer_tier: "warm_buyer",
+            buyer_score: 30,
+            pipeline_status: "discovered",
+          });
+          buyersDetected++;
+        }
+      } catch {
+        // Skip on error
+      }
+    }
+
+    if (buyersDetected > 0) {
+      console.log(
+        `[BHE] 📊 Phase 4.5: ${buyersDetected} buyers detected (${buyersWithPhone} with phone)`
+      );
+    }
 
     // ═══ PHASE 5.5: SCOPE-LEVEL FILTERING ═══
     // فلترة ما بعد الجلب بناءً على معاملات النطاق المتقدمة (Phase 3)
