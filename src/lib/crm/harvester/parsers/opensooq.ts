@@ -1,6 +1,13 @@
 /**
  * OpenSooq (السوق المفتوح) Parser — eg.opensooq.com
  * 60 مليون مستخدم في المنطقة — أولوية قصوى بعد دوبيزل
+ *
+ * HTML Structure (discovered from reference scraper):
+ *   List page: <section id="serpMainContent"> → <a class="block blackColor p-16">
+ *   Detail page: <section id="PostViewInformation"> → <li class="postCpsSearchSource ...">
+ *                <section id="postViewDescription"> → <p>
+ *                <section id="PostViewOwnerCard"> → <a> → <h3>, <span class="ltr inline">
+ *                <div class="priceColor bold font-30 width-fit">
  */
 
 import { cleanSellerName, detectBuyRequest, type ListPageListing, type ListingDetails } from "./dubizzle";
@@ -24,6 +31,10 @@ export function getOpenSooqListPageUrl(
 
 /**
  * Parse OpenSooq listing page HTML
+ *
+ * Primary pattern: links with class "block blackColor p-16" inside section#serpMainContent
+ * These links contain the listing URL with a numeric ID pattern /<id>/
+ * Fallback patterns for different page layouts.
  */
 export function parseOpenSooqList(html: string): ListPageListing[] {
   const listings: ListPageListing[] = [];
@@ -39,53 +50,63 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
     }
   }
 
-  // OpenSooq uses card-based listing layout
-  // Strategy: Try multiple patterns from most specific to broadest
   let match;
   const seenUrls = new Set<string>();
 
-  // Pattern 1: Standard listing/post links (relative)
-  // OpenSooq URLs: /ar/post/12345, /ar/listing/12345, /ar/cairo/cars/12345
-  const patterns = [
-    /href="(\/ar\/[^"]*(?:listing|item|post)\/?\d+[^"]*)"/gi,
-    /href="(\/ar\/[^"]*\/\d{4,}[^"]*)"/gi,  // Any /ar/.../<numeric_id> path
-  ];
+  // ═══ Pattern 1 (PRIMARY): "block blackColor p-16" links inside serpMainContent ═══
+  // Reference: section#serpMainContent → a.block.blackColor.p-16
+  // Extract the serpMainContent section first for tighter matching
+  const serpSection = html.match(/<section[^>]*id=["']serpMainContent["'][^>]*>([\s\S]*?)<\/section>/i);
+  const searchArea = serpSection ? serpSection[1] : html;
 
-  for (const cardPattern of patterns) {
+  // Match links that have class containing "block" and "blackColor" and "p-16"
+  // The href contains a numeric ID: /ar/.../<numeric_id>/...
+  const blockLinkPattern = /<a[^>]*class="[^"]*\bblock\b[^"]*\bblackColor\b[^"]*\bp-16\b[^"]*"[^>]*href="([^"]+)"[^>]*>[\s\S]*?(?=<a[^>]*class="[^"]*\bblock\b[^"]*\bblackColor\b|$)/gi;
+  // Also match if class order differs
+  const blockLinkPattern2 = /<a[^>]*href="([^"]+)"[^>]*class="[^"]*\bblock\b[^"]*\bblackColor\b[^"]*\bp-16\b[^"]*"[^>]*>[\s\S]*?(?=<a[^>]*href="[^"]*"[^>]*class="[^"]*\bblock\b[^"]*\bblackColor\b|$)/gi;
+
+  for (const pattern of [blockLinkPattern, blockLinkPattern2]) {
     if (listings.length > 0) break;
 
-    while ((match = cardPattern.exec(html)) !== null) {
-      const relativeUrl = match[1];
-      // Skip navigation/category/search links
-      if (/\/(search|filter|category|page|login|register|profile)\b/i.test(relativeUrl)) continue;
-      const url = `${OPENSOOQ_BASE}${relativeUrl}`;
+    while ((match = pattern.exec(searchArea)) !== null) {
+      const rawUrl = match[1];
+      if (!rawUrl || rawUrl.length < 5) continue;
 
+      // Must contain a numeric ID in the path
+      const idMatch = rawUrl.match(/\/(\d{4,})\//);
+      if (!idMatch) continue;
+
+      // Skip navigation/utility links
+      if (/\/(search|filter|category|page|login|register|profile|about|help)\b/i.test(rawUrl)) continue;
+
+      const url = rawUrl.startsWith("http") ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
       if (seenUrls.has(url)) continue;
       seenUrls.add(url);
 
-      const start = Math.max(0, match.index - 500);
-      const end = Math.min(html.length, match.index + 2000);
-      const context = html.slice(start, end);
+      // Extract context around this link for metadata
+      const linkStart = match.index;
+      const context = match[0]; // The entire matched block for this listing
 
       const title = extractText(context, [
-        /class="[^"]*(?:post-title|item-title|listing-title|postTitle|card-title)[^"]*"[^>]*>([^<]+)/i,
+        /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
         /aria-label="([^"]+)"/i,
-        /<h[23][^>]*>([^<]+)<\/h[23]>/i,
         /title="([^"]+)"/i,
+        />([^<]{5,80})</i, // Any text content > 5 chars
       ]);
       if (!title || title.length < 3) continue;
 
       const priceText = extractText(context, [
-        /class="[^"]*(?:price|postPrice|card-price)[^"]*"[^>]*>([^<]*\d[\d,٬]*[^<]*)/i,
-        /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م)/,
+        /class="[^"]*(?:price|postPrice|priceColor)[^"]*"[^>]*>([^<]*\d[\d,٬\s]*[^<]*)/i,
+        /(\d[\d,٬\s]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال)/,
+        /(\d[\d,٬]*)\s*<\/(?:span|div|p)/,
       ]);
 
       const location = extractText(context, [
-        /class="[^"]*(?:location|postLocation|city|card-location)[^"]*"[^>]*>([^<]+)/i,
+        /class="[^"]*(?:location|postLocation|city|geoLocation)[^"]*"[^>]*>([^<]+)/i,
       ]);
 
       const dateText = extractText(context, [
-        /class="[^"]*(?:date|time|postDate|card-date)[^"]*"[^>]*>([^<]+)/i,
+        /class="[^"]*(?:date|time|postDate|timeAgo)[^"]*"[^>]*>([^<]+)/i,
         /(?:منذ|ago)\s*([^<]*)/i,
       ]);
 
@@ -97,7 +118,7 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
       ]);
 
       const sellerName = extractText(context, [
-        /class="[^"]*(?:member-name|sellerName|userName|card-user)[^"]*"[^>]*>([^<]+)/i,
+        /class="[^"]*(?:member-name|sellerName|userName|card-user|ownerName)[^"]*"[^>]*>([^<]+)/i,
       ]);
 
       const isLikelyBuyRequest = detectBuyRequest(title, context);
@@ -124,28 +145,39 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
     }
   }
 
-  // Pattern 2: Absolute URL fallback
+  // ═══ Pattern 2: Individual <a> links inside serpMainContent with numeric IDs ═══
+  // Broader fallback: any link inside serpMainContent that has a numeric ID
   if (listings.length === 0) {
-    const broadPattern = /href="(https?:\/\/eg\.opensooq\.com\/[^"]*\/\d{4,}[^"]*)"/gi;
-    while ((match = broadPattern.exec(html)) !== null) {
-      const url = match[1];
+    const linkPattern = /href="(\/ar\/[^"]*\/(\d{4,})\/[^"]*)"/gi;
+    const area = serpSection ? serpSection[1] : html;
+
+    while ((match = linkPattern.exec(area)) !== null) {
+      const relativeUrl = match[1];
+      if (/\/(search|filter|category|page|login|register|profile)\b/i.test(relativeUrl)) continue;
+
+      const url = `${OPENSOOQ_BASE}${relativeUrl}`;
       if (seenUrls.has(url)) continue;
-      if (/\/(search|filter|category|page|login|register|profile)\b/i.test(url)) continue;
       seenUrls.add(url);
 
       const start = Math.max(0, match.index - 500);
-      const end = Math.min(html.length, match.index + 2000);
-      const context = html.slice(start, end);
+      const end = Math.min(area.length, match.index + 2000);
+      const context = area.slice(start, end);
 
       const title = extractText(context, [
-        /aria-label="([^"]+)"/i,
         /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
+        /aria-label="([^"]+)"/i,
         /title="([^"]+)"/i,
       ]);
       if (!title || title.length < 3) continue;
 
       const priceText = extractText(context, [
-        /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م)/,
+        /class="[^"]*(?:price|postPrice|priceColor)[^"]*"[^>]*>([^<]*\d[\d,٬]*[^<]*)/i,
+        /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال)/,
+      ]);
+
+      const thumbnailUrl = extractImage(context, [
+        /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+        /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
       ]);
 
       const isLikelyBuyRequest = detectBuyRequest(title, context);
@@ -155,10 +187,7 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
         title: title.trim(),
         price: priceText ? parsePrice(priceText) : null,
         currency: "EGP",
-        thumbnailUrl: extractImage(context, [
-          /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-          /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-        ]),
+        thumbnailUrl,
         location: extractText(context, [/class="[^"]*location[^"]*"[^>]*>([^<]+)/i]) || "",
         dateText: "",
         sellerName: null,
@@ -175,7 +204,68 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
     }
   }
 
-  // Pattern 3: __NEXT_DATA__ extraction (OpenSooq is Next.js)
+  // ═══ Pattern 3: Broader link patterns (any /ar/ path with numeric ID) ═══
+  if (listings.length === 0) {
+    const patterns = [
+      /href="(\/ar\/[^"]*(?:listing|item|post)\/?\d+[^"]*)"/gi,
+      /href="(https?:\/\/eg\.opensooq\.com\/[^"]*\/\d{4,}[^"]*)"/gi,
+    ];
+
+    for (const cardPattern of patterns) {
+      if (listings.length > 0) break;
+
+      while ((match = cardPattern.exec(html)) !== null) {
+        const rawUrl = match[1];
+        if (/\/(search|filter|category|page|login|register|profile)\b/i.test(rawUrl)) continue;
+        const url = rawUrl.startsWith("http") ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
+
+        if (seenUrls.has(url)) continue;
+        seenUrls.add(url);
+
+        const start = Math.max(0, match.index - 500);
+        const end = Math.min(html.length, match.index + 2000);
+        const context = html.slice(start, end);
+
+        const title = extractText(context, [
+          /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
+          /aria-label="([^"]+)"/i,
+          /title="([^"]+)"/i,
+        ]);
+        if (!title || title.length < 3) continue;
+
+        const priceText = extractText(context, [
+          /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال)/,
+        ]);
+
+        const isLikelyBuyRequest = detectBuyRequest(title, context);
+
+        listings.push({
+          url,
+          title: title.trim(),
+          price: priceText ? parsePrice(priceText) : null,
+          currency: "EGP",
+          thumbnailUrl: extractImage(context, [
+            /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+            /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+          ]),
+          location: extractText(context, [/class="[^"]*location[^"]*"[^>]*>([^<]+)/i]) || "",
+          dateText: "",
+          sellerName: null,
+          sellerProfileUrl: null,
+          sellerAvatarUrl: null,
+          isVerified: false,
+          isBusiness: false,
+          isFeatured: false,
+          supportsExchange: false,
+          isNegotiable: false,
+          category: null,
+          isLikelyBuyRequest,
+        });
+      }
+    }
+  }
+
+  // ═══ Pattern 4: __NEXT_DATA__ extraction (OpenSooq may use Next.js) ═══
   if (listings.length === 0) {
     const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
     if (nextDataMatch) {
@@ -183,7 +273,6 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
         const nextData = JSON.parse(nextDataMatch[1]);
         const props = nextData?.props?.pageProps;
         if (props) {
-          // Try common Next.js data shapes
           const items = props.listings || props.posts || props.ads || props.data?.listings ||
             props.searchResults?.listings || props.initialData?.listings || [];
           if (Array.isArray(items) && items.length > 0) {
@@ -194,7 +283,7 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
     }
   }
 
-  // Pattern 4: JSON-LD structured data
+  // ═══ Pattern 5: JSON-LD structured data ═══
   if (listings.length === 0) {
     const jsonLdMatches = html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi);
     for (const m of jsonLdMatches) {
@@ -242,6 +331,14 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
 
 /**
  * Parse OpenSooq detail page HTML
+ *
+ * Known structure:
+ *   - section#PostViewInformation → li.postCpsSearchSource → p (key) + a (value)
+ *   - section#PostViewInformation → li.postCpsSearchSource.width-100 → p + p (extra info)
+ *   - div.priceColor.bold.font-30.width-fit → price
+ *   - section#postViewDescription → p tags
+ *   - section#PostViewOwnerCard → a → h3 (name), span.ltr.inline (member since)
+ *   - section#postViewLocation → a (location text)
  */
 export function parseOpenSooqDetail(html: string): ListingDetails {
   const result: ListingDetails = {
@@ -257,7 +354,7 @@ export function parseOpenSooqDetail(html: string): ListingDetails {
     sellerMemberSince: null,
   };
 
-  // Try JSON
+  // Try JSON first
   const trimmed = html.trim();
   if (trimmed.startsWith("{")) {
     try {
@@ -283,20 +380,91 @@ export function parseOpenSooqDetail(html: string): ListingDetails {
     }
   }
 
-  // HTML: Extract description
-  const descPatterns = [
-    /<div[^>]*class="[^"]*(?:description|post-desc|postDescription)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
-    /<div[^>]*id="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
-  ];
-  for (const pattern of descPatterns) {
-    const m = html.match(pattern);
-    if (m) {
-      result.description = m[1].replace(/<[^>]+>/g, "").trim();
-      break;
+  // ═══ Description: section#postViewDescription → p tags ═══
+  const descSection = html.match(/<section[^>]*id=["']postViewDescription["'][^>]*>([\s\S]*?)<\/section>/i);
+  if (descSection) {
+    const pTags = descSection[1].matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi);
+    const parts: string[] = [];
+    for (const p of pTags) {
+      const text = p[1].replace(/<[^>]+>/g, "").trim();
+      if (text) parts.push(text);
+    }
+    result.description = parts.join(" ");
+  }
+  // Fallback description patterns
+  if (!result.description) {
+    const descPatterns = [
+      /<div[^>]*class="[^"]*(?:description|post-desc|postDescription)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]*id="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+    ];
+    for (const pattern of descPatterns) {
+      const m = html.match(pattern);
+      if (m) {
+        result.description = m[1].replace(/<[^>]+>/g, "").trim();
+        break;
+      }
     }
   }
 
-  // Extract images
+  // ═══ Price: div.priceColor.bold.font-30.width-fit ═══
+  const priceMatch = html.match(/class="[^"]*priceColor[^"]*bold[^"]*font-30[^"]*"[^>]*>([^<]+)/i)
+    || html.match(/class="[^"]*bold[^"]*priceColor[^"]*font-30[^"]*"[^>]*>([^<]+)/i)
+    || html.match(/class="[^"]*priceColor[^"]*"[^>]*>([^<]*\d[\d,٬\s]*[^<]*)/i);
+  if (priceMatch) {
+    result.specifications["السعر"] = priceMatch[1].replace(/,/g, "،").trim();
+  }
+
+  // ═══ Specifications: section#PostViewInformation ═══
+  // Pattern 1: li.postCpsSearchSource.flex.flexSpaceBetween.alignItems.radius-8.width-49 → p (key) + a (value)
+  const infoSection = html.match(/<section[^>]*id=["']PostViewInformation["'][^>]*>([\s\S]*?)<\/section>/i);
+  if (infoSection) {
+    const infoHtml = infoSection[1];
+
+    // Standard specs: li with p + a
+    const specLis = infoHtml.matchAll(/<li[^>]*class="[^"]*postCpsSearchSource[^"]*width-49[^"]*"[^>]*>([\s\S]*?)<\/li>/gi);
+    for (const li of specLis) {
+      const keyMatch = li[1].match(/<p[^>]*>([^<]+)<\/p>/i);
+      const valMatch = li[1].match(/<a[^>]*>([^<]+)<\/a>/i);
+      if (keyMatch && valMatch) {
+        const key = keyMatch[1].trim();
+        const value = valMatch[1].trim();
+        if (key && value) result.specifications[key] = value;
+      }
+    }
+
+    // Extra info: li.width-100 with multiple p tags
+    const extraLis = infoHtml.matchAll(/<li[^>]*class="[^"]*postCpsSearchSource[^"]*width-100[^"]*"[^>]*>([\s\S]*?)<\/li>/gi);
+    for (const li of extraLis) {
+      const pTags = [...li[1].matchAll(/<p[^>]*>([^<]+)<\/p>/gi)];
+      if (pTags.length >= 2) {
+        const key = pTags[0][1].trim();
+        const value = pTags[1][1].trim();
+        if (key && value) result.specifications[key] = value;
+      }
+    }
+  }
+
+  // Fallback spec extraction: generic key-value pairs
+  if (Object.keys(result.specifications).length === 0) {
+    const specPattern = /<(?:li|tr|div)[^>]*>\s*<(?:span|td|th|label|p)[^>]*>([^<]+)<\/(?:span|td|th|label|p)>\s*<(?:span|td|div|a|p)[^>]*>([^<]+)<\/(?:span|td|div|a|p)>/gi;
+    let specMatch;
+    while ((specMatch = specPattern.exec(html)) !== null) {
+      const key = specMatch[1].replace(/<[^>]+>/g, "").trim();
+      const value = specMatch[2].replace(/<[^>]+>/g, "").trim();
+      if (key && value && key !== value) {
+        result.specifications[key] = value;
+      }
+    }
+  }
+
+  // ═══ Location: section#postViewLocation → a ═══
+  const locSection = html.match(/<section[^>]*id=["']postViewLocation["'][^>]*>([\s\S]*?)<\/section>/i);
+  if (locSection) {
+    const locLink = locSection[1].match(/<a[^>]*>([^<]+)<\/a>/i);
+    if (locLink) result.specifications["الموقع"] = locLink[1].trim();
+  }
+
+  // ═══ Images ═══
   const imgMatches = html.matchAll(
     /src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/gi
   );
@@ -305,7 +473,7 @@ export function parseOpenSooqDetail(html: string): ListingDetails {
       result.allImageUrls.push(m[1]);
     }
   }
-  // Fallback images
+  // Also check data-src and background-image
   if (result.allImageUrls.length === 0) {
     const fallback = html.matchAll(/data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/gi);
     for (const m of fallback) {
@@ -316,26 +484,45 @@ export function parseOpenSooqDetail(html: string): ListingDetails {
   }
   result.mainImageUrl = result.allImageUrls[0] || "";
 
-  // Extract specifications
-  const specPattern = /<(?:li|tr|div)[^>]*>\s*<(?:span|td|th|label)[^>]*>([^<]+)<\/(?:span|td|th|label)>\s*<(?:span|td|div)[^>]*>([^<]+)<\/(?:span|td|div)>/gi;
-  let specMatch;
-  while ((specMatch = specPattern.exec(html)) !== null) {
-    const key = specMatch[1].replace(/<[^>]+>/g, "").trim();
-    const value = specMatch[2].replace(/<[^>]+>/g, "").trim();
-    if (key && value && key !== value) {
-      result.specifications[key] = value;
+  // ═══ Title from h1 ═══
+  const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+  if (titleMatch) {
+    result.specifications["العنوان"] = titleMatch[1].trim();
+  }
+
+  // ═══ Seller: section#PostViewOwnerCard ═══
+  const ownerSection = html.match(/<section[^>]*id=["']PostViewOwnerCard["'][^>]*>([\s\S]*?)<\/section>/i);
+  if (ownerSection) {
+    const ownerHtml = ownerSection[1];
+
+    // Owner name: a → h3
+    const nameMatch = ownerHtml.match(/<h3[^>]*>([^<]+)<\/h3>/i);
+    if (nameMatch) result.sellerName = cleanSellerName(nameMatch[1].trim());
+
+    // Owner profile URL: first a[href]
+    const profileMatch = ownerHtml.match(/<a[^>]*href="([^"]+)"[^>]*>/i);
+    if (profileMatch) {
+      const profileUrl = profileMatch[1];
+      result.sellerProfileUrl = profileUrl.startsWith("http") ? profileUrl : `${OPENSOOQ_BASE}${profileUrl}`;
     }
+
+    // Member since: span.ltr.inline
+    const sinceMatch = ownerHtml.match(/class="[^"]*\bltr\b[^"]*\binline\b[^"]*"[^>]*>([^<]+)/i)
+      || ownerHtml.match(/class="[^"]*\binline\b[^"]*\bltr\b[^"]*"[^>]*>([^<]+)/i);
+    if (sinceMatch) result.sellerMemberSince = sinceMatch[1].trim();
+  }
+  // Fallback seller extraction
+  if (!result.sellerName) {
+    const sellerMatch = html.match(/class="[^"]*(?:member-name|seller-name|userName|ownerName)[^"]*"[^>]*>([^<]+)/i);
+    if (sellerMatch) result.sellerName = cleanSellerName(sellerMatch[1].trim());
+  }
+  if (!result.sellerProfileUrl) {
+    const profileMatch = html.match(/href="(\/ar\/profile\/[^"]+)"/i) || html.match(/href="(\/profile\/[^"]+)"/i);
+    if (profileMatch) result.sellerProfileUrl = `${OPENSOOQ_BASE}${profileMatch[1]}`;
   }
 
   result.condition = result.specifications["الحالة"] || result.specifications["Condition"] || null;
   result.hasWarranty = result.description.includes("ضمان") || result.description.includes("warranty");
-
-  // Extract seller
-  const sellerMatch = html.match(/class="[^"]*(?:member-name|seller-name|userName)[^"]*"[^>]*>([^<]+)/i);
-  if (sellerMatch) result.sellerName = cleanSellerName(sellerMatch[1].trim());
-
-  const profileMatch = html.match(/href="(\/ar\/profile\/[^"]+)"/i) || html.match(/href="(\/profile\/[^"]+)"/i);
-  if (profileMatch) result.sellerProfileUrl = `${OPENSOOQ_BASE}${profileMatch[1]}`;
 
   return result;
 }
