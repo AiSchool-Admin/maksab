@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
+import { detectBuyRequest } from "@/lib/crm/harvester/parsers/dubizzle";
 
 export const maxDuration = 30;
 
@@ -399,6 +400,53 @@ export async function POST(req: NextRequest) {
         });
 
         newCount++;
+
+        // ── BHE: Detect and save buyers ──
+        const titleBuyRequest = detectBuyRequest(listing.title || "");
+        const descBuyRequest = listing.description
+          ? detectBuyRequest(listing.description)
+          : false;
+
+        if (titleBuyRequest || descBuyRequest) {
+          try {
+            const { data: existingBuyer } = await supabase
+              .from("bhe_buyers")
+              .select("id")
+              .eq("source_url", listing.url)
+              .maybeSingle();
+
+            if (!existingBuyer) {
+              await supabase.from("bhe_buyers").insert({
+                source: descBuyRequest
+                  ? "dubizzle_wanted"
+                  : "dubizzle_title_match",
+                source_url: listing.url,
+                source_platform: "dubizzle",
+                buyer_name: listing.sellerName || null,
+                buyer_phone: phone,
+                product_wanted: listing.title,
+                category: null,
+                governorate: location.governorate || null,
+                budget_max: listing.price || null,
+                original_text:
+                  listing.title +
+                  " - " +
+                  (listing.description || "").substring(0, 200),
+                buyer_tier: phone ? "hot_buyer" : "warm_buyer",
+                buyer_score: phone ? 80 : descBuyRequest ? 60 : 40,
+                pipeline_status: phone ? "phone_found" : "discovered",
+              });
+
+              console.log(
+                `[BHE-Bookmarklet] ${descBuyRequest ? "Confirmed" : "Title match"} buyer:`,
+                listing.title?.substring(0, 40),
+                phone ? `📞 ${phone}` : "📵"
+              );
+            }
+          } catch {
+            // Skip duplicate or error
+          }
+        }
       } catch (err) {
         errors.push(
           `${listing.title.substring(0, 30)}: ${err instanceof Error ? err.message : String(err)}`
