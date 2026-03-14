@@ -54,6 +54,7 @@ const POPULAR_AREAS = [
   "التجمع", "الرحاب", "العبور", "العاشر من رمضان", "سموحة",
   "سيدي جابر", "المنصورة", "طنطا", "الزقازيق", "الهرم",
   "فيصل", "المقطم", "شبرا", "حلوان", "عين شمس",
+  "المهندسين", "الدقي",
 ];
 
 // ─── "Wanted" detection ──────────────────────────────────────
@@ -81,6 +82,19 @@ function extractProduct(text: string): string | null {
     const match = text.match(pattern);
     if (match) return match[1].trim();
   }
+
+  // Fallback: use first non-empty line (trimmed to 50 chars) if it contains recognizable product terms
+  const firstLine = text.split("\n").find((l) => l.trim().length > 5)?.trim();
+  if (firstLine && detectCategory(firstLine) !== "general") {
+    // Strip price/phone/location info, keep product part
+    const cleaned = firstLine
+      .replace(/\d{5,}/g, "")
+      .replace(/[—\-]\s*[\d,]+\s*(?:ج\.?م|جنيه)/g, "")
+      .replace(/📍|🔥|💰|🟡/g, "")
+      .trim();
+    if (cleaned.length > 3) return cleaned.substring(0, 60);
+  }
+
   return null;
 }
 
@@ -98,19 +112,49 @@ function extractBudget(text: string): { min: number | null; max: number | null }
   for (const { re, type } of BUDGET_PATTERNS) {
     const match = text.match(re);
     if (match) {
-      const v1 = parseInt(match[1].replace(/,/g, ""), 10);
+      let v1 = parseInt(match[1].replace(/,/g, ""), 10);
       if (type === "range" && match[2]) {
-        const v2 = parseInt(match[2].replace(/,/g, ""), 10);
+        let v2 = parseInt(match[2].replace(/,/g, ""), 10);
+        // Check if range values need ×1000 (e.g., "من 15 لـ 25 ألف")
+        const afterRange = text.substring((match.index ?? 0) + match[0].length, (match.index ?? 0) + match[0].length + 15);
+        if (/ألف|الف|k/i.test(afterRange) || (v1 < 200 && v2 < 200)) {
+          v1 *= 1000;
+          v2 *= 1000;
+        }
         return { min: v1, max: v2 };
       }
-      // Handle "k" suffix (e.g., "40k")
-      let adjusted = v1;
-      if (/k/i.test(text.substring(match.index ?? 0, (match.index ?? 0) + match[0].length + 5))) {
-        adjusted = v1 * 1000;
+      // Handle "ألف/الف/k" suffix — check matched text and surrounding chars
+      const matchedAndAfter = text.substring(match.index ?? 0, (match.index ?? 0) + match[0].length + 15);
+      if (/ألف|الف|k/i.test(matchedAndAfter)) {
+        v1 *= 1000;
       }
-      return { min: adjusted, max: adjusted };
+      // Heuristic: if number is suspiciously small (< 200), likely in thousands
+      if (v1 < 200 && v1 > 0) {
+        v1 *= 1000;
+      }
+      return { min: v1, max: v1 };
     }
   }
+
+  // Fallback: look for number + "ألف/الف/k"
+  const altMatch = text.match(/([\d,]+)\s*(?:ألف|الف|k)\b/i);
+  if (altMatch) {
+    const val = parseInt(altMatch[1].replace(/,/g, ""), 10) * 1000;
+    return { min: val, max: val };
+  }
+
+  // Fallback: standalone large number (not a phone)
+  const phoneNumbers: string[] = text.match(/01[0-2,5]\d{8}/g) || [];
+  const numMatches = text.match(/\b(\d{4,7})\b/g);
+  if (numMatches) {
+    for (const n of numMatches) {
+      const val = parseInt(n, 10);
+      if (val >= 1000 && val <= 50000000 && !phoneNumbers.includes(n)) {
+        return { min: val, max: val };
+      }
+    }
+  }
+
   return { min: null, max: null };
 }
 
@@ -134,7 +178,7 @@ function extractLocation(text: string): { governorate: string | null; city: stri
       if (["مدينة نصر", "مصر الجديدة", "المقطم", "شبرا", "حلوان", "عين شمس"].includes(area)) {
         return { governorate: "القاهرة", city: area };
       }
-      if (["الهرم", "فيصل", "6 أكتوبر", "الشيخ زايد"].includes(area)) {
+      if (["الهرم", "فيصل", "6 أكتوبر", "الشيخ زايد", "المهندسين", "الدقي"].includes(area)) {
         return { governorate: "الجيزة", city: area };
       }
       if (["سموحة", "سيدي جابر"].includes(area)) {
@@ -189,11 +233,19 @@ function detectCondition(text: string): string | null {
 
 export function parseBuyerPost(
   post: RawPost,
-  source: string = "facebook_group"
+  source: string = "facebook_group",
+  lenient: boolean = false
 ): ParsedBuyer | null {
   const text = post.text || "";
 
-  if (!isBuyRequest(text)) return null;
+  // In lenient mode (multi-block parsing), accept blocks with phone or recognizable product
+  if (!lenient && !isBuyRequest(text)) return null;
+  if (lenient && !isBuyRequest(text)) {
+    // Still need some signal — phone number or recognizable category
+    const hasPhone = /01[0-2,5]\d{8}/.test(text);
+    const hasProduct = detectCategory(text) !== "general";
+    if (!hasPhone && !hasProduct) return null;
+  }
 
   const product = extractProduct(text);
   const budget = extractBudget(text);
@@ -231,19 +283,47 @@ export function parseBuyerPost(
  * Parse multiple posts from a raw text dump (e.g., copy-pasted from Facebook group).
  * Splits on common post separators and parses each.
  */
+/**
+ * Split raw text into individual buyer blocks.
+ * Strategy:
+ * 1. Try splitting on double blank lines (2+ newlines)
+ * 2. If only 1 block, try splitting on horizontal rules (─── or === or ---)
+ * 3. If still 1 block, try splitting on buy-request keywords (مطلوب, عايز, محتاج, etc.)
+ */
+function splitIntoBuyerBlocks(text: string): string[] {
+  // Step 1: Split on blank lines (1+ empty lines between blocks)
+  let blocks = text.split(/\n\s*\n/).filter((b) => b.trim().length > 10);
+
+  if (blocks.length > 1) return blocks;
+
+  // Step 2: Split on horizontal rules
+  blocks = text.split(/─{3,}|-{3,}|═{3,}/).filter((b) => b.trim().length > 10);
+
+  if (blocks.length > 1) return blocks;
+
+  // Step 3: Split on buy-request keywords (lookahead so keyword stays in block)
+  blocks = text
+    .split(/(?=(?:^|\n)\s*(?:مطلوب|عايز|عاوز|محتاج|ابحث عن|بدور على))/m)
+    .filter((b) => b.trim().length > 10);
+
+  return blocks;
+}
+
 export function parseMultiplePosts(
   rawText: string,
   source: string = "facebook_group",
   groupName?: string
 ): ParsedBuyer[] {
-  // Split on common separators: multiple newlines, horizontal rules, "---"
-  const chunks = rawText.split(/\n{3,}|─{3,}|-{3,}|═{3,}/).filter((c) => c.trim().length > 10);
+  const chunks = splitIntoBuyerBlocks(rawText);
+  const isMultiBlock = chunks.length > 1;
 
   const buyers: ParsedBuyer[] = [];
   for (const chunk of chunks) {
+    // In multi-block mode, be lenient — accept blocks with phone/product even without explicit "مطلوب"
     const result = parseBuyerPost(
       { text: chunk.trim(), groupName },
-      source
+      source,
+      isMultiBlock
     );
     if (result) buyers.push(result);
   }
