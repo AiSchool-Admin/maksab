@@ -672,7 +672,7 @@ async function fetchAndExtractDetail(
 }
 
 // ─── BHE: Buyer Comment Extraction from Dubizzle Detail Pages ─
-const BUYER_INTENT_REGEX = /كام|سعر|متاح|أشوف|فين|للبيع|مهتم|عايز|price|available|لسه|آخر سعر|ينفع/i;
+const BUYER_INTENT_REGEX = /كام|سعر|متاح|أشوف|فين|للبيع|مهتم|عايز|price|available|لسه|آخر سعر|ينفع|how much|still available|interested|عاوز/i;
 
 async function extractBuyerComments(
   supabase: SupabaseClient,
@@ -680,47 +680,6 @@ async function extractBuyerComments(
   listing: { id: string; source_listing_url: string; seller_name?: string | null },
   bodyText: string
 ): Promise<number> {
-  // Try multiple selectors for comments
-  const commentSelectors = [
-    '[class*="comment"]',
-    '[class*="Comment"]',
-    '[data-testid*="comment"]',
-    '[class*="reply"]',
-    '[class*="Reply"]',
-  ];
-
-  let commentsFound = 0;
-
-  for (const selector of commentSelectors) {
-    const commentEls = $detail(selector);
-    if (!commentEls.length) continue;
-
-    commentEls.each(function () {
-      const el = $detail(this);
-      const commentText = el.text().trim();
-      if (!commentText || commentText.length < 5 || commentText.length > 500) return;
-
-      // Extract author
-      const authorEl = el.find('a[href*="/member/"], a[href*="/profile/"], a[href*="/user/"], [class*="author"], [class*="user"]').first();
-      const authorName = authorEl.text().trim() || null;
-      const authorUrl = authorEl.attr("href") || null;
-
-      // Extract phone from comment
-      const phoneMatch = commentText.match(/01[0-2,5][\s.\-]?\d{3,4}[\s.\-]?\d{4,5}/g);
-      const phone = phoneMatch ? phoneMatch[0].replace(/[\s.\-]/g, "") : null;
-
-      // Check if buyer intent
-      const isBuyerIntent = BUYER_INTENT_REGEX.test(commentText);
-
-      if (isBuyerIntent || phone) {
-        commentsFound++;
-      }
-    });
-
-    if (commentsFound > 0) break;
-  }
-
-  // Also scan bodyText for comment-like buyer signals with phones
   // Extract listing metadata for buyer records
   const listingTitle = $detail('h1').first().text().trim() ||
     $detail('[data-testid*="title"], [class*="title"]').first().text().trim() || '';
@@ -757,52 +716,136 @@ async function extractBuyerComments(
     return null;
   })();
 
-  // If we found comments with buyer intent, save them
-  // For now, look for phone numbers in the body text that are NOT the seller's phone
-  // and appear near buyer-intent keywords
-  const buyerPhones = bodyText.match(/01[0-2,5]\d{8}/g) || [];
-  const uniquePhones = [...new Set(buyerPhones)];
+  // ═══ Step 1: Extract buyer comments from comment elements ═══
+  const commentSelectors = [
+    '[class*="comment"]',
+    '[class*="Comment"]',
+    '[data-testid*="comment"]',
+    '[class*="reply"]',
+    '[class*="Reply"]',
+    '[class*="question"]',
+    '[class*="Question"]',
+    '[class*="inquiry"]',
+    '[class*="Inquiry"]',
+  ];
 
-  // Filter out seller phones (already extracted as listing phones)
-  // We'll save buyers with intent even without phones
-  if (commentsFound > 0 || uniquePhones.length > 1) {
-    // The first phone is usually the seller's; subsequent ones may be buyers
-    const potentialBuyerPhones = uniquePhones.slice(1); // skip seller's phone
-
-    for (const buyerPhone of potentialBuyerPhones) {
-      try {
-        await supabase.from("bhe_buyers").upsert(
-          {
-            source: "dubizzle_comment",
-            source_url: listing.source_listing_url,
-            source_platform: "dubizzle",
-            buyer_phone: buyerPhone,
-            product_interested_in: listingTitle || null,
-            product_wanted: listingTitle || null,
-            category,
-            estimated_purchase_value: listingPrice || 0,
-            budget_min: listingPrice ? Math.floor(listingPrice * 0.7) : null,
-            budget_max: listingPrice || null,
-            governorate,
-            original_text: `تعليق على: ${listingTitle}`,
-            buyer_tier: buyerPhone ? "warm_buyer" : "cold_buyer",
-            buyer_score: buyerPhone ? 45 : 15,
-            pipeline_status: buyerPhone ? "phone_found" : "discovered",
-            harvested_at: new Date().toISOString(),
-          },
-          { onConflict: "source,source_url,buyer_profile_url", ignoreDuplicates: true }
-        );
-      } catch {
-        // Ignore upsert errors (dedup conflicts etc.)
-      }
-    }
-
-    console.log(`[BHE] Found ${commentsFound} buyer comments, ${potentialBuyerPhones.length} buyer phones for listing ${listing.id}`);
-  } else {
-    console.log(`[BHE] No buyer comments found for listing ${listing.id}`);
+  interface BuyerComment {
+    text: string;
+    authorName: string | null;
+    authorUrl: string | null;
+    phone: string | null;
   }
 
-  return commentsFound;
+  const buyerComments: BuyerComment[] = [];
+  const seenTexts = new Set<string>();
+
+  for (const selector of commentSelectors) {
+    const commentEls = $detail(selector);
+    if (!commentEls.length) continue;
+
+    commentEls.each(function () {
+      const el = $detail(this);
+      const commentText = el.text().trim();
+      if (!commentText || commentText.length < 5 || commentText.length > 500) return;
+
+      // Deduplicate by text (nested elements may repeat)
+      const textKey = commentText.substring(0, 80);
+      if (seenTexts.has(textKey)) return;
+
+      // Check buyer intent
+      const isBuyerIntent = BUYER_INTENT_REGEX.test(commentText);
+
+      // Extract phone from comment
+      const phoneMatch = commentText.match(/01[0-2,5][\s.\-]?\d{3,4}[\s.\-]?\d{4,5}/g);
+      const phone = phoneMatch ? phoneMatch[0].replace(/[\s.\-]/g, "") : null;
+
+      if (!isBuyerIntent && !phone) return;
+
+      seenTexts.add(textKey);
+
+      // Extract author
+      const authorEl = el.find('a[href*="/member/"], a[href*="/profile/"], a[href*="/user/"], [class*="author"], [class*="user"]').first();
+      const authorName = authorEl.text().trim() || null;
+      const authorUrl = authorEl.attr("href") || null;
+
+      buyerComments.push({ text: commentText, authorName, authorUrl, phone });
+    });
+
+    if (buyerComments.length > 0) break;
+  }
+
+  // ═══ Step 2: Scan bodyText for buyer phones NOT from comment elements ═══
+  // Get seller's phone (first phone in the page is usually seller's)
+  const allPhones = bodyText.match(/01[0-2,5]\d{8}/g) || [];
+  const sellerPhone = allPhones.length > 0 ? allPhones[0] : null;
+  const commentPhones = new Set(buyerComments.map(c => c.phone).filter(Boolean));
+
+  // Find phones in body that aren't seller's and weren't already captured from comments
+  const bodyBuyerPhones = [...new Set(allPhones)]
+    .filter(p => p !== sellerPhone && !commentPhones.has(p));
+
+  // Add body-level phones as buyers too
+  for (const bp of bodyBuyerPhones) {
+    // Check if this phone appears near buyer intent text
+    const phoneIdx = bodyText.indexOf(bp);
+    if (phoneIdx >= 0) {
+      const surrounding = bodyText.substring(Math.max(0, phoneIdx - 100), Math.min(bodyText.length, phoneIdx + 100));
+      if (BUYER_INTENT_REGEX.test(surrounding)) {
+        buyerComments.push({
+          text: surrounding.trim().substring(0, 500),
+          authorName: null,
+          authorUrl: null,
+          phone: bp,
+        });
+      }
+    }
+  }
+
+  // ═══ Step 3: Save all buyer comments to bhe_buyers ═══
+  let savedCount = 0;
+
+  for (const buyer of buyerComments) {
+    try {
+      const profileUrl = buyer.authorUrl
+        ? (buyer.authorUrl.startsWith("http") ? buyer.authorUrl : `https://www.dubizzle.com.eg${buyer.authorUrl}`)
+        : null;
+
+      const { error } = await supabase.from("bhe_buyers").insert({
+        source: "dubizzle_comment",
+        source_url: listing.source_listing_url,
+        source_platform: "dubizzle",
+        buyer_name: buyer.authorName,
+        buyer_profile_url: profileUrl,
+        buyer_phone: buyer.phone,
+        product_interested_in: listingTitle || null,
+        product_wanted: listingTitle || null,
+        category,
+        estimated_purchase_value: listingPrice || 0,
+        budget_min: listingPrice ? Math.floor(listingPrice * 0.7) : null,
+        budget_max: listingPrice || null,
+        governorate,
+        original_text: buyer.text.substring(0, 500),
+        buyer_tier: buyer.phone ? "hot_buyer" : "warm_buyer",
+        buyer_score: buyer.phone ? 70 : 40,
+        pipeline_status: buyer.phone ? "phone_found" : "discovered",
+        harvested_at: new Date().toISOString(),
+      });
+
+      if (error && !error.message?.includes("duplicate")) {
+        console.log("[BHE] Insert error:", error.message);
+      } else if (!error) {
+        savedCount++;
+      }
+    } catch {
+      // Ignore upsert errors (dedup conflicts etc.)
+    }
+  }
+
+  if (buyerComments.length > 0) {
+    console.log(`[BHE] Found ${buyerComments.length} buyer comments, saved ${savedCount} for ${listing.source_listing_url?.substring(0, 50)}`);
+  }
+
+  return savedCount;
 }
 
 // ─── Core Harvest Logic ──────────────────────────────────────
