@@ -109,6 +109,42 @@ const BUDGET_PATTERNS: Array<{ re: RegExp; type: "single" | "range" }> = [
 ];
 
 function extractBudget(text: string): { min: number | null; max: number | null } {
+  // ─── Pre-check: handle "مليون" and "نص مليون" patterns first ───
+  const millionMatch = text.match(/نص\s*مليون/i);
+  if (millionMatch) return { min: 500000, max: 500000 };
+
+  const quarterMillionMatch = text.match(/ربع\s*مليون/i);
+  if (quarterMillionMatch) return { min: 250000, max: 250000 };
+
+  const millionNumMatch = text.match(/([\d,]+(?:\.\d+)?)\s*مليون/i);
+  if (millionNumMatch) {
+    const val = parseFloat(millionNumMatch[1].replace(/,/g, "")) * 1000000;
+    return { min: val, max: val };
+  }
+
+  // ─── Handle "X ألف" standalone pattern FIRST (highest priority for Arabic) ───
+  // Match "40 ألف" or "من 30 لـ 40 ألف" range with ألف
+  const rangeAlfMatch = text.match(/من\s*([\d,]+)\s*(?:ل|لـ|لحد|-|–)\s*([\d,]+)\s*(?:ألف|الف|k)\b/i);
+  if (rangeAlfMatch) {
+    const v1 = parseInt(rangeAlfMatch[1].replace(/,/g, ""), 10) * 1000;
+    const v2 = parseInt(rangeAlfMatch[2].replace(/,/g, ""), 10) * 1000;
+    return { min: v1, max: v2 };
+  }
+
+  const alfMatch = text.match(/([\d,]+)\s*(?:ألف|الف|k)\b/i);
+  if (alfMatch) {
+    const val = parseInt(alfMatch[1].replace(/,/g, ""), 10) * 1000;
+    // Check for range before this: "30-40 ألف" or "30 - 40 ألف"
+    const beforeAlf = text.substring(0, alfMatch.index ?? 0);
+    const rangeBefore = beforeAlf.match(/([\d,]+)\s*[-–]\s*$/);
+    if (rangeBefore) {
+      const v1 = parseInt(rangeBefore[1].replace(/,/g, ""), 10) * 1000;
+      return { min: v1, max: val };
+    }
+    return { min: val, max: val };
+  }
+
+  // ─── Standard patterns ───
   for (const { re, type } of BUDGET_PATTERNS) {
     const match = text.match(re);
     if (match) {
@@ -134,13 +170,6 @@ function extractBudget(text: string): { min: number | null; max: number | null }
       }
       return { min: v1, max: v1 };
     }
-  }
-
-  // Fallback: look for number + "ألف/الف/k"
-  const altMatch = text.match(/([\d,]+)\s*(?:ألف|الف|k)\b/i);
-  if (altMatch) {
-    const val = parseInt(altMatch[1].replace(/,/g, ""), 10) * 1000;
-    return { min: val, max: val };
   }
 
   // Fallback: standalone large number (not a phone)
@@ -289,6 +318,7 @@ export function parseBuyerPost(
  * 1. Try splitting on double blank lines (2+ newlines)
  * 2. If only 1 block, try splitting on horizontal rules (─── or === or ---)
  * 3. If still 1 block, try splitting on buy-request keywords (مطلوب, عايز, محتاج, etc.)
+ * 4. If still 1 block, try line-by-line — each line with a phone or buy keyword is a buyer
  */
 function splitIntoBuyerBlocks(text: string): string[] {
   // Step 1: Split on blank lines (1+ empty lines between blocks)
@@ -302,11 +332,49 @@ function splitIntoBuyerBlocks(text: string): string[] {
   if (blocks.length > 1) return blocks;
 
   // Step 3: Split on buy-request keywords (lookahead so keyword stays in block)
+  // Also match keywords that appear mid-line (e.g., "أحمد: مطلوب آيفون")
   blocks = text
-    .split(/(?=(?:^|\n)\s*(?:مطلوب|عايز|عاوز|محتاج|ابحث عن|بدور على))/m)
+    .split(/(?=(?:^|\n).*?(?:مطلوب|عايز\s+(?:اشتري?)?|عاوز\s+(?:اشتري?)?|محتاج|ابحث عن|بدور على))/m)
     .filter((b) => b.trim().length > 10);
 
-  return blocks;
+  if (blocks.length > 1) return blocks;
+
+  // Step 4: Line-by-line split — each line with a phone number OR buy keyword is a separate buyer
+  const lines = text.split("\n").filter((l) => l.trim().length > 10);
+  if (lines.length > 1) {
+    const lineBlocks: string[] = [];
+    let currentBlock = "";
+
+    for (const line of lines) {
+      const hasPhone = /01[0-2,5]\d{8}/.test(line);
+      const hasBuyKeyword = BUY_REQUEST_REGEX.test(line);
+      const hasProduct = detectCategory(line) !== "general";
+
+      if ((hasPhone || hasBuyKeyword || hasProduct) && currentBlock.trim().length > 0) {
+        // Check if current line is a continuation or a new buyer
+        const currentHasPhone = /01[0-2,5]\d{8}/.test(currentBlock);
+        if (currentHasPhone && (hasPhone || hasBuyKeyword)) {
+          // Current block already has a phone → this is a new buyer
+          lineBlocks.push(currentBlock.trim());
+          currentBlock = line;
+        } else {
+          // Append to current block
+          currentBlock += "\n" + line;
+        }
+      } else if (currentBlock.trim().length === 0 && (hasPhone || hasBuyKeyword || hasProduct)) {
+        currentBlock = line;
+      } else {
+        currentBlock += "\n" + line;
+      }
+    }
+    if (currentBlock.trim().length > 10) {
+      lineBlocks.push(currentBlock.trim());
+    }
+
+    if (lineBlocks.length > 1) return lineBlocks;
+  }
+
+  return blocks.length > 0 ? blocks : [text];
 }
 
 export function parseMultiplePosts(

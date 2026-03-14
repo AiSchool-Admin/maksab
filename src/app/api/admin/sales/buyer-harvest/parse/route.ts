@@ -110,9 +110,15 @@ async function parseWithClaude(text: string, apiKey: string): Promise<ParsedResu
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 4096,
-      system: `أنت محلل بيانات. استخرج كل طلبات الشراء ("مطلوب") من النص.
+      system: `أنت محلل بيانات. استخرج كل طلبات الشراء ("مطلوب") من النص. استخرج كل المشترين — مش أول واحد بس.
 لكل طلب استخرج: الاسم، الرقم (01XXXXXXXXX)، المنتج المطلوب، الميزانية، الموقع/المحافظة، الحالة (جديد/مستعمل).
-ارجع JSON array فقط بدون أي نص إضافي.
+مهم جداً: حوّل الأرقام العربية للقيمة الحقيقية:
+- "40 ألف" = 40000
+- "25 الف" = 25000
+- "مليون" = 1000000
+- "نص مليون" = 500000
+- "ربع مليون" = 250000
+ارجع JSON array فقط بدون أي نص إضافي. لو فيه أكتر من مشتري، ارجعهم كلهم في الـ array.
 المفاتيح: name, phone, product, budget_min, budget_max, location, condition, category
 الفئات المتاحة: phones, vehicles, properties, electronics, furniture, gold, appliances, general`,
       messages: [{ role: "user", content: text.substring(0, 8000) }],
@@ -132,20 +138,34 @@ async function parseWithClaude(text: string, apiKey: string): Promise<ParsedResu
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    return parsed.map((item: any) => ({
-      buyer_name: item.name || null,
-      buyer_phone: item.phone || null,
-      product_wanted: item.product || null,
-      category: item.category || detectCategory(item.product || ""),
-      budget_min: item.budget_min || item.budget || null,
-      budget_max: item.budget_max || item.budget || null,
-      governorate: item.location || null,
-      condition_wanted: item.condition || null,
-      buyer_tier: "unknown",
-      buyer_score: 0,
-      matches_count: 0,
-      original_text: "",
-    }));
+    return parsed.map((item: any) => {
+      // Normalize budget values — Claude may return "40" instead of 40000
+      let budgetMin = item.budget_min || item.budget || null;
+      let budgetMax = item.budget_max || item.budget || null;
+
+      // If budget looks suspiciously low (< 200), it's likely in thousands
+      if (budgetMin !== null && budgetMin > 0 && budgetMin < 200) {
+        budgetMin *= 1000;
+      }
+      if (budgetMax !== null && budgetMax > 0 && budgetMax < 200) {
+        budgetMax *= 1000;
+      }
+
+      return {
+        buyer_name: item.name || null,
+        buyer_phone: item.phone || null,
+        product_wanted: item.product || null,
+        category: item.category || detectCategory(item.product || ""),
+        budget_min: budgetMin,
+        budget_max: budgetMax,
+        governorate: item.location || null,
+        condition_wanted: item.condition || null,
+        buyer_tier: "unknown",
+        buyer_score: 0,
+        matches_count: 0,
+        original_text: "",
+      };
+    });
   } catch {
     return parseWithRegex(text, "facebook_group");
   }
