@@ -2292,6 +2292,236 @@ async function handleHarvestStatus(_req: IncomingMessage, res: ServerResponse) {
   }
 }
 
+// ─── Test Dubizzle "Wanted" URLs ─────────────────────────────
+async function handleTestDubizzleWanted(_req: IncomingMessage, res: ServerResponse) {
+  console.log("[API] GET /test/dubizzle-wanted — testing wanted ad URLs");
+
+  const testUrls = [
+    { label: "phones + ad_type=wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/?ad_type=wanted" },
+    { label: "phones + filter=type_wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/?filter=type_wanted" },
+    { label: "phones + listing_type=wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/?listing_type=wanted" },
+    { label: "phones + ad_posting_type=wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/?ad_posting_type=wanted" },
+    { label: "phones cairo + ad_type=wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/cairo/?ad_type=wanted" },
+    { label: "phones (no filter — baseline)", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/" },
+    { label: "vehicles + ad_type=wanted", url: "https://www.dubizzle.com.eg/ar/vehicles/cars-for-sale/?ad_type=wanted" },
+    { label: "properties + ad_type=wanted", url: "https://www.dubizzle.com.eg/ar/properties/apartments-duplex-for-sale/?ad_type=wanted" },
+  ];
+
+  const results: Array<{
+    label: string;
+    url: string;
+    status: number | string;
+    bodyLength: number;
+    articlesFound: number;
+    firstTitles: string[];
+    error?: string;
+  }> = [];
+
+  for (const t of testUrls) {
+    try {
+      const resp = await fetch(t.url, {
+        headers: BROWSER_HEADERS,
+        redirect: "follow",
+      });
+      const html = await resp.text();
+      const $ = cheerio.load(html);
+
+      const titles: string[] = [];
+      $("article").each(function () {
+        if (titles.length >= 3) return;
+        const adLink = $(this).find('a[href*="/ad/"]').first();
+        const titleEl = $(this).find("h2, h3, [data-testid*='title'], [class*='title']").first();
+        const title = titleEl.text().trim() || adLink.text().trim() || $(this).text().trim().substring(0, 80);
+        if (title) titles.push(title);
+      });
+
+      results.push({
+        label: t.label,
+        url: t.url,
+        status: resp.status,
+        bodyLength: html.length,
+        articlesFound: $("article").length,
+        firstTitles: titles,
+      });
+    } catch (err: any) {
+      results.push({
+        label: t.label,
+        url: t.url,
+        status: "error",
+        bodyLength: 0,
+        articlesFound: 0,
+        firstTitles: [],
+        error: err.message,
+      });
+    }
+
+    // Rate limiting: 3s between requests
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+
+  // Find the best URL (most articles, not same as baseline)
+  const baseline = results.find((r) => r.label.includes("baseline"));
+  const wantedResults = results.filter((r) => !r.label.includes("baseline"));
+  const bestWanted = wantedResults
+    .filter((r) => r.articlesFound > 0)
+    .sort((a, b) => {
+      // If article count differs from baseline, it might be filtering
+      const aDiff = baseline ? Math.abs(a.articlesFound - baseline.articlesFound) : a.articlesFound;
+      const bDiff = baseline ? Math.abs(b.articlesFound - baseline.articlesFound) : b.articlesFound;
+      return bDiff - aDiff || b.articlesFound - a.articlesFound;
+    })[0];
+
+  sendJson(res, {
+    message: "Dubizzle 'wanted' URL test results",
+    baseline: baseline ? { articles: baseline.articlesFound, bodyLength: baseline.bodyLength } : null,
+    bestCandidate: bestWanted ? { label: bestWanted.label, url: bestWanted.url, articles: bestWanted.articlesFound } : null,
+    results,
+  });
+}
+
+// ─── Reverse Buyers: Sellers → Potential Buyers ──────────────
+const UPGRADE_MAP: Record<string, { pattern: RegExp; upgrades: string[] }[]> = {
+  phones: [
+    { pattern: /آيفون\s*(\d+)/i, upgrades: ["آيفون {next}", "آيفون {next2}"] },
+    { pattern: /iPhone\s*(\d+)/i, upgrades: ["iPhone {next}", "iPhone {next2}"] },
+    { pattern: /سامسونج\s*S(\d+)/i, upgrades: ["سامسونج S{next}", "سامسونج S{next2}"] },
+    { pattern: /Samsung\s*S(\d+)/i, upgrades: ["Samsung S{next}", "Samsung S{next2}"] },
+    { pattern: /شاومي|Xiaomi|ريدمي|Redmi/i, upgrades: ["النسخة الأحدث من شاومي"] },
+    { pattern: /أوبو|Oppo|ريلمي|Realme/i, upgrades: ["النسخة الأحدث من أوبو/ريلمي"] },
+    { pattern: /هواوي|Huawei/i, upgrades: ["النسخة الأحدث من هواوي"] },
+  ],
+  vehicles: [
+    { pattern: /(\d{4})/i, upgrades: ["موديل أحدث ({next_year}+)"] },
+  ],
+  electronics: [
+    { pattern: /.+/, upgrades: ["ترقية أو بديل أحدث"] },
+  ],
+};
+
+function generateUpgradeDescription(title: string, category: string): string | null {
+  const rules = UPGRADE_MAP[category] || UPGRADE_MAP.electronics || [];
+
+  for (const rule of rules) {
+    const match = title.match(rule.pattern);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num)) {
+        return rule.upgrades
+          .map((u) =>
+            u
+              .replace("{next}", String(num + 1))
+              .replace("{next2}", String(num + 2))
+              .replace("{next_year}", String(num + 1))
+          )
+          .join(" أو ");
+      }
+      return rule.upgrades[0];
+    }
+  }
+
+  return `ترقية من ${title}`;
+}
+
+async function generateReverseBuyers(): Promise<{
+  processed: number;
+  created: number;
+  skipped_existing: number;
+  skipped_no_phone: number;
+}> {
+  const supabase = getSupabase();
+
+  // Get sellers with phones who haven't been reverse-converted yet
+  const { data: sellers } = await supabase
+    .from("ahe_sellers")
+    .select("id, phone, name, primary_category, primary_governorate, total_listings_seen, pipeline_status")
+    .not("phone", "is", null)
+    .in("pipeline_status", ["discovered", "phone_found", "contacted", "responded"])
+    .order("total_listings_seen", { ascending: false })
+    .limit(100);
+
+  if (!sellers || sellers.length === 0) {
+    console.log("[Reverse Buyers] No eligible sellers found");
+    return { processed: 0, created: 0, skipped_existing: 0, skipped_no_phone: 0 };
+  }
+
+  console.log(`[Reverse Buyers] Processing ${sellers.length} sellers`);
+
+  // Get most recent listing title for each seller
+  let created = 0;
+  let skippedExisting = 0;
+
+  for (const seller of sellers) {
+    // Check if already exists as reverse buyer
+    const { data: existing } = await supabase
+      .from("bhe_buyers")
+      .select("id")
+      .eq("source", "reverse_seller")
+      .eq("buyer_phone", seller.phone)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      skippedExisting++;
+      continue;
+    }
+
+    // Get seller's most recent listing title
+    const { data: listings } = await supabase
+      .from("ahe_listings")
+      .select("title, price, maksab_category")
+      .eq("ahe_seller_id", seller.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const latestListing = listings?.[0];
+    const category = seller.primary_category || latestListing?.maksab_category || "other";
+    const productTitle = latestListing?.title || "منتج";
+    const upgradeDesc = generateUpgradeDescription(productTitle, category);
+
+    const buyerRecord = {
+      source: "reverse_seller",
+      source_url: null,
+      source_platform: "dubizzle",
+      buyer_name: seller.name,
+      buyer_phone: seller.phone,
+      product_wanted: upgradeDesc || `ترقية من ${productTitle}`,
+      category,
+      governorate: seller.primary_governorate,
+      original_text: `بائع حالي يبيع: ${productTitle}`,
+      buyer_tier: "warm_buyer",
+      buyer_score: 50,
+      estimated_purchase_value: latestListing?.price ? Math.round(Number(latestListing.price) * 1.3) : 0,
+      pipeline_status: "discovered",
+      is_duplicate: false,
+    };
+
+    const { error } = await supabase.from("bhe_buyers").insert(buyerRecord);
+    if (!error) {
+      created++;
+    } else {
+      console.log(`[Reverse Buyers] Insert error for ${seller.phone}: ${error.message}`);
+    }
+  }
+
+  console.log(`[Reverse Buyers] Done: processed=${sellers.length}, created=${created}, skipped=${skippedExisting}`);
+  return {
+    processed: sellers.length,
+    created,
+    skipped_existing: skippedExisting,
+    skipped_no_phone: 0,
+  };
+}
+
+async function handleReverseBuyers(_req: IncomingMessage, res: ServerResponse) {
+  try {
+    console.log("[API] GET /cron/reverse-buyers — generating reverse buyers from sellers");
+    const result = await generateReverseBuyers();
+    sendJson(res, { message: "Reverse buyers generation complete", ...result });
+  } catch (err: any) {
+    console.error(`[API] /cron/reverse-buyers error: ${err.message}`);
+    sendJson(res, { error: true, message: err.message }, 500);
+  }
+}
+
 // ─── HTTP Server ──────────────────────────────────────────────
 const server = createServer(async (req, res) => {
   // Handle CORS preflight
@@ -2320,6 +2550,10 @@ const server = createServer(async (req, res) => {
       await handleOutreach(req, res);
     } else if (path === "/cron/buyer-match") {
       await handleBuyerMatch(req, res);
+    } else if (path === "/cron/reverse-buyers") {
+      await handleReverseBuyers(req, res);
+    } else if (path === "/test/dubizzle-wanted") {
+      await handleTestDubizzleWanted(req, res);
     } else if (path === "/health") {
       sendJson(res, {
         ok: true,
@@ -2337,6 +2571,8 @@ const server = createServer(async (req, res) => {
           "GET /cron/enrich": "Enrich listings without phone/name (detail fetch)",
           "GET /cron/outreach": "Process outreach to new sellers + follow-ups",
           "GET /cron/buyer-match": "Match buyers to listings (BHE)",
+          "GET /cron/reverse-buyers": "Generate reverse buyers from sellers (BHE)",
+          "GET /test/dubizzle-wanted": "Test Dubizzle wanted ad URLs",
           "GET /health": "Health check",
         },
       });
@@ -2399,7 +2635,17 @@ server.listen(PORT, () => {
       console.log('[Auto-BHE] Error:', e.message);
     }
 
-    // خامساً: حساب التوازن + إرسال تنبيهات (Phase 4)
+    // خامساً: BHE — توليد مشترين عكسيين من البائعين
+    try {
+      await new Promise((r) => setTimeout(r, 3000));
+      console.log('[Auto-ReverseBuyers] Generating reverse buyers from sellers...');
+      const reverseResult = await generateReverseBuyers();
+      console.log('[Auto-ReverseBuyers] Complete:', JSON.stringify(reverseResult));
+    } catch (e: any) {
+      console.log('[Auto-ReverseBuyers] Error:', e.message);
+    }
+
+    // سادساً: حساب التوازن + إرسال تنبيهات (Phase 4)
     try {
       await new Promise((r) => setTimeout(r, 3000));
       console.log('[Auto-Balance] Calculating market balance...');

@@ -64,6 +64,7 @@ export default function BuyerHarvestPage() {
   const [activeTab, setActiveTab] = useState("buyers");
   const [tierFilter, setTierFilter] = useState<string>("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [sourceFilter, setSourceFilter] = useState<string>("");
 
   const fetchData = async () => {
     setLoading(true);
@@ -76,6 +77,7 @@ export default function BuyerHarvestPage() {
           `/api/admin/sales/buyer-harvest?${new URLSearchParams({
             ...(tierFilter && { tier: tierFilter }),
             ...(categoryFilter && { category: categoryFilter }),
+            ...(sourceFilter && { source: sourceFilter }),
             limit: "50",
           })}`,
           { headers }
@@ -96,7 +98,7 @@ export default function BuyerHarvestPage() {
 
   useEffect(() => {
     fetchData();
-  }, [tierFilter, categoryFilter]);
+  }, [tierFilter, categoryFilter, sourceFilter]);
 
   if (loading && !stats) {
     return (
@@ -201,6 +203,39 @@ export default function BuyerHarvestPage() {
           <option value="gold">💰 ذهب</option>
           <option value="appliances">🏠 أجهزة</option>
         </select>
+        <div className="h-4 w-px bg-gray-200" />
+        <button
+          onClick={() => setSourceFilter(sourceFilter === "dubizzle_wanted" ? "" : "dubizzle_wanted")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+            sourceFilter === "dubizzle_wanted" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          🔍 dubizzle مطلوب
+        </button>
+        <button
+          onClick={() => setSourceFilter(sourceFilter === "reverse_seller" ? "" : "reverse_seller")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+            sourceFilter === "reverse_seller" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          🔄 بائع ← مشتري
+        </button>
+        <button
+          onClick={() => setSourceFilter(sourceFilter === "facebook_group" ? "" : "facebook_group")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+            sourceFilter === "facebook_group" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          👥 فيسبوك
+        </button>
+        <button
+          onClick={() => setSourceFilter(sourceFilter === "manual" ? "" : "manual")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+            sourceFilter === "manual" ? "bg-gray-200 text-gray-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          ✏️ يدوي
+        </button>
       </div>
 
       {/* Buyers Table */}

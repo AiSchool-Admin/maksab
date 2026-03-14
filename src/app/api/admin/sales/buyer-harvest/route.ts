@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     const tier = searchParams.get("tier");
     const category = searchParams.get("category");
     const governorate = searchParams.get("governorate");
+    const source = searchParams.get("source");
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "50", 10);
     const offset = (page - 1) * limit;
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
     if (tier) query = query.eq("buyer_tier", tier);
     if (category) query = query.eq("category", category);
     if (governorate) query = query.eq("governorate", governorate);
+    if (source) query = query.eq("source", source);
 
     const { data: buyers, count, error } = await query;
 
