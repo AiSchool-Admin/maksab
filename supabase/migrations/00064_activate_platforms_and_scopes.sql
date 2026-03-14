@@ -1,6 +1,10 @@
 -- ============================================================
 -- Migration 00064: Activate Tested Platforms + Fix URLs + Create Scopes
 -- تفعيل المنصات المُختَبَرة + إصلاح الروابط + إنشاء النطاقات
+-- Based on real testing results:
+--   opensooq properties: 65 listings ✅
+--   aqarmap: 54 listings ✅
+--   dowwr: 12 listings ✅
 -- ============================================================
 
 -- ═══ 1. Activate opensooq + aqarmap + dowwr ═══
@@ -21,6 +25,12 @@ UPDATE ahe_category_mappings SET
   source_url_segment = 'mobiles-tablets',
   source_url_template = 'https://eg.opensooq.com/ar/{gov}/mobiles-tablets'
 WHERE source_platform = 'opensooq' AND maksab_category = 'phones';
+
+-- properties: correct path is "real-estate" not "properties"
+UPDATE ahe_category_mappings SET
+  source_url_segment = 'real-estate',
+  source_url_template = 'https://eg.opensooq.com/ar/{gov}/real-estate'
+WHERE source_platform = 'opensooq' AND maksab_category = 'properties';
 
 -- vehicles: URL works but parser needed update (done in code)
 -- Keep existing URL template as-is
@@ -50,12 +60,12 @@ INSERT INTO ahe_category_mappings (maksab_category, maksab_category_ar, source_p
 ('electronics', 'إلكترونيات', 'soq24', 'Electronics', 'electronics', 'https://soq24.com/adsCountry/2?category=electronics', true)
 ON CONFLICT DO NOTHING;
 
--- ═══ 4. Add Dowwr category mappings ═══
+-- ═══ 4. Add Dowwr category mappings (correct URL: /ads/{category}) ═══
 INSERT INTO ahe_category_mappings (maksab_category, maksab_category_ar, source_platform, source_category_name, source_url_segment, source_url_template, is_active) VALUES
-('phones', 'موبايلات', 'dowwr', 'Phones', 'phones', 'https://eg.dowwr.com/ar/phones', true),
-('vehicles', 'سيارات', 'dowwr', 'Cars', 'cars', 'https://eg.dowwr.com/ar/cars', true),
-('properties', 'عقارات', 'dowwr', 'Properties', 'properties', 'https://eg.dowwr.com/ar/properties', true),
-('electronics', 'إلكترونيات', 'dowwr', 'Electronics', 'electronics', 'https://eg.dowwr.com/ar/electronics', true)
+('phones', 'موبايلات', 'dowwr', 'Phones', 'phones', 'https://eg.dowwr.com/ads/phones', true),
+('vehicles', 'سيارات', 'dowwr', 'Cars', 'cars', 'https://eg.dowwr.com/ads/cars', true),
+('properties', 'عقارات', 'dowwr', 'Properties', 'properties', 'https://eg.dowwr.com/ads/properties', true),
+('electronics', 'إلكترونيات', 'dowwr', 'Electronics', 'electronics', 'https://eg.dowwr.com/ads/electronics', true)
 ON CONFLICT DO NOTHING;
 
 -- ═══ 5. Add Dowwr governorate mappings ═══
@@ -67,43 +77,59 @@ INSERT INTO ahe_governorate_mappings (maksab_governorate, maksab_governorate_ar,
 ('sharqia', 'الشرقية', 'dowwr', 'Sharqia', 'sharqia', 10, 360, true, 'B')
 ON CONFLICT DO NOTHING;
 
--- ═══ 6. Create scopes for opensooq properties (Cairo) ═══
+-- ═══ 6. Create scopes for opensooq properties (Cairo + Alexandria + Giza) ═══
 INSERT INTO ahe_scopes (code, name, source_platform, maksab_category, governorate, base_url,
   pagination_pattern, harvest_interval_minutes, max_pages_per_harvest,
   delay_between_requests_ms, detail_fetch_enabled, detail_delay_between_requests_ms,
   is_active, priority, scope_group)
 VALUES
-('osq_properties_cairo', 'عقارات — القاهرة — السوق المفتوح', 'opensooq', 'properties', 'cairo',
-  'https://eg.opensooq.com/ar/cairo/properties',
-  '?page={page}', 60, 3, 3000, true, 3000, true, 8, 'general')
-ON CONFLICT (code) DO NOTHING;
-
--- ═══ 7. Create scopes for aqarmap (Cairo sale + rent) ═══
-INSERT INTO ahe_scopes (code, name, source_platform, maksab_category, governorate, base_url,
-  pagination_pattern, harvest_interval_minutes, max_pages_per_harvest,
-  delay_between_requests_ms, detail_fetch_enabled, detail_delay_between_requests_ms,
-  is_active, priority, scope_group)
-VALUES
-('aqr_sale_cairo', 'عقارات بيع — القاهرة — عقارماب', 'aqarmap', 'properties', 'cairo',
-  'https://aqarmap.com.eg/en/for-sale/apartment/cairo/',
+('opensooq_properties_cairo', 'عقارات — القاهرة — السوق المفتوح', 'opensooq', 'properties', 'cairo',
+  'https://eg.opensooq.com/ar/cairo/real-estate',
   '?page={page}', 60, 3, 3000, true, 3000, true, 8, 'general'),
 
-('aqr_rent_cairo', 'عقارات إيجار — القاهرة — عقارماب', 'aqarmap', 'properties', 'cairo',
-  'https://aqarmap.com.eg/en/for-rent/apartment/cairo/',
+('opensooq_properties_alexandria', 'عقارات — الإسكندرية — السوق المفتوح', 'opensooq', 'properties', 'alexandria',
+  'https://eg.opensooq.com/ar/alexandria/real-estate',
+  '?page={page}', 120, 2, 3000, true, 3000, true, 6, 'general'),
+
+('opensooq_properties_giza', 'عقارات — الجيزة — السوق المفتوح', 'opensooq', 'properties', 'giza',
+  'https://eg.opensooq.com/ar/giza/real-estate',
   '?page={page}', 120, 2, 3000, true, 3000, true, 6, 'general')
 ON CONFLICT (code) DO NOTHING;
 
--- ═══ 8. Create scopes for dowwr (phones + electronics) ═══
+-- ═══ 7. Create scopes for aqarmap (Cairo + Alexandria — sale + rent) ═══
 INSERT INTO ahe_scopes (code, name, source_platform, maksab_category, governorate, base_url,
   pagination_pattern, harvest_interval_minutes, max_pages_per_harvest,
   delay_between_requests_ms, detail_fetch_enabled, detail_delay_between_requests_ms,
   is_active, priority, scope_group)
 VALUES
-('dwwr_phones', 'موبايلات — دوّر', 'dowwr', 'phones', 'cairo',
-  'https://eg.dowwr.com/ar/phones',
-  '?page={page}', 120, 2, 3000, true, 3000, true, 5, 'general'),
+('aqarmap_sale_cairo', 'عقارات بيع — القاهرة — عقارماب', 'aqarmap', 'properties', 'cairo',
+  'https://aqarmap.com.eg/en/for-sale/apartment/cairo/',
+  '?page={page}', 60, 3, 3000, true, 3000, true, 8, 'general'),
 
-('dwwr_electronics', 'إلكترونيات — دوّر', 'dowwr', 'electronics', 'cairo',
-  'https://eg.dowwr.com/ar/electronics',
-  '?page={page}', 180, 2, 3000, true, 3000, true, 4, 'general')
+('aqarmap_rent_cairo', 'عقارات إيجار — القاهرة — عقارماب', 'aqarmap', 'properties', 'cairo',
+  'https://aqarmap.com.eg/en/for-rent/apartment/cairo/',
+  '?page={page}', 120, 2, 3000, true, 3000, true, 6, 'general'),
+
+('aqarmap_sale_alexandria', 'عقارات بيع — الإسكندرية — عقارماب', 'aqarmap', 'properties', 'alexandria',
+  'https://aqarmap.com.eg/en/for-sale/apartment/alexandria/',
+  '?page={page}', 120, 2, 3000, true, 3000, true, 6, 'general'),
+
+('aqarmap_rent_alexandria', 'عقارات إيجار — الإسكندرية — عقارماب', 'aqarmap', 'properties', 'alexandria',
+  'https://aqarmap.com.eg/en/for-rent/apartment/alexandria/',
+  '?page={page}', 120, 2, 3000, true, 3000, true, 5, 'general')
+ON CONFLICT (code) DO NOTHING;
+
+-- ═══ 8. Create scopes for dowwr (phones + electronics — Cairo) ═══
+INSERT INTO ahe_scopes (code, name, source_platform, maksab_category, governorate, base_url,
+  pagination_pattern, harvest_interval_minutes, max_pages_per_harvest,
+  delay_between_requests_ms, detail_fetch_enabled, detail_delay_between_requests_ms,
+  is_active, priority, scope_group)
+VALUES
+('dowwr_phones_cairo', 'موبايلات — القاهرة — دوّر', 'dowwr', 'phones', 'cairo',
+  'https://eg.dowwr.com/ads/phones',
+  '?page={page}', 360, 2, 3000, true, 3000, true, 5, 'general'),
+
+('dowwr_electronics_cairo', 'إلكترونيات — القاهرة — دوّر', 'dowwr', 'electronics', 'cairo',
+  'https://eg.dowwr.com/ads/electronics',
+  '?page={page}', 360, 2, 3000, true, 3000, true, 4, 'general')
 ON CONFLICT (code) DO NOTHING;
