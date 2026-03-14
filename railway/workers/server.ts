@@ -662,10 +662,50 @@ async function fetchAndExtractDetail(
   }
 
   // ═══ BHE: Detect "مطلوب للشراء" (buy request) ads ═══
-  const isBuyRequest =
-    bodyText.includes('مطلوب للشراء') ||
-    bodyText.includes('مطلوب للشرا') ||
-    /نوع الإعلان[:\s]*مطلوب/i.test(bodyText);
+  // Must read the "نوع الإعلان" field specifically — NOT search full page text
+  // (page nav/buttons/filters contain "مطلوب" which caused false positives)
+  let isBuyRequest = false;
+
+  // Method 1: Regex on bodyText — match "نوع الإعلان" label then read its value
+  const adTypeMatch = bodyText.match(/نوع الإعلان[\s:]*([^\n]{3,30})/);
+  if (adTypeMatch) {
+    const adTypeValue = adTypeMatch[1].trim();
+    isBuyRequest = adTypeValue.includes('مطلوب') && !adTypeValue.includes('معروض');
+    console.log('[BHE] Ad type field (regex):', adTypeValue, '→ isBuyRequest:', isBuyRequest);
+  }
+
+  // Method 2: DOM — find the element with "نوع الإعلان" label and read the adjacent value
+  if (!adTypeMatch) {
+    $detail('span, div, li, td, dt, th').each(function(this: any) {
+      const text = $detail(this).text().trim();
+      if (text === 'نوع الإعلان' || text === 'نوع الإعلان:') {
+        const nextEl = $detail(this).next();
+        const value = nextEl.text().trim();
+        if (value.includes('مطلوب') && !value.includes('معروض')) {
+          isBuyRequest = true;
+        }
+        console.log('[BHE] Ad type element (DOM):', value, '→ isBuyRequest:', isBuyRequest);
+        return false; // break .each()
+      }
+    });
+  }
+
+  // Method 3: JSON-LD structured data
+  if (!adTypeMatch && !isBuyRequest) {
+    $detail('script[type="application/ld+json"]').each(function(this: any) {
+      try {
+        const json = JSON.parse($detail(this).html() || '');
+        if (json.additionalProperty) {
+          for (const prop of json.additionalProperty) {
+            if (prop.name === 'نوع الإعلان' || prop.name === 'ad_type') {
+              if (prop.value?.includes('مطلوب')) isBuyRequest = true;
+              console.log('[BHE] Ad type JSON-LD:', prop.value, '→ isBuyRequest:', isBuyRequest);
+            }
+          }
+        }
+      } catch {}
+    });
+  }
 
   if (isBuyRequest) {
     const detailTitle = $detail('h1').first().text().trim() || '';
