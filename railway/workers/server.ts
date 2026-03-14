@@ -698,32 +698,41 @@ async function fetchAndExtractDetail(
       return null;
     })();
 
-    console.log(`[BHE] Buy request found: ${detailTitle.substring(0, 50)}`);
+    const buyerData = {
+      source: 'dubizzle_wanted',
+      source_url: listing.source_listing_url || null,
+      source_platform: 'dubizzle',
+      buyer_name: sellerName || null,
+      buyer_phone: phone || null,
+      buyer_profile_url: sellerProfileUrl || null,
+      product_wanted: detailTitle || 'مطلوب',
+      category: detailCategory,
+      governorate: detailGovernorate,
+      budget_max: detailPrice || null,
+      estimated_purchase_value: detailPrice || 0,
+      original_text: ((detailTitle || '') + ' - ' + (description || '').substring(0, 200)).substring(0, 500),
+      buyer_tier: phone ? 'hot_buyer' : 'warm_buyer',
+      buyer_score: phone ? 80 : 50,
+      pipeline_status: phone ? 'phone_found' : 'discovered',
+      harvested_at: new Date().toISOString(),
+    };
+
+    console.log(`[BHE] Buy request found: "${detailTitle.substring(0, 50)}" | phone=${phone || 'none'} | cat=${detailCategory} | gov=${detailGovernorate || 'none'} | price=${detailPrice || 'none'}`);
+    console.log(`[BHE] Inserting buyer data:`, JSON.stringify(buyerData).substring(0, 300));
 
     try {
-      await supabase.from('bhe_buyers').insert({
-        source: 'dubizzle_wanted',
-        source_url: listing.source_listing_url,
-        source_platform: 'dubizzle',
-        buyer_name: sellerName,
-        buyer_phone: phone,
-        buyer_profile_url: sellerProfileUrl,
-        product_wanted: detailTitle || null,
-        product_interested_in: detailTitle || null,
-        category: detailCategory,
-        governorate: detailGovernorate,
-        budget_max: detailPrice || null,
-        estimated_purchase_value: detailPrice || 0,
-        original_text: ((detailTitle || '') + ' - ' + (description || '').substring(0, 200)).substring(0, 500),
-        buyer_tier: phone ? 'hot_buyer' : 'warm_buyer',
-        buyer_score: phone ? 80 : 50,
-        pipeline_status: phone ? 'phone_found' : 'discovered',
-        harvested_at: new Date().toISOString(),
-      });
-    } catch (e: any) {
-      if (!e.message?.includes('duplicate')) {
-        console.log('[BHE] Buy request insert error:', e.message);
+      const { data: insertData, error: insertError } = await supabase
+        .from('bhe_buyers')
+        .insert(buyerData)
+        .select('id');
+
+      if (insertError) {
+        console.log(`[BHE] ❌ INSERT ERROR: code=${insertError.code} msg="${insertError.message}" details="${insertError.details}" hint="${insertError.hint}"`);
+      } else {
+        console.log(`[BHE] ✅ Buyer saved: id=${insertData?.[0]?.id}`);
       }
+    } catch (e: any) {
+      console.log(`[BHE] ❌ EXCEPTION on insert: ${e.message}`);
     }
 
     // Mark listing as buy request
