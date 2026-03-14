@@ -661,6 +661,77 @@ async function fetchAndExtractDetail(
     console.log(`[Detail] ✅ Phone ${phone} for listing ${listing.id}`);
   }
 
+  // ═══ BHE: Detect "مطلوب للشراء" (buy request) ads ═══
+  const isBuyRequest =
+    bodyText.includes('مطلوب للشراء') ||
+    bodyText.includes('مطلوب للشرا') ||
+    /نوع الإعلان[:\s]*مطلوب/i.test(bodyText);
+
+  if (isBuyRequest) {
+    const detailTitle = $detail('h1').first().text().trim() || '';
+    const detailPrice = (() => {
+      const priceMatch = bodyText.match(/([\d,]+)\s*ج\.م/);
+      return priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : null;
+    })();
+    const detailCategory = (() => {
+      const url = listing.source_listing_url || '';
+      if (/mobile|phone|هاتف/.test(url)) return 'phones';
+      if (/vehicle|car|سيار/.test(url)) return 'vehicles';
+      if (/propert|عقار/.test(url)) return 'properties';
+      if (/electron/.test(url)) return 'electronics';
+      if (/furniture|أثاث/.test(url)) return 'furniture';
+      return 'general';
+    })();
+    const detailGovernorate = (() => {
+      const url = listing.source_listing_url || '';
+      const govMap: Record<string, string> = {
+        'cairo': 'القاهرة', 'giza': 'الجيزة', 'alexandria': 'الإسكندرية',
+        'dakahlia': 'الدقهلية', 'sharqia': 'الشرقية', 'qalyubia': 'القليوبية',
+        'gharbia': 'الغربية', 'monufia': 'المنوفية', 'beheira': 'البحيرة',
+        'minya': 'المنيا', 'asyut': 'أسيوط', 'sohag': 'سوهاج',
+        'fayoum': 'الفيوم', 'port-said': 'بورسعيد', 'ismailia': 'الإسماعيلية',
+        'suez': 'السويس', 'damietta': 'دمياط', 'luxor': 'الأقصر', 'aswan': 'أسوان',
+      };
+      for (const [eng, ar] of Object.entries(govMap)) {
+        if (url.toLowerCase().includes(eng)) return ar;
+      }
+      return null;
+    })();
+
+    console.log(`[BHE] Buy request found: ${detailTitle.substring(0, 50)}`);
+
+    try {
+      await supabase.from('bhe_buyers').insert({
+        source: 'dubizzle_wanted',
+        source_url: listing.source_listing_url,
+        source_platform: 'dubizzle',
+        buyer_name: sellerName,
+        buyer_phone: phone,
+        buyer_profile_url: sellerProfileUrl,
+        product_wanted: detailTitle || null,
+        product_interested_in: detailTitle || null,
+        category: detailCategory,
+        governorate: detailGovernorate,
+        budget_max: detailPrice || null,
+        estimated_purchase_value: detailPrice || 0,
+        original_text: ((detailTitle || '') + ' - ' + (description || '').substring(0, 200)).substring(0, 500),
+        buyer_tier: phone ? 'hot_buyer' : 'warm_buyer',
+        buyer_score: phone ? 80 : 50,
+        pipeline_status: phone ? 'phone_found' : 'discovered',
+        harvested_at: new Date().toISOString(),
+      });
+    } catch (e: any) {
+      if (!e.message?.includes('duplicate')) {
+        console.log('[BHE] Buy request insert error:', e.message);
+      }
+    }
+
+    // Mark listing as buy request
+    await supabase.from('ahe_listings')
+      .update({ is_buy_request: true })
+      .eq('id', listing.id);
+  }
+
   // ═══ BHE: Extract buyer comments ═══
   try {
     await extractBuyerComments(supabase, $detail, listing, bodyText);
@@ -2292,332 +2363,6 @@ async function handleHarvestStatus(_req: IncomingMessage, res: ServerResponse) {
   }
 }
 
-// ─── Test Dubizzle "Wanted" URLs ─────────────────────────────
-async function handleTestDubizzleWanted(_req: IncomingMessage, res: ServerResponse) {
-  console.log("[API] GET /test/dubizzle-wanted — testing wanted ad URLs");
-
-  const testUrls = [
-    { label: "phones + ad_type=wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/?ad_type=wanted" },
-    { label: "phones + filter=type_wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/?filter=type_wanted" },
-    { label: "phones + listing_type=wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/?listing_type=wanted" },
-    { label: "phones + ad_posting_type=wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/?ad_posting_type=wanted" },
-    { label: "phones cairo + ad_type=wanted", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/cairo/?ad_type=wanted" },
-    { label: "phones (no filter — baseline)", url: "https://www.dubizzle.com.eg/ar/mobiles/mobile-phones/" },
-    { label: "vehicles + ad_type=wanted", url: "https://www.dubizzle.com.eg/ar/vehicles/cars-for-sale/?ad_type=wanted" },
-    { label: "properties + ad_type=wanted", url: "https://www.dubizzle.com.eg/ar/properties/apartments-duplex-for-sale/?ad_type=wanted" },
-  ];
-
-  const results: Array<{
-    label: string;
-    url: string;
-    status: number | string;
-    bodyLength: number;
-    articlesFound: number;
-    firstTitles: string[];
-    error?: string;
-  }> = [];
-
-  for (const t of testUrls) {
-    try {
-      const resp = await fetch(t.url, {
-        headers: BROWSER_HEADERS,
-        redirect: "follow",
-      });
-      const html = await resp.text();
-      const $ = cheerio.load(html);
-
-      const titles: string[] = [];
-      $("article").each(function () {
-        if (titles.length >= 3) return;
-        const adLink = $(this).find('a[href*="/ad/"]').first();
-        const titleEl = $(this).find("h2, h3, [data-testid*='title'], [class*='title']").first();
-        const title = titleEl.text().trim() || adLink.text().trim() || $(this).text().trim().substring(0, 80);
-        if (title) titles.push(title);
-      });
-
-      results.push({
-        label: t.label,
-        url: t.url,
-        status: resp.status,
-        bodyLength: html.length,
-        articlesFound: $("article").length,
-        firstTitles: titles,
-      });
-    } catch (err: any) {
-      results.push({
-        label: t.label,
-        url: t.url,
-        status: "error",
-        bodyLength: 0,
-        articlesFound: 0,
-        firstTitles: [],
-        error: err.message,
-      });
-    }
-
-    // Rate limiting: 3s between requests
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-
-  // Find the best URL (most articles, not same as baseline)
-  const baseline = results.find((r) => r.label.includes("baseline"));
-  const wantedResults = results.filter((r) => !r.label.includes("baseline"));
-  const bestWanted = wantedResults
-    .filter((r) => r.articlesFound > 0)
-    .sort((a, b) => {
-      // If article count differs from baseline, it might be filtering
-      const aDiff = baseline ? Math.abs(a.articlesFound - baseline.articlesFound) : a.articlesFound;
-      const bDiff = baseline ? Math.abs(b.articlesFound - baseline.articlesFound) : b.articlesFound;
-      return bDiff - aDiff || b.articlesFound - a.articlesFound;
-    })[0];
-
-  sendJson(res, {
-    message: "Dubizzle 'wanted' URL test results",
-    baseline: baseline ? { articles: baseline.articlesFound, bodyLength: baseline.bodyLength } : null,
-    bestCandidate: bestWanted ? { label: bestWanted.label, url: bestWanted.url, articles: bestWanted.articlesFound } : null,
-    results,
-  });
-}
-
-// ─── Test Dubizzle "Wanted" Phones — Try multiple URL patterns ──
-async function handleTestDubizzleWantedPhones(_req: IncomingMessage, res: ServerResponse) {
-  console.log("[API] GET /test/dubizzle-wanted-phones — testing phone wanted URLs");
-
-  const phoneUrls = [
-    { label: "mobile-phones-tablets-accessories-numbers/mobile-phones", url: "https://www.dubizzle.com.eg/ar/mobile-phones-tablets-accessories-numbers/mobile-phones/?ad_type=wanted" },
-    { label: "mobile-phones (short)", url: "https://www.dubizzle.com.eg/ar/mobile-phones/?ad_type=wanted" },
-    { label: "electronics/mobile-phones", url: "https://www.dubizzle.com.eg/ar/electronics/mobile-phones/?ad_type=wanted" },
-    { label: "mobiles (no sub)", url: "https://www.dubizzle.com.eg/ar/mobiles/?ad_type=wanted" },
-    { label: "mobiles/mobile-phones (no www)", url: "https://dubizzle.com.eg/ar/mobiles/mobile-phones/?ad_type=wanted" },
-    { label: "mobiles/mobile-phones (en, no /ar/)", url: "https://www.dubizzle.com.eg/mobiles/mobile-phones/?ad_type=wanted" },
-  ];
-
-  const results: Array<{
-    label: string;
-    url: string;
-    status: number | string;
-    redirectedTo?: string;
-    bodyLength: number;
-    articlesFound: number;
-    firstTitles: string[];
-    error?: string;
-  }> = [];
-
-  for (const t of phoneUrls) {
-    try {
-      const resp = await fetch(t.url, {
-        headers: BROWSER_HEADERS,
-        redirect: "follow",
-      });
-
-      const finalUrl = resp.url; // after redirects
-      const html = await resp.text();
-      const $ = cheerio.load(html);
-
-      const titles: string[] = [];
-      $("article").each(function () {
-        if (titles.length >= 3) return;
-        const adLink = $(this).find('a[href*="/ad/"]').first();
-        const titleEl = $(this).find("h2, h3, [data-testid*='title'], [class*='title']").first();
-        const title = titleEl.text().trim() || adLink.text().trim() || $(this).text().trim().substring(0, 80);
-        if (title) titles.push(title);
-      });
-
-      results.push({
-        label: t.label,
-        url: t.url,
-        status: resp.status,
-        redirectedTo: finalUrl !== t.url ? finalUrl : undefined,
-        bodyLength: html.length,
-        articlesFound: $("article").length,
-        firstTitles: titles,
-      });
-    } catch (err: any) {
-      results.push({
-        label: t.label,
-        url: t.url,
-        status: "error",
-        bodyLength: 0,
-        articlesFound: 0,
-        firstTitles: [],
-        error: err.message,
-      });
-    }
-
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-
-  const working = results.filter((r) => typeof r.status === "number" && r.status === 200 && r.articlesFound > 0);
-
-  sendJson(res, {
-    message: "Dubizzle phones 'wanted' URL test — trying 6 patterns",
-    summary: {
-      total_tested: results.length,
-      working: working.length,
-      working_urls: working.map((w) => ({ label: w.label, url: w.url, articles: w.articlesFound })),
-    },
-    results,
-  });
-}
-
-// ─── Test Dubizzle "Wanted" Verify — Check if ads are actually "مطلوب" ──
-async function handleTestDubizzleWantedVerify(_req: IncomingMessage, res: ServerResponse) {
-  console.log("[API] GET /test/dubizzle-wanted-verify — verifying wanted ads are actually buyer ads");
-
-  // Fetch vehicles wanted listing page
-  const vehiclesUrl = "https://www.dubizzle.com.eg/ar/vehicles/cars-for-sale/?ad_type=wanted";
-
-  let detailUrls: string[] = [];
-  try {
-    const resp = await fetch(vehiclesUrl, { headers: BROWSER_HEADERS, redirect: "follow" });
-    const html = await resp.text();
-    const $ = cheerio.load(html);
-
-    // Extract first 3 ad detail URLs
-    $("article").each(function () {
-      if (detailUrls.length >= 3) return;
-      const link = $(this).find('a[href*="/ad/"]').first().attr("href");
-      if (link) {
-        const fullUrl = link.startsWith("http") ? link : `https://www.dubizzle.com.eg${link}`;
-        detailUrls.push(fullUrl);
-      }
-    });
-  } catch (err: any) {
-    sendJson(res, { error: `Failed to fetch listing page: ${err.message}` }, 500);
-    return;
-  }
-
-  if (detailUrls.length === 0) {
-    sendJson(res, { error: "No ad links found on listing page", url: vehiclesUrl });
-    return;
-  }
-
-  const adDetails: Array<{
-    url: string;
-    title: string;
-    adType: string | null;
-    isBuyer: boolean;
-    evidence: string[];
-  }> = [];
-
-  for (const adUrl of detailUrls) {
-    try {
-      await new Promise((r) => setTimeout(r, 3000));
-      const resp = await fetch(adUrl, { headers: BROWSER_HEADERS, redirect: "follow" });
-      const html = await resp.text();
-      const $ = cheerio.load(html);
-
-      const title = $("h1").first().text().trim() || $("title").text().trim();
-      const bodyText = $("body").text();
-
-      // Look for ad type indicators
-      const evidence: string[] = [];
-      let adType: string | null = null;
-      let isBuyer = false;
-
-      // Check for "مطلوب" (wanted) in title or breadcrumbs
-      if (title.includes("مطلوب") || title.toLowerCase().includes("wanted")) {
-        evidence.push(`Title contains مطلوب/wanted: "${title}"`);
-        adType = "مطلوب";
-        isBuyer = true;
-      }
-
-      // Look for ad type label in page
-      const adTypePatterns = [
-        /نوع\s*الإعلان\s*[:\s]*([^\n<]+)/,
-        /ad[_\s]*type\s*[:\s]*([^\n<]+)/i,
-        /listing[_\s]*type\s*[:\s]*([^\n<]+)/i,
-      ];
-      for (const pat of adTypePatterns) {
-        const match = bodyText.match(pat);
-        if (match) {
-          evidence.push(`Found label: "${match[0].trim().substring(0, 100)}"`);
-          const val = match[1].trim();
-          if (val.includes("مطلوب") || val.toLowerCase().includes("wanted")) {
-            adType = "مطلوب";
-            isBuyer = true;
-          } else {
-            adType = val.substring(0, 50);
-          }
-        }
-      }
-
-      // Check for buyer keywords in description
-      const buyerKeywords = ["مطلوب", "عايز", "عاوز", "محتاج", "بدور على", "أبحث عن"];
-      for (const kw of buyerKeywords) {
-        if (bodyText.includes(kw)) {
-          evidence.push(`Body contains keyword: "${kw}"`);
-          if (!adType) {
-            adType = "مطلوب (inferred)";
-            isBuyer = true;
-          }
-        }
-      }
-
-      // Check for seller keywords that indicate it's NOT a wanted ad
-      const sellerKeywords = ["معروض للبيع", "للبيع", "for sale"];
-      for (const kw of sellerKeywords) {
-        if (bodyText.includes(kw)) {
-          evidence.push(`Body contains seller keyword: "${kw}"`);
-        }
-      }
-
-      // Check structured data / JSON-LD
-      $('script[type="application/ld+json"]').each(function () {
-        try {
-          const json = JSON.parse($(this).text());
-          if (json["@type"] || json.name) {
-            evidence.push(`JSON-LD: type=${json["@type"]}, name=${(json.name || "").substring(0, 50)}`);
-          }
-        } catch { /* ignore */ }
-      });
-
-      // Check meta tags
-      const metaDesc = $('meta[name="description"]').attr("content") || "";
-      if (metaDesc.includes("مطلوب")) {
-        evidence.push(`Meta description contains مطلوب`);
-        isBuyer = true;
-      }
-
-      // Check breadcrumbs for "مطلوب"
-      const breadcrumbs = $('[class*="breadcrumb"], [data-testid*="breadcrumb"], nav[aria-label*="bread"]').text();
-      if (breadcrumbs.includes("مطلوب")) {
-        evidence.push(`Breadcrumbs contain مطلوب: "${breadcrumbs.trim().substring(0, 100)}"`);
-        adType = "مطلوب";
-        isBuyer = true;
-      }
-
-      if (!adType) adType = "unknown";
-      if (evidence.length === 0) evidence.push("No ad type indicators found in page");
-
-      adDetails.push({ url: adUrl, title, adType, isBuyer, evidence });
-    } catch (err: any) {
-      adDetails.push({
-        url: adUrl,
-        title: "FETCH_ERROR",
-        adType: null,
-        isBuyer: false,
-        evidence: [`Error: ${err.message}`],
-      });
-    }
-  }
-
-  const buyerCount = adDetails.filter((a) => a.isBuyer).length;
-
-  sendJson(res, {
-    message: "Dubizzle wanted ad verification — checking if ads are actually buyer ads",
-    source_url: vehiclesUrl,
-    ads_checked: adDetails.length,
-    confirmed_buyers: buyerCount,
-    verdict: buyerCount === adDetails.length
-      ? "✅ All ads appear to be buyer/wanted ads"
-      : buyerCount > 0
-        ? `⚠️ ${buyerCount}/${adDetails.length} appear to be buyer ads`
-        : "❌ None appear to be buyer/wanted ads",
-    ads: adDetails,
-  });
-}
-
 // ─── Reverse Buyers: Sellers → Potential Buyers ──────────────
 const UPGRADE_MAP: Record<string, { pattern: RegExp; upgrades: string[] }[]> = {
   phones: [
@@ -2797,12 +2542,6 @@ const server = createServer(async (req, res) => {
       await handleBuyerMatch(req, res);
     } else if (path === "/cron/reverse-buyers") {
       await handleReverseBuyers(req, res);
-    } else if (path === "/test/dubizzle-wanted") {
-      await handleTestDubizzleWanted(req, res);
-    } else if (path === "/test/dubizzle-wanted-phones") {
-      await handleTestDubizzleWantedPhones(req, res);
-    } else if (path === "/test/dubizzle-wanted-verify") {
-      await handleTestDubizzleWantedVerify(req, res);
     } else if (path === "/health") {
       sendJson(res, {
         ok: true,
@@ -2821,9 +2560,6 @@ const server = createServer(async (req, res) => {
           "GET /cron/outreach": "Process outreach to new sellers + follow-ups",
           "GET /cron/buyer-match": "Match buyers to listings (BHE)",
           "GET /cron/reverse-buyers": "Generate reverse buyers from sellers (BHE)",
-          "GET /test/dubizzle-wanted": "Test Dubizzle wanted ad URLs",
-          "GET /test/dubizzle-wanted-phones": "Test 6 different phone URL patterns for wanted ads",
-          "GET /test/dubizzle-wanted-verify": "Verify vehicles wanted ads are actually buyer ads",
           "GET /health": "Health check",
         },
       });
