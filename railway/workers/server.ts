@@ -2716,11 +2716,17 @@ async function generateReverseBuyers(): Promise<{
     const productTitle = latestListing?.title || "منتج";
     const upgradeDesc = generateUpgradeDescription(productTitle, category);
 
+    // Filter garbage text from seller names (WhatsApp UI artifacts)
+    let cleanName: string | null = seller.name || null;
+    if (cleanName && /مكالمة|المحادثه|واتساب|ساعات|دقائق/.test(cleanName)) {
+      cleanName = null;
+    }
+
     const buyerRecord = {
       source: "reverse_seller",
       source_url: null,
       source_platform: "dubizzle",
-      buyer_name: seller.name,
+      buyer_name: cleanName,
       buyer_phone: seller.phone,
       product_wanted: upgradeDesc || `ترقية من ${productTitle}`,
       category,
