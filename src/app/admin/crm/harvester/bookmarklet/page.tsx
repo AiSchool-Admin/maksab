@@ -32,6 +32,14 @@ interface AheScope {
   is_active: boolean;
 }
 
+type BookmarkletPlatform = "dubizzle" | "hatla2ee" | "contactcars";
+
+const PLATFORM_INFO: Record<BookmarkletPlatform, { name: string; nameAr: string; domain: string; color: string }> = {
+  dubizzle: { name: "Dubizzle", nameAr: "دوبيزل", domain: "dubizzle.com.eg", color: "#E53935" },
+  hatla2ee: { name: "Hatla2ee", nameAr: "هتلاقي", domain: "eg.hatla2ee.com", color: "#1565C0" },
+  contactcars: { name: "ContactCars", nameAr: "كونتاكت كارز", domain: "contactcars.com", color: "#2E7D32" },
+};
+
 export default function BookmarkletPage() {
   const [appUrl, setAppUrl] = useState("");
   const [recentResults, setRecentResults] = useState<BookmarkletResult[]>([]);
@@ -44,9 +52,10 @@ export default function BookmarkletPage() {
   const [newScopeCode, setNewScopeCode] = useState("");
   const [creatingToken, setCreatingToken] = useState(false);
 
-  // Selected token + scope for bookmarklet generation
+  // Selected token + scope + platform for bookmarklet generation
   const [selectedTokenId, setSelectedTokenId] = useState("");
   const [overrideScopeCode, setOverrideScopeCode] = useState("");
+  const [selectedPlatform, setSelectedPlatform] = useState<BookmarkletPlatform>("dubizzle");
   const [codeCopied, setCodeCopied] = useState(false);
 
   useEffect(() => {
@@ -194,11 +203,11 @@ export default function BookmarkletPage() {
     }
   }
 
-  // Build the bookmarklet code for selected token + scope
+  // Build the bookmarklet code for selected token + scope + platform
   const selectedToken = tokens.find((t) => t.id === selectedTokenId);
   const effectiveScopeCode = overrideScopeCode || selectedToken?.scope_code || "";
   const bookmarkletCode = selectedToken
-    ? buildBookmarkletCode(appUrl, selectedToken.token, effectiveScopeCode)
+    ? buildBookmarkletForPlatform(selectedPlatform, appUrl, selectedToken.token, effectiveScopeCode)
     : "";
 
   const activeTokens = tokens.filter((t) => t.is_active);
@@ -208,9 +217,9 @@ export default function BookmarkletPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">🔖 Bookmarklet — حصاد دوبيزل</h1>
+          <h1 className="text-2xl font-bold text-gray-900">🔖 Bookmarklet — حصاد المنصات المحظورة</h1>
           <p className="text-gray-500 text-sm mt-1">
-            للمنصات المحظورة من server-side fetch — الموظف يفتح الصفحة ويضغط الـ Bookmarklet
+            للمنصات المحظورة من server-side fetch (403) — الموظف يفتح الصفحة ويضغط الـ Bookmarklet
           </p>
         </div>
         <Link
@@ -219,6 +228,35 @@ export default function BookmarkletPage() {
         >
           → العودة للمحرك
         </Link>
+      </div>
+
+      {/* Platform Selector */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h2 className="text-lg font-bold mb-4">🎯 اختار المنصة</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {(Object.entries(PLATFORM_INFO) as [BookmarkletPlatform, typeof PLATFORM_INFO[BookmarkletPlatform]][]).map(([id, info]) => (
+            <button
+              key={id}
+              onClick={() => setSelectedPlatform(id)}
+              className={`p-4 rounded-xl border-2 text-right transition-all ${
+                selectedPlatform === id
+                  ? "border-green-500 bg-green-50 ring-2 ring-green-200"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+            >
+              <div className="font-bold text-lg" style={{ color: info.color }}>
+                {info.name}
+              </div>
+              <div className="text-gray-500 text-sm">{info.nameAr}</div>
+              <div className="text-gray-400 text-xs mt-1" dir="ltr">{info.domain}</div>
+              {id !== "dubizzle" && (
+                <span className="inline-block mt-2 px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">
+                  محظور 403 — يحتاج Bookmarklet
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Token Management */}
@@ -327,7 +365,7 @@ export default function BookmarkletPage() {
       {selectedToken && (
         <div className="bg-white rounded-xl shadow-sm border p-6">
           <h2 className="text-lg font-bold mb-4">
-            🌾 Bookmarklet — {selectedToken.employee_name}
+            🌾 Bookmarklet {PLATFORM_INFO[selectedPlatform].nameAr} — {selectedToken.employee_name}
           </h2>
 
           {/* Optional scope override */}
@@ -580,137 +618,116 @@ export default function BookmarkletPage() {
 }
 
 /**
- * Build the bookmarklet JavaScript code with embedded token and scope.
+ * Route bookmarklet code generation based on platform
  */
-function buildBookmarkletCode(appUrl: string, token: string, scopeCode: string): string {
+function buildBookmarkletForPlatform(platform: BookmarkletPlatform, appUrl: string, token: string, scopeCode: string): string {
   if (!appUrl || !token) return "";
-
-  const code = `
-(function(){
-var MAKSAB='${appUrl}';
-var TOKEN='${token}';
-var SCOPE='${scopeCode}';
-var strategy='article-based';
-
-/* ═══ Single strategy: article-based extraction ═══ */
-function extractListings(){
-  var articles=document.querySelectorAll('article');
-  console.log('Maksab: Found',articles.length,'article elements');
-  var listings=[];
-  var seenUrls={};
-  for(var i=0;i<articles.length;i++){
-    var article=articles[i];
-    var adLink=article.querySelector('a[href*="/ad/"]');
-    if(!adLink)continue;
-    var url=adLink.href;
-    var idMatch=url.match(/ID(\\d+)\\.html/);
-    if(!idMatch)continue;
-    if(seenUrls[url])continue;
-    seenUrls[url]=true;
-    var title=adLink.getAttribute('title')||adLink.textContent.trim()||'';
-    if(!title||title.length<3)continue;
-    var img=article.querySelector('img[src*="-400x300"]');
-    var thumbnail=img?img.src:null;
-    var cardText=article.textContent||'';
-    var priceMatch=cardText.match(/([\\d,]+)\\s*ج\\.م/);
-    var price=priceMatch?parseInt(priceMatch[1].replace(/,/g,'')):null;
-    var locDate=(function(art,text){var dm=text.match(/\u0645\u0646\u0630\\s+\\d+\\s*(\u062F\u0642\u064A\u0642\u0629|\u062F\u0642\u0627\u0626\u0642|\u0633\u0627\u0639\u0629|\u0633\u0627\u0639\u0627\u062A|\u064A\u0648\u0645|\u0623\u064A\u0627\u0645|\u0623\u0633\u0628\u0648\u0639|\u0623\u0633\u0627\u0628\u064A\u0639|\u0634\u0647\u0631|\u0623\u0634\u0647\u0631)/);var dateText=dm?dm[0].trim():'';var loc='';var locSrc=text;var els=art.querySelectorAll('*');var minLen=Infinity;for(var j=0;j<els.length;j++){var t=els[j].textContent||'';if(/[\u2022\u00B7]/.test(t)&&/\u0645\u0646\u0630/.test(t)&&t.length<minLen&&t.length>5&&t.length<150){minLen=t.length;locSrc=t;}}var govs='\u0627\u0644\u0642\u0627\u0647\u0631\u0629|\u0627\u0644\u062C\u064A\u0632\u0629|\u0627\u0644\u0625\u0633\u0643\u0646\u062F\u0631\u064A\u0629|\u0627\u0644\u062F\u0642\u0647\u0644\u064A\u0629|\u0627\u0644\u0628\u062D\u064A\u0631\u0629|\u0627\u0644\u0645\u0646\u0648\u0641\u064A\u0629|\u0627\u0644\u063A\u0631\u0628\u064A\u0629|\u0643\u0641\u0631 \u0627\u0644\u0634\u064A\u062E|\u0627\u0644\u0634\u0631\u0642\u064A\u0629|\u0627\u0644\u0642\u0644\u064A\u0648\u0628\u064A\u0629|\u0627\u0644\u0641\u064A\u0648\u0645|\u0628\u0646\u064A \u0633\u0648\u064A\u0641|\u0627\u0644\u0645\u0646\u064A\u0627|\u0623\u0633\u064A\u0648\u0637|\u0633\u0648\u0647\u0627\u062C|\u0642\u0646\u0627|\u0627\u0644\u0623\u0642\u0635\u0631|\u0623\u0633\u0648\u0627\u0646|\u0627\u0644\u0628\u062D\u0631 \u0627\u0644\u0623\u062D\u0645\u0631|\u0627\u0644\u0648\u0627\u062F\u064A \u0627\u0644\u062C\u062F\u064A\u062F|\u0645\u0637\u0631\u0648\u062D|\u0634\u0645\u0627\u0644 \u0633\u064A\u0646\u0627\u0621|\u062C\u0646\u0648\u0628 \u0633\u064A\u0646\u0627\u0621|\u0628\u0648\u0631\u0633\u0639\u064A\u062F|\u0627\u0644\u0633\u0648\u064A\u0633|\u0627\u0644\u0625\u0633\u0645\u0627\u0639\u064A\u0644\u064A\u0629|\u062F\u0645\u064A\u0627\u0637';var bulletIdx=locSrc.search(/[\u2022\u00B7]\\s*\u0645\u0646\u0630/);if(bulletIdx>-1){var before=locSrc.substring(Math.max(0,bulletIdx-60),bulletIdx).trim();var agRe=new RegExp('([\\u0600-\\u06FF][\\u0600-\\u06FF\\u0020]{0,28})[\\u060C,]\\\\s*('+ govs+')$');var agM=before.match(agRe);if(agM){loc=agM[1].trim()+'\\u060C '+agM[2];}else{var gRe=new RegExp('('+govs+')$');var gM=before.match(gRe);if(gM)loc=gM[1];}}return{location:loc,dateText:dateText,_srcLen:locSrc.length};})(article,cardText);
-    var location=locDate.location;var dateText=locDate.dateText;
-    if(listings.length<3){console.log('Maksab loc/date #'+listings.length+':',{location:location,dateText:dateText,cardLen:cardText.length,locSrcLen:locDate._srcLen||0});}
-    var supportsExchange=cardText.indexOf('متوفر التبادل')>-1||cardText.indexOf('تبادل')>-1;
-    var isNegotiable=cardText.indexOf('قابل للتفاوض')>-1;
-    var isFeatured=cardText.indexOf('مميز')>-1;
-    var isElite=cardText.indexOf('إيليت')>-1||!!article.querySelector('[aria-label="Elite"]');
-    var isVerified=cardText.indexOf('موثق')>-1;
-    var isBusiness=cardText.indexOf('صاحب عمل')>-1;
-    var sellerLink=article.querySelector('a[href*="/companies/"]');
-    var sellerName=sellerLink?sellerLink.textContent.trim():null;
-    var sellerProfileUrl=sellerLink?sellerLink.href:null;
-    listings.push({
-      url:url,title:title,price:price,currency:'EGP',
-      thumbnailUrl:thumbnail,location:location,dateText:dateText,
-      sellerName:sellerName,sellerProfileUrl:sellerProfileUrl,
-      isVerified:isVerified,isBusiness:isBusiness,
-      isFeatured:isFeatured||isElite,
-      supportsExchange:supportsExchange,
-      isNegotiable:isNegotiable
-    });
+  switch (platform) {
+    case "hatla2ee": return buildHatla2eeBookmarklet(appUrl, token, scopeCode);
+    case "contactcars": return buildContactCarsBookmarklet(appUrl, token, scopeCode);
+    default: return buildDubizzleBookmarklet(appUrl, token, scopeCode);
   }
-  console.log('Maksab: Strategy: article-based');
-  console.log('Maksab: Extracted',listings.length,'listings from',articles.length,'articles');
-  if(listings.length>0){
-    console.log('Maksab: Sample:',JSON.stringify(listings[0],null,2));
-    console.log('Maksab: Titles:',listings.slice(0,5).map(function(l){return l.title.substring(0,40);}).join(' | '));
-    console.log('Maksab: Prices:',listings.slice(0,5).map(function(l){return l.price;}).join(' | '));
-  }
-  return listings;
 }
 
-var listings=extractListings();
-console.log('Maksab: Found',listings.length,'real listings');
-
-/* ═══ Result ═══ */
-if(listings.length===0){
-  alert('لم يتم العثور على إعلانات في هذه الصفحة\\n\\nStrategy tried: '+strategy+'\\nتأكد إنك على صفحة قوائم (مش صفحة إعلان واحد).\\n\\nافتح الـ Console (F12) وابحث عن Maksab لمزيد من التفاصيل.');
-  return;
-}
-
-/* ═══ Send via popup window (no CORS needed!) ═══ */
-var payload=JSON.stringify({
-  url:window.location.href,
-  listings:listings,
-  timestamp:new Date().toISOString(),
-  source:'bookmarklet',
-  strategy:strategy,
-  scope_code:SCOPE||null
-});
-
+/**
+ * Common send logic shared by all bookmarklets
+ */
+function buildSendCode(): string {
+  return `
 var statusDiv=document.createElement('div');
 statusDiv.style.cssText='position:fixed;top:20px;right:20px;background:#1B7A3D;color:white;padding:16px 24px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:16px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-statusDiv.textContent='🌾 جاري إرسال '+listings.length+' إعلان لمكسب... (strategy: '+strategy+')';
+statusDiv.textContent='\\u{1F33E} جاري إرسال '+listings.length+' إعلان لمكسب... ('+PLATFORM+')';
 document.body.appendChild(statusDiv);
-
 var popup=window.open(MAKSAB+'/admin/crm/harvester/receive','maksab_harvest','width=500,height=400,scrollbars=yes');
-if(!popup){
-  statusDiv.style.background='#DC2626';
-  statusDiv.textContent='❌ المتصفح منع فتح النافذة — اسمح بالـ popups لموقع مكسب';
-  setTimeout(function(){statusDiv.remove();},8000);
-  return;
+if(!popup){statusDiv.style.background='#DC2626';statusDiv.textContent='\\u274C المتصفح منع فتح النافذة — اسمح بالـ popups';setTimeout(function(){statusDiv.remove();},8000);return;}
+var checkReady=setInterval(function(){try{popup.postMessage({type:'harvest_data',payload:payload,token:TOKEN},MAKSAB);}catch(e){}},500);
+var timeout=setTimeout(function(){clearInterval(checkReady);statusDiv.style.background='#DC2626';statusDiv.textContent='\\u274C انتهت المهلة';setTimeout(function(){statusDiv.remove();},5000);try{popup.close();}catch(e){}},30000);
+window.addEventListener('message',function handler(e){if(e.origin!==MAKSAB)return;if(e.data&&e.data.type==='harvest_result'){clearInterval(checkReady);clearTimeout(timeout);window.removeEventListener('message',handler);if(e.data.error){statusDiv.style.background='#DC2626';statusDiv.textContent='\\u274C خطأ: '+e.data.error;}else{statusDiv.style.background='#1B7A3D';statusDiv.innerHTML='\\u2705 تم إرسال '+e.data.received+' إعلان<br><span style="font-size:13px">'+e.data.new_count+' جديد — '+e.data.duplicate+' مكرر</span>';}setTimeout(function(){statusDiv.remove();},8000);setTimeout(function(){try{popup.close();}catch(e){}},2000);}});
+`;
 }
 
-var checkReady=setInterval(function(){
-  try{
-    popup.postMessage({type:'harvest_data',payload:payload,token:TOKEN},MAKSAB);
-  }catch(e){}
-},500);
-
-var timeout=setTimeout(function(){
-  clearInterval(checkReady);
-  statusDiv.style.background='#DC2626';
-  statusDiv.textContent='❌ انتهت المهلة — النافذة لم تستجب';
-  setTimeout(function(){statusDiv.remove();},5000);
-  try{popup.close();}catch(e){}
-},30000);
-
-window.addEventListener('message',function handler(e){
-  if(e.origin!==MAKSAB)return;
-  if(e.data&&e.data.type==='harvest_result'){
-    clearInterval(checkReady);
-    clearTimeout(timeout);
-    window.removeEventListener('message',handler);
-    if(e.data.error){
-      statusDiv.style.background='#DC2626';
-      statusDiv.textContent='❌ خطأ: '+e.data.error;
-    }else{
-      statusDiv.style.background='#1B7A3D';
-      statusDiv.innerHTML='✅ تم إرسال '+e.data.received+' إعلان لمكسب<br><span style="font-size:13px">'+e.data.new_count+' جديد — '+e.data.duplicate+' مكرر — طريقة: '+strategy+'</span>';
-    }
-    setTimeout(function(){statusDiv.remove();},8000);
-    setTimeout(function(){try{popup.close();}catch(e){}},2000);
-  }
-});
+/**
+ * Dubizzle Bookmarklet (existing — article-based)
+ */
+function buildDubizzleBookmarklet(appUrl: string, token: string, scopeCode: string): string {
+  const code = `
+(function(){
+var MAKSAB='${appUrl}';var TOKEN='${token}';var SCOPE='${scopeCode}';var PLATFORM='dubizzle';
+function extractListings(){var articles=document.querySelectorAll('article');var listings=[];var seenUrls={};
+for(var i=0;i<articles.length;i++){var article=articles[i];var adLink=article.querySelector('a[href*="/ad/"]');if(!adLink)continue;var url=adLink.href;var idMatch=url.match(/ID(\\d+)\\.html/);if(!idMatch)continue;if(seenUrls[url])continue;seenUrls[url]=true;var title=adLink.getAttribute('title')||adLink.textContent.trim()||'';if(!title||title.length<3)continue;var img=article.querySelector('img[src*="-400x300"]');var thumbnail=img?img.src:null;var cardText=article.textContent||'';var priceMatch=cardText.match(/([\\d,]+)\\s*ج\\.م/);var price=priceMatch?parseInt(priceMatch[1].replace(/,/g,'')):null;var supportsExchange=cardText.indexOf('تبادل')>-1;var isNegotiable=cardText.indexOf('قابل للتفاوض')>-1;var isFeatured=cardText.indexOf('مميز')>-1||cardText.indexOf('إيليت')>-1;var isVerified=cardText.indexOf('موثق')>-1;var isBusiness=cardText.indexOf('صاحب عمل')>-1;var sellerLink=article.querySelector('a[href*="/companies/"]');var sellerName=sellerLink?sellerLink.textContent.trim():null;var sellerProfileUrl=sellerLink?sellerLink.href:null;
+listings.push({url:url,title:title,price:price,currency:'EGP',thumbnailUrl:thumbnail,location:'',dateText:'',sellerName:sellerName,sellerProfileUrl:sellerProfileUrl,isVerified:isVerified,isBusiness:isBusiness,isFeatured:isFeatured,supportsExchange:supportsExchange,isNegotiable:isNegotiable});}return listings;}
+var listings=extractListings();
+if(listings.length===0){alert('لم يتم العثور على إعلانات\\n\\nتأكد إنك على صفحة قوائم دوبيزل');return;}
+var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'dubizzle-article',scope_code:SCOPE||null,platform:'dubizzle'});
+${buildSendCode()}
 })();
 `.trim().replace(/\n\s*/g, '');
+  return `javascript:${encodeURIComponent(code)}`;
+}
 
+/**
+ * Hatla2ee Bookmarklet — eg.hatla2ee.com (سيارات)
+ * يستخرج إعلانات السيارات من صفحات هتلاقي
+ */
+function buildHatla2eeBookmarklet(appUrl: string, token: string, scopeCode: string): string {
+  const code = `
+(function(){
+var MAKSAB='${appUrl}';var TOKEN='${token}';var SCOPE='${scopeCode}';var PLATFORM='hatla2ee';
+if(!window.location.hostname.includes('hatla2ee')){alert('\\u274C هذا الـ Bookmarklet خاص بموقع هتلاقي (hatla2ee.com)\\n\\nافتح eg.hatla2ee.com وجرب تاني');return;}
+function extractListings(){var listings=[];var seenUrls={};
+/* Strategy 1: car listing cards with links */
+var links=document.querySelectorAll('a[href*="/car/"],a[href*="/en/car/"]');
+console.log('Maksab Hatla2ee: Found',links.length,'car links');
+for(var i=0;i<links.length;i++){var a=links[i];var url=a.href;if(!url||seenUrls[url])continue;if(url.includes('/search')||url.includes('/filter'))continue;if(!/\\/car\\/.*\\d/.test(url))continue;seenUrls[url]=true;
+var card=a.closest('.card,.listing-card,.newCarListingCard,.vehicle-card,[class*=listing],[class*=card]')||a.parentElement.parentElement;if(!card)card=a.parentElement;var cardText=card?card.textContent:'';
+var title=a.getAttribute('title')||a.textContent.trim();if(!title||title.length<3){var h=card?card.querySelector('h2,h3,h4,[class*=title]'):null;if(h)title=h.textContent.trim();}if(!title||title.length<3)continue;
+var priceMatch=cardText.match(/([\\d,\\.]+)\\s*(?:EGP|LE|L\\.E|جنيه|ج\\.م)/i);var price=priceMatch?parseInt(priceMatch[1].replace(/[,\\.]/g,'')):null;if(!price){var priceEl=card?card.querySelector('[class*=price],[class*=Price]'):null;if(priceEl){var pt=priceEl.textContent.replace(/[^\\d]/g,'');if(pt)price=parseInt(pt);}}
+var img=card?card.querySelector('img[src*=".jpg"],img[src*=".jpeg"],img[src*=".png"],img[src*=".webp"],img[data-src]'):null;var thumbnail=img?(img.src||img.getAttribute('data-src')):null;
+var locEl=card?card.querySelector('[class*=location],[class*=Location],[class*=area]'):null;var location=locEl?locEl.textContent.trim():'';
+var yearMatch=cardText.match(/(20[0-2]\\d|19[89]\\d)/);var kmMatch=cardText.match(/([\\d,]+)\\s*(?:km|كم)/i);
+var isFeatured=cardText.indexOf('featured')>-1||cardText.indexOf('premium')>-1||cardText.indexOf('مميز')>-1;var isDealer=cardText.indexOf('dealer')>-1||cardText.indexOf('showroom')>-1||cardText.indexOf('معرض')>-1;
+listings.push({url:url,title:title,price:price,currency:'EGP',thumbnailUrl:thumbnail,location:location,dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:isDealer,isBusiness:isDealer,isFeatured:isFeatured,supportsExchange:false,isNegotiable:cardText.indexOf('negotiable')>-1||cardText.indexOf('قابل للتفاوض')>-1});}
+/* Strategy 2: structured data / JSON-LD */
+if(listings.length===0){var scripts=document.querySelectorAll('script[type="application/ld+json"]');for(var s=0;s<scripts.length;s++){try{var ld=JSON.parse(scripts[s].textContent);if(ld.itemListElement){for(var j=0;j<ld.itemListElement.length;j++){var item=ld.itemListElement[j];var iurl=item.url||item.item&&item.item.url;var iname=item.name||item.item&&item.item.name;if(iurl&&iname&&!seenUrls[iurl]){seenUrls[iurl]=true;listings.push({url:iurl,title:iname,price:item.offers?parseInt(String(item.offers.price)):null,currency:'EGP',thumbnailUrl:item.image||null,location:'',dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:false,supportsExchange:false,isNegotiable:false});}}}}catch(e){}}}
+console.log('Maksab Hatla2ee: Extracted',listings.length,'listings');return listings;}
+var listings=extractListings();
+if(listings.length===0){alert('لم يتم العثور على إعلانات سيارات في هذه الصفحة\\n\\nتأكد إنك على صفحة قوائم سيارات في هتلاقي\\neg.hatla2ee.com/en/car/used-cars-for-sale');return;}
+var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'hatla2ee-cards',scope_code:SCOPE||null,platform:'hatla2ee'});
+${buildSendCode()}
+})();
+`.trim().replace(/\n\s*/g, '');
+  return `javascript:${encodeURIComponent(code)}`;
+}
+
+/**
+ * ContactCars Bookmarklet — contactcars.com (سيارات)
+ * يستخرج إعلانات السيارات من ContactCars
+ */
+function buildContactCarsBookmarklet(appUrl: string, token: string, scopeCode: string): string {
+  const code = `
+(function(){
+var MAKSAB='${appUrl}';var TOKEN='${token}';var SCOPE='${scopeCode}';var PLATFORM='contactcars';
+if(!window.location.hostname.includes('contactcars')){alert('\\u274C هذا الـ Bookmarklet خاص بموقع ContactCars\\n\\nافتح contactcars.com وجرب تاني');return;}
+function extractListings(){var listings=[];var seenUrls={};
+/* Strategy 1: car listing cards */
+var links=document.querySelectorAll('a[href*="/car/"],a[href*="/cars/"],a[href*="/listing/"],a[href*="/en/car"]');
+console.log('Maksab ContactCars: Found',links.length,'car links');
+for(var i=0;i<links.length;i++){var a=links[i];var url=a.href;if(!url||seenUrls[url])continue;if(url.includes('/search')||url.includes('/filter')||url.includes('/compare'))continue;if(!/\\d/.test(url.split('/').pop()))continue;seenUrls[url]=true;
+var card=a.closest('.card,.listing-card,.vehicle-card,[class*=listing],[class*=card],[class*=vehicle]')||a.parentElement.parentElement;if(!card)card=a.parentElement;var cardText=card?card.textContent:'';
+var title=a.getAttribute('title')||a.textContent.trim();if(!title||title.length<3){var h=card?card.querySelector('h2,h3,h4,[class*=title]'):null;if(h)title=h.textContent.trim();}if(!title||title.length<3)continue;
+var priceMatch=cardText.match(/([\\d,\\.]+)\\s*(?:EGP|LE|L\\.E|جنيه|ج\\.م)/i);var price=priceMatch?parseInt(priceMatch[1].replace(/[,\\.]/g,'')):null;if(!price){var priceEl=card?card.querySelector('[class*=price],[class*=Price]'):null;if(priceEl){var pt=priceEl.textContent.replace(/[^\\d]/g,'');if(pt)price=parseInt(pt);}}
+var img=card?card.querySelector('img[src*=".jpg"],img[src*=".jpeg"],img[src*=".png"],img[src*=".webp"],img[data-src]'):null;var thumbnail=img?(img.src||img.getAttribute('data-src')):null;
+var locEl=card?card.querySelector('[class*=location],[class*=city]'):null;var location=locEl?locEl.textContent.trim():'';
+var isDealer=cardText.indexOf('dealer')>-1||cardText.indexOf('معرض')>-1;
+listings.push({url:url,title:title,price:price,currency:'EGP',thumbnailUrl:thumbnail,location:location,dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:isDealer,isBusiness:isDealer,isFeatured:cardText.indexOf('featured')>-1||cardText.indexOf('مميز')>-1,supportsExchange:false,isNegotiable:cardText.indexOf('قابل للتفاوض')>-1});}
+/* Strategy 2: __NEXT_DATA__ (ContactCars may use Next.js) */
+if(listings.length===0){var nd=document.getElementById('__NEXT_DATA__');if(nd){try{var data=JSON.parse(nd.textContent);var props=data.props&&data.props.pageProps;if(props){var items=props.cars||props.listings||props.vehicles||props.data||[];if(Array.isArray(items)){for(var j=0;j<items.length;j++){var item=items[j];var iurl=item.url||item.link||(item.id?'https://contactcars.com/en/car/'+item.id:'');var ititle=item.title||((item.brand||'')+(item.model?' '+item.model:'')+(item.year?' '+item.year:''));if(iurl&&ititle&&!seenUrls[iurl]){seenUrls[iurl]=true;listings.push({url:iurl.startsWith('http')?iurl:'https://contactcars.com'+iurl,title:ititle,price:typeof item.price==='number'?item.price:null,currency:'EGP',thumbnailUrl:item.image||item.thumbnail||null,location:item.location||item.city||'',dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:false,isBusiness:!!item.is_dealer,isFeatured:!!item.is_featured,supportsExchange:false,isNegotiable:false});}}}}}catch(e){}}}
+console.log('Maksab ContactCars: Extracted',listings.length,'listings');return listings;}
+var listings=extractListings();
+if(listings.length===0){alert('لم يتم العثور على إعلانات سيارات\\n\\nتأكد إنك على صفحة قوائم سيارات في ContactCars\\ncontactcars.com/en/cars-for-sale');return;}
+var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'contactcars-cards',scope_code:SCOPE||null,platform:'contactcars'});
+${buildSendCode()}
+})();
+`.trim().replace(/\n\s*/g, '');
   return `javascript:${encodeURIComponent(code)}`;
 }

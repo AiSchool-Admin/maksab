@@ -40,82 +40,97 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
   }
 
   // OpenSooq uses card-based listing layout
-  // Pattern 1: Standard listing cards with links
-  const cardPattern = /href="(\/ar\/[^"]*(?:listing|item|post)[^"]*\d+)"/gi;
+  // Strategy: Try multiple patterns from most specific to broadest
   let match;
   const seenUrls = new Set<string>();
 
-  while ((match = cardPattern.exec(html)) !== null) {
-    const relativeUrl = match[1];
-    const url = `${OPENSOOQ_BASE}${relativeUrl}`;
+  // Pattern 1: Standard listing/post links (relative)
+  // OpenSooq URLs: /ar/post/12345, /ar/listing/12345, /ar/cairo/cars/12345
+  const patterns = [
+    /href="(\/ar\/[^"]*(?:listing|item|post)\/?\d+[^"]*)"/gi,
+    /href="(\/ar\/[^"]*\/\d{4,}[^"]*)"/gi,  // Any /ar/.../<numeric_id> path
+  ];
 
-    if (seenUrls.has(url)) continue;
-    seenUrls.add(url);
+  for (const cardPattern of patterns) {
+    if (listings.length > 0) break;
 
-    const start = Math.max(0, match.index - 500);
-    const end = Math.min(html.length, match.index + 2000);
-    const context = html.slice(start, end);
+    while ((match = cardPattern.exec(html)) !== null) {
+      const relativeUrl = match[1];
+      // Skip navigation/category/search links
+      if (/\/(search|filter|category|page|login|register|profile)\b/i.test(relativeUrl)) continue;
+      const url = `${OPENSOOQ_BASE}${relativeUrl}`;
 
-    const title = extractText(context, [
-      /class="[^"]*(?:post-title|item-title|listing-title|postTitle)[^"]*"[^>]*>([^<]+)/i,
-      /aria-label="([^"]+)"/i,
-      /<h[23][^>]*>([^<]+)<\/h[23]>/i,
-    ]);
-    if (!title) continue;
+      if (seenUrls.has(url)) continue;
+      seenUrls.add(url);
 
-    const priceText = extractText(context, [
-      /class="[^"]*(?:price|postPrice)[^"]*"[^>]*>([^<]*\d[\d,٬]*[^<]*)/i,
-      /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE)/,
-    ]);
+      const start = Math.max(0, match.index - 500);
+      const end = Math.min(html.length, match.index + 2000);
+      const context = html.slice(start, end);
 
-    const location = extractText(context, [
-      /class="[^"]*(?:location|postLocation|city)[^"]*"[^>]*>([^<]+)/i,
-    ]);
+      const title = extractText(context, [
+        /class="[^"]*(?:post-title|item-title|listing-title|postTitle|card-title)[^"]*"[^>]*>([^<]+)/i,
+        /aria-label="([^"]+)"/i,
+        /<h[23][^>]*>([^<]+)<\/h[23]>/i,
+        /title="([^"]+)"/i,
+      ]);
+      if (!title || title.length < 3) continue;
 
-    const dateText = extractText(context, [
-      /class="[^"]*(?:date|time|postDate)[^"]*"[^>]*>([^<]+)/i,
-      /(?:منذ|ago)\s*([^<]*)/i,
-    ]);
+      const priceText = extractText(context, [
+        /class="[^"]*(?:price|postPrice|card-price)[^"]*"[^>]*>([^<]*\d[\d,٬]*[^<]*)/i,
+        /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م)/,
+      ]);
 
-    const thumbnailUrl = extractImage(context, [
-      /src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-      /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-      /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-    ]);
+      const location = extractText(context, [
+        /class="[^"]*(?:location|postLocation|city|card-location)[^"]*"[^>]*>([^<]+)/i,
+      ]);
 
-    const sellerName = extractText(context, [
-      /class="[^"]*(?:member-name|sellerName|userName)[^"]*"[^>]*>([^<]+)/i,
-    ]);
+      const dateText = extractText(context, [
+        /class="[^"]*(?:date|time|postDate|card-date)[^"]*"[^>]*>([^<]+)/i,
+        /(?:منذ|ago)\s*([^<]*)/i,
+      ]);
 
-    const isLikelyBuyRequest = detectBuyRequest(title, context);
+      const thumbnailUrl = extractImage(context, [
+        /src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+        /data-src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+        /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+        /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+      ]);
 
-    listings.push({
-      url,
-      title: title.trim(),
-      price: priceText ? parsePrice(priceText) : null,
-      currency: "EGP",
-      thumbnailUrl,
-      location: location?.trim() || "",
-      dateText: dateText?.trim() || "",
-      sellerName: cleanSellerName(sellerName) || null,
-      sellerProfileUrl: null,
-      sellerAvatarUrl: null,
-      isVerified: context.includes("verified") || context.includes("موثق"),
-      isBusiness: context.includes("business") || context.includes("متجر") || context.includes("تاجر"),
-      isFeatured: context.includes("featured") || context.includes("مميز") || context.includes("premium"),
-      supportsExchange: context.includes("تبادل") || context.includes("بدل"),
-      isNegotiable: context.includes("قابل للتفاوض") || context.includes("negotiable"),
-      category: null,
-      isLikelyBuyRequest,
-    });
+      const sellerName = extractText(context, [
+        /class="[^"]*(?:member-name|sellerName|userName|card-user)[^"]*"[^>]*>([^<]+)/i,
+      ]);
+
+      const isLikelyBuyRequest = detectBuyRequest(title, context);
+
+      listings.push({
+        url,
+        title: title.trim(),
+        price: priceText ? parsePrice(priceText) : null,
+        currency: "EGP",
+        thumbnailUrl,
+        location: location?.trim() || "",
+        dateText: dateText?.trim() || "",
+        sellerName: cleanSellerName(sellerName) || null,
+        sellerProfileUrl: null,
+        sellerAvatarUrl: null,
+        isVerified: context.includes("verified") || context.includes("موثق"),
+        isBusiness: context.includes("business") || context.includes("متجر") || context.includes("تاجر"),
+        isFeatured: context.includes("featured") || context.includes("مميز") || context.includes("premium"),
+        supportsExchange: context.includes("تبادل") || context.includes("بدل"),
+        isNegotiable: context.includes("قابل للتفاوض") || context.includes("negotiable"),
+        category: null,
+        isLikelyBuyRequest,
+      });
+    }
   }
 
-  // Pattern 2: Fallback — broader link patterns
+  // Pattern 2: Absolute URL fallback
   if (listings.length === 0) {
-    const broadPattern = /href="(https?:\/\/eg\.opensooq\.com\/[^"]*\/\d+)"/gi;
+    const broadPattern = /href="(https?:\/\/eg\.opensooq\.com\/[^"]*\/\d{4,}[^"]*)"/gi;
     while ((match = broadPattern.exec(html)) !== null) {
       const url = match[1];
       if (seenUrls.has(url)) continue;
+      if (/\/(search|filter|category|page|login|register|profile)\b/i.test(url)) continue;
       seenUrls.add(url);
 
       const start = Math.max(0, match.index - 500);
@@ -127,10 +142,10 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
         /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
         /title="([^"]+)"/i,
       ]);
-      if (!title) continue;
+      if (!title || title.length < 3) continue;
 
       const priceText = extractText(context, [
-        /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE)/,
+        /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م)/,
       ]);
 
       const isLikelyBuyRequest = detectBuyRequest(title, context);
@@ -140,7 +155,10 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
         title: title.trim(),
         price: priceText ? parsePrice(priceText) : null,
         currency: "EGP",
-        thumbnailUrl: extractImage(context, [/src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i]),
+        thumbnailUrl: extractImage(context, [
+          /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+          /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+        ]),
         location: extractText(context, [/class="[^"]*location[^"]*"[^>]*>([^<]+)/i]) || "",
         dateText: "",
         sellerName: null,
@@ -154,6 +172,68 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
         category: null,
         isLikelyBuyRequest,
       });
+    }
+  }
+
+  // Pattern 3: __NEXT_DATA__ extraction (OpenSooq is Next.js)
+  if (listings.length === 0) {
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+    if (nextDataMatch) {
+      try {
+        const nextData = JSON.parse(nextDataMatch[1]);
+        const props = nextData?.props?.pageProps;
+        if (props) {
+          // Try common Next.js data shapes
+          const items = props.listings || props.posts || props.ads || props.data?.listings ||
+            props.searchResults?.listings || props.initialData?.listings || [];
+          if (Array.isArray(items) && items.length > 0) {
+            return parseOpenSooqJson({ data: items });
+          }
+        }
+      } catch { /* fall through */ }
+    }
+  }
+
+  // Pattern 4: JSON-LD structured data
+  if (listings.length === 0) {
+    const jsonLdMatches = html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi);
+    for (const m of jsonLdMatches) {
+      try {
+        const ld = JSON.parse(m[1]);
+        if (ld["@type"] === "ItemList" && Array.isArray(ld.itemListElement)) {
+          for (const item of ld.itemListElement) {
+            const title = item.name || item.item?.name || "";
+            const url = item.url || item.item?.url || "";
+            if (!title || !url) continue;
+
+            const fullUrl = url.startsWith("http") ? url : `${OPENSOOQ_BASE}${url}`;
+            if (seenUrls.has(fullUrl)) continue;
+            seenUrls.add(fullUrl);
+
+            const price = item.offers?.price || item.item?.offers?.price || null;
+
+            listings.push({
+              url: fullUrl,
+              title,
+              price: price ? parseFloat(String(price)) : null,
+              currency: "EGP",
+              thumbnailUrl: item.image || item.item?.image || null,
+              location: "",
+              dateText: "",
+              sellerName: null,
+              sellerProfileUrl: null,
+              sellerAvatarUrl: null,
+              isVerified: false,
+              isBusiness: false,
+              isFeatured: false,
+              supportsExchange: false,
+              isNegotiable: false,
+              category: null,
+              isLikelyBuyRequest: detectBuyRequest(title),
+            });
+          }
+        }
+      } catch { /* skip invalid JSON-LD */ }
     }
   }
 
