@@ -16,6 +16,7 @@ import {
   BROWSER_HEADERS,
   type ListPageListing,
 } from "./parsers/dubizzle";
+import { getParser } from "./parsers/platform-router";
 import { extractPhone } from "./parsers/phone-extractor";
 import { parseRelativeDate } from "./parsers/date-parser";
 import { mapLocation } from "./parsers/location-mapper";
@@ -237,7 +238,8 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         // Increment hourly request counter
         await safeRpc(supabase, "increment_hourly_requests");
 
-        const listings = parseDubizzleList(result.html);
+        const platformParser = getParser(scope.source_platform);
+        const listings = platformParser.parseList(result.html);
 
         console.log(
           `[AHE] 📊 Page ${page}: Found ${listings.length} listings`
@@ -418,7 +420,8 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
           const result = await fetchPage(newListings[i].url, 15000);
           await safeRpc(supabase, "increment_hourly_requests");
 
-          const details = parseDubizzleDetail(result.html);
+          const detailParser = getParser(scope.source_platform);
+          const details = detailParser.parseDetail(result.html);
 
           newListings[i].enrichedDescription = details.description;
           newListings[i].enrichedMainImageUrl = details.mainImageUrl;
@@ -551,9 +554,9 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
 
           if (!existingBuyer) {
             await supabase.from("bhe_buyers").insert({
-              source: confirmedBuyRequest ? "dubizzle_wanted" : "dubizzle_title_match",
+              source: confirmedBuyRequest ? `${scope.source_platform}_wanted` : `${scope.source_platform}_title_match`,
               source_url: listing.url,
-              source_platform: "dubizzle",
+              source_platform: scope.source_platform,
               buyer_name: sellerName,
               buyer_phone: phone,
               product_wanted: listing.title,
@@ -599,9 +602,9 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
 
         if (!existingBuyer) {
           await supabase.from("bhe_buyers").insert({
-            source: "dubizzle_title_match",
+            source: `${scope.source_platform}_title_match`,
             source_url: buyer.url,
-            source_platform: "dubizzle",
+            source_platform: scope.source_platform,
             buyer_name: buyer.sellerName || null,
             buyer_phone: null,
             product_wanted: buyer.title,
