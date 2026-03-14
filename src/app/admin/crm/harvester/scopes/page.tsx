@@ -25,6 +25,7 @@ export default function ScopesPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [activeTab, setActiveTab] = useState<ScopeGroupTab>("all");
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
 
   const loadData = useCallback(async () => {
     try {
@@ -84,11 +85,33 @@ export default function ScopesPage() {
     seasonal: scopes.filter((s) => s.scope_group === "seasonal").length,
   };
 
-  // Filter scopes by active tab
-  const filteredScopes =
+  // Get unique platforms in scopes
+  const platformsInScopes = Array.from(new Set(scopes.map((s) => s.source_platform)));
+  const platformLabels: Record<string, string> = {
+    dubizzle: "🔵 دوبيزل",
+    opensooq: "🟢 السوق المفتوح",
+    hatla2ee: "🚗 هتلاقي",
+    aqarmap: "🏠 عقارماب",
+    contactcars: "🚙 كونتاكت كارز",
+    carsemsar: "🚘 كارسمسار",
+    propertyfinder: "🏡 بروبرتي فايندر",
+    yallamotor: "🏎️ يلا موتور",
+    bezaat: "📦 بيزات",
+    soq24: "🛒 سوق24",
+    cairolink: "🔗 كايرو لينك",
+    sooqmsr: "🇪🇬 سوق مصر",
+    dowwr: "🔍 دوّر",
+  };
+
+  // Filter scopes by active tab AND platform
+  let filteredScopes =
     activeTab === "all"
       ? scopes
       : scopes.filter((s) => (s.scope_group || "general") === activeTab);
+
+  if (platformFilter !== "all") {
+    filteredScopes = filteredScopes.filter((s) => s.source_platform === platformFilter);
+  }
 
   const groupTabs: { key: ScopeGroupTab; label: string; icon: string }[] = [
     { key: "all", label: "الكل", icon: "📋" },
@@ -149,6 +172,39 @@ export default function ScopesPage() {
           </button>
         ))}
       </div>
+
+      {/* Platform Filter */}
+      {platformsInScopes.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-500 font-medium">المنصة:</span>
+          <button
+            onClick={() => setPlatformFilter("all")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              platformFilter === "all"
+                ? "bg-gray-900 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            الكل ({scopes.length})
+          </button>
+          {platformsInScopes.map((platform) => {
+            const count = scopes.filter((s) => s.source_platform === platform).length;
+            return (
+              <button
+                key={platform}
+                onClick={() => setPlatformFilter(platform)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  platformFilter === platform
+                    ? "bg-gray-900 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {platformLabels[platform] || platform} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Scopes List */}
       <div className="space-y-3">
@@ -256,6 +312,11 @@ function ScopeCard({
             {scope.subcategory_ar && (
               <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs">
                 {scope.subcategory_ar}
+              </span>
+            )}
+            {scope.source_platform && scope.source_platform !== "dubizzle" && (
+              <span className="px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded-full text-xs">
+                {scope.source_platform}
               </span>
             )}
           </div>

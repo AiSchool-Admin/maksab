@@ -21,6 +21,15 @@ import {
 } from "lucide-react";
 import { getAdminHeaders } from "@/app/admin/layout";
 
+interface PlatformInfo {
+  id: string;
+  name_ar: string;
+  is_active: boolean;
+  last_test_status: string | null;
+  total_listings_harvested: number;
+  last_harvest_at: string | null;
+}
+
 interface TechData {
   harvester: {
     running: boolean;
@@ -30,6 +39,11 @@ interface TechData {
     lastHarvestMinutes: number;
     todayJobs: number;
     errors: number;
+  };
+  platforms?: {
+    total: number;
+    active: number;
+    list: PlatformInfo[];
   };
 }
 
@@ -190,6 +204,60 @@ export default function TechDashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* ── Platforms Status ──────────────────────────────────── */}
+      {data?.platforms && data.platforms.list.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-dark flex items-center gap-2">
+              🌐 المنصات المراقبة
+            </h3>
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+              {data.platforms.active} نشطة من {data.platforms.total}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {data.platforms.list.map((platform) => {
+              const statusColors: Record<string, string> = {
+                parseable: "bg-green-500",
+                reachable_no_parse: "bg-yellow-500",
+                blocked: "bg-red-500",
+                error: "bg-red-500",
+              };
+              const dotColor = platform.is_active
+                ? "bg-green-500 animate-pulse"
+                : statusColors[platform.last_test_status || ""] || "bg-gray-400";
+
+              return (
+                <div
+                  key={platform.id}
+                  className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${dotColor}`} />
+                    <span className="text-sm font-medium text-dark">{platform.name_ar}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {platform.total_listings_harvested > 0 && (
+                      <span className="text-[11px] text-gray-500">
+                        {platform.total_listings_harvested.toLocaleString()} إعلان
+                      </span>
+                    )}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                      platform.is_active
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-200 text-gray-500"
+                    }`}>
+                      {platform.is_active ? "نشط" : "معطّل"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── No Errors ──────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">

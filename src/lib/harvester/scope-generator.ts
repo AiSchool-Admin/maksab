@@ -1,13 +1,12 @@
 /**
  * Scope Generator — إنشاء كل النطاقات تلقائياً
- * المرحلة 1.5 من آلية التوازن الأمثل
+ * يدعم كل المنصات: dubizzle + opensooq + hatla2ee + aqarmap + ...
  */
 
 import { SupabaseClient } from "@supabase/supabase-js";
 
 const HIGH_DEMAND = ["phones", "vehicles", "properties", "electronics"];
 const MED_DEMAND = ["furniture", "fashion", "home_appliances"];
-const LOW_DEMAND = ["gold_jewelry", "scrap", "luxury", "hobbies", "services"];
 
 const TARGET_RATIOS: Record<string, number> = {
   phones: 0.33,
@@ -22,6 +21,40 @@ const TARGET_RATIOS: Record<string, number> = {
   gold_jewelry: 0.25,
   scrap: 0.5,
   luxury: 0.2,
+};
+
+// Platform short codes for scope code generation
+const PLATFORM_CODES: Record<string, string> = {
+  dubizzle: "dub",
+  opensooq: "osq",
+  hatla2ee: "hat",
+  aqarmap: "aqr",
+  contactcars: "ccr",
+  carsemsar: "csm",
+  propertyfinder: "pf",
+  yallamotor: "ylm",
+  bezaat: "bzt",
+  soq24: "sq24",
+  cairolink: "clk",
+  sooqmsr: "smsr",
+  dowwr: "dwwr",
+};
+
+// Platform Arabic names for scope naming
+const PLATFORM_NAMES_AR: Record<string, string> = {
+  dubizzle: "دوبيزل",
+  opensooq: "السوق المفتوح",
+  hatla2ee: "هتلاقي",
+  aqarmap: "عقارماب",
+  contactcars: "كونتاكت كارز",
+  carsemsar: "كارسمسار",
+  propertyfinder: "بروبرتي فايندر",
+  yallamotor: "يلا موتور",
+  bezaat: "بيزات",
+  soq24: "سوق24",
+  cairolink: "كايرو لينك",
+  sooqmsr: "سوق مصر",
+  dowwr: "دوّر",
 };
 
 interface ScopeConfig {
@@ -62,119 +95,146 @@ export async function generateAllScopes(supabase: SupabaseClient): Promise<{
     governoratesCount: number;
     sampleUrl: string | null;
     sampleScope: string | null;
+    platformsProcessed: string[];
   };
 }> {
-  const { data: categories, error: catError } = await supabase
-    .from("ahe_category_mappings")
-    .select("*")
-    .eq("source_platform", "dubizzle");
+  // Get ALL active platforms (not just dubizzle)
+  const { data: activePlatforms } = await supabase
+    .from("harvest_platforms")
+    .select("id")
+    .eq("is_active", true);
 
-  const { data: governorates, error: govError } = await supabase
-    .from("ahe_governorate_mappings")
-    .select("*")
-    .eq("source_platform", "dubizzle");
+  // Also include platforms with testable status for scope generation
+  const { data: testablePlatforms } = await supabase
+    .from("harvest_platforms")
+    .select("id")
+    .eq("is_testable", true);
 
-  if (catError || govError) {
-    return {
-      created: 0,
-      updated: 0,
-      skipped: 0,
-      total: 0,
-      errors: [
-        ...(catError ? [{ code: "FETCH_CATEGORIES", error: catError.message }] : []),
-        ...(govError ? [{ code: "FETCH_GOVERNORATES", error: govError.message }] : []),
-      ],
-      debug: { categoriesCount: 0, governoratesCount: 0, sampleUrl: null, sampleScope: null },
-    };
-  }
+  const platformIds = new Set<string>();
+  // Always include dubizzle
+  platformIds.add("dubizzle");
+  for (const p of activePlatforms || []) platformIds.add(p.id);
+  for (const p of testablePlatforms || []) platformIds.add(p.id);
 
-  const scopes: Record<string, any>[] = [];
-  let skipped = 0;
+  // Exclude Facebook (manual only)
+  platformIds.delete("facebook_marketplace");
+  platformIds.delete("facebook_groups");
 
-  for (const cat of categories || []) {
-    for (const gov of governorates || []) {
-      const govTier = gov.gov_tier || "B";
-      const catDemand = getCatDemand(cat.maksab_category);
+  const allScopes: Record<string, unknown>[] = [];
+  let totalSkipped = 0;
+  const allErrors: { code: string; error: string }[] = [];
+  const platformsProcessed: string[] = [];
 
-      // Skip low demand categories in remote governorates
-      if (catDemand === "low" && (govTier === "D" || govTier === "C")) {
-        skipped++;
-        continue;
+  for (const platformId of platformIds) {
+    const { data: categories, error: catError } = await supabase
+      .from("ahe_category_mappings")
+      .select("*")
+      .eq("source_platform", platformId)
+      .eq("is_active", true);
+
+    const { data: governorates, error: govError } = await supabase
+      .from("ahe_governorate_mappings")
+      .select("*")
+      .eq("source_platform", platformId)
+      .eq("is_active", true);
+
+    if (catError || govError) {
+      if (catError) allErrors.push({ code: `${platformId}_CAT`, error: catError.message });
+      if (govError) allErrors.push({ code: `${platformId}_GOV`, error: govError.message });
+      continue;
+    }
+
+    if (!categories?.length || !governorates?.length) {
+      continue;
+    }
+
+    platformsProcessed.push(platformId);
+    const platformCode = PLATFORM_CODES[platformId] || platformId.substring(0, 3);
+    const platformNameAr = PLATFORM_NAMES_AR[platformId] || platformId;
+
+    for (const cat of categories) {
+      for (const gov of governorates) {
+        const govTier = gov.gov_tier || "B";
+        const catDemand = getCatDemand(cat.maksab_category);
+
+        // Skip low demand categories in remote governorates
+        if (catDemand === "low" && (govTier === "D" || govTier === "C")) {
+          totalSkipped++;
+          continue;
+        }
+        if (catDemand === "med" && govTier === "D") {
+          totalSkipped++;
+          continue;
+        }
+
+        const config = getScopeConfig(govTier, catDemand);
+
+        // Build URL
+        const baseUrl = (cat.source_url_template || "").replace(
+          "{gov}",
+          gov.source_url_segment || ""
+        );
+
+        if (!baseUrl || baseUrl.includes("{gov}")) {
+          totalSkipped++;
+          continue;
+        }
+
+        const code = `${platformCode}_${cat.maksab_category}_${gov.maksab_governorate}`;
+
+        // Non-dubizzle platforms get slightly lower priority
+        const priorityAdjust = platformId === "dubizzle" ? 0 : -1;
+
+        allScopes.push({
+          code,
+          name: `${cat.maksab_category_ar} — ${gov.maksab_governorate_ar} — ${platformNameAr}`,
+          source_platform: platformId,
+          maksab_category: cat.maksab_category,
+          governorate: gov.maksab_governorate,
+          base_url: baseUrl,
+          harvest_interval_minutes: config.interval,
+          max_pages_per_harvest: config.maxPages,
+          priority: Math.max(1, config.priority + priorityAdjust),
+          is_active: platformId === "dubizzle" ? govTier !== "D" : false, // New platforms start inactive
+          target_supply_demand_ratio: TARGET_RATIOS[cat.maksab_category] || 0.33,
+          gov_tier: govTier,
+          cat_demand_level: catDemand,
+        });
       }
-      if (catDemand === "med" && govTier === "D") {
-        skipped++;
-        continue;
-      }
-
-      const config = getScopeConfig(govTier, catDemand);
-
-      // Build URL
-      const baseUrl = (cat.source_url_template || "").replace(
-        "{gov}",
-        gov.source_url_segment || ""
-      );
-
-      if (!baseUrl || baseUrl.includes("{gov}")) {
-        skipped++;
-        continue;
-      }
-
-      const code = `dub_${cat.maksab_category}_${gov.maksab_governorate}`;
-
-      scopes.push({
-        code,
-        name: `${cat.maksab_category_ar} — ${gov.maksab_governorate_ar} — دوبيزل`,
-        source_platform: "dubizzle",
-        maksab_category: cat.maksab_category,
-        governorate: gov.maksab_governorate,
-        base_url: baseUrl,
-        harvest_interval_minutes: config.interval,
-        max_pages_per_harvest: config.maxPages,
-        priority: config.priority,
-        is_active: govTier !== "D",
-        target_supply_demand_ratio: TARGET_RATIOS[cat.maksab_category] || 0.33,
-        gov_tier: govTier,
-        cat_demand_level: catDemand,
-      });
     }
   }
 
-  // Upsert with proper error tracking
+  // Upsert
   let created = 0;
   let updated = 0;
-  const errors: { code: string; error: string }[] = [];
 
-  // First, try inserting one scope to detect column issues early
-  if (scopes.length > 0) {
-    const testScope = scopes[0];
+  if (allScopes.length > 0) {
     const { error: testError } = await supabase
       .from("ahe_scopes")
       .select("id")
       .limit(0);
 
     if (testError) {
-      errors.push({ code: "TABLE_ACCESS", error: testError.message });
+      allErrors.push({ code: "TABLE_ACCESS", error: testError.message });
     }
   }
 
-  for (const scope of scopes) {
-    // Check if exists
+  for (const scope of allScopes) {
     const { data: existing, error: lookupError } = await supabase
       .from("ahe_scopes")
       .select("id")
-      .eq("code", scope.code)
+      .eq("code", scope.code as string)
       .limit(1)
       .maybeSingle();
 
     if (lookupError) {
-      if (errors.length < 10) {
-        errors.push({ code: scope.code, error: `lookup: ${lookupError.message}` });
+      if (allErrors.length < 20) {
+        allErrors.push({ code: scope.code as string, error: `lookup: ${lookupError.message}` });
       }
       continue;
     }
 
     if (existing) {
-      // Update only the configurable fields, preserve custom settings
       const { error } = await supabase
         .from("ahe_scopes")
         .update({
@@ -188,26 +248,24 @@ export async function generateAllScopes(supabase: SupabaseClient): Promise<{
         .eq("id", existing.id);
 
       if (error) {
-        if (errors.length < 10) {
-          errors.push({ code: scope.code, error: `update: ${error.message}` });
+        if (allErrors.length < 20) {
+          allErrors.push({ code: scope.code as string, error: `update: ${error.message}` });
         }
       } else {
         updated++;
       }
     } else {
-      // Insert new
       const { error } = await supabase.from("ahe_scopes").insert(scope);
       if (error) {
-        if (errors.length < 10) {
-          errors.push({ code: scope.code, error: `insert: ${error.message}` });
+        if (allErrors.length < 20) {
+          allErrors.push({ code: scope.code as string, error: `insert: ${error.message}` });
         }
-        // If column error, try without the new columns
         if (error.message.includes("column") || error.message.includes("undefined")) {
-          const { target_supply_demand_ratio, gov_tier, cat_demand_level, ...safeScope } = scope;
+          const { target_supply_demand_ratio, gov_tier, cat_demand_level, ...safeScope } = scope as Record<string, unknown>;
           const { error: retryError } = await supabase.from("ahe_scopes").insert(safeScope);
           if (retryError) {
-            if (errors.length < 10) {
-              errors.push({ code: scope.code, error: `retry_insert: ${retryError.message}` });
+            if (allErrors.length < 20) {
+              allErrors.push({ code: scope.code as string, error: `retry_insert: ${retryError.message}` });
             }
           } else {
             created++;
@@ -222,14 +280,15 @@ export async function generateAllScopes(supabase: SupabaseClient): Promise<{
   return {
     created,
     updated,
-    skipped,
-    total: scopes.length,
-    errors,
+    skipped: totalSkipped,
+    total: allScopes.length,
+    errors: allErrors,
     debug: {
-      categoriesCount: (categories || []).length,
-      governoratesCount: (governorates || []).length,
-      sampleUrl: scopes[0]?.base_url || null,
-      sampleScope: scopes[0] ? JSON.stringify(scopes[0]) : null,
+      categoriesCount: allScopes.length,
+      governoratesCount: 0,
+      sampleUrl: allScopes[0]?.base_url as string || null,
+      sampleScope: allScopes[0] ? JSON.stringify(allScopes[0]) : null,
+      platformsProcessed,
     },
   };
 }

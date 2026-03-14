@@ -12,6 +12,7 @@ import {
   parseDubizzleDetail,
   BROWSER_HEADERS,
 } from "@/lib/crm/harvester/parsers/dubizzle";
+import { getParser } from "@/lib/crm/harvester/parsers/platform-router";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
 import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
@@ -152,7 +153,8 @@ export async function POST(req: NextRequest) {
           diag.has_next_data = html.includes("__NEXT_DATA__");
           diag.has_json_ld = html.includes("application/ld+json");
 
-          const listings = parseDubizzleList(html);
+          const platformParser = getParser(typedScope.source_platform);
+          const listings = platformParser.parseList(html);
           diag.listings_found = listings.length;
 
           // Store listings from the first successful strategy

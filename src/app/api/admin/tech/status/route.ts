@@ -61,6 +61,18 @@ export async function GET(req: NextRequest) {
       safeCount(sb, "ahe_harvest_jobs", (q) => q.gte("started_at", todayISO)),
     ]);
 
+    // Get platforms data
+    let platforms: { id: string; name_ar: string; is_active: boolean; last_test_status: string | null; total_listings_harvested: number; last_harvest_at: string | null }[] = [];
+    try {
+      const { data } = await sb
+        .from("harvest_platforms")
+        .select("id, name_ar, is_active, last_test_status, total_listings_harvested, last_harvest_at")
+        .order("is_active", { ascending: false });
+      platforms = data || [];
+    } catch {
+      // Table may not exist yet
+    }
+
     return NextResponse.json({
       harvester: {
         running: todayJobs > 0,
@@ -70,6 +82,11 @@ export async function GET(req: NextRequest) {
         lastHarvestMinutes: 0,
         todayJobs,
         errors: 0,
+      },
+      platforms: {
+        total: platforms.length,
+        active: platforms.filter(p => p.is_active).length,
+        list: platforms,
       },
     });
   } catch (error) {
