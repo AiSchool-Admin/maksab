@@ -489,25 +489,32 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       // Strategy 1: كل بائع بالرقم = مشتري محتمل
       if (sellerId?.id && listing.extractedPhone) {
         const sellerName = cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null);
-        console.log('[SIB] Calling createBuyerFromSeller for:', sellerName, listing.extractedPhone);
-        const sibResult = await createBuyerFromSeller(supabase, {
-          id: sellerId.id,
-          phone: listing.extractedPhone,
-          name: sellerName,
-          profile_url: listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl || null,
-          is_business: listing.isBusiness,
-          is_verified: listing.isVerified,
-          total_listings_seen: 1,
-        }, {
-          title: listing.title,
-          price: listing.price,
-          source_listing_url: listing.url,
-        }, {
-          maksab_category: scope.maksab_category,
-          governorate: scope.governorate,
-          source_platform: scope.source_platform,
-        });
-        console.log('[SIB] Result:', sibResult);
+        console.log('=== [SIB-CHECK] About to call createBuyerFromSeller ===');
+        console.log('=== [SIB-CHECK] seller:', JSON.stringify({ name: sellerName, phone: listing.extractedPhone }).substring(0, 100));
+
+        try {
+          const sibResult = await createBuyerFromSeller(supabase, {
+            id: sellerId.id,
+            phone: listing.extractedPhone,
+            name: sellerName,
+            profile_url: listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl || null,
+            is_business: listing.isBusiness,
+            is_verified: listing.isVerified,
+            total_listings_seen: 1,
+          }, {
+            title: listing.title,
+            price: listing.price,
+            source_listing_url: listing.url,
+          }, {
+            maksab_category: scope.maksab_category,
+            governorate: scope.governorate,
+            source_platform: scope.source_platform,
+          });
+          console.log('=== [SIB-CHECK] Result:', sibResult);
+        } catch (e: unknown) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          console.log('=== [SIB-CHECK] CRASH:', errMsg);
+        }
       }
 
       // Strategy 3: تصنيف احتمالية الشراء
