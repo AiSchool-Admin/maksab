@@ -109,6 +109,7 @@ export function parseHatla2eeList(html: string): ListPageListing[] {
       isNegotiable: context.includes("قابل للتفاوض") || context.includes("negotiable"),
       category: "vehicles",
       isLikelyBuyRequest,
+      detectedBuyerPhone: null,
     });
   }
 
@@ -249,6 +250,7 @@ function parseHatla2eeJson(json: Record<string, unknown>): ListPageListing[] {
       isNegotiable: !!(item.is_negotiable),
       category: "vehicles",
       isLikelyBuyRequest,
+      detectedBuyerPhone: null,
     });
   }
 

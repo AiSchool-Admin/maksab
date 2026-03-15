@@ -77,6 +77,7 @@ export function parseGenericList(html: string): ListPageListing[] {
       isNegotiable: context.includes("قابل للتفاوض") || context.includes("negotiable"),
       category: null,
       isLikelyBuyRequest,
+      detectedBuyerPhone: null,
     });
   }
 
@@ -117,6 +118,7 @@ export function parseGenericList(html: string): ListPageListing[] {
         isNegotiable: false,
         category: null,
         isLikelyBuyRequest: detectBuyRequest(title),
+        detectedBuyerPhone: null,
       });
     }
   }
@@ -235,6 +237,7 @@ function parseGenericJson(json: Record<string, unknown>): ListPageListing[] {
       isNegotiable: false,
       category: null,
       isLikelyBuyRequest: detectBuyRequest(title),
+      detectedBuyerPhone: null,
     });
   }
 

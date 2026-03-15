@@ -108,6 +108,7 @@ export function parseAqarmapList(html: string): ListPageListing[] {
       isNegotiable: context.includes("قابل للتفاوض") || context.includes("negotiable"),
       category: "properties",
       isLikelyBuyRequest,
+      detectedBuyerPhone: null,
     });
   }
 
@@ -147,6 +148,7 @@ export function parseAqarmapList(html: string): ListPageListing[] {
         isNegotiable: false,
         category: "properties",
         isLikelyBuyRequest: detectBuyRequest(title),
+        detectedBuyerPhone: null,
       });
     }
   }
@@ -278,6 +280,7 @@ function parseAqarmapJson(json: Record<string, unknown>): ListPageListing[] {
       isNegotiable: !!(item.is_negotiable),
       category: "properties",
       isLikelyBuyRequest: detectBuyRequest(title),
+      detectedBuyerPhone: null,
     });
   }
 

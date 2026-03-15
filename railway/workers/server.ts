@@ -1659,24 +1659,24 @@ async function enrichListings(): Promise<{
   console.log('[Enrich] Starting enrichment cycle...');
   const supabase = getSupabase();
 
-  // Fetch 10 listings without phone
-  // Try with detail_fetched_at filter first, fallback without it if column doesn't exist
+  // Fetch 10 listings that haven't had their detail page opened yet
+  // Opens ALL listings (not just those without phone) to detect "مطلوب" buy requests
   let listings: any[] | null = null;
   let error: any = null;
 
-  // Try with detail_fetched_at filter
+  // Fetch any listing without detail_fetched_at — prioritize likely buy requests first
   const result1 = await supabase
     .from("ahe_listings")
-    .select("id, source_listing_url, ahe_seller_id, seller_name")
-    .is("extracted_phone", null)
+    .select("id, source_listing_url, ahe_seller_id, seller_name, is_likely_buy_request")
     .is("detail_fetched_at", null)
     .eq("is_duplicate", false)
+    .order("is_likely_buy_request", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(10);
 
   if (result1.error) {
     console.log(`[Enrich] Query with detail_fetched_at failed: ${result1.error.message}`);
-    // Fallback: query without detail_fetched_at
+    // Fallback: query without detail_fetched_at — use extracted_phone IS NULL
     const result2 = await supabase
       .from("ahe_listings")
       .select("id, source_listing_url, ahe_seller_id, seller_name")
@@ -1694,11 +1694,12 @@ async function enrichListings(): Promise<{
   console.log(`[Enrich] Query result: count=${listings?.length ?? 0}, error=${error?.message || 'none'}`);
 
   if (error || !listings?.length) {
-    console.log('[Enrich] No listings to enrich:', error?.message || 'all enriched');
+    console.log('[Enrich] No listings to enrich:', error?.message || 'all detail pages opened');
     return { enriched: 0, phones_found: 0, names_found: 0 };
   }
 
-  console.log(`[Enrich] Processing ${listings.length} listings`);
+  const buyRequestCount = listings.filter((l: any) => l.is_likely_buy_request).length;
+  console.log(`[Enrich] Processing ${listings.length} listings (${buyRequestCount} likely buyers first)`);
 
   let phonesFound = 0;
   let namesFound = 0;

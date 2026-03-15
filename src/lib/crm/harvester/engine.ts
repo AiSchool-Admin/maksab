@@ -65,6 +65,7 @@ interface EnrichedListing extends ListPageListing {
   extractedPhone?: string | null;
   sellerNameFromDetail?: string | null;
   sellerProfileUrlFromDetail?: string | null;
+  detectedBuyerPhone: string | null;
 }
 
 async function safeRpc(
@@ -376,8 +377,12 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       }
     }
 
+    const buyRequestsFromCards = newListings.filter(l => l.isLikelyBuyRequest);
     console.log(
       `[AHE] 📊 Phase 2: ${newListings.length} new, ${duplicateCount} duplicates`
+    );
+    console.log(
+      `[BHE] 🔍 Detected ${buyRequestsFromCards.length} buy requests from ${newListings.length} card listings`
     );
 
     await updateJob(supabase, jobId, {
@@ -517,6 +522,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         phone_source: listing.extractedPhone ? "description" : null,
         condition: listing.enrichedCondition || null,
         listing_type: listing.isFeatured ? "featured" : "regular",
+        is_likely_buy_request: listing.isLikelyBuyRequest || false,
       });
     }
 
@@ -538,7 +544,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       const likelyBuyRequest = listing.isLikelyBuyRequest;
 
       if (confirmedBuyRequest || likelyBuyRequest) {
-        const phone = listing.extractedPhone || null;
+        const phone = listing.extractedPhone || listing.detectedBuyerPhone || null;
         const sellerName = cleanSellerName(
           listing.sellerNameFromDetail || listing.sellerName || null
         );
@@ -601,20 +607,21 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
           .maybeSingle();
 
         if (!existingBuyer) {
+          const buyerPhone = buyer.detectedBuyerPhone || null;
           await supabase.from("bhe_buyers").insert({
             source: `${scope.source_platform}_title_match`,
             source_url: buyer.url,
             source_platform: scope.source_platform,
             buyer_name: buyer.sellerName || null,
-            buyer_phone: null,
+            buyer_phone: buyerPhone,
             product_wanted: buyer.title,
             category: scope.maksab_category || null,
             governorate: scope.governorate || null,
             budget_max: buyer.price || null,
             original_text: buyer.title,
-            buyer_tier: "warm_buyer",
-            buyer_score: 30,
-            pipeline_status: "discovered",
+            buyer_tier: buyerPhone ? "hot_buyer" : "warm_buyer",
+            buyer_score: buyerPhone ? 70 : 30,
+            pipeline_status: buyerPhone ? "phone_found" : "discovered",
           });
           buyersDetected++;
         }

@@ -53,16 +53,31 @@ export const BUY_KEYWORDS = new RegExp([
   'wanted', 'wtb', 'looking for', 'we buy', 'will buy',
 ].join('|'), 'i');
 
-export function detectBuyRequest(title: string, cardText?: string): boolean {
-  const hasBuyKeyword = BUY_KEYWORDS.test(title);
-  if (hasBuyKeyword) return true;
+export function detectBuyRequest(title: string, cardText?: string, description?: string): boolean {
+  // 1. Buy keyword in title → definite buyer
+  if (BUY_KEYWORDS.test(title)) return true;
 
-  // If card text available: barter badge + buy keyword anywhere in card
+  // 2. Buy keyword in description/snippet → definite buyer
+  if (description && BUY_KEYWORDS.test(description)) return true;
+
+  // 3. Buy keyword anywhere in card text → buyer
+  //    (card text includes title + description + badges + everything visible)
   if (cardText) {
-    const hasBarterBadge = cardText.includes('متوفر التبادل') ||
-      cardText.includes('قابل للتبديل') ||
-      cardText.includes('قابل للتبادل');
-    if (hasBarterBadge && BUY_KEYWORDS.test(cardText)) return true;
+    const hasBuyKeyword = BUY_KEYWORDS.test(cardText);
+    if (hasBuyKeyword) {
+      // Phone number in card = trade buyer (very likely)
+      const hasPhoneInCard = /01[0-2,5]\d{8}/.test(cardText);
+      if (hasPhoneInCard) return true;
+
+      // Barter badge + buy keyword = likely buyer
+      const hasBarterBadge = cardText.includes('متوفر التبادل') ||
+        cardText.includes('قابل للتبديل') ||
+        cardText.includes('قابل للتبادل');
+      if (hasBarterBadge) return true;
+
+      // Buy keyword in card text alone (could be from description snippet)
+      return true;
+    }
   }
 
   return false;
@@ -86,6 +101,7 @@ export interface ListPageListing {
   isNegotiable: boolean;
   category: string | null;
   isLikelyBuyRequest: boolean;
+  detectedBuyerPhone: string | null;
 }
 
 export interface ListingDetails {
@@ -241,10 +257,20 @@ function parseJsonListings(json: Record<string, unknown>): ListPageListing[] {
       isBusiness = !!(user.is_business || user.account_type === "business");
     }
 
-    const isLikelyBuyRequest = detectBuyRequest(title);
+    // Build full card text from all available fields for buy request detection
+    const descriptionSnippet = (ad.description as string) || (ad.subtitle as string) || (ad.snippet as string) || "";
+    const fullCardText = [title, descriptionSnippet, location].filter(Boolean).join(" ");
+
+    const isLikelyBuyRequest = detectBuyRequest(title, fullCardText, descriptionSnippet);
+
+    // Extract phone from card text (trade buyers often put their numbers)
+    const phoneInCard = fullCardText.match(/01[0-2,5]\d{8}/);
+    const detectedBuyerPhone = phoneInCard ? phoneInCard[0] : null;
 
     if (isLikelyBuyRequest) {
-      console.log('[BHE-Card] 🔥 BUY keyword in title →', 'BUYER :', title.substring(0, 40));
+      const source = BUY_KEYWORDS.test(title) ? '(title)' : BUY_KEYWORDS.test(descriptionSnippet) ? '(desc)' : '(card)';
+      console.log('[BHE-Card] 🔥 BUY request detected', source, '→ BUYER :', title.substring(0, 40),
+        detectedBuyerPhone ? `📞 ${detectedBuyerPhone}` : '');
     }
 
     listings.push({
@@ -267,6 +293,7 @@ function parseJsonListings(json: Record<string, unknown>): ListPageListing[] {
         !!(ad.is_negotiable || ad.negotiable) || title.includes("قابل للتفاوض"),
       category: (ad.category_name as string) || null,
       isLikelyBuyRequest,
+      detectedBuyerPhone,
     });
   }
 
@@ -442,15 +469,24 @@ function parseHtmlListings(html: string): ListPageListing[] {
 
     const thumbnailUrl = extractImageFromContext(context);
 
-    const isLikelyBuyRequest = detectBuyRequest(title, context);
+    // Strip HTML tags to get clean card text for buy request detection
+    const cleanCardText = context.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const isLikelyBuyRequest = detectBuyRequest(title, cleanCardText);
+
+    // Extract phone from card text (trade buyers often put their numbers)
+    const phoneInCard = cleanCardText.match(/01[0-2,5]\d{8}/);
+    const detectedBuyerPhone = phoneInCard ? phoneInCard[0] : null;
 
     if (isLikelyBuyRequest) {
-      const hasBuyKeyword = BUY_KEYWORDS.test(title);
-      const hasBarterBadge = context.includes('متوفر التبادل') || context.includes('قابل للتبديل');
+      const source = BUY_KEYWORDS.test(title) ? '(title)' :
+        (cleanCardText !== title && BUY_KEYWORDS.test(cleanCardText)) ? '(card)' : '(context)';
+      const hasBarterBadge = cleanCardText.includes('متوفر التبادل') || cleanCardText.includes('قابل للتبديل');
       console.log('[BHE-Card]',
-        hasBuyKeyword ? '🔥 BUY keyword in title' : '',
-        hasBarterBadge ? '🔄 Barter badge' : '',
-        '→ BUYER :', title.substring(0, 40));
+        `🔥 BUY request detected ${source}`,
+        hasBarterBadge ? '🔄 Barter' : '',
+        '→ BUYER :', title.substring(0, 40),
+        detectedBuyerPhone ? `📞 ${detectedBuyerPhone}` : '');
     }
 
     listings.push({
@@ -471,6 +507,7 @@ function parseHtmlListings(html: string): ListPageListing[] {
       isNegotiable: context.includes("قابل للتفاوض"),
       category: null,
       isLikelyBuyRequest,
+      detectedBuyerPhone,
     });
   }
 

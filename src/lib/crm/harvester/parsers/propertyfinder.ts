@@ -97,6 +97,7 @@ export function parsePropertyFinderList(html: string): ListPageListing[] {
                 supportsExchange: false, isNegotiable: false,
                 category: "properties",
                 isLikelyBuyRequest: detectBuyRequest(title),
+                detectedBuyerPhone: null,
               });
             }
 
@@ -176,7 +177,7 @@ export function parsePropertyFinderList(html: string): ListPageListing[] {
       isVerified: ctx.includes("verified"), isBusiness: ctx.includes("agent") || ctx.includes("broker"),
       isFeatured: ctx.includes("featured") || ctx.includes("premium"),
       supportsExchange: false, isNegotiable: ctx.includes("negotiable"),
-      category: "properties", isLikelyBuyRequest: detectBuyRequest(title, ctx),
+      category: "properties", isLikelyBuyRequest: detectBuyRequest(title, ctx), detectedBuyerPhone: null,
     });
   }
 
@@ -220,7 +221,7 @@ export function parsePropertyFinderList(html: string): ListPageListing[] {
       isVerified: ctx.includes("verified"), isBusiness: ctx.includes("agent") || ctx.includes("broker"),
       isFeatured: ctx.includes("featured") || ctx.includes("premium"),
       supportsExchange: false, isNegotiable: ctx.includes("negotiable"),
-      category: "properties", isLikelyBuyRequest,
+      category: "properties", isLikelyBuyRequest, detectedBuyerPhone: null,
     });
   }
   return listings;
@@ -294,6 +295,7 @@ function parseJson(json: Record<string, unknown>): ListPageListing[] {
       isFeatured: !!(item.isFeatured || item.featured),
       supportsExchange: false, isNegotiable: false, category: "properties",
       isLikelyBuyRequest: detectBuyRequest(title),
+      detectedBuyerPhone: null,
     };
   });
 }
