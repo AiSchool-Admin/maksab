@@ -24,6 +24,10 @@ const PORT = parseInt(process.env.PORT || "3000", 10);
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
+const VERCEL_HARVEST_URL = process.env.VERCEL_HARVEST_URL || ""; // e.g. https://maksab.vercel.app/api/admin/crm/harvester/harvest-vercel
+
+// Platforms that should be harvested via Vercel (Railway IPs blocked by WAF)
+const VERCEL_DELEGATED_PLATFORMS = ["opensooq", "aqarmap", "dowwr"];
 
 const BROWSER_HEADERS: Record<string, string> = {
   "User-Agent":
@@ -2098,6 +2102,72 @@ async function calculateMarketBalanceWorker(): Promise<Array<{
   return results;
 }
 
+/**
+ * Delegate harvest to Vercel endpoint for platforms blocked on Railway
+ * (opensooq, aqarmap, dowwr → Railway IPs get 403, Vercel IPs work)
+ */
+async function harvestViaVercel(scopeCode: string): Promise<HarvestResult> {
+  const startTime = Date.now();
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 70000); // 70s (Vercel has 60s limit)
+
+    const response = await fetch(VERCEL_HARVEST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope_code: scopeCode }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    const data = await response.json();
+
+    console.log(
+      `[Vercel Proxy] ${data.success ? "✅" : "❌"} ${scopeCode}: ` +
+      `${data.listings_new || 0} new, ${data.listings_duplicate || 0} dup, ` +
+      `${data.sellers_new || 0} sellers, ${data.duration_ms || 0}ms`
+    );
+
+    return {
+      success: data.success ?? false,
+      scope_code: scopeCode,
+      pages_fetched: data.pages_fetched || 0,
+      fetched: data.listings_fetched || 0,
+      new: data.listings_new || 0,
+      duplicate: data.listings_duplicate || 0,
+      sellers_new: data.sellers_new || 0,
+      phones_extracted: data.phones_extracted || 0,
+      crm_queued: 0,
+      errors: data.errors || [],
+      duration_ms: Date.now() - startTime,
+      debug: {
+        via: "vercel",
+        vercel_url: VERCEL_HARVEST_URL,
+        vercel_duration_ms: data.duration_ms,
+        buyers_detected: data.buyers_detected || 0,
+        warnings: data.warnings || [],
+      },
+    };
+  } catch (err: any) {
+    console.error(`[Vercel Proxy] ❌ Failed to delegate ${scopeCode}: ${err.message}`);
+    return {
+      success: false,
+      scope_code: scopeCode,
+      pages_fetched: 0,
+      fetched: 0,
+      new: 0,
+      duplicate: 0,
+      sellers_new: 0,
+      phones_extracted: 0,
+      crm_queued: 0,
+      errors: [`Vercel delegation failed: ${err.message}`],
+      duration_ms: Date.now() - startTime,
+      debug: { via: "vercel", vercel_url: VERCEL_HARVEST_URL },
+    };
+  }
+}
+
 async function cronHarvest(): Promise<{
   scopes_processed: number;
   results: HarvestResult[];
@@ -2131,13 +2201,27 @@ async function cronHarvest(): Promise<{
 
   // Smart scope selection — round-robin with priority
   // Pick the scope that hasn't been harvested the longest (or never), breaking ties by priority
-  const { data: readyScopes } = await supabase
+  // If Vercel delegation is configured, also include server_fetch_blocked scopes for delegatable platforms
+  let query = supabase
     .from("ahe_scopes")
     .select("*")
     .eq("is_active", true)
     .eq("is_paused", false)
-    .or("server_fetch_blocked.eq.false,server_fetch_blocked.is.null")
-    .or("next_harvest_at.is.null,next_harvest_at.lte.now()")
+    .or("next_harvest_at.is.null,next_harvest_at.lte.now()");
+
+  if (VERCEL_HARVEST_URL) {
+    // Allow blocked scopes if their platform can be delegated to Vercel
+    const delegatedPlatformFilter = VERCEL_DELEGATED_PLATFORMS
+      .map((p) => `source_platform.eq.${p}`)
+      .join(",");
+    query = query.or(
+      `server_fetch_blocked.eq.false,server_fetch_blocked.is.null,${delegatedPlatformFilter}`
+    );
+  } else {
+    query = query.or("server_fetch_blocked.eq.false,server_fetch_blocked.is.null");
+  }
+
+  const { data: readyScopes } = await query
     .order("last_harvest_at", { ascending: true, nullsFirst: true })
     .order("priority", { ascending: false })
     .limit(1);
@@ -2154,9 +2238,22 @@ async function cronHarvest(): Promise<{
 
   const results: HarvestResult[] = [];
 
+  // Delegate to Vercel for platforms blocked on Railway
+  const shouldDelegateToVercel =
+    VERCEL_HARVEST_URL &&
+    VERCEL_DELEGATED_PLATFORMS.includes(scope.source_platform);
+
   try {
-    const result = await harvestScope(scope.code);
-    results.push(result);
+    if (shouldDelegateToVercel) {
+      console.log(
+        `[Cron] 🌐 Delegating ${scope.code} (${scope.source_platform}) to Vercel → ${VERCEL_HARVEST_URL}`
+      );
+      const result = await harvestViaVercel(scope.code);
+      results.push(result);
+    } else {
+      const result = await harvestScope(scope.code);
+      results.push(result);
+    }
   } catch (err: any) {
     console.error(`[Cron] ❌ Error harvesting ${scope.code}: ${err.message}`);
     results.push({
@@ -2227,7 +2324,27 @@ async function handleHarvest(req: IncomingMessage, res: ServerResponse) {
     }
 
     console.log(`[API] ${req.method} /harvest — scope_code: ${scope_code}`);
-    const result = await harvestScope(scope_code);
+
+    // Check if this scope should be delegated to Vercel
+    let result: HarvestResult;
+    if (VERCEL_HARVEST_URL) {
+      const supabase = getSupabase();
+      const { data: scopeData } = await supabase
+        .from("ahe_scopes")
+        .select("source_platform")
+        .eq("code", scope_code)
+        .single();
+
+      if (scopeData && VERCEL_DELEGATED_PLATFORMS.includes(scopeData.source_platform)) {
+        console.log(`[API] 🌐 Delegating ${scope_code} (${scopeData.source_platform}) to Vercel`);
+        result = await harvestViaVercel(scope_code);
+      } else {
+        result = await harvestScope(scope_code);
+      }
+    } else {
+      result = await harvestScope(scope_code);
+    }
+
     sendJson(res, result);
   } catch (err: any) {
     console.error(`[API] /harvest error: ${err.message}`);
