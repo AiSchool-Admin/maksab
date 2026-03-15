@@ -732,6 +732,74 @@ async function checkPriceDrops(): Promise<void> {
 }
 
 /**
+ * Auto-enrich listings without phone numbers.
+ * After each harvest, opensooq/aqarmap listings often lack phone numbers.
+ * This calls the Vercel enrichment endpoint to fetch detail pages and extract phones.
+ */
+async function autoEnrichListings(): Promise<void> {
+  const client = getClient();
+  if (!client) return;
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  if (!appUrl) {
+    console.log(`[${new Date().toISOString()}] ⚠️ Skipping auto-enrich: no APP_URL configured`);
+    return;
+  }
+
+  try {
+    const platforms = ["opensooq", "aqarmap"];
+
+    for (const platform of platforms) {
+      // Check if there are unenriched listings for this platform
+      const { count } = await client
+        .from("ahe_listings")
+        .select("id", { count: "exact", head: true })
+        .eq("source_platform", platform)
+        .is("extracted_phone", null)
+        .eq("is_duplicate", false);
+
+      if (!count || count === 0) continue;
+
+      console.log(`[${new Date().toISOString()}] 🔍 ${platform}: ${count} listings without phone — enriching...`);
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 55000); // 55s timeout
+
+        const response = await fetch(
+          `${appUrl}/api/admin/crm/harvester/enrich-vercel?platform=${platform}&limit=5`,
+          {
+            signal: controller.signal,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log(
+            `[${new Date().toISOString()}] ✅ ${platform} enrichment: ${result.phones_found || 0} phones found from ${result.listings_processed || 0} listings (${result.duration_ms || 0}ms)`
+          );
+        } else {
+          console.warn(
+            `[${new Date().toISOString()}] ⚠️ ${platform} enrichment failed: HTTP ${response.status}`
+          );
+        }
+      } catch (err) {
+        console.warn(
+          `[${new Date().toISOString()}] ⚠️ ${platform} enrichment error: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  } catch (error) {
+    console.error(
+      `[${new Date().toISOString()}] Error in auto-enrich:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+/**
  * Clean up old signals (older than 60 days) to keep DB performant.
  */
 async function cleanupOldSignals(): Promise<void> {
@@ -789,6 +857,11 @@ async function tick(): Promise<void> {
     await checkPriceDrops();
   }
 
+  // Every 10 minutes: auto-enrich listings without phone
+  if (tickCount % 10 === 0) {
+    await autoEnrichListings();
+  }
+
   // Every 60 minutes: expire old ads
   if (tickCount % 60 === 0) {
     await expireOldAds();
@@ -806,9 +879,10 @@ async function tick(): Promise<void> {
   }
 }
 
-console.log(`[${new Date().toISOString()}] 🟢 مكسب Worker started (Auctions + Smart Notifications)`);
+console.log(`[${new Date().toISOString()}] 🟢 مكسب Worker started (Auctions + Smart Notifications + Enrichment)`);
 console.log(`  - Auction finalization: every ${INTERVAL_MS / 1000}s`);
 console.log(`  - New ad → buyer matching: every 5 minutes`);
+console.log(`  - Auto-enrich (phone extraction): every 10 minutes`);
 console.log(`  - Ending-soon notifications: every 15 minutes`);
 console.log(`  - Price drop notifications: every 30 minutes`);
 console.log(`  - Ad expiry check: every 60 minutes`);

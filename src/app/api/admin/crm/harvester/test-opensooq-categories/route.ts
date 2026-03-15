@@ -3,12 +3,12 @@
  * GET /api/admin/crm/harvester/test-opensooq-categories
  *
  * Tests which OpenSooq URLs work for each category,
- * returning status + listing count from __NEXT_DATA__
+ * returning status + listing count + full debug info from __NEXT_DATA__
  */
 
 import { NextResponse } from "next/server";
 import { BROWSER_HEADERS } from "@/lib/crm/harvester/parsers/dubizzle";
-import { parseOpenSooqListWithDebug } from "@/lib/crm/harvester/parsers/opensooq";
+import { parseOpenSooqListWithDebug, type OpenSooqParseDebug } from "@/lib/crm/harvester/parsers/opensooq";
 
 export const maxDuration = 60;
 
@@ -106,6 +106,8 @@ interface UrlResult {
   patternsUsed: string[];
   htmlLength: number;
   redirectUrl: string | null;
+  /** Full debug info when 0 listings — helps diagnose non-property categories */
+  debug: OpenSooqParseDebug | null;
 }
 
 interface CategoryResult {
@@ -139,6 +141,7 @@ export async function GET() {
         patternsUsed: [],
         htmlLength: 0,
         redirectUrl: null,
+        debug: null,
       };
 
       try {
@@ -165,10 +168,19 @@ export async function GET() {
           urlResult.listingsCount = listings.length;
           urlResult.patternsUsed = debug.patternsUsed;
 
+          // Always include debug for failed URLs (0 listings)
+          // For working URLs, include only sample listings
           if (listings.length > 0) {
+            urlResult.debug = {
+              ...debug,
+              // Truncate for successful — keep key fields
+              firstItemSample: debug.firstItemSample?.substring(0, 200) || null,
+            };
             categoryResult.workingUrls.push(urlResult);
           } else {
-            urlResult.error = "0 listings parsed";
+            // Full debug for failed — this is key for diagnosing non-property categories
+            urlResult.debug = debug;
+            urlResult.error = `0 listings parsed (nextData: ${debug.hasNextData}, landingApi: ${debug.hasLandingApi}, widgets: ${debug.widgetCount}, pagePropsKeys: ${debug.nextDataPagePropsKeys.join(",")})`;
             categoryResult.failedUrls.push(urlResult);
           }
         } else {
