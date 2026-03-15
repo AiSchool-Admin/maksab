@@ -317,6 +317,61 @@ export function parseOpenSooqListWithDebug(html: string): {
         if (props) {
           debug.nextDataPagePropsKeys = Object.keys(props);
 
+          // ═══ Pattern 0 (serpApiResponse): إلكترونيات + سيارات + أثاث + أزياء ═══
+          // Non-real-estate categories use serpApiResponse.listings.items (flat array)
+          const serpApi = props?.serpApiResponse;
+          if (serpApi?.listings?.items && Array.isArray(serpApi.listings.items)) {
+            const items = serpApi.listings.items as Record<string, unknown>[];
+            console.log('[OpenSooq] Found serpApiResponse.listings.items:', items.length);
+
+            for (const item of items) {
+              if (!item.title && !item.post_url) continue;
+
+              const postUrl = item.post_url as string | undefined;
+              const imageUri = item.image_uri as string | undefined;
+              const title = (item.title as string) || (item.highlights as string) || '';
+              const isLikelyBuyRequest = detectBuyRequest(title);
+
+              listings.push({
+                title,
+                price: item.price_amount ? parseInt(String(item.price_amount).replace(/[^0-9]/g, '')) || null : null,
+                url: postUrl
+                  ? (postUrl.startsWith('http') ? postUrl : OPENSOOQ_BASE + postUrl)
+                  : (item.id ? OPENSOOQ_BASE + '/ar/post/' + item.id : ''),
+                thumbnailUrl: imageUri
+                  ? 'https://opensooq-images.os-cdn.com/previews/700x0/' + imageUri
+                  : null,
+                currency: 'EGP',
+                location: [item.nhood_label, item.city_label].filter(Boolean).join(', '),
+                dateText: (item.posted_at as string) || '',
+                sellerName: cleanSellerName((item.member_display_name as string) || '') || null,
+                sellerProfileUrl: item.member_user_name
+                  ? OPENSOOQ_BASE + '/ar/member/' + item.member_user_name
+                  : null,
+                sellerAvatarUrl: (item.member_avatar_uri as string) || null,
+                isVerified: false,
+                isBusiness: false,
+                isFeatured: String(item.listing_status || '').includes('premium') || String(item.listing_status || '').includes('featured'),
+                supportsExchange: false,
+                isNegotiable: false,
+                category: (item.cat2_code as string) || (item.cat1_code as string) || null,
+                isLikelyBuyRequest,
+              });
+            }
+
+            if (listings.length > 0) {
+              debug.patternsUsed.push('p0_serpApiResponse');
+              debug.totalFromEachPattern['p0_serpApiResponse'] = listings.length;
+            }
+          }
+
+          // If serpApiResponse found 10+ listings, skip other patterns
+          if (listings.length >= 10) {
+            debug.finalListingCount = listings.length;
+            debug.sampleListings = listings.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+            return { listings, debug };
+          }
+
           // ═══ PRIMARY: landingApiResponse.listings = array of widgets ═══
           // Each widget has items[] with real listing data (id, price, post_url, highlights, etc.)
           // This MUST run first and takes priority over all other patterns
