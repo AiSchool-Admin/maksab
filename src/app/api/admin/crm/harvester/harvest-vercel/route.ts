@@ -322,10 +322,10 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       }
     }
 
-    // Strategy 1+3: كل بائع بالرقم = مشتري محتمل + تصنيف احتمالية الشراء
-    if (aheSellerId && phone) {
-      console.log('=== [SIB-CHECK] About to call createBuyerFromSeller ===');
-      console.log('=== [SIB-CHECK] seller:', JSON.stringify({ name: sellerName, phone }).substring(0, 100));
+    // Strategy 1+3: كل بائع جديد = مشتري محتمل (مش لازم يكون عنده رقم)
+    if (aheSellerId) {
+      console.log('=== [SIB-CHECK] seller upsert done, calling SIB ===');
+      console.log('=== [SIB-CHECK] seller:', JSON.stringify({ name: sellerName, phone: phone || 'NO_PHONE' }).substring(0, 100));
 
       try {
         const sibResult = await createBuyerFromSeller(supabase, {

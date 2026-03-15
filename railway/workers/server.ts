@@ -941,7 +941,6 @@ async function extractBuyerComments(
         buyer_name: buyer.authorName,
         buyer_profile_url: profileUrl,
         buyer_phone: buyer.phone,
-        product_interested_in: listingTitle || null,
         product_wanted: listingTitle || null,
         category,
         estimated_purchase_value: listingPrice || 0,
