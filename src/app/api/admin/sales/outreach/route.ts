@@ -12,30 +12,39 @@ function getSupabase() {
   });
 }
 
+/**
+ * قالب مزدوج: بائع + مشتري (acq_dual_seller_buyer_v1)
+ * كل بائع = مشتري محتمل — الرسالة تخاطبه بالصفتين
+ */
 function generateOutreachMessage(seller: any): string {
-  const name = seller.name ? ` أ/ ${seller.name.split(" ")[0]}` : "";
-  const count = seller.total_listings_seen || seller.active_listings || 0;
+  const name = seller.name ? ` ${seller.name.split(" ")[0]}` : " يا باشا";
   const category = seller.primary_category || "إعلانات";
 
-  const categoryEmoji: Record<string, string> = {
-    cars: "🚗", real_estate: "🏠", phones: "📱", gold: "💰",
-    fashion: "👗", scrap: "♻️", luxury: "💎", appliances: "🏠",
-    furniture: "🪑", hobbies: "🎮", tools: "🔧", services: "🛠️",
+  const categoryAr: Record<string, string> = {
+    phones: "موبايل", vehicles: "عربية", cars: "عربية",
+    properties: "شقة", real_estate: "شقة",
+    electronics: "جهاز", furniture: "أثاث", fashion: "ملابس",
+    gold: "ذهب", luxury: "منتج فاخر", appliances: "جهاز",
+    hobbies: "منتج", tools: "عدة", services: "خدمة", scrap: "خردة",
   };
-  const emoji = categoryEmoji[category] || "📦";
+  const catLabel = categoryAr[category] || "منتج";
 
-  const categoryNames: Record<string, string> = {
-    cars: "سيارات", real_estate: "عقارات", phones: "موبايلات", gold: "ذهب وفضة",
-    fashion: "موضة", scrap: "خردة", luxury: "سلع فاخرة", appliances: "أجهزة منزلية",
-    furniture: "أثاث", hobbies: "هوايات", tools: "عدد وأدوات", services: "خدمات",
-  };
-  const categoryAr = categoryNames[category] || category;
+  const relatedCount = seller.total_listings_seen ? Math.max(seller.total_listings_seen * 10, 50) : 50;
+  const product = seller.most_listed_product || "إعلانك";
 
-  if (count >= 15) {
-    return `السلام عليكم${name} 👋\nأنا من فريق مكسب — أكبر سوق إلكتروني في مصر.\nلاحظنا إن حضرتك عندك ${count} إعلان ${categoryAr} وشغلك ممتاز ماشاء الله.\nعايزين نعرض عليك تجربة مكسب مجاناً — هتوصل لعملاء أكتر بكتير.\nممكن أبعتلك اللينك؟ ${emoji}`;
-  }
+  return `السلام عليكم${name} 👋
+شفنا ${product} بتاعك على دوبيزل.
+على مكسب تقدر:
+📢 تنشر نفس الإعلان مجاناً — يوصل لآلاف المشترين
+🔨 تعمل مزاد — المشترين يتنافسوا وتبيع بأعلى سعر!
+💰 عمولة طوعية — مش إجبارية زي دوبيزل
 
-  return `السلام عليكم${name} 👋\nأنا من فريق مكسب — سوق إلكتروني مصري جديد.\nلاحظنا إعلاناتك في ${categoryAr} وعايزين نساعدك توصل لعملاء أكتر.\nجرّب مكسب مجاناً — سجّل وانشر أول إعلان في دقيقة.\nأبعتلك اللينك؟ ${emoji}`;
++ لو بتدوّر على ${catLabel} جديد:
+🛒 عندنا ${relatedCount}+ إعلان ${catLabel} بأسعار أقل
+🔄 أو بدّل ${product} بحاجة أحدث — بدون ما تدفع الفرق كامل!
+
+سجّل مجاناً: https://maksab.app/join
+مكسب — اشتري وبيع وبدّل بأمان 💚`;
 }
 
 export async function GET() {
@@ -48,9 +57,10 @@ export async function GET() {
     // - Ordered by priority_score DESC (whales first)
     const { data: sellers, error } = await supabase
       .from("ahe_sellers")
-      .select("id, name, phone, priority_score, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, first_outreach_at")
+      .select("id, name, phone, priority_score, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, buy_probability, buy_probability_score")
       .not("phone", "is", null)
       .in("pipeline_status", ["phone_found", "discovered"])
+      .order("buy_probability_score", { ascending: false })
       .order("priority_score", { ascending: false })
       .limit(50);
 
