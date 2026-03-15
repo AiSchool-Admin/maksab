@@ -56,7 +56,7 @@ interface VercelHarvestResult {
   errors: string[];
   warnings: string[];
   duration_ms: number;
-  parserDebug?: OpenSooqParseDebug;
+  parserDebug: OpenSooqParseDebug | null;
 }
 
 async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult> {
@@ -87,6 +87,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       errors: [`Scope not found: ${scopeCode} — ${scopeErr?.message || ""}`],
       warnings: [],
       duration_ms: Date.now() - startTime,
+      parserDebug: null,
     };
   }
 
@@ -109,6 +110,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       ],
       warnings: [],
       duration_ms: Date.now() - startTime,
+      parserDebug: null,
     };
   }
 
@@ -120,7 +122,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
   const parser = getParser(scope.source_platform);
   let listings: ListPageListing[] = [];
   let pagesFetched = 0;
-  let parserDebug: OpenSooqParseDebug | undefined;
+  let parserDebug: OpenSooqParseDebug | null = null;
 
   try {
     const pageUrl = scope.base_url;
