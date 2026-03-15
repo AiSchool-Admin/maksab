@@ -21,6 +21,10 @@ import {
   BROWSER_HEADERS,
   type ListPageListing,
 } from "@/lib/crm/harvester/parsers/dubizzle";
+import {
+  parseOpenSooqListWithDebug,
+  type OpenSooqParseDebug,
+} from "@/lib/crm/harvester/parsers/opensooq";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
 import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
@@ -52,6 +56,7 @@ interface VercelHarvestResult {
   errors: string[];
   warnings: string[];
   duration_ms: number;
+  parserDebug?: OpenSooqParseDebug;
 }
 
 async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult> {
@@ -115,6 +120,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
   const parser = getParser(scope.source_platform);
   let listings: ListPageListing[] = [];
   let pagesFetched = 0;
+  let parserDebug: OpenSooqParseDebug | undefined;
 
   try {
     const pageUrl = scope.base_url;
@@ -132,7 +138,6 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
 
     if (!response.ok) {
       if (response.status === 403) {
-        // Vercel also blocked? Mark it
         errors.push(`HTTP 403 — Vercel أيضاً محظور من ${scope.source_platform}`);
       } else {
         errors.push(`HTTP ${response.status} from ${scope.source_platform}`);
@@ -142,8 +147,16 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       pagesFetched = 1;
       console.log(`[Vercel Harvest] ✅ Received ${html.length} bytes`);
 
-      listings = parser.parseList(html);
-      console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings`);
+      // Use debug-aware parser for OpenSooq
+      if (scope.source_platform === 'opensooq') {
+        const result = parseOpenSooqListWithDebug(html);
+        listings = result.listings;
+        parserDebug = result.debug;
+        console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (patterns: ${result.debug.patternsUsed.join(', ') || 'none'})`);
+      } else {
+        listings = parser.parseList(html);
+        console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings`);
+      }
 
       if (listings.length === 0) {
         warnings.push(
@@ -415,6 +428,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     errors,
     warnings,
     duration_ms: durationMs,
+    parserDebug,
   };
 }
 

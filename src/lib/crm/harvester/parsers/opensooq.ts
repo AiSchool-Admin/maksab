@@ -14,6 +14,26 @@ import { cleanSellerName, detectBuyRequest, type ListPageListing, type ListingDe
 
 const OPENSOOQ_BASE = "https://eg.opensooq.com";
 
+/** Debug info returned alongside listings for diagnostics */
+export interface OpenSooqParseDebug {
+  htmlLength: number;
+  hasNextData: boolean;
+  nextDataPagePropsKeys: string[];
+  hasLandingApi: boolean;
+  landingApiKeys: string[];
+  widgetCount: number;
+  widgets: { label: string; type: string; itemsCount: number }[];
+  firstItemKeys: string[];
+  firstItemSample: string | null;
+  hasSerpMainContent: boolean;
+  serpMainContentLength: number;
+  patternsUsed: string[];
+  totalFromEachPattern: Record<string, number>;
+  filterItemsRemoved: number;
+  finalListingCount: number;
+  sampleListings: { title: string; url: string; price: number | null }[];
+}
+
 /**
  * Build list page URL for OpenSooq
  */
@@ -30,21 +50,56 @@ export function getOpenSooqListPageUrl(
 }
 
 /**
- * Parse OpenSooq listing page HTML
+ * Parse OpenSooq listing page HTML (backward-compatible wrapper)
+ */
+export function parseOpenSooqList(html: string): ListPageListing[] {
+  return parseOpenSooqListWithDebug(html).listings;
+}
+
+/**
+ * Parse OpenSooq listing page HTML — with full debug info
  *
  * Primary pattern: links with class "block blackColor p-16" inside section#serpMainContent
  * These links contain the listing URL with a numeric ID pattern /<id>/
  * Fallback patterns for different page layouts.
  */
-export function parseOpenSooqList(html: string): ListPageListing[] {
+export function parseOpenSooqListWithDebug(html: string): {
+  listings: ListPageListing[];
+  debug: OpenSooqParseDebug;
+} {
   const listings: ListPageListing[] = [];
+  const debug: OpenSooqParseDebug = {
+    htmlLength: html.length,
+    hasNextData: false,
+    nextDataPagePropsKeys: [],
+    hasLandingApi: false,
+    landingApiKeys: [],
+    widgetCount: 0,
+    widgets: [],
+    firstItemKeys: [],
+    firstItemSample: null,
+    hasSerpMainContent: false,
+    serpMainContentLength: 0,
+    patternsUsed: [],
+    totalFromEachPattern: {},
+    filterItemsRemoved: 0,
+    finalListingCount: 0,
+    sampleListings: [],
+  };
 
   // Try JSON response first (API)
   const trimmed = html.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
       const json = JSON.parse(trimmed);
-      return parseOpenSooqJson(json);
+      const parsed = parseOpenSooqJson(json);
+      if (parsed.length > 0) {
+        debug.patternsUsed.push('json_api');
+        debug.totalFromEachPattern['json_api'] = parsed.length;
+        debug.finalListingCount = parsed.length;
+        debug.sampleListings = parsed.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+        return { listings: parsed, debug };
+      }
     } catch {
       // Fall through to HTML
     }
@@ -53,18 +108,15 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
   let match;
   const seenUrls = new Set<string>();
 
-  // ═══ Extract serpMainContent — use greedy match to get the full section ═══
-  // The non-greedy [\s\S]*? was stopping at nested </section> tags
+  // ═══ Extract serpMainContent ═══
   let searchArea = html;
   const serpStart = html.search(/<section[^>]*id=["']serpMainContent["']/i);
   if (serpStart !== -1) {
-    // Find the matching </section> by counting depth
+    debug.hasSerpMainContent = true;
     let depth = 0;
-    let pos = serpStart;
     let foundEnd = -1;
     const sectionOpenRe = /<section\b/gi;
     const sectionCloseRe = /<\/section>/gi;
-    // Collect all open/close positions after serpStart
     const tags: { pos: number; isOpen: boolean }[] = [];
     sectionOpenRe.lastIndex = serpStart;
     let m;
@@ -86,50 +138,40 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
     }
     if (foundEnd > serpStart) {
       searchArea = html.slice(serpStart, foundEnd);
+      debug.serpMainContentLength = searchArea.length;
     }
   }
 
-  // ═══ Pattern 0 (NEW PRIMARY): <article> elements ═══
-  // OpenSooq wraps each listing in <article> tags — this is the most reliable
+  // ═══ Pattern 0: <article> elements ═══
   const articlePattern = /<article\b[^>]*>([\s\S]*?)<\/article>/gi;
+  let p0Count = 0;
   while ((match = articlePattern.exec(searchArea)) !== null) {
     const context = match[1];
-
-    // Find the listing link with a numeric ID
     const linkMatch = context.match(/href="((?:\/ar\/|https?:\/\/eg\.opensooq\.com\/)[^"]*\/\d{4,}[^"]*)"/i);
     if (!linkMatch) continue;
-
     const rawUrl = linkMatch[1];
     if (/\/(search|filter|category|page|login|register|profile|about|help)\b/i.test(rawUrl)) continue;
-
     const url = rawUrl.startsWith("http") ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
     if (seenUrls.has(url)) continue;
     seenUrls.add(url);
-
     const title = extractText(context, [
-      /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
-      /aria-label="([^"]+)"/i,
-      /title="([^"]+)"/i,
-      />([^<]{5,80})</i,
+      /<h[23456][^>]*>([^<]+)<\/h[23456]>/i, /aria-label="([^"]+)"/i,
+      /title="([^"]+)"/i, />([^<]{5,80})</i,
     ]);
     if (!title || title.length < 3) continue;
-
     const priceText = extractText(context, [
       /class="[^"]*(?:price|postPrice|priceColor)[^"]*"[^>]*>([^<]*\d[\d,٬\s]*[^<]*)/i,
       /(\d[\d,٬\s]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال|JOD|KWD)/i,
       /(\d[\d,٬]*)\s*<\/(?:span|div|p)/,
     ]);
-
     const location = extractText(context, [
       /class="[^"]*(?:location|postLocation|city|geoLocation|geo)[^"]*"[^>]*>([^<]+)/i,
       /class="[^"]*(?:address|area)[^"]*"[^>]*>([^<]+)/i,
     ]);
-
     const dateText = extractText(context, [
       /class="[^"]*(?:date|time|postDate|timeAgo|created)[^"]*"[^>]*>([^<]+)/i,
       /(?:منذ|ago)\s*([^<]*)/i,
     ]);
-
     const thumbnailUrl = extractImage(context, [
       /src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
       /data-src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
@@ -137,194 +179,166 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
       /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
       /style="[^"]*background-image:\s*url\(\s*'?(https?:\/\/[^"')]+)'?\s*\)/i,
     ]);
-
     const sellerName = extractText(context, [
       /class="[^"]*(?:member-name|sellerName|userName|card-user|ownerName)[^"]*"[^>]*>([^<]+)/i,
     ]);
-
     const isLikelyBuyRequest = detectBuyRequest(title, context);
-
     listings.push({
-      url,
-      title: title.trim(),
-      price: priceText ? parsePrice(priceText) : null,
-      currency: "EGP",
-      thumbnailUrl,
-      location: location?.trim() || "",
+      url, title: title.trim(), price: priceText ? parsePrice(priceText) : null,
+      currency: "EGP", thumbnailUrl, location: location?.trim() || "",
       dateText: dateText?.trim() || "",
       sellerName: cleanSellerName(sellerName) || null,
-      sellerProfileUrl: null,
-      sellerAvatarUrl: null,
+      sellerProfileUrl: null, sellerAvatarUrl: null,
       isVerified: context.includes("verified") || context.includes("موثق"),
       isBusiness: context.includes("business") || context.includes("متجر") || context.includes("تاجر"),
       isFeatured: context.includes("featured") || context.includes("مميز") || context.includes("premium"),
       supportsExchange: context.includes("تبادل") || context.includes("بدل"),
       isNegotiable: context.includes("قابل للتفاوض") || context.includes("negotiable"),
-      category: null,
-      isLikelyBuyRequest,
+      category: null, isLikelyBuyRequest,
     });
+    p0Count++;
+  }
+  if (p0Count > 0) {
+    debug.patternsUsed.push('p0_article');
+    debug.totalFromEachPattern['p0_article'] = p0Count;
   }
 
   // ═══ Pattern 1: "block blackColor p-16" links ═══
-  // Fallback if <article> approach didn't find enough
   if (listings.length < 5) {
-    // Clear previous results if too few — we'll try a different strategy
-    if (listings.length > 0 && listings.length < 5) {
-      // Keep what we have and try to find more
-    }
-
-    // Match each link individually and grab surrounding context
+    let p1Count = 0;
     const allListingLinks = searchArea.matchAll(
       /href="(\/ar\/[^"]*\/(\d{4,})\/[^"]*)"/gi
     );
-
     for (const linkMatch of allListingLinks) {
       const rawUrl = linkMatch[1];
       if (/\/(search|filter|category|page|login|register|profile|about|help)\b/i.test(rawUrl)) continue;
-
       const url = `${OPENSOOQ_BASE}${rawUrl}`;
       if (seenUrls.has(url)) continue;
       seenUrls.add(url);
-
-      // Get context: 800 chars before and 1500 chars after
       const start = Math.max(0, linkMatch.index! - 800);
       const end = Math.min(searchArea.length, linkMatch.index! + 1500);
       const context = searchArea.slice(start, end);
-
       const title = extractText(context, [
-        /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
-        /aria-label="([^"]+)"/i,
-        /title="([^"]+)"/i,
+        /<h[23456][^>]*>([^<]+)<\/h[23456]>/i, /aria-label="([^"]+)"/i, /title="([^"]+)"/i,
       ]);
       if (!title || title.length < 3) continue;
-
       const priceText = extractText(context, [
         /class="[^"]*(?:price|postPrice|priceColor)[^"]*"[^>]*>([^<]*\d[\d,٬\s]*[^<]*)/i,
         /(\d[\d,٬\s]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال|JOD|KWD)/i,
         /(\d[\d,٬]*)\s*<\/(?:span|div|p)/,
       ]);
-
       const thumbnailUrl = extractImage(context, [
         /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
         /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
       ]);
-
       const isLikelyBuyRequest = detectBuyRequest(title, context);
-
       listings.push({
-        url,
-        title: title.trim(),
-        price: priceText ? parsePrice(priceText) : null,
-        currency: "EGP",
-        thumbnailUrl,
-        location: extractText(context, [
-          /class="[^"]*(?:location|city|geo)[^"]*"[^>]*>([^<]+)/i,
-        ]) || "",
+        url, title: title.trim(), price: priceText ? parsePrice(priceText) : null,
+        currency: "EGP", thumbnailUrl,
+        location: extractText(context, [/class="[^"]*(?:location|city|geo)[^"]*"[^>]*>([^<]+)/i]) || "",
         dateText: extractText(context, [
-          /class="[^"]*(?:date|time|postDate|timeAgo)[^"]*"[^>]*>([^<]+)/i,
-          /(?:منذ|ago)\s*([^<]*)/i,
+          /class="[^"]*(?:date|time|postDate|timeAgo)[^"]*"[^>]*>([^<]+)/i, /(?:منذ|ago)\s*([^<]*)/i,
         ]) || "",
-        sellerName: null,
-        sellerProfileUrl: null,
-        sellerAvatarUrl: null,
-        isVerified: false,
-        isBusiness: false,
-        isFeatured: false,
-        supportsExchange: false,
-        isNegotiable: false,
-        category: null,
-        isLikelyBuyRequest,
+        sellerName: null, sellerProfileUrl: null, sellerAvatarUrl: null,
+        isVerified: false, isBusiness: false, isFeatured: false,
+        supportsExchange: false, isNegotiable: false, category: null, isLikelyBuyRequest,
       });
+      p1Count++;
+    }
+    if (p1Count > 0) {
+      debug.patternsUsed.push('p1_serp_links');
+      debug.totalFromEachPattern['p1_serp_links'] = p1Count;
     }
   }
 
-  // ═══ Pattern 2: Full-page link scan (broadest HTML fallback) ═══
+  // ═══ Pattern 2: Full-page link scan ═══
   if (listings.length < 5) {
+    let p2Count = 0;
     const fullPageLinks = html.matchAll(
       /href="((?:\/ar\/|https?:\/\/eg\.opensooq\.com\/)[^"]*\/\d{4,}[^"]*)"/gi
     );
-
     for (const linkMatch of fullPageLinks) {
       const rawUrl = linkMatch[1];
       if (/\/(search|filter|category|page|login|register|profile|about|help)\b/i.test(rawUrl)) continue;
       const url = rawUrl.startsWith("http") ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
       if (seenUrls.has(url)) continue;
       seenUrls.add(url);
-
       const start = Math.max(0, linkMatch.index! - 500);
       const end = Math.min(html.length, linkMatch.index! + 2000);
       const context = html.slice(start, end);
-
       const title = extractText(context, [
-        /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
-        /aria-label="([^"]+)"/i,
-        /title="([^"]+)"/i,
+        /<h[23456][^>]*>([^<]+)<\/h[23456]>/i, /aria-label="([^"]+)"/i, /title="([^"]+)"/i,
       ]);
       if (!title || title.length < 3) continue;
-
       const priceText = extractText(context, [
         /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال|JOD|KWD)/i,
       ]);
-
       const isLikelyBuyRequest = detectBuyRequest(title, context);
-
       listings.push({
-        url,
-        title: title.trim(),
-        price: priceText ? parsePrice(priceText) : null,
+        url, title: title.trim(), price: priceText ? parsePrice(priceText) : null,
         currency: "EGP",
         thumbnailUrl: extractImage(context, [
           /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
           /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
         ]),
         location: extractText(context, [/class="[^"]*location[^"]*"[^>]*>([^<]+)/i]) || "",
-        dateText: "",
-        sellerName: null,
-        sellerProfileUrl: null,
-        sellerAvatarUrl: null,
-        isVerified: false,
-        isBusiness: false,
-        isFeatured: false,
-        supportsExchange: false,
-        isNegotiable: false,
-        category: null,
-        isLikelyBuyRequest,
+        dateText: "", sellerName: null, sellerProfileUrl: null, sellerAvatarUrl: null,
+        isVerified: false, isBusiness: false, isFeatured: false,
+        supportsExchange: false, isNegotiable: false, category: null, isLikelyBuyRequest,
       });
+      p2Count++;
+    }
+    if (p2Count > 0) {
+      debug.patternsUsed.push('p2_fullpage_links');
+      debug.totalFromEachPattern['p2_fullpage_links'] = p2Count;
     }
   }
 
   // ═══ Pattern 3: __NEXT_DATA__ extraction (OpenSooq uses Next.js) ═══
   if (listings.length < 5) {
     const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+    debug.hasNextData = !!nextDataMatch;
+
     if (nextDataMatch) {
       try {
         const nextData = JSON.parse(nextDataMatch[1]);
         const props = nextData?.props?.pageProps;
         if (props) {
-          console.log('[OpenSooq] __NEXT_DATA__ pageProps keys:', Object.keys(props));
+          debug.nextDataPagePropsKeys = Object.keys(props);
 
           // ═══ PRIMARY: landingApiResponse.listings = array of widgets ═══
-          // Each widget has { items: [...], label: "...", type: "..." }
-          // Each item inside widget.items = real listing with id, title, price, uri, etc.
           const landingApi = props.landingApiResponse;
+          debug.hasLandingApi = !!landingApi;
+          if (landingApi) {
+            debug.landingApiKeys = Object.keys(landingApi);
+          }
+
           if (landingApi?.listings && Array.isArray(landingApi.listings)) {
-            console.log(`[OpenSooq] Found landingApiResponse.listings: ${landingApi.listings.length} widgets`);
+            debug.widgetCount = landingApi.listings.length;
             const widgetListings: ListPageListing[] = [];
 
-            for (const widget of landingApi.listings) {
+            for (let wi = 0; wi < landingApi.listings.length; wi++) {
+              const widget = landingApi.listings[wi];
+              const widgetInfo = {
+                label: widget.label || widget.title || '(no label)',
+                type: widget.type || widget.widget_type || '(no type)',
+                itemsCount: Array.isArray(widget.items) ? widget.items.length : 0,
+              };
+              // Keep first 5 widgets in debug
+              if (wi < 5) debug.widgets.push(widgetInfo);
+
               if (!widget.items || !Array.isArray(widget.items)) continue;
 
               for (const item of widget.items as Record<string, unknown>[]) {
-                // Debug first item
-                if (widgetListings.length === 0) {
-                  console.log('[OpenSooq] Widget item keys:', Object.keys(item));
-                  console.log('[OpenSooq] Sample item:', JSON.stringify(item).substring(0, 500));
+                // Capture first item debug info
+                if (!debug.firstItemSample) {
+                  debug.firstItemKeys = Object.keys(item);
+                  debug.firstItemSample = JSON.stringify(item).substring(0, 300);
                 }
 
                 const title = (item.title as string) || (item.name as string) || (item.label as string) || '';
                 if (!title || title.length < 3) continue;
 
-                // Build URL from uri or id
                 let url = '';
                 if (item.uri) {
                   url = `${OPENSOOQ_BASE}${item.uri}`;
@@ -341,7 +355,6 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
                 if (seenUrls.has(url)) continue;
                 seenUrls.add(url);
 
-                // Price
                 let price: number | null = null;
                 const rawPrice = item.price ?? item.amount;
                 if (rawPrice !== undefined && rawPrice !== null) {
@@ -349,7 +362,6 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
                   else price = parsePrice(String(rawPrice));
                 }
 
-                // Image
                 let thumbnailUrl: string | null = null;
                 if (item.image) {
                   thumbnailUrl = typeof item.image === 'string' ? item.image :
@@ -372,12 +384,7 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
                 );
 
                 widgetListings.push({
-                  url,
-                  title: title.trim(),
-                  price,
-                  currency: 'EGP',
-                  thumbnailUrl,
-                  location,
+                  url, title: title.trim(), price, currency: 'EGP', thumbnailUrl, location,
                   dateText: (item.created_at as string) || (item.date as string) || (item.post_date as string) || '',
                   sellerName,
                   sellerProfileUrl: item.member_id ? `${OPENSOOQ_BASE}/ar/profile/${item.member_id}` : null,
@@ -393,18 +400,23 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
               }
             }
 
-            // Filter out items that look like category filters (age ranges, etc.)
+            // Filter out category filter items
+            const beforeFilter = widgetListings.length;
             const filtered = widgetListings.filter(l => {
               if (!l.title) return false;
-              // Filter out age-range filter items: "0 - 11 شهر", "1 - 5 سنوات", etc.
               if (/^\d+\s*[-–]\s*\d+\s*(شهر|سنوات|سنة|أشهر)/.test(l.title)) return false;
               if (/^\d+\+\s*(شهر|سنة|سنوات|أشهر)/.test(l.title)) return false;
               return true;
             });
+            debug.filterItemsRemoved = beforeFilter - filtered.length;
 
             if (filtered.length > 0) {
-              console.log(`[OpenSooq] Extracted ${filtered.length} listings from widgets (filtered from ${widgetListings.length})`);
-              return [...listings, ...filtered];
+              debug.patternsUsed.push('p3_next_data_widgets');
+              debug.totalFromEachPattern['p3_next_data_widgets'] = filtered.length;
+              const combined = [...listings, ...filtered];
+              debug.finalListingCount = combined.length;
+              debug.sampleListings = combined.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+              return { listings: combined, debug };
             }
           }
 
@@ -416,97 +428,107 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
           for (const key of knownKeys) {
             const val = props[key];
             if (Array.isArray(val) && val.length > 0) {
-              console.log(`[OpenSooq] Found array in pageProps.${key}, count: ${val.length}`);
               const parsed = parseOpenSooqJson({ data: val });
-              if (parsed.length > 0) return parsed;
+              if (parsed.length > 0) {
+                debug.patternsUsed.push(`p3_flat_${key}`);
+                debug.totalFromEachPattern[`p3_flat_${key}`] = parsed.length;
+                debug.finalListingCount = parsed.length;
+                debug.sampleListings = parsed.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+                return { listings: parsed, debug };
+              }
             }
-            // Check nested .listings / .data / .items inside the key
             if (val && typeof val === 'object' && !Array.isArray(val)) {
               for (const subKey of ['listings', 'data', 'items', 'posts', 'results', 'list']) {
                 const subVal = (val as Record<string, unknown>)[subKey];
                 if (Array.isArray(subVal) && subVal.length > 0) {
-                  console.log(`[OpenSooq] Found array in pageProps.${key}.${subKey}, count: ${subVal.length}`);
                   const parsed = parseOpenSooqJson({ data: subVal });
-                  if (parsed.length > 0) return parsed;
+                  if (parsed.length > 0) {
+                    debug.patternsUsed.push(`p3_nested_${key}.${subKey}`);
+                    debug.totalFromEachPattern[`p3_nested_${key}.${subKey}`] = parsed.length;
+                    debug.finalListingCount = parsed.length;
+                    debug.sampleListings = parsed.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+                    return { listings: parsed, debug };
+                  }
                 }
               }
             }
           }
 
-          // Deep recursive search: find ANY array of objects with title/name/subject
+          // Deep recursive search
           const foundArrays = findListingArrays(props, 'pageProps', 3);
           for (const { path, items: foundItems } of foundArrays) {
-            console.log(`[OpenSooq] Found listing array at ${path}, count: ${foundItems.length}`);
             const parsed = parseOpenSooqJson({ data: foundItems });
-            if (parsed.length > 0) return parsed;
+            if (parsed.length > 0) {
+              debug.patternsUsed.push(`p3_deep_${path}`);
+              debug.totalFromEachPattern[`p3_deep_${path}`] = parsed.length;
+              debug.finalListingCount = parsed.length;
+              debug.sampleListings = parsed.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+              return { listings: parsed, debug };
+            }
           }
         }
 
-        // Also check outside pageProps (some Next.js apps put data elsewhere)
+        // Check outside pageProps
         if (nextData?.props) {
           const foundArrays = findListingArrays(nextData.props, 'props', 4);
           for (const { path, items: foundItems } of foundArrays) {
-            if (path.includes('pageProps')) continue; // Already checked
-            console.log(`[OpenSooq] Found listing array at ${path}, count: ${foundItems.length}`);
+            if (path.includes('pageProps')) continue;
             const parsed = parseOpenSooqJson({ data: foundItems });
-            if (parsed.length > 0) return parsed;
+            if (parsed.length > 0) {
+              debug.patternsUsed.push(`p3_outside_${path}`);
+              debug.totalFromEachPattern[`p3_outside_${path}`] = parsed.length;
+              debug.finalListingCount = parsed.length;
+              debug.sampleListings = parsed.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+              return { listings: parsed, debug };
+            }
           }
         }
       } catch (e) {
-        console.log('[OpenSooq] __NEXT_DATA__ parse error:', e instanceof Error ? e.message : String(e));
+        debug.patternsUsed.push('p3_error: ' + (e instanceof Error ? e.message : String(e)));
       }
     }
   }
 
   // ═══ Pattern 4: JSON-LD structured data ═══
   if (listings.length < 5) {
+    let p4Count = 0;
     const jsonLdMatches = html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi);
     for (const m of jsonLdMatches) {
       try {
         const ld = JSON.parse(m[1]);
-        // Handle both single objects and arrays of JSON-LD
         const ldItems = Array.isArray(ld) ? ld : [ld];
 
         for (const ldObj of ldItems) {
-          // ItemList → itemListElement
           if (ldObj["@type"] === "ItemList" && Array.isArray(ldObj.itemListElement)) {
             for (const item of ldObj.itemListElement) {
               const inner = item.item || item;
               const title = inner.name || inner.headline || "";
               const url = inner.url || "";
               if (!title || !url) continue;
-
               const fullUrl = url.startsWith("http") ? url : `${OPENSOOQ_BASE}${url}`;
               if (seenUrls.has(fullUrl)) continue;
               seenUrls.add(fullUrl);
-
               const price = inner.offers?.price || inner.offers?.lowPrice || null;
               const imageUrl = typeof inner.image === "string" ? inner.image :
                 Array.isArray(inner.image) ? inner.image[0] : inner.image?.url || null;
-
               listings.push({
-                url: fullUrl,
-                title,
+                url: fullUrl, title,
                 price: price ? parseFloat(String(price)) : null,
                 currency: inner.offers?.priceCurrency || "EGP",
                 thumbnailUrl: imageUrl,
                 location: inner.contentLocation?.name || inner.address?.addressLocality || "",
                 dateText: inner.datePublished || inner.dateCreated || "",
                 sellerName: inner.seller?.name || inner.author?.name || null,
-                sellerProfileUrl: inner.seller?.url || null,
-                sellerAvatarUrl: null,
-                isVerified: false,
-                isBusiness: false,
-                isFeatured: false,
-                supportsExchange: false,
-                isNegotiable: false,
+                sellerProfileUrl: inner.seller?.url || null, sellerAvatarUrl: null,
+                isVerified: false, isBusiness: false, isFeatured: false,
+                supportsExchange: false, isNegotiable: false,
                 category: inner.category || null,
                 isLikelyBuyRequest: detectBuyRequest(title),
               });
+              p4Count++;
             }
           }
 
-          // Individual Product / Offer / ListItem
           if (['Product', 'Offer', 'Vehicle', 'RealEstateListing', 'Apartment', 'House'].includes(ldObj["@type"])) {
             const title = ldObj.name || ldObj.headline || "";
             const url = ldObj.url || "";
@@ -517,37 +539,38 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
                 const price = ldObj.offers?.price || ldObj.price || null;
                 const imageUrl = typeof ldObj.image === "string" ? ldObj.image :
                   Array.isArray(ldObj.image) ? ldObj.image[0] : ldObj.image?.url || null;
-
                 listings.push({
-                  url: fullUrl,
-                  title,
+                  url: fullUrl, title,
                   price: price ? parseFloat(String(price)) : null,
                   currency: ldObj.offers?.priceCurrency || ldObj.priceCurrency || "EGP",
                   thumbnailUrl: imageUrl,
                   location: ldObj.contentLocation?.name || ldObj.address?.addressLocality || "",
                   dateText: ldObj.datePublished || "",
-                  sellerName: ldObj.seller?.name || null,
-                  sellerProfileUrl: null,
-                  sellerAvatarUrl: null,
-                  isVerified: false,
-                  isBusiness: false,
-                  isFeatured: false,
-                  supportsExchange: false,
-                  isNegotiable: false,
+                  sellerName: ldObj.seller?.name || null, sellerProfileUrl: null, sellerAvatarUrl: null,
+                  isVerified: false, isBusiness: false, isFeatured: false,
+                  supportsExchange: false, isNegotiable: false,
                   category: ldObj.category || null,
                   isLikelyBuyRequest: detectBuyRequest(title),
                 });
+                p4Count++;
               }
             }
           }
         }
       } catch {
-        console.log('[OpenSooq] JSON-LD parse error in one script block');
+        // JSON-LD parse error
       }
+    }
+    if (p4Count > 0) {
+      debug.patternsUsed.push('p4_json_ld');
+      debug.totalFromEachPattern['p4_json_ld'] = p4Count;
     }
   }
 
-  return listings;
+  debug.finalListingCount = listings.length;
+  debug.sampleListings = listings.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+
+  return { listings, debug };
 }
 
 /**
