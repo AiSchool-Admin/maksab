@@ -301,10 +301,114 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
         const nextData = JSON.parse(nextDataMatch[1]);
         const props = nextData?.props?.pageProps;
         if (props) {
-          // Log keys for debugging
           console.log('[OpenSooq] __NEXT_DATA__ pageProps keys:', Object.keys(props));
 
-          // Try known keys first
+          // ═══ PRIMARY: landingApiResponse.listings = array of widgets ═══
+          // Each widget has { items: [...], label: "...", type: "..." }
+          // Each item inside widget.items = real listing with id, title, price, uri, etc.
+          const landingApi = props.landingApiResponse;
+          if (landingApi?.listings && Array.isArray(landingApi.listings)) {
+            console.log(`[OpenSooq] Found landingApiResponse.listings: ${landingApi.listings.length} widgets`);
+            const widgetListings: ListPageListing[] = [];
+
+            for (const widget of landingApi.listings) {
+              if (!widget.items || !Array.isArray(widget.items)) continue;
+
+              for (const item of widget.items as Record<string, unknown>[]) {
+                // Debug first item
+                if (widgetListings.length === 0) {
+                  console.log('[OpenSooq] Widget item keys:', Object.keys(item));
+                  console.log('[OpenSooq] Sample item:', JSON.stringify(item).substring(0, 500));
+                }
+
+                const title = (item.title as string) || (item.name as string) || (item.label as string) || '';
+                if (!title || title.length < 3) continue;
+
+                // Build URL from uri or id
+                let url = '';
+                if (item.uri) {
+                  url = `${OPENSOOQ_BASE}${item.uri}`;
+                } else if (item.url) {
+                  const rawUrl = item.url as string;
+                  url = rawUrl.startsWith('http') ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
+                } else if (item.link) {
+                  const rawUrl = item.link as string;
+                  url = rawUrl.startsWith('http') ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
+                } else if (item.id) {
+                  url = `${OPENSOOQ_BASE}/ar/listing/${item.id}`;
+                }
+                if (!url) continue;
+                if (seenUrls.has(url)) continue;
+                seenUrls.add(url);
+
+                // Price
+                let price: number | null = null;
+                const rawPrice = item.price ?? item.amount;
+                if (rawPrice !== undefined && rawPrice !== null) {
+                  if (typeof rawPrice === 'number') price = rawPrice;
+                  else price = parsePrice(String(rawPrice));
+                }
+
+                // Image
+                let thumbnailUrl: string | null = null;
+                if (item.image) {
+                  thumbnailUrl = typeof item.image === 'string' ? item.image :
+                    (item.image as Record<string, unknown>)?.url as string || null;
+                } else if (item.img) {
+                  thumbnailUrl = item.img as string;
+                } else if (item.photo) {
+                  thumbnailUrl = item.photo as string;
+                } else if (item.thumbnail) {
+                  thumbnailUrl = item.thumbnail as string;
+                } else if (item.images && Array.isArray(item.images) && (item.images as unknown[]).length > 0) {
+                  const firstImg = (item.images as Record<string, unknown>[])[0];
+                  thumbnailUrl = typeof firstImg === 'string' ? firstImg : (firstImg?.url as string) || null;
+                }
+
+                const isLikelyBuyRequest = detectBuyRequest(title);
+                const location = (item.city_name as string) || (item.city as string) || (item.location as string) || '';
+                const sellerName = cleanSellerName(
+                  (item.member_name as string) || (item.owner_name as string) || (item.seller as string) || null
+                );
+
+                widgetListings.push({
+                  url,
+                  title: title.trim(),
+                  price,
+                  currency: 'EGP',
+                  thumbnailUrl,
+                  location,
+                  dateText: (item.created_at as string) || (item.date as string) || (item.post_date as string) || '',
+                  sellerName,
+                  sellerProfileUrl: item.member_id ? `${OPENSOOQ_BASE}/ar/profile/${item.member_id}` : null,
+                  sellerAvatarUrl: (item.member_image as string) || null,
+                  isVerified: !!(item.is_verified || item.verified),
+                  isBusiness: !!(item.is_business),
+                  isFeatured: !!(item.is_featured || item.featured || item.is_premium),
+                  supportsExchange: title.includes('تبادل') || title.includes('بدل'),
+                  isNegotiable: !!(item.is_negotiable) || title.includes('قابل للتفاوض'),
+                  category: (item.category_name as string) || null,
+                  isLikelyBuyRequest,
+                });
+              }
+            }
+
+            // Filter out items that look like category filters (age ranges, etc.)
+            const filtered = widgetListings.filter(l => {
+              if (!l.title) return false;
+              // Filter out age-range filter items: "0 - 11 شهر", "1 - 5 سنوات", etc.
+              if (/^\d+\s*[-–]\s*\d+\s*(شهر|سنوات|سنة|أشهر)/.test(l.title)) return false;
+              if (/^\d+\+\s*(شهر|سنة|سنوات|أشهر)/.test(l.title)) return false;
+              return true;
+            });
+
+            if (filtered.length > 0) {
+              console.log(`[OpenSooq] Extracted ${filtered.length} listings from widgets (filtered from ${widgetListings.length})`);
+              return [...listings, ...filtered];
+            }
+          }
+
+          // ═══ FALLBACK: Try known flat keys ═══
           const knownKeys = [
             'listings', 'posts', 'ads', 'items', 'results', 'serpData',
             'searchResults', 'initialData', 'postList', 'adsList',
