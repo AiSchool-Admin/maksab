@@ -22,6 +22,7 @@ import { parseRelativeDate } from "./parsers/date-parser";
 import { mapLocation } from "./parsers/location-mapper";
 import { applyScopeFilters, type FilterableListing } from "./scope-filter";
 import { updateWhaleScoresAfterHarvest } from "./whale-detector";
+import { createBuyerFromSeller, updateSellerBuyProbability } from "./seller-to-buyer";
 import type { AheScope } from "./types";
 
 function getServiceClient(): SupabaseClient {
@@ -484,6 +485,36 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
 
       if (sellerId?.isNew) newSellersCount++;
       if (listing.extractedPhone) phonesExtracted++;
+
+      // Strategy 1: كل بائع بالرقم = مشتري محتمل
+      if (sellerId?.id && listing.extractedPhone) {
+        await createBuyerFromSeller(supabase, {
+          id: sellerId.id,
+          phone: listing.extractedPhone,
+          name: cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null),
+          profile_url: listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl || null,
+          is_business: listing.isBusiness,
+          is_verified: listing.isVerified,
+          total_listings_seen: 1,
+        }, {
+          title: listing.title,
+          price: listing.price,
+          source_listing_url: listing.url,
+        }, {
+          maksab_category: scope.maksab_category,
+          governorate: scope.governorate,
+          source_platform: scope.source_platform,
+        });
+      }
+
+      // Strategy 3: تصنيف احتمالية الشراء
+      if (sellerId?.id) {
+        await updateSellerBuyProbability(supabase, sellerId.id, {
+          is_business: listing.isBusiness,
+          is_verified: listing.isVerified,
+          total_listings_seen: 1,
+        });
+      }
 
       // حفظ sellerId للاستخدام في Phase 5.6 (whale detection)
       if (sellerId?.id) {

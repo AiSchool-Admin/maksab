@@ -236,6 +236,14 @@ export default function BuyerHarvestPage() {
         >
           ✏️ يدوي
         </button>
+        <button
+          onClick={() => setSourceFilter(sourceFilter === "seller_is_buyer" ? "" : "seller_is_buyer")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+            sourceFilter === "seller_is_buyer" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          🛒 بائع = مشتري
+        </button>
       </div>
 
       {/* Buyers Table */}

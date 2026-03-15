@@ -128,6 +128,13 @@ export async function GET(req: NextRequest) {
       q.gte("created_at", todayStart.toISOString())
     );
 
+    // ── Buy probability stats ─────────────────────────────────────
+    const [buyProbVeryHigh, buyProbHigh, sellerIsBuyerCount] = await Promise.all([
+      safeCount(sb, "ahe_sellers", (q) => q.eq("buy_probability", "very_high").not("phone", "is", null)),
+      safeCount(sb, "ahe_sellers", (q) => q.eq("buy_probability", "high").not("phone", "is", null)),
+      safeCount(sb, "bhe_buyers", (q) => q.eq("source", "seller_is_buyer")),
+    ]);
+
     // ── Chart data (last 30 days harvest) ────────────────────────
     const listingsDaily = await getDailyCountsLast30(sb, "ahe_listings");
     const sellersDaily = await getDailyCountsLast30(sb, "ahe_sellers");
@@ -157,11 +164,13 @@ export async function GET(req: NextRequest) {
       {
         id: "sales",
         name: "المبيعات",
-        status: "good",
+        status: (buyProbVeryHigh || 0) > 0 ? "excellent" : "good",
         stats: crmCustomersCount !== null ? `${crmCustomersCount} عميل CRM` : "—",
-        details: crmCustomersCount !== null
-          ? (crmCustomersCount > 0 ? `${crmCustomersCount} عميل في نظام CRM` : "لا توجد بيانات بعد")
-          : "الجدول غير متاح",
+        details: [
+          crmCustomersCount !== null && crmCustomersCount > 0 ? `${crmCustomersCount} عميل CRM` : null,
+          sellerIsBuyerCount !== null && sellerIsBuyerCount > 0 ? `${sellerIsBuyerCount} بائع→مشتري` : null,
+          buyProbVeryHigh !== null ? `مشترين محتملين: ${buyProbVeryHigh} very_high | ${buyProbHigh || 0} high` : null,
+        ].filter(Boolean).join(" · ") || "لا توجد بيانات بعد",
       },
       {
         id: "marketing",
