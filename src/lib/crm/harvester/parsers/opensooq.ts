@@ -53,72 +53,160 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
   let match;
   const seenUrls = new Set<string>();
 
-  // ═══ Pattern 1 (PRIMARY): "block blackColor p-16" links inside serpMainContent ═══
-  // Reference: section#serpMainContent → a.block.blackColor.p-16
-  // Extract the serpMainContent section first for tighter matching
-  const serpSection = html.match(/<section[^>]*id=["']serpMainContent["'][^>]*>([\s\S]*?)<\/section>/i);
-  const searchArea = serpSection ? serpSection[1] : html;
+  // ═══ Extract serpMainContent — use greedy match to get the full section ═══
+  // The non-greedy [\s\S]*? was stopping at nested </section> tags
+  let searchArea = html;
+  const serpStart = html.search(/<section[^>]*id=["']serpMainContent["']/i);
+  if (serpStart !== -1) {
+    // Find the matching </section> by counting depth
+    let depth = 0;
+    let pos = serpStart;
+    let foundEnd = -1;
+    const sectionOpenRe = /<section\b/gi;
+    const sectionCloseRe = /<\/section>/gi;
+    // Collect all open/close positions after serpStart
+    const tags: { pos: number; isOpen: boolean }[] = [];
+    sectionOpenRe.lastIndex = serpStart;
+    let m;
+    while ((m = sectionOpenRe.exec(html)) !== null) {
+      tags.push({ pos: m.index, isOpen: true });
+    }
+    sectionCloseRe.lastIndex = serpStart;
+    while ((m = sectionCloseRe.exec(html)) !== null) {
+      tags.push({ pos: m.index, isOpen: false });
+    }
+    tags.sort((a, b) => a.pos - b.pos);
+    for (const tag of tags) {
+      if (tag.isOpen) depth++;
+      else depth--;
+      if (depth === 0) {
+        foundEnd = tag.pos + '</section>'.length;
+        break;
+      }
+    }
+    if (foundEnd > serpStart) {
+      searchArea = html.slice(serpStart, foundEnd);
+    }
+  }
 
-  // Match links that have class containing "block" and "blackColor" and "p-16"
-  // The href contains a numeric ID: /ar/.../<numeric_id>/...
-  const blockLinkPattern = /<a[^>]*class="[^"]*\bblock\b[^"]*\bblackColor\b[^"]*\bp-16\b[^"]*"[^>]*href="([^"]+)"[^>]*>[\s\S]*?(?=<a[^>]*class="[^"]*\bblock\b[^"]*\bblackColor\b|$)/gi;
-  // Also match if class order differs
-  const blockLinkPattern2 = /<a[^>]*href="([^"]+)"[^>]*class="[^"]*\bblock\b[^"]*\bblackColor\b[^"]*\bp-16\b[^"]*"[^>]*>[\s\S]*?(?=<a[^>]*href="[^"]*"[^>]*class="[^"]*\bblock\b[^"]*\bblackColor\b|$)/gi;
+  // ═══ Pattern 0 (NEW PRIMARY): <article> elements ═══
+  // OpenSooq wraps each listing in <article> tags — this is the most reliable
+  const articlePattern = /<article\b[^>]*>([\s\S]*?)<\/article>/gi;
+  while ((match = articlePattern.exec(searchArea)) !== null) {
+    const context = match[1];
 
-  for (const pattern of [blockLinkPattern, blockLinkPattern2]) {
-    if (listings.length > 0) break;
+    // Find the listing link with a numeric ID
+    const linkMatch = context.match(/href="((?:\/ar\/|https?:\/\/eg\.opensooq\.com\/)[^"]*\/\d{4,}[^"]*)"/i);
+    if (!linkMatch) continue;
 
-    while ((match = pattern.exec(searchArea)) !== null) {
-      const rawUrl = match[1];
-      if (!rawUrl || rawUrl.length < 5) continue;
+    const rawUrl = linkMatch[1];
+    if (/\/(search|filter|category|page|login|register|profile|about|help)\b/i.test(rawUrl)) continue;
 
-      // Must contain a numeric ID in the path
-      const idMatch = rawUrl.match(/\/(\d{4,})\//);
-      if (!idMatch) continue;
+    const url = rawUrl.startsWith("http") ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
 
-      // Skip navigation/utility links
+    const title = extractText(context, [
+      /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
+      /aria-label="([^"]+)"/i,
+      /title="([^"]+)"/i,
+      />([^<]{5,80})</i,
+    ]);
+    if (!title || title.length < 3) continue;
+
+    const priceText = extractText(context, [
+      /class="[^"]*(?:price|postPrice|priceColor)[^"]*"[^>]*>([^<]*\d[\d,٬\s]*[^<]*)/i,
+      /(\d[\d,٬\s]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال|JOD|KWD)/i,
+      /(\d[\d,٬]*)\s*<\/(?:span|div|p)/,
+    ]);
+
+    const location = extractText(context, [
+      /class="[^"]*(?:location|postLocation|city|geoLocation|geo)[^"]*"[^>]*>([^<]+)/i,
+      /class="[^"]*(?:address|area)[^"]*"[^>]*>([^<]+)/i,
+    ]);
+
+    const dateText = extractText(context, [
+      /class="[^"]*(?:date|time|postDate|timeAgo|created)[^"]*"[^>]*>([^<]+)/i,
+      /(?:منذ|ago)\s*([^<]*)/i,
+    ]);
+
+    const thumbnailUrl = extractImage(context, [
+      /src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+      /data-src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+      /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+      /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+      /style="[^"]*background-image:\s*url\(\s*'?(https?:\/\/[^"')]+)'?\s*\)/i,
+    ]);
+
+    const sellerName = extractText(context, [
+      /class="[^"]*(?:member-name|sellerName|userName|card-user|ownerName)[^"]*"[^>]*>([^<]+)/i,
+    ]);
+
+    const isLikelyBuyRequest = detectBuyRequest(title, context);
+
+    listings.push({
+      url,
+      title: title.trim(),
+      price: priceText ? parsePrice(priceText) : null,
+      currency: "EGP",
+      thumbnailUrl,
+      location: location?.trim() || "",
+      dateText: dateText?.trim() || "",
+      sellerName: cleanSellerName(sellerName) || null,
+      sellerProfileUrl: null,
+      sellerAvatarUrl: null,
+      isVerified: context.includes("verified") || context.includes("موثق"),
+      isBusiness: context.includes("business") || context.includes("متجر") || context.includes("تاجر"),
+      isFeatured: context.includes("featured") || context.includes("مميز") || context.includes("premium"),
+      supportsExchange: context.includes("تبادل") || context.includes("بدل"),
+      isNegotiable: context.includes("قابل للتفاوض") || context.includes("negotiable"),
+      category: null,
+      isLikelyBuyRequest,
+    });
+  }
+
+  // ═══ Pattern 1: "block blackColor p-16" links ═══
+  // Fallback if <article> approach didn't find enough
+  if (listings.length < 5) {
+    // Clear previous results if too few — we'll try a different strategy
+    if (listings.length > 0 && listings.length < 5) {
+      // Keep what we have and try to find more
+    }
+
+    // Match each link individually and grab surrounding context
+    const allListingLinks = searchArea.matchAll(
+      /href="(\/ar\/[^"]*\/(\d{4,})\/[^"]*)"/gi
+    );
+
+    for (const linkMatch of allListingLinks) {
+      const rawUrl = linkMatch[1];
       if (/\/(search|filter|category|page|login|register|profile|about|help)\b/i.test(rawUrl)) continue;
 
-      const url = rawUrl.startsWith("http") ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
+      const url = `${OPENSOOQ_BASE}${rawUrl}`;
       if (seenUrls.has(url)) continue;
       seenUrls.add(url);
 
-      // Extract context around this link for metadata
-      const linkStart = match.index;
-      const context = match[0]; // The entire matched block for this listing
+      // Get context: 800 chars before and 1500 chars after
+      const start = Math.max(0, linkMatch.index! - 800);
+      const end = Math.min(searchArea.length, linkMatch.index! + 1500);
+      const context = searchArea.slice(start, end);
 
       const title = extractText(context, [
         /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
         /aria-label="([^"]+)"/i,
         /title="([^"]+)"/i,
-        />([^<]{5,80})</i, // Any text content > 5 chars
       ]);
       if (!title || title.length < 3) continue;
 
       const priceText = extractText(context, [
         /class="[^"]*(?:price|postPrice|priceColor)[^"]*"[^>]*>([^<]*\d[\d,٬\s]*[^<]*)/i,
-        /(\d[\d,٬\s]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال)/,
+        /(\d[\d,٬\s]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال|JOD|KWD)/i,
         /(\d[\d,٬]*)\s*<\/(?:span|div|p)/,
       ]);
 
-      const location = extractText(context, [
-        /class="[^"]*(?:location|postLocation|city|geoLocation)[^"]*"[^>]*>([^<]+)/i,
-      ]);
-
-      const dateText = extractText(context, [
-        /class="[^"]*(?:date|time|postDate|timeAgo)[^"]*"[^>]*>([^<]+)/i,
-        /(?:منذ|ago)\s*([^<]*)/i,
-      ]);
-
       const thumbnailUrl = extractImage(context, [
-        /src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-        /data-src="(https?:\/\/[^"]*opensooq[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
         /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
         /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-      ]);
-
-      const sellerName = extractText(context, [
-        /class="[^"]*(?:member-name|sellerName|userName|card-user|ownerName)[^"]*"[^>]*>([^<]+)/i,
       ]);
 
       const isLikelyBuyRequest = detectBuyRequest(title, context);
@@ -129,39 +217,43 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
         price: priceText ? parsePrice(priceText) : null,
         currency: "EGP",
         thumbnailUrl,
-        location: location?.trim() || "",
-        dateText: dateText?.trim() || "",
-        sellerName: cleanSellerName(sellerName) || null,
+        location: extractText(context, [
+          /class="[^"]*(?:location|city|geo)[^"]*"[^>]*>([^<]+)/i,
+        ]) || "",
+        dateText: extractText(context, [
+          /class="[^"]*(?:date|time|postDate|timeAgo)[^"]*"[^>]*>([^<]+)/i,
+          /(?:منذ|ago)\s*([^<]*)/i,
+        ]) || "",
+        sellerName: null,
         sellerProfileUrl: null,
         sellerAvatarUrl: null,
-        isVerified: context.includes("verified") || context.includes("موثق"),
-        isBusiness: context.includes("business") || context.includes("متجر") || context.includes("تاجر"),
-        isFeatured: context.includes("featured") || context.includes("مميز") || context.includes("premium"),
-        supportsExchange: context.includes("تبادل") || context.includes("بدل"),
-        isNegotiable: context.includes("قابل للتفاوض") || context.includes("negotiable"),
+        isVerified: false,
+        isBusiness: false,
+        isFeatured: false,
+        supportsExchange: false,
+        isNegotiable: false,
         category: null,
         isLikelyBuyRequest,
       });
     }
   }
 
-  // ═══ Pattern 2: Individual <a> links inside serpMainContent with numeric IDs ═══
-  // Broader fallback: any link inside serpMainContent that has a numeric ID
-  if (listings.length === 0) {
-    const linkPattern = /href="(\/ar\/[^"]*\/(\d{4,})\/[^"]*)"/gi;
-    const area = serpSection ? serpSection[1] : html;
+  // ═══ Pattern 2: Full-page link scan (broadest HTML fallback) ═══
+  if (listings.length < 5) {
+    const fullPageLinks = html.matchAll(
+      /href="((?:\/ar\/|https?:\/\/eg\.opensooq\.com\/)[^"]*\/\d{4,}[^"]*)"/gi
+    );
 
-    while ((match = linkPattern.exec(area)) !== null) {
-      const relativeUrl = match[1];
-      if (/\/(search|filter|category|page|login|register|profile)\b/i.test(relativeUrl)) continue;
-
-      const url = `${OPENSOOQ_BASE}${relativeUrl}`;
+    for (const linkMatch of fullPageLinks) {
+      const rawUrl = linkMatch[1];
+      if (/\/(search|filter|category|page|login|register|profile|about|help)\b/i.test(rawUrl)) continue;
+      const url = rawUrl.startsWith("http") ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
       if (seenUrls.has(url)) continue;
       seenUrls.add(url);
 
-      const start = Math.max(0, match.index - 500);
-      const end = Math.min(area.length, match.index + 2000);
-      const context = area.slice(start, end);
+      const start = Math.max(0, linkMatch.index! - 500);
+      const end = Math.min(html.length, linkMatch.index! + 2000);
+      const context = html.slice(start, end);
 
       const title = extractText(context, [
         /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
@@ -171,13 +263,7 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
       if (!title || title.length < 3) continue;
 
       const priceText = extractText(context, [
-        /class="[^"]*(?:price|postPrice|priceColor)[^"]*"[^>]*>([^<]*\d[\d,٬]*[^<]*)/i,
-        /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال)/,
-      ]);
-
-      const thumbnailUrl = extractImage(context, [
-        /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-        /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+        /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال|JOD|KWD)/i,
       ]);
 
       const isLikelyBuyRequest = detectBuyRequest(title, context);
@@ -187,7 +273,10 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
         title: title.trim(),
         price: priceText ? parsePrice(priceText) : null,
         currency: "EGP",
-        thumbnailUrl,
+        thumbnailUrl: extractImage(context, [
+          /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+          /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
+        ]),
         location: extractText(context, [/class="[^"]*location[^"]*"[^>]*>([^<]+)/i]) || "",
         dateText: "",
         sellerName: null,
@@ -204,69 +293,8 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
     }
   }
 
-  // ═══ Pattern 3: Broader link patterns (any /ar/ path with numeric ID) ═══
-  if (listings.length === 0) {
-    const patterns = [
-      /href="(\/ar\/[^"]*(?:listing|item|post)\/?\d+[^"]*)"/gi,
-      /href="(https?:\/\/eg\.opensooq\.com\/[^"]*\/\d{4,}[^"]*)"/gi,
-    ];
-
-    for (const cardPattern of patterns) {
-      if (listings.length > 0) break;
-
-      while ((match = cardPattern.exec(html)) !== null) {
-        const rawUrl = match[1];
-        if (/\/(search|filter|category|page|login|register|profile)\b/i.test(rawUrl)) continue;
-        const url = rawUrl.startsWith("http") ? rawUrl : `${OPENSOOQ_BASE}${rawUrl}`;
-
-        if (seenUrls.has(url)) continue;
-        seenUrls.add(url);
-
-        const start = Math.max(0, match.index - 500);
-        const end = Math.min(html.length, match.index + 2000);
-        const context = html.slice(start, end);
-
-        const title = extractText(context, [
-          /<h[23456][^>]*>([^<]+)<\/h[23456]>/i,
-          /aria-label="([^"]+)"/i,
-          /title="([^"]+)"/i,
-        ]);
-        if (!title || title.length < 3) continue;
-
-        const priceText = extractText(context, [
-          /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE|د\.م|دينار|ريال)/,
-        ]);
-
-        const isLikelyBuyRequest = detectBuyRequest(title, context);
-
-        listings.push({
-          url,
-          title: title.trim(),
-          price: priceText ? parsePrice(priceText) : null,
-          currency: "EGP",
-          thumbnailUrl: extractImage(context, [
-            /src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-            /data-src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i,
-          ]),
-          location: extractText(context, [/class="[^"]*location[^"]*"[^>]*>([^<]+)/i]) || "",
-          dateText: "",
-          sellerName: null,
-          sellerProfileUrl: null,
-          sellerAvatarUrl: null,
-          isVerified: false,
-          isBusiness: false,
-          isFeatured: false,
-          supportsExchange: false,
-          isNegotiable: false,
-          category: null,
-          isLikelyBuyRequest,
-        });
-      }
-    }
-  }
-
-  // ═══ Pattern 4: __NEXT_DATA__ extraction (OpenSooq uses Next.js) ═══
-  if (listings.length === 0) {
+  // ═══ Pattern 3: __NEXT_DATA__ extraction (OpenSooq uses Next.js) ═══
+  if (listings.length < 5) {
     const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
     if (nextDataMatch) {
       try {
@@ -326,8 +354,8 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
     }
   }
 
-  // ═══ Pattern 5: JSON-LD structured data ═══
-  if (listings.length === 0) {
+  // ═══ Pattern 4: JSON-LD structured data ═══
+  if (listings.length < 5) {
     const jsonLdMatches = html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi);
     for (const m of jsonLdMatches) {
       try {

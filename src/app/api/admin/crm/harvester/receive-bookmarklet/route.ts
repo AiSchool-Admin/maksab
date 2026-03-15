@@ -202,6 +202,8 @@ interface BookmarkletPayload {
   timestamp: string;
   source: string;
   scope_code?: string; // Explicit scope code from bookmarklet
+  platform?: string; // Source platform: dubizzle, hatla2ee, contactcars, yallamotor, sooqmsr, etc.
+  strategy?: string; // Extraction strategy used
 }
 
 // GET — return recent bookmarklet results
@@ -210,12 +212,24 @@ export async function GET(req: NextRequest) {
     const supabase = getServiceClient();
 
     // Get recent bookmarklet-sourced listings count by timestamp
-    const { data } = await supabase
+    // Support multiple bookmarklet platforms
+    const platformFilter = req.nextUrl.searchParams.get("platform");
+    const bookmarkletPlatforms = [
+      "dubizzle_bookmarklet", "hatla2ee", "contactcars", "yallamotor", "sooqmsr",
+    ];
+    const query = supabase
       .from("ahe_listings")
       .select("created_at, is_duplicate")
-      .eq("source_platform", "dubizzle_bookmarklet")
       .order("created_at", { ascending: false })
       .limit(100);
+
+    if (platformFilter) {
+      query.eq("source_platform", platformFilter);
+    } else {
+      query.in("source_platform", bookmarkletPlatforms);
+    }
+
+    const { data } = await query;
 
     // Group by approximate batch (within 30 seconds)
     const batches: Array<{
@@ -286,6 +300,13 @@ export async function POST(req: NextRequest) {
     let dupCount = 0;
     const errors: string[] = [];
 
+    // ── Determine source platform ──
+    // Bookmarklet can send a platform field (hatla2ee, contactcars, yallamotor, sooqmsr)
+    // Default to "dubizzle_bookmarklet" for backwards compatibility
+    const sourcePlatform = body.platform
+      ? (body.platform === "dubizzle" ? "dubizzle_bookmarklet" : body.platform)
+      : "dubizzle_bookmarklet";
+
     // ── Scope matching: explicit scope_code > employee default > auto-detect from URL ──
     const effectiveScopeCode = body.scope_code || employee.scope_code || null;
     const scopeId = await matchScopeFromUrl(body.url || "", effectiveScopeCode, supabase);
@@ -322,7 +343,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Map location
-        const location = mapLocation(listing.location || "", "dubizzle");
+        const location = mapLocation(listing.location || "", sourcePlatform);
 
         // Extract phone from description if available
         const phone = listing.description
@@ -355,7 +376,7 @@ export async function POST(req: NextRequest) {
                 phone: phone,
                 profile_url: listing.sellerProfileUrl || null,
                 name: listing.sellerName || null,
-                source_platform: "dubizzle",
+                source_platform: sourcePlatform,
                 is_verified: listing.isVerified || false,
                 is_business: listing.isBusiness || false,
                 primary_category: null,
@@ -373,7 +394,7 @@ export async function POST(req: NextRequest) {
         // Insert listing
         await supabase.from("ahe_listings").insert({
           scope_id: scopeId,
-          source_platform: "dubizzle_bookmarklet",
+          source_platform: sourcePlatform,
           source_listing_url: listing.url,
           title: listing.title,
           description: listing.description || null,
@@ -418,10 +439,10 @@ export async function POST(req: NextRequest) {
             if (!existingBuyer) {
               await supabase.from("bhe_buyers").insert({
                 source: descBuyRequest
-                  ? "dubizzle_wanted"
-                  : "dubizzle_title_match",
+                  ? `${sourcePlatform}_wanted`
+                  : `${sourcePlatform}_title_match`,
                 source_url: listing.url,
-                source_platform: "dubizzle",
+                source_platform: sourcePlatform,
                 buyer_name: listing.sellerName || null,
                 buyer_phone: phone,
                 product_wanted: listing.title,
