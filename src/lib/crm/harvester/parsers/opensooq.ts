@@ -21,6 +21,7 @@ export interface OpenSooqParseDebug {
   nextDataPagePropsKeys: string[];
   hasLandingApi: boolean;
   landingApiKeys: string[];
+  landingApiDetails: Record<string, { type: string; isArray: boolean; length: number; sampleKeys: string[]; sample: string }>;
   widgetCount: number;
   widgets: { label: string; type: string; itemsCount: number }[];
   firstItemKeys: string[];
@@ -32,6 +33,12 @@ export interface OpenSooqParseDebug {
   filterItemsRemoved: number;
   finalListingCount: number;
   sampleListings: { title: string; url: string; price: number | null }[];
+  /** Deep search results: all arrays with listing-like items */
+  deepSearchResults: { path: string; length: number; sampleKeys: string[] }[];
+  /** Keys in __NEXT_DATA__ matching listing/post/item/ad patterns */
+  relevantKeys: string[];
+  /** Items that parseOpenSooqNextDataItem rejected (for debugging) */
+  rejectedItemsSample: { keys: string[]; sample: string; reason: string }[];
 }
 
 /**
@@ -74,6 +81,7 @@ export function parseOpenSooqListWithDebug(html: string): {
     nextDataPagePropsKeys: [],
     hasLandingApi: false,
     landingApiKeys: [],
+    landingApiDetails: {},
     widgetCount: 0,
     widgets: [],
     firstItemKeys: [],
@@ -85,6 +93,9 @@ export function parseOpenSooqListWithDebug(html: string): {
     filterItemsRemoved: 0,
     finalListingCount: 0,
     sampleListings: [],
+    deepSearchResults: [],
+    relevantKeys: [],
+    rejectedItemsSample: [],
   };
 
   // Try JSON response first (API)
@@ -313,6 +324,28 @@ export function parseOpenSooqListWithDebug(html: string): {
           debug.hasLandingApi = !!landingApi;
           if (landingApi) {
             debug.landingApiKeys = Object.keys(landingApi);
+            // Capture detailed info for each landingApi key (for debugging non-property categories)
+            for (const [laKey, laVal] of Object.entries(landingApi as Record<string, unknown>)) {
+              const isArr = Array.isArray(laVal);
+              const detail: { type: string; isArray: boolean; length: number; sampleKeys: string[]; sample: string } = {
+                type: isArr ? 'array' : typeof laVal,
+                isArray: isArr,
+                length: isArr ? (laVal as unknown[]).length : 0,
+                sampleKeys: [],
+                sample: '',
+              };
+              if (isArr && (laVal as unknown[]).length > 0) {
+                const first = (laVal as unknown[])[0];
+                if (first && typeof first === 'object' && !Array.isArray(first)) {
+                  detail.sampleKeys = Object.keys(first as Record<string, unknown>).slice(0, 20);
+                }
+                try { detail.sample = JSON.stringify(first).substring(0, 300); } catch { /* */ }
+              } else if (laVal && typeof laVal === 'object' && !isArr) {
+                detail.sampleKeys = Object.keys(laVal as Record<string, unknown>).slice(0, 20);
+                try { detail.sample = JSON.stringify(laVal).substring(0, 300); } catch { /* */ }
+              }
+              debug.landingApiDetails[laKey] = detail;
+            }
           }
 
           if (landingApi?.listings && Array.isArray(landingApi.listings)) {
@@ -326,16 +359,32 @@ export function parseOpenSooqListWithDebug(html: string): {
                 type: widget.type || widget.widget_type || '(no type)',
                 itemsCount: Array.isArray(widget.items) ? widget.items.length : 0,
               };
-              // Keep first 10 widgets in debug (more for non-property diagnosis)
-              if (wi < 10) debug.widgets.push(widgetInfo);
+              // Keep first 15 widgets in debug (more for non-property diagnosis)
+              if (wi < 15) debug.widgets.push(widgetInfo);
 
-              if (!widget.items || !Array.isArray(widget.items) || widget.items.length === 0) continue;
+              // ═══ Try widget.items first ═══
+              let widgetItems: Record<string, unknown>[] = [];
+              if (widget.items && Array.isArray(widget.items) && widget.items.length > 0) {
+                widgetItems = widget.items;
+              }
+              // ═══ ALSO check widget.data, widget.posts, widget.results (non-property may use different keys) ═══
+              if (widgetItems.length === 0) {
+                for (const altKey of ['data', 'posts', 'results', 'list', 'ads', 'content']) {
+                  if (widget[altKey] && Array.isArray(widget[altKey]) && (widget[altKey] as unknown[]).length > 0) {
+                    widgetItems = widget[altKey] as Record<string, unknown>[];
+                    break;
+                  }
+                }
+              }
+
+              if (widgetItems.length === 0) continue;
               // For non-property categories: widget types may differ (e.g., "horizontal-cards", "grid", etc.)
               // Only skip known non-listing widget types
               const skipTypes = ['banner', 'ad', 'promotion', 'filter', 'category-filter', 'age-selector', 'download-app'];
               if (widget.type && typeof widget.type === 'string' && skipTypes.some(t => widget.type.toLowerCase().includes(t))) continue;
 
-              for (const item of widget.items as Record<string, unknown>[]) {
+              for (const item of widgetItems) {
+                if (typeof item !== 'object' || item === null) continue;
                 // Capture first item debug info
                 if (!debug.firstItemSample) {
                   debug.firstItemKeys = Object.keys(item);
@@ -344,6 +393,17 @@ export function parseOpenSooqListWithDebug(html: string): {
 
                 const parsed = parseOpenSooqNextDataItem(item, seenUrls);
                 if (!parsed) {
+                  // Track rejected items for debugging (max 5)
+                  if (debug.rejectedItemsSample.length < 5) {
+                    const keys = Object.keys(item);
+                    const reason = !item.id && !item.post_url && !item.url && !item.link
+                      ? 'no id/url' : 'no title or title < 3 chars';
+                    debug.rejectedItemsSample.push({
+                      keys,
+                      sample: JSON.stringify(item).substring(0, 300),
+                      reason,
+                    });
+                  }
                   // Fallback: if item has no standard title but has widget label, try with label as title
                   if (!item.title && !item.highlights && !item.name && widget.label) {
                     const itemWithLabel = { ...item, title: widget.label };
@@ -374,6 +434,48 @@ export function parseOpenSooqListWithDebug(html: string): {
               debug.sampleListings = combined.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
               // If we got 10+ listings from widgets, this is authoritative — return immediately
               return { listings: combined, debug };
+            }
+          }
+
+          // ═══ NEW: Try landingApiResponse with non-standard listing keys ═══
+          // Non-property categories may store widgets/listings under different top-level keys
+          if (landingApi && typeof landingApi === 'object') {
+            const laObj = landingApi as Record<string, unknown>;
+            for (const altListingsKey of ['widgets', 'sections', 'blocks', 'components', 'modules', 'content', 'data', 'results']) {
+              if (altListingsKey === 'listings') continue; // Already processed
+              const altListings = laObj[altListingsKey];
+              if (!Array.isArray(altListings) || altListings.length === 0) continue;
+
+              const altWidgetListings: ListPageListing[] = [];
+              for (const widget of altListings as Record<string, unknown>[]) {
+                if (typeof widget !== 'object' || widget === null) continue;
+                // Try extracting items from various sub-keys
+                let items: Record<string, unknown>[] = [];
+                for (const itemKey of ['items', 'data', 'posts', 'results', 'list', 'ads', 'content']) {
+                  if (widget[itemKey] && Array.isArray(widget[itemKey]) && (widget[itemKey] as unknown[]).length > 0) {
+                    items = widget[itemKey] as Record<string, unknown>[];
+                    break;
+                  }
+                }
+                // If the widget itself looks like a listing item (has id + title), try it directly
+                if (items.length === 0 && widget.id && (widget.title || widget.highlights || widget.name)) {
+                  items = [widget];
+                }
+                for (const item of items) {
+                  if (typeof item !== 'object' || item === null) continue;
+                  const parsed = parseOpenSooqNextDataItem(item, seenUrls);
+                  if (parsed) altWidgetListings.push(parsed);
+                }
+              }
+
+              if (altWidgetListings.length > 0) {
+                debug.patternsUsed.push(`p3_landing_api_${altListingsKey}`);
+                debug.totalFromEachPattern[`p3_landing_api_${altListingsKey}`] = altWidgetListings.length;
+                const combined = [...listings, ...altWidgetListings];
+                debug.finalListingCount = combined.length;
+                debug.sampleListings = combined.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+                return { listings: combined, debug };
+              }
             }
           }
 
@@ -473,18 +575,25 @@ export function parseOpenSooqListWithDebug(html: string): {
 
           // ═══ FALLBACK C: Search all pageProps for arrays with id + price (broader) ═══
           // For non-property categories where data may be in unexpected keys
-          const allArrays = findAllObjectArrays(props, 'pageProps', 4);
+          const allArrays = findAllObjectArrays(props, 'pageProps', 6);
           for (const { path, items: foundItems } of allArrays) {
-            // Skip known non-listing paths
-            if (/translations|ageSelect|filter|facet|menu|navigation|breadcrumb|seo|meta/i.test(path)) continue;
-            // Check if items have id + price or id + post_url
+            // Collect deep search results for debug
             const sample = foundItems[0] as Record<string, unknown>;
             const sampleKeys = Object.keys(sample);
-            const hasIdLike = sampleKeys.some(k => /^(id|post_id)$/i.test(k));
-            const hasPriceLike = sampleKeys.some(k => /^(price|amount|asking_price)$/i.test(k));
-            const hasUrlLike = sampleKeys.some(k => /^(post_url|url|link|uri|href)$/i.test(k));
+            debug.deepSearchResults.push({ path, length: foundItems.length, sampleKeys: sampleKeys.slice(0, 15) });
 
-            if (hasIdLike && (hasPriceLike || hasUrlLike)) {
+            // Skip known non-listing paths
+            if (/translations|ageSelect|filter|facet|menu|navigation|breadcrumb|seo|meta|locale|__N_SSP/i.test(path)) continue;
+            // Check if items have id + price or id + post_url or just look like listings
+            const hasIdLike = sampleKeys.some(k => /^(id|post_id|_id)$/i.test(k));
+            const hasPriceLike = sampleKeys.some(k => /^(price|amount|asking_price)$/i.test(k));
+            const hasUrlLike = sampleKeys.some(k => /^(post_url|url|link|uri|href|detail_url|slug)$/i.test(k));
+            const hasTitleLike = sampleKeys.some(k => /^(title|name|highlights|subject|label|post_title|text|description)$/i.test(k));
+            const hasImageLike = sampleKeys.some(k => /^(image|img|photo|thumbnail|picture|media|images)$/i.test(k));
+
+            // More relaxed matching: any 2 of {id, url, title, price, image}
+            const signals = [hasIdLike, hasUrlLike, hasTitleLike, hasPriceLike, hasImageLike].filter(Boolean).length;
+            if (signals >= 2 && foundItems.length >= 2) {
               const parsedItems: ListPageListing[] = [];
               for (const item of foundItems as Record<string, unknown>[]) {
                 const parsed = parseOpenSooqNextDataItem(item, seenUrls);
@@ -502,10 +611,11 @@ export function parseOpenSooqListWithDebug(html: string): {
           }
 
           // Deep recursive search — but exclude known non-listing paths
-          const foundArrays = findListingArrays(props, 'pageProps', 3);
+          const foundArrays = findListingArrays(props, 'pageProps', 5);
           for (const { path, items: foundItems } of foundArrays) {
             // Skip translation/filter arrays that contain age selectors, not listings
             if (/translations|ageSelect|filter|facet/i.test(path)) continue;
+            // Try both parseOpenSooqJson and parseOpenSooqNextDataItem
             const parsed = parseOpenSooqJson({ data: foundItems });
             if (parsed.length > 0) {
               debug.patternsUsed.push(`p3_deep_${path}`);
@@ -514,7 +624,53 @@ export function parseOpenSooqListWithDebug(html: string): {
               debug.sampleListings = parsed.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
               return { listings: parsed, debug };
             }
+            // Also try parseOpenSooqNextDataItem directly
+            const parsedItems: ListPageListing[] = [];
+            for (const item of foundItems as Record<string, unknown>[]) {
+              const p = parseOpenSooqNextDataItem(item, seenUrls);
+              if (p) parsedItems.push(p);
+            }
+            if (parsedItems.length > 0) {
+              debug.patternsUsed.push(`p3_deep_item_${path}`);
+              debug.totalFromEachPattern[`p3_deep_item_${path}`] = parsedItems.length;
+              const combined = [...listings, ...parsedItems];
+              debug.finalListingCount = combined.length;
+              debug.sampleListings = combined.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+              return { listings: combined, debug };
+            }
           }
+
+          // ═══ FALLBACK D: Aggressive — ANY array with 5+ items and 5+ fields per item ═══
+          // Last resort for non-property categories where structure is completely unexpected
+          if (listings.length === 0) {
+            const aggressiveArrays = findAllObjectArrays(props, 'pageProps', 6);
+            // Sort by array length (more items = more likely to be listings)
+            aggressiveArrays.sort((a, b) => b.items.length - a.items.length);
+            for (const { path, items: foundItems } of aggressiveArrays) {
+              if (/translations|ageSelect|filter|facet|menu|navigation|breadcrumb|seo|meta|locale|__N_SSP|font/i.test(path)) continue;
+              const sample = foundItems[0] as Record<string, unknown>;
+              const keys = Object.keys(sample);
+              // Must have at least 5 fields and at least 5 items — these are likely data records
+              if (keys.length >= 5 && foundItems.length >= 5) {
+                const parsedItems: ListPageListing[] = [];
+                for (const item of foundItems as Record<string, unknown>[]) {
+                  const p = parseOpenSooqNextDataItem(item, seenUrls);
+                  if (p) parsedItems.push(p);
+                }
+                if (parsedItems.length >= 3) {
+                  debug.patternsUsed.push(`p3_aggressive_${path}`);
+                  debug.totalFromEachPattern[`p3_aggressive_${path}`] = parsedItems.length;
+                  const combined = [...listings, ...parsedItems];
+                  debug.finalListingCount = combined.length;
+                  debug.sampleListings = combined.slice(0, 3).map(l => ({ title: l.title, url: l.url, price: l.price }));
+                  return { listings: combined, debug };
+                }
+              }
+            }
+          }
+
+          // Collect relevant keys for debug
+          findRelevantKeysInObject(props, 'pageProps', 5, debug.relevantKeys);
         }
 
         // Check outside pageProps — but exclude translation/filter paths
@@ -834,59 +990,101 @@ function parseOpenSooqNextDataItem(
 ): ListPageListing | null {
   const OPENSOOQ = "https://eg.opensooq.com";
 
-  // Skip items without id or post_url (not real listings)
-  if (!item.id && !item.post_url && !item.url && !item.link) return null;
+  // Skip items without id or any URL-like field (not real listings)
+  // More relaxed: also accept post_id, _id, slug, and numeric id-like fields
+  const hasIdentifier = item.id || item.post_url || item.url || item.link ||
+    item.post_id || item._id || item.uri || item.href || item.detail_url || item.slug;
+  if (!hasIdentifier) return null;
 
-  // Title: try multiple field names
+  // Title: try multiple field names (expanded list)
   const title = (item.highlights as string) || (item.title as string) || (item.name as string) ||
-    (item.label as string) || (item.subject as string) || (item.post_title as string) || '';
+    (item.label as string) || (item.subject as string) || (item.post_title as string) ||
+    (item.heading as string) || (item.headline as string) || (item.display_name as string) ||
+    (item.ad_title as string) || (item.text as string) || '';
   if (!title || title.length < 3) return null;
 
-  // URL
+  // URL (expanded search)
   let url = '';
-  for (const key of ['post_url', 'uri', 'url', 'link', 'href', 'detail_url']) {
-    if (item[key]) {
+  for (const key of ['post_url', 'uri', 'url', 'link', 'href', 'detail_url', 'canonical_url', 'seo_url', 'web_url', 'page_url']) {
+    if (item[key] && typeof item[key] === 'string') {
       const rawUrl = item[key] as string;
       url = rawUrl.startsWith('http') ? rawUrl : `${OPENSOOQ}${rawUrl}`;
       break;
     }
   }
+  // Build URL from slug if available
+  if (!url && item.slug && typeof item.slug === 'string') {
+    url = `${OPENSOOQ}/ar/${item.slug}`;
+  }
   if (!url && item.id) {
     url = `${OPENSOOQ}/ar/post/${item.id}`;
+  }
+  if (!url && item.post_id) {
+    url = `${OPENSOOQ}/ar/post/${item.post_id}`;
   }
   if (!url) return null;
   if (seenUrls.has(url)) return null;
   seenUrls.add(url);
 
-  // Price
+  // Price (expanded field names)
   let price: number | null = null;
-  const rawPrice = item.price ?? item.amount ?? item.asking_price;
+  const rawPrice = item.price ?? item.amount ?? item.asking_price ?? item.cost ??
+    item.display_price ?? item.formatted_price ?? item.sale_price;
   if (rawPrice !== undefined && rawPrice !== null) {
     if (typeof rawPrice === 'number') price = rawPrice;
     else price = parsePrice(String(rawPrice));
   }
-
-  // Image
-  let thumbnailUrl: string | null = null;
-  if (item.image) {
-    const imgStr = typeof item.image === 'string' ? item.image :
-      (item.image as Record<string, unknown>)?.url as string || null;
-    if (imgStr) {
-      thumbnailUrl = imgStr.startsWith('http') ? imgStr :
-        `https://opensooq-images.os-cdn.com/previews/700x0/${imgStr}`;
+  // Try nested price object
+  if (price === null && item.price_info && typeof item.price_info === 'object') {
+    const priceInfo = item.price_info as Record<string, unknown>;
+    const nestedPrice = priceInfo.value ?? priceInfo.amount ?? priceInfo.price;
+    if (nestedPrice !== undefined && nestedPrice !== null) {
+      price = typeof nestedPrice === 'number' ? nestedPrice : parsePrice(String(nestedPrice));
     }
-  } else if (item.img) {
-    thumbnailUrl = item.img as string;
-  } else if (item.photo) {
-    thumbnailUrl = item.photo as string;
-  } else if (item.thumbnail) {
-    thumbnailUrl = item.thumbnail as string;
-  } else if (item.images && Array.isArray(item.images) && (item.images as unknown[]).length > 0) {
-    const firstImg = (item.images as Record<string, unknown>[])[0];
-    thumbnailUrl = typeof firstImg === 'string' ? firstImg : (firstImg?.url as string) || null;
   }
 
-  // Location
+  // Image (expanded)
+  let thumbnailUrl: string | null = null;
+  for (const imgKey of ['image', 'img', 'photo', 'thumbnail', 'picture', 'main_image', 'cover', 'cover_image', 'avatar', 'media_url', 'image_url', 'thumb']) {
+    if (item[imgKey]) {
+      const imgVal = item[imgKey];
+      if (typeof imgVal === 'string') {
+        thumbnailUrl = imgVal.startsWith('http') ? imgVal :
+          `https://opensooq-images.os-cdn.com/previews/700x0/${imgVal}`;
+        break;
+      }
+      if (typeof imgVal === 'object' && imgVal !== null) {
+        const imgObj = imgVal as Record<string, unknown>;
+        const imgStr = (imgObj.url || imgObj.src || imgObj.path || imgObj.link) as string | undefined;
+        if (imgStr) {
+          thumbnailUrl = imgStr.startsWith('http') ? imgStr :
+            `https://opensooq-images.os-cdn.com/previews/700x0/${imgStr}`;
+          break;
+        }
+      }
+    }
+  }
+  // Try images array
+  if (!thumbnailUrl && item.images && Array.isArray(item.images) && (item.images as unknown[]).length > 0) {
+    const firstImg = (item.images as unknown[])[0];
+    if (typeof firstImg === 'string') {
+      thumbnailUrl = firstImg.startsWith('http') ? firstImg :
+        `https://opensooq-images.os-cdn.com/previews/700x0/${firstImg}`;
+    } else if (firstImg && typeof firstImg === 'object') {
+      const imgObj = firstImg as Record<string, unknown>;
+      thumbnailUrl = (imgObj.url || imgObj.src || imgObj.path) as string || null;
+    }
+  }
+  // Try media array
+  if (!thumbnailUrl && item.media && Array.isArray(item.media) && (item.media as unknown[]).length > 0) {
+    const firstMedia = (item.media as unknown[])[0];
+    if (typeof firstMedia === 'string') thumbnailUrl = firstMedia;
+    else if (firstMedia && typeof firstMedia === 'object') {
+      thumbnailUrl = ((firstMedia as Record<string, unknown>).url || (firstMedia as Record<string, unknown>).src) as string || null;
+    }
+  }
+
+  // Location (expanded)
   const locationParts = [
     item.nhood_reporting as string,
     item.city_reporting as string,
@@ -895,28 +1093,37 @@ function parseOpenSooqNextDataItem(
     item.location as string,
     item.neighborhood as string,
     item.area as string,
+    item.region as string,
+    item.governorate as string,
+    item.district as string,
+    item.address as string,
   ].filter(Boolean);
   const location = Array.from(new Set(locationParts)).join(', ');
 
   const isLikelyBuyRequest = detectBuyRequest(title);
   const sellerName = cleanSellerName(
-    (item.member_name as string) || (item.owner_name as string) || (item.seller as string) || null
+    (item.member_name as string) || (item.owner_name as string) || (item.seller as string) ||
+    (item.seller_name as string) || (item.user_name as string) || (item.author as string) || null
   );
 
   const category = (item.cat2_code as string) || (item.cat1_code as string) ||
-    (item.category_name as string) || (item.category as string) || null;
+    (item.category_name as string) || (item.category as string) ||
+    (item.cat_name as string) || (item.subcategory as string) || null;
 
   return {
     url, title: title.trim(), price, currency: 'EGP', thumbnailUrl, location,
-    dateText: (item.created_at as string) || (item.date as string) || (item.post_date as string) || '',
+    dateText: (item.created_at as string) || (item.date as string) || (item.post_date as string) ||
+      (item.created as string) || (item.published_at as string) || (item.time as string) || '',
     sellerName,
-    sellerProfileUrl: item.member_id ? `${OPENSOOQ}/ar/profile/${item.member_id}` : null,
-    sellerAvatarUrl: (item.member_image as string) || null,
-    isVerified: !!(item.is_verified || item.verified),
-    isBusiness: !!(item.is_business),
-    isFeatured: !!(item.is_featured || item.featured || item.is_premium),
-    supportsExchange: title.includes('تبادل') || title.includes('بدل'),
-    isNegotiable: !!(item.is_negotiable) || title.includes('قابل للتفاوض'),
+    sellerProfileUrl: item.member_id ? `${OPENSOOQ}/ar/profile/${item.member_id}` :
+      (item.seller_id ? `${OPENSOOQ}/ar/profile/${item.seller_id}` : null),
+    sellerAvatarUrl: (item.member_image as string) || (item.seller_image as string) ||
+      (item.user_avatar as string) || null,
+    isVerified: !!(item.is_verified || item.verified || item.isVerified),
+    isBusiness: !!(item.is_business || item.isBusiness || item.is_shop),
+    isFeatured: !!(item.is_featured || item.featured || item.is_premium || item.isPremium || item.isFeatured),
+    supportsExchange: title.includes('تبادل') || title.includes('بدل') || title.includes('exchange'),
+    isNegotiable: !!(item.is_negotiable || item.isNegotiable) || title.includes('قابل للتفاوض'),
     category,
     isLikelyBuyRequest,
   };
@@ -1033,6 +1240,33 @@ function findAllObjectArrays(
   }
 
   return results;
+}
+
+/**
+ * Find all keys in an object tree that match listing-related patterns
+ */
+function findRelevantKeysInObject(
+  obj: unknown,
+  path: string,
+  maxDepth: number,
+  results: string[]
+): void {
+  if (maxDepth <= 0 || !obj || typeof obj !== 'object') return;
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < Math.min(obj.length, 2); i++) {
+      findRelevantKeysInObject(obj[i], `${path}[${i}]`, maxDepth - 1, results);
+    }
+  } else {
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (/listing|post|item|ad|product|search|result|serp|card|widget|section/i.test(key)) {
+        const type = Array.isArray(value) ? `array(${(value as unknown[]).length})` : typeof value;
+        results.push(`${path}.${key} [${type}]`);
+      }
+      if (value && typeof value === 'object') {
+        findRelevantKeysInObject(value, `${path}.${key}`, maxDepth - 1, results);
+      }
+    }
+  }
 }
 
 /**

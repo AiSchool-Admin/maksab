@@ -41,13 +41,14 @@ const OPENSOOQ_GOVERNORATES = [
 ];
 
 const OPENSOOQ_CATEGORIES = [
-  { slug: "cars-vehicles", name: "سيارات", cat: "vehicles", priority: 8 },
-  { slug: "properties-for-sale", name: "عقارات بيع", cat: "properties", priority: 7 },
-  { slug: "properties-for-rent", name: "عقارات إيجار", cat: "properties", priority: 6 },
+  // ═══ Verified working URLs (200 OK + content) ═══
+  { slug: "real-estate", name: "عقارات", cat: "properties", priority: 7 },
+  { slug: "cars", name: "سيارات", cat: "vehicles", priority: 8 },
+  { slug: "electronics", name: "إلكترونيات", cat: "electronics", priority: 7 },
+  { slug: "home-garden", name: "أثاث ومنزل", cat: "furniture", priority: 5 },
+  { slug: "fashion", name: "أزياء", cat: "fashion", priority: 4 },
+  // ═══ Additional categories (may need URL verification) ═══
   { slug: "mobiles-tablets", name: "موبايلات", cat: "phones", priority: 7 },
-  { slug: "electronics", name: "إلكترونيات", cat: "electronics", priority: 5 },
-  { slug: "home-furniture", name: "أثاث", cat: "furniture", priority: 5 },
-  { slug: "fashion-beauty", name: "موضة", cat: "fashion", priority: 4 },
   { slug: "services", name: "خدمات", cat: "services", priority: 3 },
   { slug: "animals-birds", name: "حيوانات", cat: "hobbies", priority: 3 },
   { slug: "kids-baby", name: "أطفال", cat: "fashion", priority: 3 },
