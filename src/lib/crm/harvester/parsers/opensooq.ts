@@ -265,7 +265,7 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
     }
   }
 
-  // ═══ Pattern 4: __NEXT_DATA__ extraction (OpenSooq may use Next.js) ═══
+  // ═══ Pattern 4: __NEXT_DATA__ extraction (OpenSooq uses Next.js) ═══
   if (listings.length === 0) {
     const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
     if (nextDataMatch) {
@@ -273,13 +273,56 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
         const nextData = JSON.parse(nextDataMatch[1]);
         const props = nextData?.props?.pageProps;
         if (props) {
-          const items = props.listings || props.posts || props.ads || props.data?.listings ||
-            props.searchResults?.listings || props.initialData?.listings || [];
-          if (Array.isArray(items) && items.length > 0) {
-            return parseOpenSooqJson({ data: items });
+          // Log keys for debugging
+          console.log('[OpenSooq] __NEXT_DATA__ pageProps keys:', Object.keys(props));
+
+          // Try known keys first
+          const knownKeys = [
+            'listings', 'posts', 'ads', 'items', 'results', 'serpData',
+            'searchResults', 'initialData', 'postList', 'adsList',
+          ];
+          for (const key of knownKeys) {
+            const val = props[key];
+            if (Array.isArray(val) && val.length > 0) {
+              console.log(`[OpenSooq] Found array in pageProps.${key}, count: ${val.length}`);
+              const parsed = parseOpenSooqJson({ data: val });
+              if (parsed.length > 0) return parsed;
+            }
+            // Check nested .listings / .data / .items inside the key
+            if (val && typeof val === 'object' && !Array.isArray(val)) {
+              for (const subKey of ['listings', 'data', 'items', 'posts', 'results', 'list']) {
+                const subVal = (val as Record<string, unknown>)[subKey];
+                if (Array.isArray(subVal) && subVal.length > 0) {
+                  console.log(`[OpenSooq] Found array in pageProps.${key}.${subKey}, count: ${subVal.length}`);
+                  const parsed = parseOpenSooqJson({ data: subVal });
+                  if (parsed.length > 0) return parsed;
+                }
+              }
+            }
+          }
+
+          // Deep recursive search: find ANY array of objects with title/name/subject
+          const foundArrays = findListingArrays(props, 'pageProps', 3);
+          for (const { path, items: foundItems } of foundArrays) {
+            console.log(`[OpenSooq] Found listing array at ${path}, count: ${foundItems.length}`);
+            const parsed = parseOpenSooqJson({ data: foundItems });
+            if (parsed.length > 0) return parsed;
           }
         }
-      } catch { /* fall through */ }
+
+        // Also check outside pageProps (some Next.js apps put data elsewhere)
+        if (nextData?.props) {
+          const foundArrays = findListingArrays(nextData.props, 'props', 4);
+          for (const { path, items: foundItems } of foundArrays) {
+            if (path.includes('pageProps')) continue; // Already checked
+            console.log(`[OpenSooq] Found listing array at ${path}, count: ${foundItems.length}`);
+            const parsed = parseOpenSooqJson({ data: foundItems });
+            if (parsed.length > 0) return parsed;
+          }
+        }
+      } catch (e) {
+        console.log('[OpenSooq] __NEXT_DATA__ parse error:', e instanceof Error ? e.message : String(e));
+      }
     }
   }
 
@@ -289,40 +332,86 @@ export function parseOpenSooqList(html: string): ListPageListing[] {
     for (const m of jsonLdMatches) {
       try {
         const ld = JSON.parse(m[1]);
-        if (ld["@type"] === "ItemList" && Array.isArray(ld.itemListElement)) {
-          for (const item of ld.itemListElement) {
-            const title = item.name || item.item?.name || "";
-            const url = item.url || item.item?.url || "";
-            if (!title || !url) continue;
+        // Handle both single objects and arrays of JSON-LD
+        const ldItems = Array.isArray(ld) ? ld : [ld];
 
-            const fullUrl = url.startsWith("http") ? url : `${OPENSOOQ_BASE}${url}`;
-            if (seenUrls.has(fullUrl)) continue;
-            seenUrls.add(fullUrl);
+        for (const ldObj of ldItems) {
+          // ItemList → itemListElement
+          if (ldObj["@type"] === "ItemList" && Array.isArray(ldObj.itemListElement)) {
+            for (const item of ldObj.itemListElement) {
+              const inner = item.item || item;
+              const title = inner.name || inner.headline || "";
+              const url = inner.url || "";
+              if (!title || !url) continue;
 
-            const price = item.offers?.price || item.item?.offers?.price || null;
+              const fullUrl = url.startsWith("http") ? url : `${OPENSOOQ_BASE}${url}`;
+              if (seenUrls.has(fullUrl)) continue;
+              seenUrls.add(fullUrl);
 
-            listings.push({
-              url: fullUrl,
-              title,
-              price: price ? parseFloat(String(price)) : null,
-              currency: "EGP",
-              thumbnailUrl: item.image || item.item?.image || null,
-              location: "",
-              dateText: "",
-              sellerName: null,
-              sellerProfileUrl: null,
-              sellerAvatarUrl: null,
-              isVerified: false,
-              isBusiness: false,
-              isFeatured: false,
-              supportsExchange: false,
-              isNegotiable: false,
-              category: null,
-              isLikelyBuyRequest: detectBuyRequest(title),
-            });
+              const price = inner.offers?.price || inner.offers?.lowPrice || null;
+              const imageUrl = typeof inner.image === "string" ? inner.image :
+                Array.isArray(inner.image) ? inner.image[0] : inner.image?.url || null;
+
+              listings.push({
+                url: fullUrl,
+                title,
+                price: price ? parseFloat(String(price)) : null,
+                currency: inner.offers?.priceCurrency || "EGP",
+                thumbnailUrl: imageUrl,
+                location: inner.contentLocation?.name || inner.address?.addressLocality || "",
+                dateText: inner.datePublished || inner.dateCreated || "",
+                sellerName: inner.seller?.name || inner.author?.name || null,
+                sellerProfileUrl: inner.seller?.url || null,
+                sellerAvatarUrl: null,
+                isVerified: false,
+                isBusiness: false,
+                isFeatured: false,
+                supportsExchange: false,
+                isNegotiable: false,
+                category: inner.category || null,
+                isLikelyBuyRequest: detectBuyRequest(title),
+              });
+            }
+          }
+
+          // Individual Product / Offer / ListItem
+          if (['Product', 'Offer', 'Vehicle', 'RealEstateListing', 'Apartment', 'House'].includes(ldObj["@type"])) {
+            const title = ldObj.name || ldObj.headline || "";
+            const url = ldObj.url || "";
+            if (title && url) {
+              const fullUrl = url.startsWith("http") ? url : `${OPENSOOQ_BASE}${url}`;
+              if (!seenUrls.has(fullUrl)) {
+                seenUrls.add(fullUrl);
+                const price = ldObj.offers?.price || ldObj.price || null;
+                const imageUrl = typeof ldObj.image === "string" ? ldObj.image :
+                  Array.isArray(ldObj.image) ? ldObj.image[0] : ldObj.image?.url || null;
+
+                listings.push({
+                  url: fullUrl,
+                  title,
+                  price: price ? parseFloat(String(price)) : null,
+                  currency: ldObj.offers?.priceCurrency || ldObj.priceCurrency || "EGP",
+                  thumbnailUrl: imageUrl,
+                  location: ldObj.contentLocation?.name || ldObj.address?.addressLocality || "",
+                  dateText: ldObj.datePublished || "",
+                  sellerName: ldObj.seller?.name || null,
+                  sellerProfileUrl: null,
+                  sellerAvatarUrl: null,
+                  isVerified: false,
+                  isBusiness: false,
+                  isFeatured: false,
+                  supportsExchange: false,
+                  isNegotiable: false,
+                  category: ldObj.category || null,
+                  isLikelyBuyRequest: detectBuyRequest(title),
+                });
+              }
+            }
           }
         }
-      } catch { /* skip invalid JSON-LD */ }
+      } catch {
+        console.log('[OpenSooq] JSON-LD parse error in one script block');
+      }
     }
   }
 
@@ -603,4 +692,49 @@ function extractImage(context: string, patterns: RegExp[]): string | null {
 function parsePrice(text: string): number | null {
   const cleaned = text.replace(/[,٬\s]/g, "").match(/(\d+)/);
   return cleaned ? parseFloat(cleaned[1]) : null;
+}
+
+/**
+ * Recursively search an object for arrays that look like listing data
+ * (arrays of objects with title/name/subject + price/url)
+ */
+function findListingArrays(
+  obj: unknown,
+  path: string,
+  maxDepth: number
+): { path: string; items: Record<string, unknown>[] }[] {
+  const results: { path: string; items: Record<string, unknown>[] }[] = [];
+  if (maxDepth <= 0 || !obj || typeof obj !== 'object') return results;
+
+  if (Array.isArray(obj)) {
+    // Check if this array looks like listings (objects with title-like fields)
+    if (obj.length >= 2) {
+      const first = obj[0];
+      if (first && typeof first === 'object' && !Array.isArray(first)) {
+        const keys = Object.keys(first as Record<string, unknown>);
+        const hasTitle = keys.some(k =>
+          /^(title|name|subject|headline|post_title|ad_title)$/i.test(k)
+        );
+        const hasIdOrUrl = keys.some(k =>
+          /^(id|url|link|href|slug|post_id|ad_id)$/i.test(k)
+        );
+        if (hasTitle && hasIdOrUrl) {
+          results.push({ path, items: obj as Record<string, unknown>[] });
+        }
+      }
+    }
+    // Also search inside array elements
+    for (let i = 0; i < Math.min(obj.length, 3); i++) {
+      results.push(...findListingArrays(obj[i], `${path}[${i}]`, maxDepth - 1));
+    }
+  } else {
+    // Search object properties
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (value && typeof value === 'object') {
+        results.push(...findListingArrays(value, `${path}.${key}`, maxDepth - 1));
+      }
+    }
+  }
+
+  return results;
 }
