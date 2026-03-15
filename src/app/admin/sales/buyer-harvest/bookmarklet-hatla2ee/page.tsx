@@ -120,6 +120,15 @@ export default function Hatla2eeBookmarkletPage() {
               4
             </span>
             <span>
+              اضغط &ldquo;▶ تشغيل&rdquo; في لوحة الحصاد التلقائي — هيحدّث الصفحة
+              ويحصد كل 5 دقائق تلقائي
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-xs">
+              5
+            </span>
+            <span>
               الإعلانات بتتحفظ في <code className="bg-blue-100 px-1 rounded">ahe_listings</code> بـ{" "}
               <code className="bg-blue-100 px-1 rounded">source_platform = &apos;hatla2ee&apos;</code>
             </span>
@@ -377,53 +386,126 @@ if(listings.length===0){
   return;
 }
 
-var payload=JSON.stringify({
-  url:window.location.href,
-  listings:listings,
-  timestamp:new Date().toISOString(),
-  source:'bookmarklet',
-  strategy:'hatla2ee-cards',
-  scope_code:null,
-  platform:'hatla2ee'
-});
+function sendToMaksab(listingsToSend,isAutoRefresh){
+  var payload=JSON.stringify({
+    url:window.location.href,
+    listings:listingsToSend,
+    timestamp:new Date().toISOString(),
+    source:'bookmarklet',
+    strategy:'hatla2ee-cards',
+    scope_code:null,
+    platform:'hatla2ee'
+  });
 
-var statusDiv=document.createElement('div');
-statusDiv.style.cssText='position:fixed;top:20px;right:20px;background:#1565C0;color:white;padding:16px 24px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:16px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-statusDiv.textContent='\\u{1F697} جاري إرسال '+listings.length+' إعلان سيارة لمكسب...';
-document.body.appendChild(statusDiv);
+  var statusDiv=document.createElement('div');
+  statusDiv.id='maksab-status';
+  statusDiv.style.cssText='position:fixed;top:20px;right:20px;background:#1565C0;color:white;padding:16px 24px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:16px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+  statusDiv.textContent='\\u{1F697} جاري إرسال '+listingsToSend.length+' إعلان سيارة لمكسب...';
+  var old=document.getElementById('maksab-status');
+  if(old)old.remove();
+  document.body.appendChild(statusDiv);
 
-var popup=window.open(MAKSAB+'/admin/crm/harvester/receive','maksab_harvest','width=500,height=400,scrollbars=yes');
-if(!popup){statusDiv.style.background='#DC2626';statusDiv.textContent='\\u274C المتصفح منع فتح النافذة — اسمح بالـ popups';setTimeout(function(){statusDiv.remove();},8000);return;}
+  var popup=window.open(MAKSAB+'/admin/crm/harvester/receive','maksab_harvest','width=500,height=400,scrollbars=yes');
+  if(!popup){statusDiv.style.background='#DC2626';statusDiv.textContent='\\u274C المتصفح منع فتح النافذة — اسمح بالـ popups';setTimeout(function(){statusDiv.remove();},8000);return;}
 
-var checkReady=setInterval(function(){
-  try{popup.postMessage({type:'harvest_data',payload:payload,token:'bookmarklet-hatla2ee'},MAKSAB);}catch(e){}
-},500);
+  var checkReady=setInterval(function(){
+    try{popup.postMessage({type:'harvest_data',payload:payload,token:'bookmarklet-hatla2ee'},MAKSAB);}catch(e){}
+  },500);
 
-var timeout=setTimeout(function(){
-  clearInterval(checkReady);
-  statusDiv.style.background='#DC2626';
-  statusDiv.textContent='\\u274C انتهت المهلة';
-  setTimeout(function(){statusDiv.remove();},5000);
-  try{popup.close();}catch(e){}
-},30000);
-
-window.addEventListener('message',function handler(e){
-  if(e.origin!==MAKSAB)return;
-  if(e.data&&e.data.type==='harvest_result'){
+  var timeout=setTimeout(function(){
     clearInterval(checkReady);
-    clearTimeout(timeout);
-    window.removeEventListener('message',handler);
-    if(e.data.error){
-      statusDiv.style.background='#DC2626';
-      statusDiv.textContent='\\u274C خطأ: '+e.data.error;
-    }else{
-      statusDiv.style.background='#1B7A3D';
-      statusDiv.innerHTML='\\u2705 تم إرسال '+e.data.received+' إعلان سيارة<br><span style="font-size:13px">'+e.data.new_count+' جديد — '+e.data.duplicate+' مكرر</span>';
+    statusDiv.style.background='#DC2626';
+    statusDiv.textContent='\\u274C انتهت المهلة';
+    setTimeout(function(){statusDiv.remove();},5000);
+    try{popup.close();}catch(e){}
+  },30000);
+
+  window.addEventListener('message',function handler(e){
+    if(e.origin!==MAKSAB)return;
+    if(e.data&&e.data.type==='harvest_result'){
+      clearInterval(checkReady);
+      clearTimeout(timeout);
+      window.removeEventListener('message',handler);
+      if(e.data.error){
+        statusDiv.style.background='#DC2626';
+        statusDiv.textContent='\\u274C خطأ: '+e.data.error;
+      }else{
+        statusDiv.style.background='#1B7A3D';
+        statusDiv.innerHTML='\\u2705 تم إرسال '+e.data.received+' إعلان سيارة<br><span style="font-size:13px">'+e.data.new_count+' جديد — '+e.data.duplicate+' مكرر</span>';
+      }
+      setTimeout(function(){statusDiv.remove();},8000);
+      setTimeout(function(){try{popup.close();}catch(e){}},2000);
     }
-    setTimeout(function(){statusDiv.remove();},8000);
-    setTimeout(function(){try{popup.close();}catch(e){}},2000);
+  });
+}
+
+sendToMaksab(listings,false);
+
+/* ═══ Auto-Refresh Panel ═══ */
+if(!document.getElementById('maksab-autorefresh')){
+  var panel=document.createElement('div');
+  panel.id='maksab-autorefresh';
+  panel.style.cssText='position:fixed;bottom:20px;right:20px;background:#1B7A3D;color:white;padding:16px 20px;border-radius:16px;z-index:99998;font-family:sans-serif;font-size:14px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);min-width:280px;';
+  panel.innerHTML='<div style="font-weight:bold;font-size:16px;margin-bottom:8px;">\\u{1F504} حصاد تلقائي — هتلاقي</div>'
+    +'<div style="margin-bottom:8px;">يحصد الصفحة كل 5 دقائق تلقائياً</div>'
+    +'<div style="display:flex;gap:8px;">'
+    +'<button id="maksab-auto-start" style="flex:1;padding:8px 16px;background:#fff;color:#1B7A3D;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;">\\u25B6 تشغيل</button>'
+    +'<button id="maksab-auto-stop" style="flex:1;padding:8px 16px;background:#DC2626;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;display:none;">\\u23F9 إيقاف</button>'
+    +'</div>'
+    +'<div id="maksab-auto-status" style="margin-top:8px;font-size:12px;opacity:0.8;"></div>';
+  document.body.appendChild(panel);
+
+  var autoInterval=null;
+  var harvestCount=0;
+  var AUTO_INTERVAL_MS=5*60*1000;
+
+  document.getElementById('maksab-auto-start').onclick=function(){
+    this.style.display='none';
+    document.getElementById('maksab-auto-stop').style.display='block';
+    document.getElementById('maksab-auto-status').textContent='\\u23F3 الحصاد القادم خلال 5 دقائق...';
+    harvestCount=0;
+    autoInterval=setInterval(function(){
+      harvestCount++;
+      document.getElementById('maksab-auto-status').textContent='\\u{1F504} حصادة #'+harvestCount+' — جاري التحديث...';
+      window.location.reload();
+    },AUTO_INTERVAL_MS);
+  };
+
+  document.getElementById('maksab-auto-stop').onclick=function(){
+    this.style.display='none';
+    document.getElementById('maksab-auto-start').style.display='block';
+    document.getElementById('maksab-auto-status').textContent='\\u23F8 متوقف';
+    if(autoInterval){clearInterval(autoInterval);autoInterval=null;}
+  };
+
+  /* ═══ Auto-harvest on page load if flag is set ═══ */
+  if(sessionStorage.getItem('maksab_auto_harvest')==='true'){
+    var autoCount=parseInt(sessionStorage.getItem('maksab_auto_count')||'0')+1;
+    sessionStorage.setItem('maksab_auto_count',String(autoCount));
+    document.getElementById('maksab-auto-start').style.display='none';
+    document.getElementById('maksab-auto-stop').style.display='block';
+    document.getElementById('maksab-auto-status').textContent='\\u2705 حصادة تلقائية #'+autoCount+' — القادمة خلال 5 دقائق';
+    autoInterval=setInterval(function(){
+      window.location.reload();
+    },AUTO_INTERVAL_MS);
   }
-});
+
+  /* Save auto-harvest state before reload */
+  var origStart=document.getElementById('maksab-auto-start').onclick;
+  document.getElementById('maksab-auto-start').onclick=function(){
+    sessionStorage.setItem('maksab_auto_harvest','true');
+    sessionStorage.setItem('maksab_auto_count','0');
+    origStart.call(this);
+  };
+  document.getElementById('maksab-auto-stop').onclick=function(){
+    sessionStorage.removeItem('maksab_auto_harvest');
+    sessionStorage.removeItem('maksab_auto_count');
+    this.style.display='none';
+    document.getElementById('maksab-auto-start').style.display='block';
+    document.getElementById('maksab-auto-status').textContent='\\u23F8 متوقف';
+    if(autoInterval){clearInterval(autoInterval);autoInterval=null;}
+  };
+}
 
 })();
 `.trim().replace(/\n\s*/g, "");
