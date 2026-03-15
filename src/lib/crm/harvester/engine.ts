@@ -486,11 +486,11 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       if (sellerId?.isNew) newSellersCount++;
       if (listing.extractedPhone) phonesExtracted++;
 
-      // Strategy 1: كل بائع بالرقم = مشتري محتمل
-      if (sellerId?.id && listing.extractedPhone) {
+      // Strategy 1: كل بائع جديد = مشتري محتمل (مش لازم يكون عنده رقم)
+      if (sellerId?.id) {
         const sellerName = cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null);
-        console.log('=== [SIB-CHECK] About to call createBuyerFromSeller ===');
-        console.log('=== [SIB-CHECK] seller:', JSON.stringify({ name: sellerName, phone: listing.extractedPhone }).substring(0, 100));
+        console.log('=== [SIB-CHECK] seller upsert done, calling SIB ===');
+        console.log('=== [SIB-CHECK] seller:', JSON.stringify({ name: sellerName, phone: listing.extractedPhone || 'NO_PHONE' }).substring(0, 100));
 
         try {
           const sibResult = await createBuyerFromSeller(supabase, {
