@@ -94,9 +94,14 @@ export async function createBuyerFromSeller(
   seller: SellerInfo,
   listing: ListingInfo,
   scope: ScopeInfo | null
-): Promise<void> {
+): Promise<string> {
+  console.log('[SIB] START:', seller?.phone, listing?.title?.substring(0, 30));
+
   // لازم يكون عنده رقم
-  if (!seller.phone) return;
+  if (!seller.phone) {
+    console.log('[SIB] SKIP: no phone');
+    return 'skip_no_phone';
+  }
 
   try {
     // لا تنشئ duplicate
@@ -107,7 +112,8 @@ export async function createBuyerFromSeller(
       .eq("buyer_phone", seller.phone)
       .limit(1);
 
-    if (existing && existing.length > 0) return;
+    console.log('[SIB] Duplicate check:', existing && existing.length > 0 ? 'SKIP' : 'NEW');
+    if (existing && existing.length > 0) return 'skip_duplicate';
 
     // تصنيف حسب احتمالية الشراء
     const { level, score: buyerScore } = calculateBuyProbability(seller);
@@ -169,15 +175,17 @@ export async function createBuyerFromSeller(
       pipeline_status: "phone_found",
     });
 
-    if (error && !error.message?.includes("duplicate")) {
-      console.log("[BHE-SIB] Insert error:", error.message);
+    if (error) {
+      console.log('[SIB] ERROR:', error.message, error.code);
+      return `error: ${error.message}`;
+    } else {
+      console.log('[SIB] SUCCESS — buyer created');
+      return 'created';
     }
   } catch (err) {
-    // Silent — don't break the harvest flow
     const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("duplicate")) {
-      console.log("[BHE-SIB] Error:", msg);
-    }
+    console.log('[SIB] CATCH ERROR:', msg);
+    return `catch_error: ${msg}`;
   }
 }
 
