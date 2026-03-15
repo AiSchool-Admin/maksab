@@ -30,7 +30,28 @@ export function cleanSellerName(name: string | null): string | null {
 }
 
 // ═══ Buy request detection from listing title/card ═══
-export const BUY_KEYWORDS = /مطلوب|نشتري|بنشتري|نشترى|بنشترى|عايز اشتري|عاوز تبيع|محتاج|بدور على|كلمنا بنشتري|لو عندك|wanted|wtb|looking for/i;
+export const BUY_KEYWORDS = new RegExp([
+  // كلمات شراء مباشرة
+  'مطلوب', 'نشتري', 'بنشتري', 'نشترى', 'بنشترى',
+  'هنشتري', 'هنشترى', 'نشتريها', 'بنشتريها', 'بنشتريه', 'نشتريه',
+  'اشتري', 'اشترى', 'شراء', 'للشراء', 'مطلوب للشراء',
+  // كلمات طلب
+  'عايز اشتري', 'عايز أشتري', 'عاوز اشتري',
+  'عايز تبيع', 'عاوز تبيع',
+  'محتاج', 'محتاجه', 'محتاجين',
+  'ابحث عن', 'بدور على', 'بدور ع', 'دور على',
+  // كلمات استهداف البائع
+  'لو عندك', 'لو معاك', 'عندك', 'معاك',
+  'لو بتفكر تبيع', 'بتفكر تبيع', 'بتفكر تبدل',
+  'عايز تبدل', 'عاوز تبدل',
+  'كلمنا بنشتري', 'كلمنا', 'كلمني', 'تواصل', 'ابعتلنا', 'ابعتلي',
+  // كلمات سعر شراء
+  'بأفضل سعر', 'بافضل سعر', 'بأعلى سعر', 'باعلى سعر', 'بأحسن سعر', 'باحسن سعر',
+  // كلمات تجار الشراء
+  'بنجيلك', 'هنجيلك', 'نجيلك لحد البيت', 'بنوصلك',
+  // إنجليزي
+  'wanted', 'wtb', 'looking for', 'we buy', 'will buy',
+].join('|'), 'i');
 
 export function detectBuyRequest(title: string, cardText?: string): boolean {
   const hasBuyKeyword = BUY_KEYWORDS.test(title);
@@ -38,7 +59,9 @@ export function detectBuyRequest(title: string, cardText?: string): boolean {
 
   // If card text available: barter badge + buy keyword anywhere in card
   if (cardText) {
-    const hasBarterBadge = cardText.includes('متوفر التبادل') || cardText.includes('قابل للتبديل');
+    const hasBarterBadge = cardText.includes('متوفر التبادل') ||
+      cardText.includes('قابل للتبديل') ||
+      cardText.includes('قابل للتبادل');
     if (hasBarterBadge && BUY_KEYWORDS.test(cardText)) return true;
   }
 
