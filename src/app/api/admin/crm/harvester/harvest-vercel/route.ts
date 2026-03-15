@@ -32,7 +32,7 @@ import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
 export const maxDuration = 60; // Vercel max
 
 // Platforms that work from Vercel but are blocked on Railway
-const VERCEL_PLATFORMS = ["opensooq", "aqarmap", "dowwr"];
+const VERCEL_PLATFORMS = ["opensooq", "aqarmap", "dowwr", "propertyfinder"];
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";

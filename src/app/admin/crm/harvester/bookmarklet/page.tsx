@@ -670,10 +670,42 @@ ${buildSendCode()}
  * يستخرج إعلانات السيارات من صفحات هتلاقي
  */
 function buildHatla2eeBookmarklet(appUrl: string, token: string, scopeCode: string): string {
+  const extractionCode = buildHatla2eeExtractionCode();
   const code = `
 (function(){
 var MAKSAB='${appUrl}';var TOKEN='${token}';var SCOPE='${scopeCode}';var PLATFORM='hatla2ee';
 if(!window.location.hostname.includes('hatla2ee')){alert('\\u274C هذا الـ Bookmarklet خاص بموقع هتلاقي (hatla2ee.com)\\n\\nافتح eg.hatla2ee.com وجرب تاني');return;}
+${extractionCode}
+var listings=extractListings();
+if(listings.length===0){alert('لم يتم العثور على إعلانات سيارات في هذه الصفحة\\n\\nتأكد إنك على صفحة قوائم سيارات في هتلاقي\\neg.hatla2ee.com/en/car/used-cars-for-sale');return;}
+/* Auto-harvest panel */
+if(!window._maksabAutoPanel){
+var panel=document.createElement('div');
+panel.id='maksab-auto-panel';
+panel.style.cssText='position:fixed;bottom:20px;left:20px;background:#1B5E20;color:white;padding:12px 18px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:14px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);cursor:pointer;';
+panel.innerHTML='\\u{1F504} حصاد تلقائي كل 5 دقائق <span id="maksab-auto-status" style="display:block;font-size:12px;opacity:0.8;">اضغط لتفعيل</span>';
+panel.onclick=function(){
+if(window._maksabAutoInterval){clearInterval(window._maksabAutoInterval);window._maksabAutoInterval=null;document.getElementById('maksab-auto-status').textContent='متوقف — اضغط لتفعيل';panel.style.background='#1B5E20';return;}
+window._maksabAutoInterval=setInterval(function(){
+document.getElementById('maksab-auto-status').textContent='جاري الحصاد...';
+try{var autoListings=extractListings();if(autoListings.length>0){var autoPayload=JSON.stringify({url:window.location.href,listings:autoListings,timestamp:new Date().toISOString(),source:'bookmarklet_auto',strategy:'hatla2ee-cards',scope_code:SCOPE||null,platform:'hatla2ee'});
+fetch(MAKSAB+'/api/admin/crm/harvester/receive-bookmarklet',{method:'POST',headers:{'Content-Type':'application/json'},body:autoPayload}).then(function(r){return r.json();}).then(function(d){document.getElementById('maksab-auto-status').textContent='آخر حصاد: '+(d.new_count||0)+' جديد — '+new Date().toLocaleTimeString('ar-EG');}).catch(function(e){document.getElementById('maksab-auto-status').textContent='خطأ: '+e.message;});}
+else{location.reload();}
+}catch(e){document.getElementById('maksab-auto-status').textContent='خطأ: '+e.message;}
+},300000);/* 5 minutes */
+document.getElementById('maksab-auto-status').textContent='شغّال — حصاد كل 5 دقائق';panel.style.background='#E65100';
+};
+document.body.appendChild(panel);window._maksabAutoPanel=true;}
+var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'hatla2ee-cards',scope_code:SCOPE||null,platform:'hatla2ee'});
+${buildSendCode()}
+})();
+`.trim().replace(/\n\s*/g, '');
+  return `javascript:${encodeURIComponent(code)}`;
+}
+
+/** Shared extraction code for Hatla2ee */
+function buildHatla2eeExtractionCode(): string {
+  return `
 function extractListings(){var listings=[];var seenUrls={};
 /* Strategy 1: car listing cards with links */
 var links=document.querySelectorAll('a[href*="/car/"],a[href*="/en/car/"]');
@@ -690,13 +722,7 @@ listings.push({url:url,title:title,price:price,currency:'EGP',thumbnailUrl:thumb
 /* Strategy 2: structured data / JSON-LD */
 if(listings.length===0){var scripts=document.querySelectorAll('script[type="application/ld+json"]');for(var s=0;s<scripts.length;s++){try{var ld=JSON.parse(scripts[s].textContent);if(ld.itemListElement){for(var j=0;j<ld.itemListElement.length;j++){var item=ld.itemListElement[j];var iurl=item.url||item.item&&item.item.url;var iname=item.name||item.item&&item.item.name;if(iurl&&iname&&!seenUrls[iurl]){seenUrls[iurl]=true;listings.push({url:iurl,title:iname,price:item.offers?parseInt(String(item.offers.price)):null,currency:'EGP',thumbnailUrl:item.image||null,location:'',dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:false,supportsExchange:false,isNegotiable:false});}}}}catch(e){}}}
 console.log('Maksab Hatla2ee: Extracted',listings.length,'listings');return listings;}
-var listings=extractListings();
-if(listings.length===0){alert('لم يتم العثور على إعلانات سيارات في هذه الصفحة\\n\\nتأكد إنك على صفحة قوائم سيارات في هتلاقي\\neg.hatla2ee.com/en/car/used-cars-for-sale');return;}
-var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'hatla2ee-cards',scope_code:SCOPE||null,platform:'hatla2ee'});
-${buildSendCode()}
-})();
-`.trim().replace(/\n\s*/g, '');
-  return `javascript:${encodeURIComponent(code)}`;
+`;
 }
 
 /**
