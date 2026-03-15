@@ -324,7 +324,8 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
 
     // Strategy 1+3: كل بائع بالرقم = مشتري محتمل + تصنيف احتمالية الشراء
     if (aheSellerId && phone) {
-      await createBuyerFromSeller(supabase, {
+      console.log('[SIB] Calling createBuyerFromSeller for:', sellerName, phone);
+      const sibResult = await createBuyerFromSeller(supabase, {
         id: aheSellerId,
         phone,
         name: sellerName,
@@ -341,6 +342,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
         governorate: scope.governorate || governorate,
         source_platform: scope.source_platform,
       });
+      console.log('[SIB] Result:', sibResult);
     }
     if (aheSellerId) {
       await updateSellerBuyProbability(supabase, aheSellerId, {

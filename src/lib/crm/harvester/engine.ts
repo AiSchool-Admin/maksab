@@ -488,10 +488,12 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
 
       // Strategy 1: كل بائع بالرقم = مشتري محتمل
       if (sellerId?.id && listing.extractedPhone) {
-        await createBuyerFromSeller(supabase, {
+        const sellerName = cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null);
+        console.log('[SIB] Calling createBuyerFromSeller for:', sellerName, listing.extractedPhone);
+        const sibResult = await createBuyerFromSeller(supabase, {
           id: sellerId.id,
           phone: listing.extractedPhone,
-          name: cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null),
+          name: sellerName,
           profile_url: listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl || null,
           is_business: listing.isBusiness,
           is_verified: listing.isVerified,
@@ -505,6 +507,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
           governorate: scope.governorate,
           source_platform: scope.source_platform,
         });
+        console.log('[SIB] Result:', sibResult);
       }
 
       // Strategy 3: تصنيف احتمالية الشراء
