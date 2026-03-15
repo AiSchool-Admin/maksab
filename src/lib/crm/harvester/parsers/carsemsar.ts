@@ -55,7 +55,7 @@ export function parseCarSemsarList(html: string): ListPageListing[] {
       isVerified: false, isBusiness: ctx.includes("dealer") || ctx.includes("معرض"),
       isFeatured: ctx.includes("featured") || ctx.includes("مميز"),
       supportsExchange: false, isNegotiable: ctx.includes("قابل للتفاوض"),
-      category: "vehicles", isLikelyBuyRequest,
+      category: "vehicles", isLikelyBuyRequest, detectedBuyerPhone: null,
     });
   }
   return listings;
@@ -90,6 +90,7 @@ function parseJson(json: Record<string, unknown>): ListPageListing[] {
     isVerified: false, isBusiness: false, isFeatured: false,
     supportsExchange: false, isNegotiable: false, category: "vehicles",
     isLikelyBuyRequest: detectBuyRequest((item.title as string) || ""),
+    detectedBuyerPhone: null,
   }));
 }
 

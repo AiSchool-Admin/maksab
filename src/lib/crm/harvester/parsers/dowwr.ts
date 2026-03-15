@@ -87,6 +87,7 @@ export function parseDowwrList(html: string): ListPageListing[] {
       isNegotiable: ctx.includes("قابل للتفاوض") || ctx.includes("negotiable"),
       category: null,
       isLikelyBuyRequest,
+      detectedBuyerPhone: null,
     });
   }
 
@@ -129,6 +130,7 @@ export function parseDowwrList(html: string): ListPageListing[] {
         isNegotiable: false,
         category: null,
         isLikelyBuyRequest: detectBuyRequest(title),
+        detectedBuyerPhone: null,
       });
     }
   }
@@ -171,6 +173,7 @@ export function parseDowwrList(html: string): ListPageListing[] {
         isNegotiable: false,
         category: null,
         isLikelyBuyRequest: detectBuyRequest(title),
+        detectedBuyerPhone: null,
       });
     }
   }
@@ -314,6 +317,7 @@ function parseDowwrJson(json: Record<string, unknown>): ListPageListing[] {
       isNegotiable: !!(item.is_negotiable) || title.includes("قابل للتفاوض"),
       category: (item.category_name as string) || null,
       isLikelyBuyRequest,
+      detectedBuyerPhone: null,
     });
   }
 

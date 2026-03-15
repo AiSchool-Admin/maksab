@@ -62,7 +62,7 @@ export function parseYallamotorList(html: string): ListPageListing[] {
       isVerified: ctx.includes("verified"), isBusiness: ctx.includes("dealer") || ctx.includes("showroom"),
       isFeatured: ctx.includes("featured") || ctx.includes("premium"),
       supportsExchange: false, isNegotiable: ctx.includes("negotiable"),
-      category: "vehicles", isLikelyBuyRequest,
+      category: "vehicles", isLikelyBuyRequest, detectedBuyerPhone: null,
     });
   }
   return listings;
@@ -112,6 +112,7 @@ function parseJson(json: Record<string, unknown>): ListPageListing[] {
     isVerified: false, isBusiness: false, isFeatured: false,
     supportsExchange: false, isNegotiable: false, category: "vehicles",
     isLikelyBuyRequest: detectBuyRequest((item.title as string) || ""),
+    detectedBuyerPhone: null,
   }));
 }
 

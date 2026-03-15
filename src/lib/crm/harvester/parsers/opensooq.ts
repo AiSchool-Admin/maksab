@@ -205,7 +205,7 @@ export function parseOpenSooqListWithDebug(html: string): {
       isFeatured: context.includes("featured") || context.includes("مميز") || context.includes("premium"),
       supportsExchange: context.includes("تبادل") || context.includes("بدل"),
       isNegotiable: context.includes("قابل للتفاوض") || context.includes("negotiable"),
-      category: null, isLikelyBuyRequest,
+      category: null, isLikelyBuyRequest, detectedBuyerPhone: null,
     });
     p0Count++;
   }
@@ -252,7 +252,7 @@ export function parseOpenSooqListWithDebug(html: string): {
         ]) || "",
         sellerName: null, sellerProfileUrl: null, sellerAvatarUrl: null,
         isVerified: false, isBusiness: false, isFeatured: false,
-        supportsExchange: false, isNegotiable: false, category: null, isLikelyBuyRequest,
+        supportsExchange: false, isNegotiable: false, category: null, isLikelyBuyRequest, detectedBuyerPhone: null,
       });
       p1Count++;
     }
@@ -295,7 +295,7 @@ export function parseOpenSooqListWithDebug(html: string): {
         location: extractText(context, [/class="[^"]*location[^"]*"[^>]*>([^<]+)/i]) || "",
         dateText: "", sellerName: null, sellerProfileUrl: null, sellerAvatarUrl: null,
         isVerified: false, isBusiness: false, isFeatured: false,
-        supportsExchange: false, isNegotiable: false, category: null, isLikelyBuyRequest,
+        supportsExchange: false, isNegotiable: false, category: null, isLikelyBuyRequest, detectedBuyerPhone: null,
       });
       p2Count++;
     }
@@ -356,6 +356,7 @@ export function parseOpenSooqListWithDebug(html: string): {
                 isNegotiable: false,
                 category: (item.cat2_code as string) || (item.cat1_code as string) || null,
                 isLikelyBuyRequest,
+                detectedBuyerPhone: null,
               });
             }
 
@@ -786,6 +787,7 @@ export function parseOpenSooqListWithDebug(html: string): {
                 supportsExchange: false, isNegotiable: false,
                 category: inner.category || null,
                 isLikelyBuyRequest: detectBuyRequest(title),
+                detectedBuyerPhone: null,
               });
               p4Count++;
             }
@@ -813,6 +815,7 @@ export function parseOpenSooqListWithDebug(html: string): {
                   supportsExchange: false, isNegotiable: false,
                   category: ldObj.category || null,
                   isLikelyBuyRequest: detectBuyRequest(title),
+                  detectedBuyerPhone: null,
                 });
                 p4Count++;
               }
@@ -1181,6 +1184,7 @@ function parseOpenSooqNextDataItem(
     isNegotiable: !!(item.is_negotiable || item.isNegotiable) || title.includes('قابل للتفاوض'),
     category,
     isLikelyBuyRequest,
+    detectedBuyerPhone: null,
   };
 }
 
@@ -1233,6 +1237,7 @@ function parseOpenSooqJson(json: Record<string, unknown>): ListPageListing[] {
       isNegotiable: !!(item.is_negotiable) || title.includes("قابل للتفاوض"),
       category: (item.category_name as string) || null,
       isLikelyBuyRequest,
+      detectedBuyerPhone: null,
     });
   }
 
