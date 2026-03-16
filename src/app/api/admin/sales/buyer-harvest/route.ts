@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
       .from("bhe_buyers")
       .select("*", { count: "exact" })
       .eq("is_duplicate", false)
+      .order("buyer_whale_score", { ascending: false })
       .order("buyer_score", { ascending: false })
       .range(offset, offset + limit - 1);
 

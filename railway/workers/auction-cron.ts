@@ -858,6 +858,38 @@ async function recalculateWhaleScores(): Promise<void> {
 }
 
 /**
+ * كل ساعة: إعادة حساب buyer_whale_score + buyer_tier لكل المشترين
+ */
+async function recalculateBuyerWhaleScores(): Promise<void> {
+  const client = getClient();
+  if (!client) return;
+
+  try {
+    const { data, error } = await client.rpc('calculate_buyer_whale_scores');
+
+    if (error) {
+      console.error(
+        `[${new Date().toISOString()}] ❌ calculate_buyer_whale_scores error:`,
+        error.message,
+      );
+      return;
+    }
+
+    const updated = typeof data === 'number' ? data : 0;
+    if (updated > 0) {
+      console.log(
+        `[${new Date().toISOString()}] 🛒 Recalculated buyer whale scores for ${updated} buyers`,
+      );
+    }
+  } catch (error) {
+    console.error(
+      `[${new Date().toISOString()}] Error in calculate_buyer_whale_scores:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+/**
  * كل ساعة: حوّل بائعين جدد لمشترين (seller_is_buyer)
  * يستدعي Supabase RPC function تعمل bulk insert مباشرة
  */
@@ -942,6 +974,11 @@ async function tick(): Promise<void> {
     await recalculateWhaleScores();
   }
 
+  // Every 60 minutes: recalculate buyer whale scores + tiers
+  if (tickCount % 60 === 0) {
+    await recalculateBuyerWhaleScores();
+  }
+
   // Every 360 minutes (6 hours): notify sellers about buyer interest
   if (tickCount % 360 === 0) {
     await notifySellerInterest();
@@ -963,6 +1000,7 @@ console.log(`  - Price drop notifications: every 30 minutes`);
 console.log(`  - Ad expiry check: every 60 minutes`);
 console.log(`  - Seller → Buyer conversion (SIB): every 60 minutes`);
 console.log(`  - Whale score recalculation: every 60 minutes`);
+console.log(`  - Buyer whale score recalculation: every 60 minutes`);
 console.log(`  - Seller interest notifications: every 6 hours`);
 console.log(`  - Signal cleanup: every 24 hours`);
 

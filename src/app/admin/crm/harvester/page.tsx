@@ -64,6 +64,19 @@ interface StatsData {
     visitor: number;
   };
   estimated_monthly_value?: number;
+  buyer_tiers?: {
+    whale_buyer: number;
+    big_buyer: number;
+    regular_buyer: number;
+    small_buyer: number;
+    cold_buyer: number;
+  };
+  buyer_readiness?: {
+    ready_now: number;
+    actively_searching: number;
+    interested: number;
+  };
+  buyer_total_purchase_value?: number;
   chart: { date: string; listings: number; phones: number }[];
 }
 
@@ -340,6 +353,55 @@ export default function HarvesterDashboard() {
                   <p className="text-[10px] text-gray-300">&lt;15 نقطة • 0 ج/شهر</p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Buyer Tier Breakdown */}
+          {stats?.buyer_tiers && (
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex flex-wrap items-center gap-4 mb-3">
+                <h2 className="text-lg font-bold">🛒 تصنيف المشترين</h2>
+                {stats.buyer_total_purchase_value != null && stats.buyer_total_purchase_value > 0 && (
+                  <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-bold">
+                    💎 القيمة الشرائية المتوقعة: {stats.buyer_total_purchase_value.toLocaleString()} ج.م
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-purple-700">{stats.buyer_tiers.whale_buyer}</p>
+                  <p className="text-xs text-purple-600">🐋 حوت مشتري</p>
+                  <p className="text-[10px] text-purple-500">≥80 نقطة</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-700">{stats.buyer_tiers.big_buyer}</p>
+                  <p className="text-xs text-blue-600">🦈 مشتري كبير</p>
+                  <p className="text-[10px] text-blue-500">≥60 نقطة</p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-green-700">{stats.buyer_tiers.regular_buyer}</p>
+                  <p className="text-xs text-green-600">🐟 مشتري عادي</p>
+                  <p className="text-[10px] text-green-500">≥40 نقطة</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-gray-600">{stats.buyer_tiers.small_buyer}</p>
+                  <p className="text-xs text-gray-500">🐠 مشتري صغير</p>
+                  <p className="text-[10px] text-gray-400">≥20 نقطة</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-gray-400">{stats.buyer_tiers.cold_buyer}</p>
+                  <p className="text-xs text-gray-400">❄️ بارد</p>
+                  <p className="text-[10px] text-gray-300">&lt;20 نقطة</p>
+                </div>
+              </div>
+              {/* Readiness */}
+              {stats.buyer_readiness && (
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <span className="px-3 py-1.5 bg-red-50 text-red-700 rounded-lg font-medium">🔥 جاهز للشراء: {stats.buyer_readiness.ready_now}</span>
+                  <span className="px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg font-medium">🔍 يبحث بنشاط: {stats.buyer_readiness.actively_searching}</span>
+                  <span className="px-3 py-1.5 bg-yellow-50 text-yellow-700 rounded-lg font-medium">👀 مهتم: {stats.buyer_readiness.interested}</span>
+                </div>
+              )}
             </div>
           )}
 
