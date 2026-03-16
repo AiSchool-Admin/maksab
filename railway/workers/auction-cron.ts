@@ -767,7 +767,7 @@ async function autoEnrichListings(): Promise<void> {
         const timeout = setTimeout(() => controller.abort(), 55000); // 55s timeout
 
         const response = await fetch(
-          `${appUrl}/api/admin/crm/harvester/enrich-vercel?platform=${platform}&limit=5`,
+          `${appUrl}/api/admin/crm/harvester/enrich-vercel?platform=${platform}&limit=30`,
           {
             signal: controller.signal,
             headers: { "Content-Type": "application/json" },
@@ -890,8 +890,8 @@ async function tick(): Promise<void> {
     await checkPriceDrops();
   }
 
-  // Every 10 minutes: auto-enrich listings without phone
-  if (tickCount % 10 === 0) {
+  // Every 5 minutes: auto-enrich listings without phone
+  if (tickCount % 5 === 0) {
     await autoEnrichListings();
   }
 
@@ -920,7 +920,7 @@ async function tick(): Promise<void> {
 console.log(`[${new Date().toISOString()}] 🟢 مكسب Worker started (Auctions + Smart Notifications + Enrichment + SIB)`);
 console.log(`  - Auction finalization: every ${INTERVAL_MS / 1000}s`);
 console.log(`  - New ad → buyer matching: every 5 minutes`);
-console.log(`  - Auto-enrich (phone extraction): every 10 minutes`);
+console.log(`  - Auto-enrich (phone extraction): every 5 minutes`);
 console.log(`  - Ending-soon notifications: every 15 minutes`);
 console.log(`  - Price drop notifications: every 30 minutes`);
 console.log(`  - Ad expiry check: every 60 minutes`);
