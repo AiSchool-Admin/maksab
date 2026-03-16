@@ -109,7 +109,11 @@ export async function GET(req: NextRequest) {
       conversationsCount,
       teamMembersCount,
       reportsCount,
-      crmCustomersCount,
+      buyersCount,
+      // Whale breakdown
+      whaleSellerCount,
+      bigFishSellerCount,
+      regularSellerCount,
     ] = await Promise.all([
       safeCount(sb, "profiles"),
       safeCount(sb, "ahe_listings"),
@@ -118,7 +122,11 @@ export async function GET(req: NextRequest) {
       safeCount(sb, "wa_conversations"),
       safeCount(sb, "team_members", (q) => q.eq("is_active", true)),
       safeCount(sb, "reports", (q) => q.eq("status", "pending")),
-      safeCount(sb, "crm_customers"),
+      safeCount(sb, "bhe_buyers"),
+      // Whale tiers
+      safeCount(sb, "ahe_sellers", (q) => q.eq("seller_tier", "whale")),
+      safeCount(sb, "ahe_sellers", (q) => q.eq("seller_tier", "big_fish")),
+      safeCount(sb, "ahe_sellers", (q) => q.eq("seller_tier", "regular")),
     ]);
 
     // ── Today's activity count ───────────────────────────────────
@@ -165,9 +173,10 @@ export async function GET(req: NextRequest) {
         id: "sales",
         name: "المبيعات",
         status: (buyProbVeryHigh || 0) > 0 ? "excellent" : "good",
-        stats: crmCustomersCount !== null ? `${crmCustomersCount} عميل CRM` : "—",
+        stats: `${sellersCount ?? 0} بائع | ${buyersCount ?? 0} مشتري`,
         details: [
-          crmCustomersCount !== null && crmCustomersCount > 0 ? `${crmCustomersCount} عميل CRM` : null,
+          `🐋 ${whaleSellerCount ?? 0} | 🦈 ${bigFishSellerCount ?? 0} | 🐟 ${regularSellerCount ?? 0}`,
+          sellersWithPhoneCount !== null && sellersWithPhoneCount > 0 ? `${sellersWithPhoneCount} بأرقام` : null,
           sellerIsBuyerCount !== null && sellerIsBuyerCount > 0 ? `${sellerIsBuyerCount} بائع→مشتري` : null,
           buyProbVeryHigh !== null ? `مشترين محتملين: ${buyProbVeryHigh} very_high | ${buyProbHigh || 0} high` : null,
         ].filter(Boolean).join(" · ") || "لا توجد بيانات بعد",

@@ -25,8 +25,16 @@ interface KanbanCard {
   name: string;
   phone: string;
   score: number;
+  tier: string;
   category: string;
 }
+
+const TIER_EMOJI: Record<string, string> = {
+  whale: "🐋",
+  big_fish: "🦈",
+  regular: "🐟",
+  small_fish: "🐠",
+};
 
 interface KanbanColumn {
   id: string;
@@ -249,14 +257,16 @@ export default function SalesPipelinePage() {
                       </span>
                       <span
                         className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${
-                          card.score >= 90
-                            ? "bg-green-100 text-green-700"
-                            : card.score >= 70
-                            ? "bg-yellow-100 text-yellow-700"
+                          card.tier === "whale"
+                            ? "bg-red-100 text-red-700"
+                            : card.tier === "big_fish"
+                            ? "bg-orange-100 text-orange-700"
+                            : card.tier === "regular"
+                            ? "bg-blue-100 text-blue-700"
                             : "bg-gray-100 text-gray-600"
                         }`}
                       >
-                        {card.score}
+                        {TIER_EMOJI[card.tier] || "🐠"} {card.score}
                       </span>
                     </div>
                     <p className="text-xs text-gray-text" dir="ltr">

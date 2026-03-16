@@ -45,9 +45,11 @@ interface Buyer {
 }
 
 const TIER_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
-  hot_buyer: { emoji: "🔥", label: "hot", color: "bg-red-100 text-red-700" },
-  warm_buyer: { emoji: "🟡", label: "warm", color: "bg-yellow-100 text-yellow-700" },
-  cold_buyer: { emoji: "🔵", label: "cold", color: "bg-blue-100 text-blue-700" },
+  whale_buyer: { emoji: "🐋", label: "حوت", color: "bg-red-100 text-red-700" },
+  big_buyer: { emoji: "🦈", label: "كبير", color: "bg-orange-100 text-orange-700" },
+  regular_buyer: { emoji: "🐟", label: "عادي", color: "bg-blue-100 text-blue-700" },
+  small_buyer: { emoji: "🐠", label: "صغير", color: "bg-gray-100 text-gray-500" },
+  cold_buyer: { emoji: "❄️", label: "بارد", color: "bg-slate-100 text-slate-500" },
   unknown: { emoji: "⚪", label: "?", color: "bg-gray-100 text-gray-500" },
 };
 
@@ -137,7 +139,7 @@ export default function BuyerHarvestPage() {
         <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
           <StatCard icon={<ShoppingCart size={18} />} label="اكتشفوا" value={stats.today.discovered} color="text-blue-600" bgColor="bg-blue-50" />
           <StatCard icon={<Phone size={18} />} label="بأرقام" value={stats.today.with_phones} color="text-green-600" bgColor="bg-green-50" />
-          <StatCard icon={<Flame size={18} />} label="hot" value={stats.today.hot} color="text-red-600" bgColor="bg-red-50" />
+          <StatCard icon={<Flame size={18} />} label="🐋 + 🦈" value={stats.today.hot} color="text-red-600" bgColor="bg-red-50" />
           <StatCard icon={<ArrowLeftRight size={18} />} label="مطابقات" value={stats.today.matched} color="text-purple-600" bgColor="bg-purple-50" />
           <StatCard icon={<MessageSquare size={18} />} label="تواصل" value={stats.today.contacted} color="text-[#D4A843]" bgColor="bg-[#FFF8E1]" />
           <StatCard icon={<UserCheck size={18} />} label="سجّلوا" value={stats.today.signed_up} color="text-[#1B7A3D]" bgColor="bg-[#E8F5E9]" />
@@ -174,20 +176,36 @@ export default function BuyerHarvestPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <button
-          onClick={() => setTierFilter(tierFilter === "hot_buyer" ? "" : "hot_buyer")}
+          onClick={() => setTierFilter(tierFilter === "whale_buyer" ? "" : "whale_buyer")}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
-            tierFilter === "hot_buyer" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            tierFilter === "whale_buyer" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
           }`}
         >
-          🔥 hot
+          🐋 حوت
         </button>
         <button
-          onClick={() => setTierFilter(tierFilter === "warm_buyer" ? "" : "warm_buyer")}
+          onClick={() => setTierFilter(tierFilter === "big_buyer" ? "" : "big_buyer")}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
-            tierFilter === "warm_buyer" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            tierFilter === "big_buyer" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
           }`}
         >
-          🟡 warm
+          🦈 كبير
+        </button>
+        <button
+          onClick={() => setTierFilter(tierFilter === "regular_buyer" ? "" : "regular_buyer")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+            tierFilter === "regular_buyer" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          🐟 عادي
+        </button>
+        <button
+          onClick={() => setTierFilter(tierFilter === "small_buyer" ? "" : "small_buyer")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+            tierFilter === "small_buyer" ? "bg-gray-200 text-gray-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          🐠 صغير
         </button>
         <select
           value={categoryFilter}

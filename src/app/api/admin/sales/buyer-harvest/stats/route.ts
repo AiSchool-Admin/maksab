@@ -42,7 +42,7 @@ export async function GET() {
     ] = await Promise.all([
       supabase.from("bhe_buyers").select("*", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00`).eq("is_duplicate", false),
       supabase.from("bhe_buyers").select("*", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00`).not("buyer_phone", "is", null).eq("is_duplicate", false),
-      supabase.from("bhe_buyers").select("*", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00`).eq("buyer_tier", "hot_buyer").eq("is_duplicate", false),
+      supabase.from("bhe_buyers").select("*", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00`).in("buyer_tier", ["whale_buyer", "big_buyer"]).eq("is_duplicate", false),
       supabase.from("bhe_buyers").select("*", { count: "exact", head: true }).gte("last_matched_at", `${today}T00:00:00`).gt("matches_count", 0).eq("is_duplicate", false),
       supabase.from("bhe_buyers").select("*", { count: "exact", head: true }).gte("contacted_at", `${today}T00:00:00`).eq("is_duplicate", false),
       supabase.from("bhe_buyers").select("*", { count: "exact", head: true }).eq("pipeline_status", "signed_up").eq("is_duplicate", false),

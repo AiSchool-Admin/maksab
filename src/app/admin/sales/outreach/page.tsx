@@ -20,6 +20,7 @@ interface OutreachContact {
   name: string;
   phone: string;
   score: number;
+  sellerTier: string;
   isWhale: boolean;
   listingCount: number;
   location: string;
@@ -27,6 +28,13 @@ interface OutreachContact {
   status: "pending" | "sent" | "skipped";
   message: string;
 }
+
+const TIER_DISPLAY: Record<string, { emoji: string; label: string; color: string }> = {
+  whale: { emoji: "🐋", label: "حوت", color: "bg-red-100 text-red-700" },
+  big_fish: { emoji: "🦈", label: "كبير", color: "bg-orange-100 text-orange-700" },
+  regular: { emoji: "🐟", label: "عادي", color: "bg-blue-100 text-blue-700" },
+  small_fish: { emoji: "🐠", label: "صغير", color: "bg-gray-100 text-gray-500" },
+};
 
 interface OutreachProgress {
   sent: number;
@@ -254,7 +262,7 @@ export default function SalesOutreachPage() {
             >
               <div className="flex items-center gap-3">
                 <span className="text-2xl">
-                  {contact.isWhale ? "🐋" : "👤"}
+                  {(TIER_DISPLAY[contact.sellerTier] || TIER_DISPLAY.small_fish).emoji}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -328,29 +336,21 @@ function ContactCard({
       <div className="flex items-start gap-3">
         {/* Avatar / Whale indicator */}
         <div className="flex-shrink-0">
-          <span className="text-3xl">{contact.isWhale ? "🐋" : "👤"}</span>
+          <span className="text-3xl">{(TIER_DISPLAY[contact.sellerTier] || TIER_DISPLAY.small_fish).emoji}</span>
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-bold text-dark">{contact.name}</span>
-            <span
-              className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                contact.score >= 90
-                  ? "bg-green-100 text-green-700"
-                  : contact.score >= 70
-                  ? "bg-yellow-100 text-yellow-700"
-                  : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              {contact.score} نقطة
-            </span>
-            {contact.isWhale && (
-              <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">
-                حوت 🐋
-              </span>
-            )}
+            {(() => {
+              const tier = TIER_DISPLAY[contact.sellerTier] || TIER_DISPLAY.small_fish;
+              return (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${tier.color}`}>
+                  {tier.emoji} {tier.label} — {contact.score} نقطة
+                </span>
+              );
+            })()}
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-gray-text">
