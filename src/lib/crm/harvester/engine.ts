@@ -486,18 +486,20 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       if (sellerId?.isNew) newSellersCount++;
       if (listing.extractedPhone) phonesExtracted++;
 
-      // Strategy 1: كل بائع جديد = مشتري محتمل (مش لازم يكون عنده رقم)
-      if (sellerId?.id) {
-        const sellerName = cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null);
-        console.log('=== [SIB-CHECK] seller upsert done, calling SIB ===');
-        console.log('=== [SIB-CHECK] seller:', JSON.stringify({ name: sellerName, phone: listing.extractedPhone || 'NO_PHONE' }).substring(0, 100));
+      // Strategy 1: كل بائع جديد = مشتري محتمل
+      // بدل الاعتماد على sellerId (ممكن يرجع undefined لو RLS تمنع SELECT بعد INSERT)
+      // نستخدم البيانات مباشرة من الـ listing
+      const sellerPhone = listing.extractedPhone || null;
+      const sellerName = cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null);
+      const sellerProfileUrl = listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl || null;
 
+      if (sellerPhone) {
+        console.log('=== [SIB-CHECK] Calling with phone:', sellerPhone);
         try {
           const sibResult = await createBuyerFromSeller(supabase, {
-            id: sellerId.id,
-            phone: listing.extractedPhone,
             name: sellerName,
-            profile_url: listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl || null,
+            phone: sellerPhone,
+            profile_url: sellerProfileUrl,
             is_business: listing.isBusiness,
             is_verified: listing.isVerified,
             total_listings_seen: 1,
@@ -513,8 +515,10 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
           console.log('=== [SIB-CHECK] Result:', sibResult);
         } catch (e: unknown) {
           const errMsg = e instanceof Error ? e.message : String(e);
-          console.log('=== [SIB-CHECK] CRASH:', errMsg);
+          console.log('=== [SIB-CHECK] ERROR:', errMsg);
         }
+      } else {
+        console.log('=== [SIB-CHECK] SKIP — no phone');
       }
 
       // Strategy 3: تصنيف احتمالية الشراء
