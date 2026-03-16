@@ -825,6 +825,39 @@ async function cleanupOldSignals(): Promise<void> {
   }
 }
 
+/**
+ * كل ساعة: حوّل بائعين جدد لمشترين (seller_is_buyer)
+ * يستدعي Supabase RPC function تعمل bulk insert مباشرة
+ */
+async function convertSellersToBuyers(): Promise<void> {
+  const client = getClient();
+  if (!client) return;
+
+  try {
+    const { data, error } = await client.rpc('convert_sellers_to_buyers');
+
+    if (error) {
+      console.error(
+        `[${new Date().toISOString()}] ❌ convert_sellers_to_buyers error:`,
+        error.message,
+      );
+      return;
+    }
+
+    const inserted = typeof data === 'number' ? data : 0;
+    if (inserted > 0) {
+      console.log(
+        `[${new Date().toISOString()}] 🔄 [SIB] Converted ${inserted} sellers → buyers`,
+      );
+    }
+  } catch (error) {
+    console.error(
+      `[${new Date().toISOString()}] Error in convert_sellers_to_buyers:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 // ─── Main Loop ──────────────────────────────────────────────
 let tickCount = 0;
 
@@ -867,6 +900,11 @@ async function tick(): Promise<void> {
     await expireOldAds();
   }
 
+  // Every 60 minutes: convert sellers to buyers (seller_is_buyer)
+  if (tickCount % 60 === 0) {
+    await convertSellersToBuyers();
+  }
+
   // Every 360 minutes (6 hours): notify sellers about buyer interest
   if (tickCount % 360 === 0) {
     await notifySellerInterest();
@@ -879,13 +917,14 @@ async function tick(): Promise<void> {
   }
 }
 
-console.log(`[${new Date().toISOString()}] 🟢 مكسب Worker started (Auctions + Smart Notifications + Enrichment)`);
+console.log(`[${new Date().toISOString()}] 🟢 مكسب Worker started (Auctions + Smart Notifications + Enrichment + SIB)`);
 console.log(`  - Auction finalization: every ${INTERVAL_MS / 1000}s`);
 console.log(`  - New ad → buyer matching: every 5 minutes`);
 console.log(`  - Auto-enrich (phone extraction): every 10 minutes`);
 console.log(`  - Ending-soon notifications: every 15 minutes`);
 console.log(`  - Price drop notifications: every 30 minutes`);
 console.log(`  - Ad expiry check: every 60 minutes`);
+console.log(`  - Seller → Buyer conversion (SIB): every 60 minutes`);
 console.log(`  - Seller interest notifications: every 6 hours`);
 console.log(`  - Signal cleanup: every 24 hours`);
 
