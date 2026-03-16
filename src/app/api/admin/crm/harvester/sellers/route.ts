@@ -1,6 +1,6 @@
 /**
  * AHE Sellers API
- * GET — قائمة المعلنين المكتشفين مع فلاتر وإحصائيات
+ * GET — قائمة المعلنين المكتشفين مع فلاتر وإحصائيات + تصنيف الحيتان
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,11 +16,12 @@ export async function GET(req: NextRequest) {
   const pipelineStatus = searchParams.get("status");
   const hasPhone = searchParams.get("has_phone");
   const whalesOnly = searchParams.get("whales_only");
+  const tierFilter = searchParams.get("tier");
   const governorate = searchParams.get("governorate");
   const search = searchParams.get("search");
 
   try {
-    // Main query
+    // Main query — sorted by whale_score desc
     let query = supabase
       .from("ahe_sellers")
       .select("*", { count: "exact" })
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
     if (pipelineStatus) query = query.eq("pipeline_status", pipelineStatus);
     if (hasPhone === "true") query = query.not("phone", "is", null);
     if (whalesOnly === "true") query = query.eq("is_whale", true);
+    if (tierFilter) query = query.eq("seller_tier", tierFilter);
     if (governorate) query = query.eq("primary_governorate", governorate);
     if (search)
       query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
@@ -42,25 +44,39 @@ export async function GET(req: NextRequest) {
     }
 
     // Stats queries in parallel
-    const [withPhoneRes, whalesRes, contactedRes, signedUpRes] =
-      await Promise.all([
-        supabase
-          .from("ahe_sellers")
-          .select("id", { count: "exact", head: true })
-          .not("phone", "is", null),
-        supabase
-          .from("ahe_sellers")
-          .select("id", { count: "exact", head: true })
-          .eq("is_whale", true),
-        supabase
-          .from("ahe_sellers")
-          .select("id", { count: "exact", head: true })
-          .eq("pipeline_status", "contacted"),
-        supabase
-          .from("ahe_sellers")
-          .select("id", { count: "exact", head: true })
-          .eq("pipeline_status", "signed_up"),
-      ]);
+    const [
+      withPhoneRes,
+      whalesRes,
+      bigFishRes,
+      regularsRes,
+      contactedRes,
+      signedUpRes,
+    ] = await Promise.all([
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .not("phone", "is", null),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "whale"),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "big_fish"),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "regular"),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("pipeline_status", "contacted"),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("pipeline_status", "signed_up"),
+    ]);
 
     return NextResponse.json({
       sellers: sellers || [],
@@ -70,6 +86,8 @@ export async function GET(req: NextRequest) {
       stats: {
         with_phone: withPhoneRes.count || 0,
         whales: whalesRes.count || 0,
+        big_fish: bigFishRes.count || 0,
+        regulars: regularsRes.count || 0,
         contacted: contactedRes.count || 0,
         signed_up: signedUpRes.count || 0,
       },

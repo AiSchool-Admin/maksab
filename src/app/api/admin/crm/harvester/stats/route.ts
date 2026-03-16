@@ -1,6 +1,6 @@
 /**
  * AHE Stats API
- * GET — إحصائيات Dashboard + بيانات الرسم البياني
+ * GET — إحصائيات Dashboard + بيانات الرسم البياني + تصنيف الحيتان
  */
 
 import { NextResponse } from "next/server";
@@ -12,13 +12,18 @@ export async function GET() {
   try {
     const today = new Date().toISOString().split("T")[0];
 
-    // Today's stats - run queries in parallel
+    // Today's stats + tier breakdown - run queries in parallel
     const [
       harvestsRes,
       listingsRes,
       sellersRes,
       phonesRes,
       whalesRes,
+      bigFishRes,
+      regularsRes,
+      smallFishRes,
+      visitorsRes,
+      monthlyValueRes,
       chartRes,
     ] = await Promise.all([
       // Harvests today
@@ -43,12 +48,34 @@ export async function GET() {
         .select("id", { count: "exact", head: true })
         .not("phone", "is", null)
         .gte("created_at", `${today}T00:00:00`),
-      // Total whales
+      // Tier counts
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
-        .eq("is_whale", true),
-      // Last 7 days chart data from ahe_daily_metrics
+        .eq("seller_tier", "whale"),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "big_fish"),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "regular"),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "small_fish"),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "visitor"),
+      // Total estimated monthly value
+      supabase
+        .from("ahe_sellers")
+        .select("estimated_monthly_value")
+        .not("estimated_monthly_value", "is", null)
+        .gt("estimated_monthly_value", 0),
+      // Last 7 days chart data
       supabase
         .from("ahe_daily_metrics")
         .select("metric_date, total_listings_new, total_phones_extracted")
@@ -61,7 +88,14 @@ export async function GET() {
         .order("metric_date", { ascending: true }),
     ]);
 
-    // Build chart data - fill in missing days
+    // Calculate total monthly value
+    const totalMonthlyValue = (monthlyValueRes.data || []).reduce(
+      (sum: number, row: { estimated_monthly_value: number }) =>
+        sum + (row.estimated_monthly_value || 0),
+      0
+    );
+
+    // Build chart data
     const chartData: { date: string; listings: number; phones: number }[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
@@ -83,10 +117,18 @@ export async function GET() {
         sellers: sellersRes.count || 0,
         phones: phonesRes.count || 0,
         whales: whalesRes.count || 0,
-        contacted: 0, // TODO: implement when outreach is built
+        contacted: 0,
         signed_up: 0,
         lost: 0,
       },
+      tiers: {
+        whale: whalesRes.count || 0,
+        big_fish: bigFishRes.count || 0,
+        regular: regularsRes.count || 0,
+        small_fish: smallFishRes.count || 0,
+        visitor: visitorsRes.count || 0,
+      },
+      estimated_monthly_value: totalMonthlyValue,
       chart: chartData,
     });
   } catch (error) {

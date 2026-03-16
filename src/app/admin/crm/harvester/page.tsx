@@ -56,6 +56,14 @@ interface StatsData {
     signed_up: number;
     lost: number;
   };
+  tiers?: {
+    whale: number;
+    big_fish: number;
+    regular: number;
+    small_fish: number;
+    visitor: number;
+  };
+  estimated_monthly_value?: number;
   chart: { date: string; listings: number; phones: number }[];
 }
 
@@ -293,6 +301,47 @@ export default function HarvesterDashboard() {
             <StatCard icon="🐋" label="حيتان" value={todayStats.whales} />
             <StatCard icon="❌" label="لم يردوا" value={todayStats.lost} />
           </div>
+
+          {/* Whale Tier Breakdown */}
+          {stats?.tiers && (
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex flex-wrap items-center gap-4 mb-3">
+                <h2 className="text-lg font-bold">🎯 تصنيف البائعين</h2>
+                {stats.estimated_monthly_value != null && stats.estimated_monthly_value > 0 && (
+                  <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm font-bold">
+                    💰 القيمة الشهرية المتوقعة: {stats.estimated_monthly_value.toLocaleString()} ج.م
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-yellow-700">{stats.tiers.whale}</p>
+                  <p className="text-xs text-yellow-600">🐋 حيتان</p>
+                  <p className="text-[10px] text-yellow-500">≥60 نقطة • 999 ج/شهر</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-700">{stats.tiers.big_fish}</p>
+                  <p className="text-xs text-blue-600">🦈 كبار</p>
+                  <p className="text-[10px] text-blue-500">≥45 نقطة • 499 ج/شهر</p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-green-700">{stats.tiers.regular}</p>
+                  <p className="text-xs text-green-600">🐟 عاديين</p>
+                  <p className="text-[10px] text-green-500">≥30 نقطة • 199 ج/شهر</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-gray-600">{stats.tiers.small_fish}</p>
+                  <p className="text-xs text-gray-500">🐠 صغار</p>
+                  <p className="text-[10px] text-gray-400">≥15 نقطة • 15 ج/شهر</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-gray-400">{stats.tiers.visitor}</p>
+                  <p className="text-xs text-gray-400">👻 زوار</p>
+                  <p className="text-[10px] text-gray-300">&lt;15 نقطة • 0 ج/شهر</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Chart - Last 7 days */}
           {stats?.chart && stats.chart.length > 0 && (
@@ -886,21 +935,34 @@ function SellersTab() {
     beheira: "البحيرة",
   };
 
-  function whaleScoreBar(score: number) {
-    const color = score > 60 ? "bg-green-500" : score >= 30 ? "bg-yellow-500" : "bg-gray-300";
+  const TIER_LABELS: Record<string, { icon: string; label: string; color: string }> = {
+    whale: { icon: "🐋", label: "حوت", color: "text-yellow-700 bg-yellow-50 border-yellow-200" },
+    big_fish: { icon: "🦈", label: "كبير", color: "text-blue-700 bg-blue-50 border-blue-200" },
+    regular: { icon: "🐟", label: "عادي", color: "text-green-700 bg-green-50 border-green-200" },
+    small_fish: { icon: "🐠", label: "صغير", color: "text-gray-600 bg-gray-50 border-gray-200" },
+    visitor: { icon: "👻", label: "زائر", color: "text-gray-400 bg-gray-50 border-gray-100" },
+  };
+
+  function whaleScoreBar(score: number, tier?: string) {
+    const tierInfo = TIER_LABELS[tier || "visitor"] || TIER_LABELS.visitor;
+    const color = score >= 60 ? "bg-yellow-500" : score >= 45 ? "bg-blue-500" : score >= 30 ? "bg-green-500" : score >= 15 ? "bg-gray-400" : "bg-gray-200";
     return (
       <div className="flex items-center gap-2">
         <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div className={`h-full ${color} rounded-full`} style={{ width: `${Math.min(score, 100)}%` }} />
+          <div className={`h-full ${color} rounded-full`} style={{ width: `${Math.min(score, 75) / 75 * 100}%` }} />
         </div>
-        <span className="text-xs text-gray-500">{score}</span>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${tierInfo.color}`}>
+          {tierInfo.icon} {score}
+        </span>
       </div>
     );
   }
 
   function sellerBadges(seller: SellersData["sellers"][0]) {
     const badges: string[] = [];
-    if (seller.is_whale) badges.push("🐋 حوت");
+    const tier = (seller as unknown as Record<string, string>).seller_tier;
+    const tierInfo = TIER_LABELS[tier || "visitor"];
+    if (tierInfo && tier !== "visitor") badges.push(`${tierInfo.icon} ${tierInfo.label}`);
     if (seller.is_business) badges.push("🏪 تاجر");
     if (seller.is_verified) badges.push("✓ موثق");
     if (seller.has_featured_listings) badges.push("⭐ مميز");
@@ -913,7 +975,9 @@ function SellersTab() {
       {data?.stats && (
         <div className="flex flex-wrap gap-4 text-sm">
           <span className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg font-medium">📞 بأرقام: {data.stats.with_phone}</span>
-          <span className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg font-medium">🐋 حيتان: {data.stats.whales}</span>
+          <span className="px-3 py-1.5 bg-yellow-50 text-yellow-700 rounded-lg font-medium">🐋 حيتان: {data.stats.whales}</span>
+          <span className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg font-medium">🦈 كبار: {(data.stats as Record<string, number>).big_fish || 0}</span>
+          <span className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg font-medium">🐟 عاديين: {(data.stats as Record<string, number>).regulars || 0}</span>
           <span className="px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg font-medium">📨 تم التواصل: {data.stats.contacted}</span>
           <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg font-medium">✅ سجّلوا: {data.stats.signed_up}</span>
         </div>
@@ -1017,7 +1081,7 @@ function SellersTab() {
                       {/* Listings count */}
                       <td className="py-3 px-3 text-center font-medium">{seller.total_listings_seen}</td>
                       {/* Whale Score */}
-                      <td className="py-3 px-3">{whaleScoreBar(seller.whale_score)}</td>
+                      <td className="py-3 px-3">{whaleScoreBar(seller.whale_score, (seller as unknown as Record<string, string>).seller_tier)}</td>
                       {/* Pipeline Status */}
                       <td className="py-3 px-3">
                         <span className="text-xs">{pipelineLabels[seller.pipeline_status] || seller.pipeline_status}</span>

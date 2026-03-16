@@ -140,10 +140,11 @@ export async function GET(req: NextRequest) {
     if (category) query = query.eq("primary_category", category);
     if (governorate) query = query.eq("primary_governorate", governorate);
 
+    // Always sort: whale → big_fish → regular → small_fish → visitor
     if (whalesFirst) {
       query = query
-        .order("is_whale", { ascending: false })
         .order("whale_score", { ascending: false })
+        .order("seller_tier", { ascending: true })
         .order("total_listings_seen", { ascending: false });
     } else {
       query = query.order("total_listings_seen", { ascending: false });
@@ -173,6 +174,8 @@ export async function GET(req: NextRequest) {
         total_listings_seen: seller.total_listings_seen,
         is_whale: seller.is_whale,
         whale_score: seller.whale_score,
+        seller_tier: seller.seller_tier || "visitor",
+        estimated_monthly_value: seller.estimated_monthly_value || 0,
         is_business: seller.is_business,
         is_verified: seller.is_verified,
         detected_account_type: seller.detected_account_type,
