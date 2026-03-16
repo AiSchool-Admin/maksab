@@ -17,11 +17,14 @@ CREATE INDEX IF NOT EXISTS idx_bhe_buyers_whale_score ON bhe_buyers(buyer_whale_
 CREATE INDEX IF NOT EXISTS idx_bhe_buyers_tier ON bhe_buyers(buyer_tier, buyer_whale_score DESC);
 
 -- ═══ دالة حساب Buyer Whale Score ═══
+-- ملاحظة: UPDATE في PostgreSQL بيستخدم القيمة القديمة مش الجديدة
+-- لذلك buyer_tier بيتحسب في UPDATE ثاني بعد ما buyer_whale_score يتحفظ
 CREATE OR REPLACE FUNCTION calculate_buyer_whale_scores()
 RETURNS INTEGER AS $$
 DECLARE
   updated INTEGER;
 BEGIN
+  -- أولاً: حساب buyer_whale_score + purchase_readiness + estimated_purchase_value
   UPDATE bhe_buyers SET
     buyer_whale_score = (
       -- 1. القوة الشرائية (0-40)
@@ -73,13 +76,6 @@ BEGIN
       WHEN 'reverse_seller' THEN 'long_term'
       ELSE 'unknown'
     END,
-    buyer_tier = CASE
-      WHEN buyer_whale_score >= 80 THEN 'whale_buyer'
-      WHEN buyer_whale_score >= 60 THEN 'big_buyer'
-      WHEN buyer_whale_score >= 40 THEN 'regular_buyer'
-      WHEN buyer_whale_score >= 20 THEN 'small_buyer'
-      ELSE 'cold_buyer'
-    END,
     estimated_purchase_value = COALESCE(budget_max,
       CASE category
         WHEN 'properties' THEN 2000000
@@ -90,6 +86,16 @@ BEGIN
         ELSE 5000
       END
     );
+
+  -- ثانياً: حساب buyer_tier بناءً على buyer_whale_score المحسوب
+  UPDATE bhe_buyers SET
+    buyer_tier = CASE
+      WHEN buyer_whale_score >= 80 THEN 'whale_buyer'
+      WHEN buyer_whale_score >= 60 THEN 'big_buyer'
+      WHEN buyer_whale_score >= 40 THEN 'regular_buyer'
+      WHEN buyer_whale_score >= 20 THEN 'small_buyer'
+      ELSE 'cold_buyer'
+    END;
 
   GET DIAGNOSTICS updated = ROW_COUNT;
   RETURN updated;
