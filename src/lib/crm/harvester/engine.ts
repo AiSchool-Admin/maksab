@@ -909,6 +909,64 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       `[AHE] ✅ Job ${jobId} completed in ${durationSeconds}s — ${newListings.length} new, ${duplicateCount} dup, ${errors.length} errors`
     );
 
+    // ═══ SELLER IS BUYER — بعد كل حصادة ═══
+    try {
+      console.log('=== [SIB] Starting seller_is_buyer conversion ===');
+
+      // جلب آخر 50 بائع بأرقام اتضافوا في آخر ساعة
+      const { data: recentSellers, error: selErr } = await supabase
+        .from('ahe_sellers')
+        .select('id, name, phone, profile_url, is_business, total_listings_seen')
+        .not('phone', 'is', null)
+        .gte('created_at', new Date(Date.now() - 3600000).toISOString())
+        .limit(50);
+
+      if (selErr) {
+        console.log('=== [SIB] Query error:', selErr.message);
+      } else {
+        console.log('=== [SIB] Found', recentSellers?.length || 0, 'recent sellers with phones');
+
+        let created = 0;
+        for (const seller of (recentSellers || [])) {
+          // check duplicate
+          const { data: exists } = await supabase
+            .from('bhe_buyers')
+            .select('id')
+            .eq('source', 'seller_is_buyer')
+            .eq('buyer_phone', seller.phone)
+            .maybeSingle();
+
+          if (exists) continue;
+
+          const { error: insErr } = await supabase.from('bhe_buyers').insert({
+            source: 'seller_is_buyer',
+            source_platform: 'dubizzle',
+            buyer_name: seller.name,
+            buyer_phone: seller.phone,
+            buyer_profile_url: seller.profile_url,
+            product_wanted: 'ترقية — بائع نشط',
+            category: scope?.maksab_category || null,
+            governorate: scope?.governorate || null,
+            buyer_tier: (!seller.is_business && (seller.total_listings_seen || 1) <= 3) ? 'hot_buyer' : 'warm_buyer',
+            buyer_score: (!seller.is_business && (seller.total_listings_seen || 1) <= 3) ? 80 : 50,
+            pipeline_status: 'phone_found',
+          });
+
+          if (insErr) {
+            console.log('=== [SIB] Insert error:', insErr.message);
+            break; // لو فيه خطأ schema — وقف
+          } else {
+            created++;
+          }
+        }
+
+        console.log('=== [SIB] Created', created, 'buyers from sellers');
+      }
+    } catch (e: unknown) {
+      const sibMsg = e instanceof Error ? e.message : String(e);
+      console.log('=== [SIB] CRASH:', sibMsg);
+    }
+
     return {
       success: true,
       listings_new: newListings.length,
