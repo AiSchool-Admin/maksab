@@ -57,11 +57,11 @@ export async function GET() {
     // - Ordered by priority_score DESC (whales first)
     const { data: sellers, error } = await supabase
       .from("ahe_sellers")
-      .select("id, name, phone, priority_score, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, buy_probability, buy_probability_score")
+      .select("id, name, phone, priority_score, whale_score, seller_tier, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, buy_probability, buy_probability_score")
       .not("phone", "is", null)
       .in("pipeline_status", ["phone_found", "discovered"])
+      .order("whale_score", { ascending: false })
       .order("buy_probability_score", { ascending: false })
-      .order("priority_score", { ascending: false })
       .limit(50);
 
     if (error) {
@@ -83,17 +83,18 @@ export async function GET() {
       .not("first_outreach_at", "is", null)
       .gte("first_outreach_at", todayISO);
 
-    const WHALE_THRESHOLD = 10; // 10+ listings = whale
-
     const contacts = withPhone.map((s) => {
       const listingCount = s.total_listings_seen || s.active_listings || 0;
-      const isWhale = listingCount >= WHALE_THRESHOLD || s.is_business === true;
+      const whaleScore = s.whale_score || 0;
+      const sellerTier = s.seller_tier || "small_fish";
+      const isWhale = sellerTier === "whale" || sellerTier === "big_fish";
 
       return {
         id: s.id,
         name: s.name || "بائع بدون اسم",
         phone: s.phone,
-        score: s.priority_score || 0,
+        score: whaleScore,
+        sellerTier,
         isWhale,
         listingCount,
         location: s.primary_governorate || "غير محدد",

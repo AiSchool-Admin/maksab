@@ -54,12 +54,17 @@ export async function GET(req: NextRequest) {
     todayStart.setHours(0, 0, 0, 0);
     const todayISO = todayStart.toISOString();
 
-    const [scopes, todayListings, todayPhones, todayJobs] = await Promise.all([
+    const [scopes, todayListings, todayPhones, todayJobsFromJobs, todayOpsFromScopes] = await Promise.all([
       safeCount(sb, "ahe_scopes", (q) => q.eq("is_active", true)),
       safeCount(sb, "ahe_listings", (q) => q.gte("created_at", todayISO)),
       safeCount(sb, "ahe_sellers", (q) => q.not("phone", "is", null).gte("created_at", todayISO)),
       safeCount(sb, "ahe_harvest_jobs", (q) => q.gte("started_at", todayISO)),
+      // Operations today = scopes that were harvested today
+      safeCount(sb, "ahe_scopes", (q) => q.gte("last_harvest_at", todayISO)),
     ]);
+
+    // Use scopes harvested today as operations count; fallback to harvest_jobs
+    const todayJobs = todayOpsFromScopes > 0 ? todayOpsFromScopes : todayJobsFromJobs;
 
     // Get platforms data
     let platforms: { id: string; name_ar: string; is_active: boolean; last_test_status: string | null; total_listings_harvested: number; last_harvest_at: string | null }[] = [];
