@@ -7,6 +7,7 @@ import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistratio
 import UpdateBanner from "@/components/pwa/UpdateBanner";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget";
+import CSSupportWidget from "@/components/cs/CSSupportWidget";
 import ComparisonFab from "@/components/comparison/ComparisonFab";
 import OfflineQueueBanner from "@/components/pwa/OfflineQueueBanner";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
@@ -144,6 +145,7 @@ export default function RootLayout({
             <ComparisonFab />
             <InstallPrompt />
             <ChatbotWidget />
+            <CSSupportWidget />
             <AnalyticsProvider />
             <GoogleAnalytics />
             <MetaPixel />
