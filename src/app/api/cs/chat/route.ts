@@ -103,6 +103,7 @@ const SARA_PROMPT = `
 // Retry function for Anthropic API (handles 529 Overloaded)
 async function callClaudeWithRetry(body: object, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`[SARA-RETRY] Attempt ${attempt}/${maxRetries} — API Key exists: ${!!process.env.ANTHROPIC_API_KEY}, prefix: ${process.env.ANTHROPIC_API_KEY?.slice(0, 8)}`);
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -113,6 +114,8 @@ async function callClaudeWithRetry(body: object, maxRetries = 3) {
       body: JSON.stringify(body)
     });
     const data = await response.json();
+    console.log(`[SARA-RETRY] Status: ${response.status}`);
+    console.log(`[SARA-RETRY] Body: ${JSON.stringify(data)}`);
     // Success
     if (response.ok) return data;
     // Overloaded → wait and retry
@@ -182,6 +185,39 @@ async function getCSSettings(sb: ReturnType<typeof getServiceClient>) {
 }
 
 export async function GET(req: NextRequest) {
+  // TEST: GET /api/cs/chat?test=1
+  const testParam = req.nextUrl.searchParams.get('test');
+  if (testParam === '1') {
+    try {
+      const testRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY ?? 'MISSING',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 50,
+          messages: [{ role: 'user', content: 'قول اهلا' }]
+        })
+      });
+      const testData = await testRes.json();
+      return NextResponse.json({
+        status: testRes.status,
+        apiKeyExists: !!process.env.ANTHROPIC_API_KEY,
+        apiKeyPrefix: process.env.ANTHROPIC_API_KEY?.slice(0, 8),
+        response: testData
+      });
+    } catch (testErr: any) {
+      return NextResponse.json({
+        error: testErr.message,
+        apiKeyExists: !!process.env.ANTHROPIC_API_KEY,
+        apiKeyPrefix: process.env.ANTHROPIC_API_KEY?.slice(0, 8),
+      });
+    }
+  }
+
   try {
     const authHeader = req.headers.get("authorization");
     const token = authHeader?.replace("Bearer ", "");
@@ -561,8 +597,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-  } catch (error) {
-    console.error("CS chat POST error:", error);
+  } catch (error: any) {
+    console.error('[SARA-FINAL-ERROR]', error.message, error);
     return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
