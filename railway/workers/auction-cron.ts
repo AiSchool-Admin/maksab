@@ -969,20 +969,8 @@ async function tick(): Promise<void> {
     await convertSellersToBuyers();
 
     // كل ساعة: إعادة حساب whale scores (بعد التحويل مباشرة عشان البائعين الجدد ياخدوا score فوراً)
-    try {
-      const { data, error } = await getClient()!.rpc('calculate_whale_scores');
-      console.log(`[${new Date().toISOString()}] [Whale] Recalculated:`, data, error?.message || 'OK');
-    } catch(e: any) {
-      console.log(`[${new Date().toISOString()}] [Whale] Error:`, e.message);
-    }
-
-    // وكمان buyer whale scores:
-    try {
-      const { data, error } = await getClient()!.rpc('calculate_buyer_whale_scores');
-      console.log(`[${new Date().toISOString()}] [BuyerWhale] Recalculated:`, data, error?.message || 'OK');
-    } catch(e: any) {
-      console.log(`[${new Date().toISOString()}] [BuyerWhale] Error:`, e.message);
-    }
+    await recalculateWhaleScores();
+    await recalculateBuyerWhaleScores();
   }
 
   // Every 360 minutes (6 hours): notify sellers about buyer interest

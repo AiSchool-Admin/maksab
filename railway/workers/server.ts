@@ -1658,7 +1658,7 @@ async function enrichListings(): Promise<{
   console.log('[Enrich] Starting enrichment cycle...');
   const supabase = getSupabase();
 
-  // Fetch 30 listings that haven't had their detail page opened yet
+  // Fetch 10 listings that haven't had their detail page opened yet
   // Opens ALL listings (not just those without phone) to detect "مطلوب" buy requests
   let listings: any[] | null = null;
   let error: any = null;
@@ -1671,7 +1671,7 @@ async function enrichListings(): Promise<{
     .eq("is_duplicate", false)
     .order("is_likely_buy_request", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(10);
 
   if (result1.error) {
     console.log(`[Enrich] Query with detail_fetched_at failed: ${result1.error.message}`);
@@ -1682,7 +1682,7 @@ async function enrichListings(): Promise<{
       .is("extracted_phone", null)
       .eq("is_duplicate", false)
       .order("created_at", { ascending: false })
-      .limit(30);
+      .limit(10);
     listings = result2.data;
     error = result2.error;
   } else {
@@ -2743,6 +2743,7 @@ server.listen(PORT, () => {
   // Railway Cron بيعمل restart كل 15 دقيقة
   // عند كل restart — شغّل حصادة واحدة ثم 5 دورات إثراء
   setTimeout(async () => {
+    try {
     // أولاً: harvest
     console.log('[Auto-Cron] Server started — running automatic harvest...');
     try {
@@ -2808,6 +2809,9 @@ server.listen(PORT, () => {
       ));
     } catch (e: any) {
       console.log('[Auto-Balance] Error:', e.message);
+    }
+    } catch (fatalErr: any) {
+      console.error('[Auto-Cron] Fatal error in auto-cron sequence:', fatalErr?.message || fatalErr);
     }
   }, 10000); // 10 ثواني بعد البدء
 });
