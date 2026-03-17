@@ -8,7 +8,127 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifySessionToken } from "@/lib/auth/session-token";
 
+const SARA_PROMPT = `
+أنتِ سارة — موظفة خدمة العملاء الأولى في مكسب.
+عندك 10 سنين خبرة في منصات التجارة الإلكترونية المصرية.
+اشتغلتِ قبل كده في Jumia وOLX مصر قبل ما تيجي مكسب.
+══════════════════════════════════════
+طريقة تفكيرك (مش بس شخصيتك)
+══════════════════════════════════════
+قبل ما تردي على أي رسالة — بتسأل نفسك:
+1. العميل ده بيسأل عن إيه بالظبط؟
+2. في حاجة وراء السؤال ده مش قالهاش؟
+3. إيه اللي هيخليه يرضى ويكمل مع مكسب؟
+لما عميل جديد بيسألك عن الأسعار:
+- مش بتقوله القائمة كلها فوراً
+- بتسأل: "بتبيع منتجات كتير ولا بتبيع بشكل فردي أحياناً؟"
+- بعدين بتقوله الباقة المناسبة بالظبط ليه
+لما عميل زعلان:
+- أول جملة دايماً تعترف بإحساسه — مش تبرر
+- "أنا فاهمة ده محبط" قبل أي حل
+- لو في غلطة من مكسب — تقوليها بصراحة
+لما المشكلة تقنية:
+- بتسأل خطوة خطوة مش بتطلب screenshots من الأول
+- "بتحصل المشكلة دي لما بتعمل إيه بالظبط؟"
+- لو مش قادرة تحلها في 3 رسائل → بتحول فوراً
+══════════════════════════════════════
+خبرتك العملية — حالات شايفاها كتير
+══════════════════════════════════════
+✦ عميل بيسأل عن الأسعار وهو في الحقيقة خايف مش مصدق
+  → مش بتبيعيله فوراً — بتطمنيه: "الباقة المجانية تبدأ بيها وشوف"
+✦ عميل بيقول "الموقع مش شغال"
+  → أول سؤال: "بتفتحيه على موبايل ولا كمبيوتر؟ وأي browser؟"
+✦ عميل جديد مش عارف يبدأ منين
+  → مش بتديه كل الخطوات دفعة واحدة
+  → بتسأل: "عايز تبيع ولا تشتري؟" وبتبدأ من هناك
+✦ عميل بيسأل نفس السؤال بأساليب مختلفة
+  → ده معناه إن إجابتك الأولى مش وضّحت
+  → "أنا شايفة إن جوابي مكنش واضح — خليني أقولك بطريقة تانية"
+✦ عميل عنده شكوى على بائع تاني
+  → مش شغلتك تحكمي — شغلتك تسمعي وتوثقي وتحولي
+  → "شكراً إنك بلغتنا — ده بيساعدنا نحمي الكل"
+══════════════════════════════════════
+أسلوب الكلام — بالأمثلة
+══════════════════════════════════════
+✅ صح:
+"كام منتج عندك تقريباً؟ عشان أقدر أقولك أنسب خيار"
+"ده حصل امتى بالظبط؟ وظهر أي رسالة خطأ؟"
+"فاهمة — الموضوع ده بيتحل بسهولة. خطوة واحدة بس"
+"أنا مش متأكدة 100% من ده — هتأكدلك وارد عليك"
+❌ غلط:
+"بالطبع يسعدني مساعدتك!"
+"سؤالك ممتاز!"
+"أهلاً بيك في مكسب!" (في نص المحادثة)
+"للأسف مش في صلاحياتي" (من غير بديل)
+══════════════════════════════════════
+معلومات مكسب الكاملة
+══════════════════════════════════════
+[المنصة]
+مكسب = بيع مباشر + مزادات + مقايضة
+الميزة التنافسية: المزادات والمقايضة مش موجودين في Dubizzle
+[الباقات]
+الأفراد: عمولة طوعية 1% (10ج-200ج) — مش إجبارية
+التجار:
+- مجاني: 10 إعلانات
+- Silver  199ج/شهر: 50 إعلان
+- Gold   499ج/شهر: 200 إعلان + شارة موثق
+- Diamond 999ج/شهر: غير محدود + صفحة متجر
+إضافات: بوست 15ج | مميز 25ج/أسبوع
+[الفئات — 12]
+سيارات | عقارات | موبايلات | فاشون | خردة
+ذهب وفضة | لاكشري | أجهزة | أثاث | هوايات | عُدد | خدمات
+[التسجيل]
+موبايل + SMS كود — فرد أو تاجر
+══════════════════════════════════════
+متى بتحوّلي لموظف بشري
+══════════════════════════════════════
+فوراً بدون تفكير:
+- احتيال أو نصب
+- مشكلة دفع أو خصم
+- حساب اتحذف
+- تهديد أو موقف قانوني
+- العميل طلب موظف بشري صراحة
+بعد 3 محاولات فاشلة:
+- مشكلة تقنية مش قادرة تحليها
+لما بتحوّلي:
+"فاهمة — الموضوع ده محتاج متخصص.
+هحوّلك دلوقتي لزميلي وهيكلمك في أقل من ساعة."
+══════════════════════════════════════
+قاعدة ذهبية واحدة
+══════════════════════════════════════
+كل محادثة هدفها إن العميل يقفل الشات وهو حاسس
+إن في حد بني آدم فاهمه — مش روبوت جاوبه.
+`;
 
+// Retry function for Anthropic API (handles 529 Overloaded)
+async function callClaudeWithRetry(body: object, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify(body)
+    });
+    const data = await response.json();
+    // Success
+    if (response.ok) return data;
+    // Overloaded → wait and retry
+    if (response.status === 529 || response.status === 503) {
+      console.log(`[SARA-CS] Attempt ${attempt} overloaded — waiting...`);
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, attempt * 2000)); // 2s, 4s, 6s
+        continue;
+      }
+    }
+    // Other error → stop immediately
+    console.error('[SARA-CS] API Error:', data);
+    throw new Error(data.error?.message ?? 'API Error');
+  }
+  throw new Error('Max retries reached');
+}
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -197,7 +317,7 @@ export async function POST(req: NextRequest) {
         if (msgInsertErr) {
           console.error("[CS-CHAT] Error saving user message:", msgInsertErr.message);
         } else {
-          // ═══ AI RESPONSE — INLINE for START action ═══
+          // ═══ AI RESPONSE — Claude API for START action ═══
           try {
             console.log('[CS-AI-INLINE-START] Starting...');
 
@@ -212,48 +332,24 @@ export async function POST(req: NextRequest) {
             console.log('[CS-AI-INLINE-START] aiEnabled:', startAiEnabled);
 
             if (startAiEnabled) {
-              // Check message count — start action with greeting already sent means count >= 1
-              const { count: startMsgCount } = await sb
-                .from('cs_messages')
-                .select('*', { count: 'exact', head: true })
-                .eq('conversation_id', conversationId);
-              const startIsFirst = (startMsgCount ?? 0) <= 2;
-              console.log('[CS-AI-INLINE-START] Message count:', startMsgCount, 'isFirst:', startIsFirst);
+              const cleanMessages = [{ role: 'user' as const, content: message }];
 
-              const msgLower = message.toLowerCase();
-              let intent = 'unknown';
-              let aiResponse = '';
+              let aiResponse: string;
+              try {
+                const aiData = await callClaudeWithRetry({
+                  model: 'claude-haiku-4-5-20251001',
+                  max_tokens: 400,
+                  system: SARA_PROMPT,
+                  messages: cleanMessages
+                });
 
-              if (/مرحبا|السلام|[اأ]هلا|هاي|هاى|hi|hello|صباح|مساء/.test(msgLower)) {
-                intent = 'greeting';
-                if (startIsFirst) {
-                  aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
-                } else {
-                  aiResponse = 'أهلاً! 💚 إزاي أقدر أساعدك تاني؟';
-                }
-              } else if (/سج[لّ]|اسجل|تسجيل|حساب|اشترك|sign up/.test(msgLower)) {
-                intent = 'registration';
-                aiResponse = 'عشان تسجّل على مكسب:\n1. اضغط "انشئ حساب" 📱\n2. اختار فرد أو تاجر 🏪\n3. دخّل رقمك 📞\n4. فعّل بالكود ✅\n\nلو عندك مشكلة قولي وأنا أساعدك! 😊';
-              } else if (/[اإ]علان|نشر|انشر|[اأ]ضيف|حذف|عد[لّ]/.test(msgLower)) {
-                intent = 'listing';
-                aiResponse = 'عشان تنشر إعلان:\n1. اضغط "انشر إعلانك" ➕\n2. اختار الفئة 📂\n3. أضف صور واضحة 📸\n4. اكتب وصف مفصّل ✏️\n5. حدد السعر 💰\n6. اضغط "نشر" 🚀';
-              } else if (/دفع|فلوس|عمولة|اشتراك|باقة|باقات|الباقات|سعر|اسعار|أسعار|تكلفة|كام|بكام/.test(msgLower)) {
-                intent = 'payment';
-                aiResponse = 'الباقات المتاحة في مكسب 💰:\n\n🆓 مجاني: 10 إعلانات\n🥈 Silver: 199 ج/شهر — 50 إعلان\n🥇 Gold: 499 ج/شهر — 200 إعلان\n💎 Diamond: 999 ج/شهر — غير محدود\n\nوللأفراد: عمولة طوعية 1% فقط (بحد أقصى 200 ج)\n\nعايز تعرف أكتر؟ 😊';
-              } else if (/شكوى|نصب|احتيال|مزيف|سرقة/.test(msgLower)) {
-                intent = 'complaint';
-                aiResponse = '⚠️ فاهم إن فيه مشكلة — آسفين جداً!\nهحوّلك لزميلي المتخصص فوراً.\nممكن تقولي التفاصيل؟';
-              } else if (/مش شغال|خطأ|error|bug|مشكلة/.test(msgLower)) {
-                intent = 'technical';
-                aiResponse = 'فاهم إن فيه مشكلة تقنية 🔧\nمحتاج منك:\n1. إيه اللي حصل بالظبط؟\n2. على أي صفحة؟\n3. screenshot لو ممكن 📸';
+                aiResponse = aiData.content?.[0]?.text
+                  ?? 'لحظة — في ضغط على الخدمة دلوقتي. جرب تاني بعد ثانية.';
+              } catch {
+                aiResponse = 'في ضغط على الخدمة دلوقتي. جرب تاني بعد شوية 🙏';
               }
 
-              // Fallback
-              if (!aiResponse) {
-                aiResponse = 'مش متأكد فهمت — ممكن توضحلي أكتر؟ 😊\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
-              }
-
-              console.log('[CS-AI-INLINE-START] Intent:', intent);
+              console.log('[CS-AI-INLINE-START] Response length:', aiResponse.length);
 
               const { error: aiStartErr } = await sb.from('cs_messages').insert({
                 conversation_id: conversationId,
@@ -342,7 +438,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      // ═══ AI RESPONSE — INLINE (لا تستخدم handleAIResponse) ═══
+      // ═══ AI RESPONSE — Claude API (with retry) ═══
       try {
         console.log('[CS-AI-INLINE] Starting...');
 
@@ -358,78 +454,38 @@ export async function POST(req: NextRequest) {
         console.log('[CS-AI-INLINE] aiEnabled:', aiEnabled);
 
         if (aiEnabled) {
-          // 1.5. Check message count to avoid greeting loop
-          const { count: msgCount } = await sb
-            .from('cs_messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('conversation_id', conversation_id);
-          const isFirstMessage = (msgCount ?? 0) <= 2; // greeting + first user message
-          console.log('[CS-AI-INLINE] Message count:', msgCount, 'isFirstMessage:', isFirstMessage);
-
-          // 1.6. Fetch last 5 messages for context memory
+          // Fetch last 10 messages for context
           const { data: historyRows } = await sb
             .from('cs_messages')
             .select('message, sender_type')
             .eq('conversation_id', conversation_id)
             .order('created_at', { ascending: false })
-            .limit(5);
+            .limit(10);
           const conversationHistory = (historyRows || []).reverse();
           console.log('[CS-AI-INLINE] History:', conversationHistory.length, 'messages');
 
-          // 2. كشف النية — check current message + history context
-          const msgLower = message.toLowerCase();
-          let intent = 'unknown';
-          let aiResponse = '';
+          // Build messages array for Claude API
+          const cleanMessages = conversationHistory.map((m: any) => ({
+            role: m.sender_type === 'user' ? 'user' as const : 'assistant' as const,
+            content: m.message,
+          }));
 
-          // Build context string from history for better intent detection
-          const historyContext = conversationHistory
-            .map((m: any) => m.message)
-            .join(' ')
-            .toLowerCase();
+          let aiResponse: string;
+          try {
+            const aiData = await callClaudeWithRetry({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 400,
+              system: SARA_PROMPT,
+              messages: cleanMessages
+            });
 
-          if (/مرحبا|السلام|[اأ]هلا|هاي|هاى|hi|hello|صباح|مساء/.test(msgLower)) {
-            intent = 'greeting';
-            // Only send full greeting on first message, otherwise be brief
-            if (isFirstMessage) {
-              aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
-            } else {
-              aiResponse = 'أهلاً! 💚 إزاي أقدر أساعدك تاني؟';
-            }
-          } else if (/سج[لّ]|اسجل|تسجيل|حساب|اشترك|sign up/.test(msgLower)) {
-            intent = 'registration';
-            aiResponse = 'عشان تسجّل على مكسب:\n1. اضغط "انشئ حساب" 📱\n2. اختار فرد أو تاجر 🏪\n3. دخّل رقمك 📞\n4. فعّل بالكود ✅\n\nلو عندك مشكلة قولي وأنا أساعدك! 😊';
-          } else if (/[اإ]علان|نشر|انشر|[اأ]ضيف|حذف|عد[لّ]/.test(msgLower)) {
-            intent = 'listing';
-            aiResponse = 'عشان تنشر إعلان:\n1. اضغط "انشر إعلانك" ➕\n2. اختار الفئة 📂\n3. أضف صور واضحة 📸\n4. اكتب وصف مفصّل ✏️\n5. حدد السعر 💰\n6. اضغط "نشر" 🚀';
-          } else if (/دفع|فلوس|عمولة|اشتراك|باقة|باقات|الباقات|سعر|اسعار|أسعار|تكلفة|كام|بكام/.test(msgLower)) {
-            intent = 'payment';
-            aiResponse = 'الباقات المتاحة في مكسب 💰:\n\n🆓 مجاني: 10 إعلانات\n🥈 Silver: 199 ج/شهر — 50 إعلان\n🥇 Gold: 499 ج/شهر — 200 إعلان\n💎 Diamond: 999 ج/شهر — غير محدود\n\nوللأفراد: عمولة طوعية 1% فقط (بحد أقصى 200 ج)\n\nعايز تعرف أكتر؟ 😊';
-          } else if (/شكوى|نصب|احتيال|مزيف|سرقة/.test(msgLower)) {
-            intent = 'complaint';
-            aiResponse = '⚠️ فاهم إن فيه مشكلة — آسفين جداً!\nهحوّلك لزميلي المتخصص فوراً.\nممكن تقولي التفاصيل؟';
-          } else if (/مش شغال|خطأ|error|bug|مشكلة/.test(msgLower)) {
-            intent = 'technical';
-            aiResponse = 'فاهم إن فيه مشكلة تقنية 🔧\nمحتاج منك:\n1. إيه اللي حصل بالظبط؟\n2. على أي صفحة؟\n3. screenshot لو ممكن 📸';
-          } else {
-            // Check history context for ongoing topic
-            if (/دفع|فلوس|عمولة|اشتراك|باقة|باقات|الباقات|سعر|اسعار|أسعار|تكلفة|كام|بكام/.test(historyContext)) {
-              intent = 'payment_followup';
-              aiResponse = 'بخصوص الباقات — عايز تعرف تفاصيل أكتر عن باقة معينة؟ 😊\n\n🆓 مجاني: 10 إعلانات\n🥈 Silver: 199 ج/شهر — 50 إعلان\n🥇 Gold: 499 ج/شهر — 200 إعلان\n💎 Diamond: 999 ج/شهر — غير محدود';
-            } else if (/سج[لّ]|تسجيل|حساب/.test(historyContext)) {
-              intent = 'registration_followup';
-              aiResponse = 'لسه محتاج مساعدة في التسجيل؟ قولي إيه المشكلة بالظبط وأنا أساعدك! 😊';
-            } else if (/[اإ]علان|نشر/.test(historyContext)) {
-              intent = 'listing_followup';
-              aiResponse = 'لسه محتاج مساعدة في الإعلان؟ قولي إيه الخطوة اللي واقف فيها! 😊';
-            }
+            aiResponse = aiData.content?.[0]?.text
+              ?? 'لحظة — في ضغط على الخدمة دلوقتي. جرب تاني بعد ثانية.';
+          } catch {
+            aiResponse = 'في ضغط على الخدمة دلوقتي. جرب تاني بعد شوية 🙏';
           }
 
-          // Fallback if no intent matched
-          if (!aiResponse) {
-            aiResponse = 'مش متأكد فهمت — ممكن توضحلي أكتر؟ 😊\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
-          }
-
-          console.log('[CS-AI-INLINE] Intent:', intent, 'Response length:', aiResponse.length);
+          console.log('[CS-AI-INLINE] Response length:', aiResponse.length);
 
           // 3. حفظ رد AI
           const { error: aiInsertError } = await sb.from('cs_messages').insert({
