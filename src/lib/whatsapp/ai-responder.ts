@@ -136,10 +136,6 @@ export async function generateAIResponse(
         { role: 'user', content: incomingMessage },
       ];
 
-      console.log('[SARA-DEBUG] Model:', 'claude-haiku-4-5-20251001');
-      console.log('[SARA-DEBUG] Messages count:', cleanMessages.length);
-      console.log('[SARA-DEBUG] System prompt length:', systemPrompt.length);
-
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -148,24 +144,22 @@ export async function generateAIResponse(
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
           system: systemPrompt,
           messages: cleanMessages,
         }),
       });
 
-      console.log('[SARA-DEBUG] API Status:', response.status);
-      const data = await response.json();
-      console.log('[SARA-DEBUG] API Response:', JSON.stringify(data).slice(0, 500));
-
       if (response.ok) {
+        const data = await response.json();
         const aiReply = data.content?.[0]?.text;
         if (aiReply) {
           return { reply: aiReply, intent, action };
         }
       } else {
-        console.error('[AI Responder] Claude API error:', response.status, data);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[AI Responder] Claude API error:', response.status, errorData);
       }
     } catch (err) {
       console.error('[AI Responder] Claude API call failed:', err);
