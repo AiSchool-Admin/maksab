@@ -36,6 +36,7 @@ function formatTime(iso: string): string {
 }
 
 export default function CSSupportWidget() {
+  const [isMounted, setIsMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [conversation, setConversation] = useState<CSConversation | null>(null);
   const [messages, setMessages] = useState<CSMessage[]>([]);
@@ -44,6 +45,11 @@ export default function CSSupportWidget() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showRating, setShowRating] = useState(false);
   const [rating, setRating] = useState(0);
+
+  // Defer rendering until after hydration to avoid localStorage mismatch
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -313,6 +319,8 @@ export default function CSSupportWidget() {
     }
   };
 
+  // Don't render until mounted (avoids hydration mismatch from localStorage)
+  if (!isMounted) return null;
   // Don't show for non-logged-in users
   if (!isLoggedIn()) return null;
 
@@ -446,6 +454,7 @@ export default function CSSupportWidget() {
                         className={`text-[10px] mt-0.5 ${
                           isUser ? "text-left" : "text-right"
                         } text-gray-400`}
+                        suppressHydrationWarning
                       >
                         {formatTime(msg.created_at)}
                       </div>

@@ -48,7 +48,7 @@ export default function ConversationItem({
           <h3 className="text-sm font-bold text-dark truncate">
             {otherUser.displayName}
           </h3>
-          <span className="text-[10px] text-gray-text flex-shrink-0 ms-2">
+          <span className="text-[10px] text-gray-text flex-shrink-0 ms-2" suppressHydrationWarning>
             {formatTimeAgo(conv.lastMessageAt)}
           </span>
         </div>

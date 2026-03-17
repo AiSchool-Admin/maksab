@@ -21,18 +21,22 @@ interface ChatMessage {
   timestamp: number;
 }
 
-const WELCOME_MESSAGE: ChatMessage = {
-  id: "welcome",
-  role: "assistant",
-  content:
-    "أهلاً بيك في مكسب! 💚\nأنا المساعد الذكي — ممكن أساعدك تلاقي أي حاجة وأحللك الأسعار.\n\nجرب تسألني:\n• \"عايز آيفون 15 بأقل من 20 ألف\"\n• \"سعر تويوتا كورولا كام؟\"\n• \"فيه شقق في مدينة نصر؟\"",
-  timestamp: Date.now(),
-};
+const WELCOME_CONTENT =
+  "أهلاً بيك في مكسب! 💚\nأنا المساعد الذكي — ممكن أساعدك تلاقي أي حاجة وأحللك الأسعار.\n\nجرب تسألني:\n• \"عايز آيفون 15 بأقل من 20 ألف\"\n• \"سعر تويوتا كورولا كام؟\"\n• \"فيه شقق في مدينة نصر؟\"";
+
+function createWelcomeMessage(): ChatMessage {
+  return {
+    id: "welcome",
+    role: "assistant",
+    content: WELCOME_CONTENT,
+    timestamp: 0,
+  };
+}
 
 export default function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [createWelcomeMessage()]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showHideConfirm, setShowHideConfirm] = useState(false);

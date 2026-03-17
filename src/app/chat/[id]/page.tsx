@@ -526,7 +526,7 @@ export default function ChatPage({
           <>
             {/* Date separator for first message */}
             <div className="text-center mb-4">
-              <span className="text-[10px] text-gray-text bg-gray-light px-3 py-1 rounded-full">
+              <span className="text-[10px] text-gray-text bg-gray-light px-3 py-1 rounded-full" suppressHydrationWarning>
                 {new Date(messages[0].createdAt).toLocaleDateString("ar-EG", {
                   day: "numeric",
                   month: "long",

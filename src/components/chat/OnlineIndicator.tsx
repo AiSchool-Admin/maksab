@@ -22,7 +22,7 @@ export default function OnlineIndicator({
 
   if (lastSeen) {
     return (
-      <span className="text-xs text-gray-text">
+      <span className="text-xs text-gray-text" suppressHydrationWarning>
         آخر ظهور {formatTimeAgo(lastSeen)}
       </span>
     );
