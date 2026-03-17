@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getAdminHeaders } from "@/app/admin/layout";
+import Link from "next/link";
 import {
   RefreshCw,
   Copy,
@@ -13,7 +14,22 @@ import {
   Target,
   Send,
   Users,
+  Pencil,
+  Phone,
+  Smile,
+  Meh,
+  Frown,
+  StickyNote,
+  BarChart3,
+  Clock,
+  UserCheck,
+  ChevronDown,
+  Filter,
+  FileText,
+  X,
 } from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OutreachContact {
   id: string;
@@ -25,16 +41,27 @@ interface OutreachContact {
   listingCount: number;
   location: string;
   category: string;
-  status: "pending" | "sent" | "skipped";
+  pipelineStatus: string;
+  outreachCount: number;
+  lastOutreachAt: string | null;
+  lastResponseAt: string | null;
+  notes: string | null;
+  rejectionReason: string | null;
+  templateId: string | null;
   message: string;
 }
 
-const TIER_DISPLAY: Record<string, { emoji: string; label: string; color: string }> = {
-  whale: { emoji: "🐋", label: "حوت", color: "bg-red-100 text-red-700" },
-  big_fish: { emoji: "🦈", label: "كبير", color: "bg-orange-100 text-orange-700" },
-  regular: { emoji: "🐟", label: "عادي", color: "bg-blue-100 text-blue-700" },
-  small_fish: { emoji: "🐠", label: "صغير", color: "bg-gray-100 text-gray-500" },
-};
+interface OutreachTemplate {
+  id: string;
+  name: string;
+  name_ar: string;
+  category: string;
+  target_tier: string;
+  message_text: string;
+  is_default: boolean;
+  usage_count: number;
+  response_rate: number;
+}
 
 interface OutreachProgress {
   sent: number;
@@ -43,49 +70,188 @@ interface OutreachProgress {
   target: number;
 }
 
-interface OutreachData {
-  progress: OutreachProgress;
-  contacts: OutreachContact[];
+interface StatsData {
+  sentToday: number;
+  sentWeek: number;
+  sentMonth: number;
+  responseRate: number;
+  interestRate: number;
+  registrationRate: number;
+  totalSent: number;
+  totalResponded: number;
+  totalInterested: number;
+  totalRegistered: number;
+  bestTemplate: { name_ar: string; usage_count: number; response_rate: number } | null;
+  byCategory: Record<string, { sent: number; interested: number }>;
 }
 
-export default function SalesOutreachPage() {
-  const [data, setData] = useState<OutreachData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [expandedMessages, setExpandedMessages] = useState<
-    Record<string, boolean>
-  >({});
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [localStatuses, setLocalStatuses] = useState<
-    Record<string, "pending" | "sent" | "skipped">
-  >({});
+const TIER_DISPLAY: Record<string, { emoji: string; label: string; color: string }> = {
+  whale: { emoji: "🐋", label: "حوت", color: "bg-red-100 text-red-700" },
+  big_fish: { emoji: "🦈", label: "كبير", color: "bg-orange-100 text-orange-700" },
+  regular: { emoji: "🐟", label: "عادي", color: "bg-blue-100 text-blue-700" },
+  small_fish: { emoji: "🐠", label: "صغير", color: "bg-gray-100 text-gray-500" },
+  visitor: { emoji: "👻", label: "زائر", color: "bg-gray-50 text-gray-400" },
+};
 
-  const fetchData = async () => {
+const CATEGORY_LABELS: Record<string, string> = {
+  vehicles: "سيارات",
+  properties: "عقارات",
+  phones: "موبايلات",
+  electronics: "إلكترونيات",
+  furniture: "أثاث",
+  fashion: "ملابس",
+  gold: "ذهب",
+  luxury: "فاخر",
+  appliances: "أجهزة",
+  hobbies: "هوايات",
+  tools: "عدد",
+  services: "خدمات",
+  scrap: "خردة",
+  kids: "أطفال",
+  sports: "رياضة",
+  pets: "حيوانات",
+  other: "أخرى",
+};
+
+const GOV_LABELS: Record<string, string> = {
+  cairo: "القاهرة",
+  alexandria: "الإسكندرية",
+  giza: "الجيزة",
+  qalyubia: "القليوبية",
+  sharqia: "الشرقية",
+  dakahlia: "الدقهلية",
+  gharbia: "الغربية",
+  monufia: "المنوفية",
+  beheira: "البحيرة",
+  kafr_el_sheikh: "كفر الشيخ",
+  damietta: "دمياط",
+  port_said: "بورسعيد",
+  ismailia: "الإسماعيلية",
+  suez: "السويس",
+  fayoum: "الفيوم",
+  beni_suef: "بني سويف",
+  minya: "المنيا",
+  assiut: "أسيوط",
+  sohag: "سوهاج",
+  qena: "قنا",
+  luxor: "الأقصر",
+  aswan: "أسوان",
+  red_sea: "البحر الأحمر",
+  matrouh: "مطروح",
+};
+
+const ROLE_TARGETS: Record<string, number> = {
+  ceo: 10,
+  sales_manager: 30,
+  sales_rep: 50,
+};
+
+type TabType = "new" | "followup" | "interested" | "stats";
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function SalesOutreachPage() {
+  const [activeTab, setActiveTab] = useState<TabType>("new");
+  const [contacts, setContacts] = useState<OutreachContact[]>([]);
+  const [templates, setTemplates] = useState<OutreachTemplate[]>([]);
+  const [progress, setProgress] = useState<OutreachProgress>({ sent: 0, skipped: 0, remaining: 0, target: 50 });
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tierCounts, setTierCounts] = useState<Record<string, number>>({});
+
+  // Filters
+  const [tierFilter, setTierFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [govFilter, setGovFilter] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Daily target
+  const [dailyTarget, setDailyTarget] = useState(() => {
+    if (typeof window !== "undefined") {
+      return parseInt(localStorage.getItem("outreach_daily_target") || "50");
+    }
+    return 50;
+  });
+  const [editingTarget, setEditingTarget] = useState(false);
+
+  // Template selection
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+  // UI state
+  const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [processedIds, setProcessedIds] = useState<Set<string>>(new Set());
+
+  // Modal
+  const [noteModal, setNoteModal] = useState<{ sellerId: string; currentNote: string } | null>(null);
+  const [reasonModal, setReasonModal] = useState<{ sellerId: string; action: string } | null>(null);
+  const [modalText, setModalText] = useState("");
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/sales/outreach", {
+      const params = new URLSearchParams({
+        tab: activeTab,
+        tier: tierFilter,
+        category: categoryFilter,
+        governorate: govFilter,
+        dailyTarget: String(dailyTarget),
+      });
+      if (selectedTemplateId) params.set("templateId", selectedTemplateId);
+
+      const res = await fetch(`/api/admin/sales/outreach?${params}`, {
         headers: getAdminHeaders(),
       });
       const json = await res.json();
-      setData(json);
-      // Initialize local statuses from server data
-      const statuses: Record<string, "pending" | "sent" | "skipped"> = {};
-      json.contacts.forEach((c: OutreachContact) => {
-        statuses[c.id] = c.status;
-      });
-      setLocalStatuses(statuses);
+
+      if (activeTab === "stats") {
+        setStats(json.stats);
+      } else {
+        setContacts(json.contacts || []);
+        setProgress(json.progress || { sent: 0, skipped: 0, remaining: 0, target: dailyTarget });
+        setTemplates(json.templates || []);
+        setTierCounts(json.tierCounts || {});
+      }
+      setProcessedIds(new Set());
     } catch (err) {
       console.error("Failed to fetch outreach data:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, tierFilter, categoryFilter, govFilter, dailyTarget, selectedTemplateId]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  const toggleMessage = (id: string) => {
-    setExpandedMessages((prev) => ({ ...prev, [id]: !prev[id] }));
+  const updateDailyTarget = (val: number) => {
+    setDailyTarget(val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("outreach_daily_target", String(val));
+    }
+  };
+
+  const updateSellerStatus = async (
+    sellerId: string,
+    action: string,
+    extra?: { templateId?: string; notes?: string; reason?: string }
+  ) => {
+    try {
+      await fetch("/api/admin/sales/outreach", {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ sellerId, action, ...extra }),
+      });
+      setProcessedIds((prev) => new Set([...prev, sellerId]));
+      // Update progress locally
+      if (action === "sent") {
+        setProgress((p) => ({ ...p, sent: p.sent + 1, remaining: Math.max(0, p.remaining - 1) }));
+      } else if (action === "skipped") {
+        setProgress((p) => ({ ...p, skipped: p.skipped + 1, remaining: Math.max(0, p.remaining - 1) }));
+      }
+    } catch (err) {
+      console.error("Failed to update status:", err);
+    }
   };
 
   const copyMessage = async (id: string, message: string) => {
@@ -103,63 +269,23 @@ export default function SalesOutreachPage() {
     window.open(url, "_blank");
   };
 
-  const markSent = (id: string) => {
-    setLocalStatuses((prev) => ({ ...prev, [id]: "sent" }));
+  const toggleMessage = (id: string) => {
+    setExpandedMessages((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const markSkipped = (id: string) => {
-    setLocalStatuses((prev) => ({ ...prev, [id]: "skipped" }));
-  };
-
-  // Compute live progress from local statuses
-  const liveProgress = data
-    ? {
-        sent:
-          data.progress.sent +
-          Object.values(localStatuses).filter((s) => s === "sent").length -
-          data.contacts.filter((c) => c.status === "sent").length,
-        skipped:
-          data.progress.skipped +
-          Object.values(localStatuses).filter((s) => s === "skipped").length -
-          data.contacts.filter((c) => c.status === "skipped").length,
-        remaining: data.contacts.filter(
-          (c) => localStatuses[c.id] === "pending"
-        ).length,
-        target: data.progress.target,
-      }
-    : null;
-
-  const progressPercent = liveProgress
-    ? Math.round(
-        ((liveProgress.sent + liveProgress.skipped) / liveProgress.target) * 100
-      )
+  const progressPercent = progress.target > 0
+    ? Math.round((progress.sent / progress.target) * 100)
     : 0;
 
-  if (loading || !data || !liveProgress) {
-    return (
-      <div className="space-y-4">
-        <div className="bg-white rounded-2xl p-6 animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-60 mb-4" />
-          <div className="h-4 bg-gray-100 rounded w-full mb-2" />
-          <div className="h-8 bg-gray-100 rounded" />
-        </div>
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-white rounded-2xl p-6 animate-pulse">
-            <div className="h-5 bg-gray-200 rounded w-48 mb-3" />
-            <div className="h-4 bg-gray-100 rounded w-32 mb-2" />
-            <div className="h-4 bg-gray-100 rounded w-64" />
-          </div>
-        ))}
-      </div>
-    );
-  }
+  const pendingContacts = contacts.filter((c) => !processedIds.has(c.id));
+  const doneContacts = contacts.filter((c) => processedIds.has(c.id));
 
-  const pendingContacts = data.contacts.filter(
-    (c) => localStatuses[c.id] === "pending"
-  );
-  const processedContacts = data.contacts.filter(
-    (c) => localStatuses[c.id] !== "pending"
-  );
+  // Tab counts
+  const tabCounts = {
+    new: pendingContacts.length,
+    followup: activeTab === "followup" ? pendingContacts.length : 0,
+    interested: activeTab === "interested" ? pendingContacts.length : 0,
+  };
 
   return (
     <div className="space-y-6">
@@ -171,42 +297,90 @@ export default function SalesOutreachPage() {
             تواصل مع البائعين المحتملين وحوّلهم لمستخدمين
           </p>
         </div>
-        <button
-          onClick={fetchData}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-        >
-          <RefreshCw size={16} />
-          تحديث
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/sales/templates"
+            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <FileText size={16} />
+            الرسائل
+          </Link>
+          <button
+            onClick={fetchData}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <RefreshCw size={16} />
+            تحديث
+          </button>
+        </div>
       </div>
 
-      {/* Progress Bar */}
+      {/* ═══ Improvement 1: Editable Daily Target + Progress ═══ */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100">
-        <div className="flex items-center gap-2 mb-3">
-          <Target size={18} className="text-[#1B7A3D]" />
-          <h2 className="text-base font-bold text-dark">تقدم اليوم</h2>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Target size={18} className="text-[#1B7A3D]" />
+            <h2 className="text-base font-bold text-dark">تقدم اليوم</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-text">🎯 الهدف:</span>
+            {editingTarget ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={dailyTarget}
+                  onChange={(e) => updateDailyTarget(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-16 px-2 py-1 text-sm border border-[#1B7A3D] rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-[#1B7A3D]/20"
+                  min={1}
+                  autoFocus
+                  onBlur={() => setEditingTarget(false)}
+                  onKeyDown={(e) => e.key === "Enter" && setEditingTarget(false)}
+                />
+                <span className="text-xs text-gray-text">رسالة</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => setEditingTarget(true)}
+                className="flex items-center gap-1 px-2 py-1 bg-[#E8F5E9] text-[#1B7A3D] rounded-lg text-sm font-bold hover:bg-[#d0ecd2] transition-colors"
+              >
+                {dailyTarget}
+                <Pencil size={12} />
+              </button>
+            )}
+            {/* Quick presets */}
+            <div className="flex gap-1 mr-2">
+              {Object.entries(ROLE_TARGETS).map(([role, target]) => (
+                <button
+                  key={role}
+                  onClick={() => { updateDailyTarget(target); setEditingTarget(false); }}
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full transition-colors ${
+                    dailyTarget === target
+                      ? "bg-[#1B7A3D] text-white"
+                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  }`}
+                >
+                  {role === "ceo" ? "CEO" : role === "sales_manager" ? "مشرف" : "موظف"}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-4 mb-3 text-sm">
           <div className="flex items-center gap-1.5">
             <Send size={14} className="text-[#1B7A3D]" />
             <span className="text-gray-text">أُرسل</span>
-            <span className="font-bold text-[#1B7A3D]">{liveProgress.sent}</span>
+            <span className="font-bold text-[#1B7A3D]">{progress.sent}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <SkipForward size={14} className="text-gray-400" />
             <span className="text-gray-text">تخطّى</span>
-            <span className="font-bold text-gray-500">{liveProgress.skipped}</span>
+            <span className="font-bold text-gray-500">{progress.skipped}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Users size={14} className="text-blue-500" />
             <span className="text-gray-text">متبقي</span>
-            <span className="font-bold text-blue-600">{liveProgress.remaining}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Target size={14} className="text-[#D4A843]" />
-            <span className="text-gray-text">الهدف</span>
-            <span className="font-bold text-[#D4A843]">{liveProgress.target}</span>
+            <span className="font-bold text-blue-600">{progress.remaining}</span>
           </div>
         </div>
 
@@ -224,93 +398,333 @@ export default function SalesOutreachPage() {
         </p>
       </div>
 
-      {/* Pending Contacts */}
-      {pendingContacts.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-base font-bold text-dark flex items-center gap-2">
-            <MessageSquare size={18} className="text-[#1B7A3D]" />
-            في الانتظار ({pendingContacts.length})
-          </h2>
+      {/* ═══ Improvement 5: Tabs ═══ */}
+      <div className="flex gap-1 bg-white rounded-2xl p-1.5 border border-gray-100 overflow-x-auto">
+        {[
+          { key: "new" as TabType, label: "📤 جدد", icon: Send },
+          { key: "followup" as TabType, label: "⏳ متابعة", icon: Clock },
+          { key: "interested" as TabType, label: "😊 مهتمين", icon: UserCheck },
+          { key: "stats" as TabType, label: "📊 إحصائيات", icon: BarChart3 },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`flex-1 min-w-0 px-3 py-2 rounded-xl text-sm font-bold transition-colors whitespace-nowrap ${
+              activeTab === key
+                ? "bg-[#1B7A3D] text-white"
+                : "text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-          {pendingContacts.map((contact) => (
-            <ContactCard
-              key={contact.id}
-              contact={contact}
-              isExpanded={expandedMessages[contact.id] ?? false}
-              isCopied={copiedId === contact.id}
-              onToggleMessage={() => toggleMessage(contact.id)}
-              onCopy={() => copyMessage(contact.id, contact.message)}
-              onWhatsApp={() => openWhatsApp(contact.phone, contact.message)}
-              onMarkSent={() => markSent(contact.id)}
-              onSkip={() => markSkipped(contact.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Processed Contacts */}
-      {processedContacts.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-base font-bold text-dark flex items-center gap-2 text-gray-400">
-            تم التعامل معهم ({processedContacts.length})
-          </h2>
-
-          {processedContacts.map((contact) => (
-            <div
-              key={contact.id}
-              className="bg-white rounded-2xl p-4 border border-gray-100 opacity-60"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">
-                  {(TIER_DISPLAY[contact.sellerTier] || TIER_DISPLAY.small_fish).emoji}
+      {/* ═══ Improvement 2: Filters ═══ */}
+      {activeTab !== "stats" && (
+        <div className="bg-white rounded-2xl border border-gray-100">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="w-full flex items-center justify-between p-4"
+          >
+            <div className="flex items-center gap-2 text-sm font-bold text-dark">
+              <Filter size={16} />
+              فلاتر
+              {(tierFilter !== "all" || categoryFilter !== "all" || govFilter !== "all") && (
+                <span className="bg-[#1B7A3D] text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">
+                  {[tierFilter, categoryFilter, govFilter].filter(f => f !== "all").length}
                 </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-dark truncate">
-                      {contact.name}
-                    </span>
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        localStatuses[contact.id] === "sent"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-500"
+              )}
+            </div>
+            <ChevronDown size={16} className={`text-gray-400 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+          </button>
+
+          {showFilters && (
+            <div className="px-4 pb-4 space-y-3">
+              {/* Tier filter */}
+              <div>
+                <p className="text-xs text-gray-text mb-1.5">التصنيف:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { key: "all", label: "الكل" },
+                    { key: "whale", label: `🐋 حوت ${tierCounts.whale ? `(${tierCounts.whale})` : ""}` },
+                    { key: "big_fish", label: `🦈 كبير ${tierCounts.big_fish ? `(${tierCounts.big_fish})` : ""}` },
+                    { key: "regular", label: `🐟 عادي ${tierCounts.regular ? `(${tierCounts.regular})` : ""}` },
+                    { key: "small_fish", label: `🐠 صغير ${tierCounts.small_fish ? `(${tierCounts.small_fish})` : ""}` },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setTierFilter(key)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        tierFilter === key
+                          ? "bg-[#1B7A3D] text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
                     >
-                      {localStatuses[contact.id] === "sent"
-                        ? "✅ تم الإرسال"
-                        : "⏭️ تم التخطي"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-text" dir="ltr">
-                    {contact.phone}
-                  </p>
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              {/* Category filter */}
+              <div>
+                <p className="text-xs text-gray-text mb-1.5">الفئة:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setCategoryFilter("all")}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      categoryFilter === "all"
+                        ? "bg-[#1B7A3D] text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    الكل
+                  </button>
+                  {["vehicles", "properties", "phones", "electronics", "furniture", "fashion"].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setCategoryFilter(cat)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        categoryFilter === cat
+                          ? "bg-[#1B7A3D] text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {CATEGORY_LABELS[cat] || cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Governorate filter */}
+              <div>
+                <p className="text-xs text-gray-text mb-1.5">المحافظة:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setGovFilter("all")}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      govFilter === "all"
+                        ? "bg-[#1B7A3D] text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    الكل
+                  </button>
+                  {["cairo", "alexandria", "giza", "qalyubia", "sharqia", "dakahlia"].map((gov) => (
+                    <button
+                      key={gov}
+                      onClick={() => setGovFilter(gov)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        govFilter === gov
+                          ? "bg-[#1B7A3D] text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {GOV_LABELS[gov] || gov}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Template selector (Improvement 3) */}
+              <div>
+                <p className="text-xs text-gray-text mb-1.5">قالب الرسالة:</p>
+                <select
+                  value={selectedTemplateId || ""}
+                  onChange={(e) => setSelectedTemplateId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1B7A3D]/20"
+                >
+                  <option value="">تلقائي (حسب التصنيف)</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name_ar} {t.is_default ? "⭐" : ""} ({t.usage_count} استخدام)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Clear filters */}
+              {(tierFilter !== "all" || categoryFilter !== "all" || govFilter !== "all") && (
+                <button
+                  onClick={() => { setTierFilter("all"); setCategoryFilter("all"); setGovFilter("all"); }}
+                  className="text-xs text-red-500 hover:text-red-700"
+                >
+                  ✕ مسح الفلاتر
+                </button>
+              )}
             </div>
-          ))}
+          )}
         </div>
       )}
 
-      {/* All done */}
-      {pendingContacts.length === 0 && (
-        <div className="bg-white rounded-2xl p-8 border border-gray-100 text-center">
-          <span className="text-4xl mb-3 block">🎉</span>
-          <h3 className="text-lg font-bold text-dark mb-1">
-            أحسنت! خلصت كل جهات الاتصال
-          </h3>
-          <p className="text-sm text-gray-text">
-            اضغط تحديث لتحميل دفعة جديدة
-          </p>
-        </div>
+      {/* ═══ Stats Tab (Improvement 5) ═══ */}
+      {activeTab === "stats" && (
+        <StatsPanel stats={stats} loading={loading} />
+      )}
+
+      {/* ═══ Content Tabs ═══ */}
+      {activeTab !== "stats" && (
+        <>
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white rounded-2xl p-6 animate-pulse">
+                  <div className="h-5 bg-gray-200 rounded w-48 mb-3" />
+                  <div className="h-4 bg-gray-100 rounded w-32 mb-2" />
+                  <div className="h-4 bg-gray-100 rounded w-64" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Pending Contacts */}
+              {pendingContacts.length > 0 && (
+                <div className="space-y-3">
+                  <h2 className="text-base font-bold text-dark flex items-center gap-2">
+                    <MessageSquare size={18} className="text-[#1B7A3D]" />
+                    {activeTab === "new" && "في الانتظار"}
+                    {activeTab === "followup" && "تحتاج متابعة"}
+                    {activeTab === "interested" && "مهتمين"}
+                    {" "}({pendingContacts.length})
+                  </h2>
+
+                  {pendingContacts.map((contact) => (
+                    <ContactCard
+                      key={contact.id}
+                      contact={contact}
+                      tab={activeTab}
+                      isExpanded={expandedMessages[contact.id] ?? false}
+                      isCopied={copiedId === contact.id}
+                      onToggleMessage={() => toggleMessage(contact.id)}
+                      onCopy={() => copyMessage(contact.id, contact.message)}
+                      onWhatsApp={() => openWhatsApp(contact.phone, contact.message)}
+                      onMarkSent={() => updateSellerStatus(contact.id, "sent", { templateId: contact.templateId || undefined })}
+                      onSkip={() => {
+                        setReasonModal({ sellerId: contact.id, action: "skipped" });
+                        setModalText("");
+                      }}
+                      onInterested={() => updateSellerStatus(contact.id, "interested")}
+                      onConsidering={() => updateSellerStatus(contact.id, "considering")}
+                      onRejected={() => {
+                        setReasonModal({ sellerId: contact.id, action: "rejected" });
+                        setModalText("");
+                      }}
+                      onNote={() => {
+                        setNoteModal({ sellerId: contact.id, currentNote: contact.notes || "" });
+                        setModalText(contact.notes || "");
+                      }}
+                      onCall={() => window.open(`tel:${contact.phone}`, "_self")}
+                      onRegistered={() => updateSellerStatus(contact.id, "registered")}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Processed Contacts */}
+              {doneContacts.length > 0 && (
+                <div className="space-y-3">
+                  <h2 className="text-base font-bold text-dark flex items-center gap-2 text-gray-400">
+                    تم التعامل معهم ({doneContacts.length})
+                  </h2>
+                  {doneContacts.map((contact) => (
+                    <div key={contact.id} className="bg-white rounded-2xl p-4 border border-gray-100 opacity-60">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">
+                          {(TIER_DISPLAY[contact.sellerTier] || TIER_DISPLAY.small_fish).emoji}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-dark truncate">{contact.name}</span>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                              ✅ تم
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-text" dir="ltr">{contact.phone}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {pendingContacts.length === 0 && !loading && (
+                <div className="bg-white rounded-2xl p-8 border border-gray-100 text-center">
+                  <span className="text-4xl mb-3 block">
+                    {activeTab === "new" ? "🎉" : activeTab === "followup" ? "✅" : "📭"}
+                  </span>
+                  <h3 className="text-lg font-bold text-dark mb-1">
+                    {activeTab === "new" && "أحسنت! خلصت كل جهات الاتصال"}
+                    {activeTab === "followup" && "مفيش حد يحتاج متابعة دلوقتي"}
+                    {activeTab === "interested" && "لسه مفيش مهتمين"}
+                  </h3>
+                  <p className="text-sm text-gray-text">
+                    {activeTab === "new" && "اضغط تحديث لتحميل دفعة جديدة"}
+                    {activeTab === "followup" && "هيظهروا لما حد ما يردش خلال 48 ساعة"}
+                    {activeTab === "interested" && "لما حد يرد إيجابي هيظهر هنا"}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* ═══ Note Modal ═══ */}
+      {noteModal && (
+        <Modal
+          title="📝 ملاحظة"
+          onClose={() => setNoteModal(null)}
+          onConfirm={() => {
+            updateSellerStatus(noteModal.sellerId, "note", { notes: modalText });
+            setNoteModal(null);
+          }}
+        >
+          <textarea
+            value={modalText}
+            onChange={(e) => setModalText(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm min-h-[100px] focus:outline-none focus:ring-2 focus:ring-[#1B7A3D]/20"
+            placeholder="اكتب ملاحظتك هنا..."
+            autoFocus
+          />
+        </Modal>
+      )}
+
+      {/* ═══ Reason Modal ═══ */}
+      {reasonModal && (
+        <Modal
+          title={reasonModal.action === "rejected" ? "😞 سبب الرفض" : "⏭️ سبب التخطي"}
+          onClose={() => setReasonModal(null)}
+          onConfirm={() => {
+            updateSellerStatus(reasonModal.sellerId, reasonModal.action, { reason: modalText || undefined });
+            setReasonModal(null);
+          }}
+        >
+          <input
+            value={modalText}
+            onChange={(e) => setModalText(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B7A3D]/20"
+            placeholder={reasonModal.action === "rejected" ? "السبب (اختياري)..." : "السبب (اختياري)..."}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                updateSellerStatus(reasonModal.sellerId, reasonModal.action, { reason: modalText || undefined });
+                setReasonModal(null);
+              }
+            }}
+          />
+        </Modal>
       )}
     </div>
   );
 }
 
-// ─── Contact Card Component ───────────────────────────────────────────────────
+// ─── Contact Card Component (Improvement 4) ──────────────────────────────────
 
 interface ContactCardProps {
   contact: OutreachContact;
+  tab: TabType;
   isExpanded: boolean;
   isCopied: boolean;
   onToggleMessage: () => void;
@@ -318,10 +732,17 @@ interface ContactCardProps {
   onWhatsApp: () => void;
   onMarkSent: () => void;
   onSkip: () => void;
+  onInterested: () => void;
+  onConsidering: () => void;
+  onRejected: () => void;
+  onNote: () => void;
+  onCall: () => void;
+  onRegistered: () => void;
 }
 
 function ContactCard({
   contact,
+  tab,
   isExpanded,
   isCopied,
   onToggleMessage,
@@ -329,38 +750,50 @@ function ContactCard({
   onWhatsApp,
   onMarkSent,
   onSkip,
+  onInterested,
+  onConsidering,
+  onRejected,
+  onNote,
+  onCall,
+  onRegistered,
 }: ContactCardProps) {
+  const tier = TIER_DISPLAY[contact.sellerTier] || TIER_DISPLAY.small_fish;
+
   return (
     <div className="bg-white rounded-2xl p-4 border border-gray-100 hover:shadow-md transition-shadow">
       {/* Header Row */}
       <div className="flex items-start gap-3">
-        {/* Avatar / Whale indicator */}
         <div className="flex-shrink-0">
-          <span className="text-3xl">{(TIER_DISPLAY[contact.sellerTier] || TIER_DISPLAY.small_fish).emoji}</span>
+          <span className="text-3xl">{tier.emoji}</span>
         </div>
-
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-bold text-dark">{contact.name}</span>
-            {(() => {
-              const tier = TIER_DISPLAY[contact.sellerTier] || TIER_DISPLAY.small_fish;
-              return (
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${tier.color}`}>
-                  {tier.emoji} {tier.label} — {contact.score} نقطة
-                </span>
-              );
-            })()}
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${tier.color}`}>
+              {tier.emoji} {tier.label} — {contact.score} نقطة
+            </span>
+            {contact.outreachCount > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
+                📤 {contact.outreachCount} رسالة
+              </span>
+            )}
           </div>
-
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-gray-text">
-            <span dir="ltr">{contact.phone}</span>
-            <span>📍 {contact.location}</span>
+            <span dir="ltr">📞 {contact.phone}</span>
+            <span>📍 {GOV_LABELS[contact.location] || contact.location}</span>
             <span>📦 {contact.listingCount} إعلان</span>
             <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-              {contact.category}
+              {CATEGORY_LABELS[contact.category] || contact.category}
             </span>
           </div>
+          {contact.notes && (
+            <p className="text-xs text-[#D4A843] mt-1">📝 {contact.notes}</p>
+          )}
+          {contact.lastOutreachAt && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              آخر تواصل: {new Date(contact.lastOutreachAt).toLocaleDateString("ar-EG")}
+            </p>
+          )}
         </div>
       </div>
 
@@ -371,7 +804,7 @@ function ContactCard({
           className="flex items-center gap-1.5 text-xs text-[#1B7A3D] hover:text-[#145C2E] font-medium transition-colors"
         >
           {isExpanded ? <EyeOff size={14} /> : <Eye size={14} />}
-          {isExpanded ? "إخفاء الرسالة" : "عرض الرسالة"}
+          {isExpanded ? "إخفاء الرسالة" : "📋 عرض الرسالة"}
         </button>
 
         {isExpanded && (
@@ -383,38 +816,271 @@ function ContactCard({
         )}
       </div>
 
-      {/* Action Buttons */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          onClick={onCopy}
-          className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium text-gray-700 transition-colors"
-        >
-          {isCopied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
-          {isCopied ? "تم النسخ!" : "📋 نسخ"}
-        </button>
+      {/* Action Buttons — different per tab */}
+      <div className="mt-3 space-y-2">
+        {/* Row 1: Send actions */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={onWhatsApp}
+            className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 rounded-xl text-xs font-medium text-white transition-colors"
+          >
+            📱 واتساب
+          </button>
 
-        <button
-          onClick={onWhatsApp}
-          className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 rounded-xl text-xs font-medium text-white transition-colors"
-        >
-          📱 واتساب
-        </button>
+          <button
+            onClick={onCopy}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium text-gray-700 transition-colors"
+          >
+            {isCopied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+            {isCopied ? "تم النسخ!" : "📋 نسخ"}
+          </button>
 
-        <button
-          onClick={onMarkSent}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[#1B7A3D] hover:bg-[#145C2E] rounded-xl text-xs font-medium text-white transition-colors"
-        >
-          <Check size={14} />
-          ✅ تم الإرسال
-        </button>
+          {tab === "interested" && (
+            <button
+              onClick={onCall}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-xs font-medium text-white transition-colors"
+            >
+              <Phone size={14} />
+              📞 اتصل
+            </button>
+          )}
+        </div>
 
-        <button
-          onClick={onSkip}
-          className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-medium text-gray-500 transition-colors"
-        >
-          <SkipForward size={14} />
-          ⏭️ تخطي
-        </button>
+        {/* Row 2: Status actions */}
+        <div className="flex flex-wrap items-center gap-2">
+          {(tab === "new" || tab === "followup") && (
+            <>
+              <button
+                onClick={onMarkSent}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#1B7A3D] hover:bg-[#145C2E] rounded-xl text-xs font-medium text-white transition-colors"
+              >
+                <Check size={14} />
+                ✅ أرسلت
+              </button>
+              <button
+                onClick={onSkip}
+                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-medium text-gray-500 transition-colors"
+              >
+                <SkipForward size={14} />
+                ⏭️ تخطي
+              </button>
+            </>
+          )}
+
+          {/* Response status buttons */}
+          <div className="flex items-center gap-1 border-r border-gray-200 pr-2 mr-1">
+            <button
+              onClick={onInterested}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-green-50 hover:bg-green-100 rounded-lg text-xs font-medium text-green-700 transition-colors"
+              title="مهتم"
+            >
+              <Smile size={14} />
+              مهتم
+            </button>
+            <button
+              onClick={onConsidering}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-50 hover:bg-yellow-100 rounded-lg text-xs font-medium text-yellow-700 transition-colors"
+              title="سأفكر"
+            >
+              <Meh size={14} />
+              سأفكر
+            </button>
+            <button
+              onClick={onRejected}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg text-xs font-medium text-red-700 transition-colors"
+              title="رفض"
+            >
+              <Frown size={14} />
+              رفض
+            </button>
+          </div>
+
+          <button
+            onClick={onNote}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-[#FFF8E1] hover:bg-[#FFECB3] rounded-lg text-xs font-medium text-[#D4A843] transition-colors"
+            title="ملاحظة"
+          >
+            <StickyNote size={14} />
+            📝
+          </button>
+
+          {tab === "interested" && (
+            <button
+              onClick={onRegistered}
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#D4A843] hover:bg-[#C49835] rounded-xl text-xs font-medium text-white transition-colors"
+            >
+              <UserCheck size={14} />
+              ✅ سجّل!
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stats Panel (Improvement 5) ─────────────────────────────────────────────
+
+function StatsPanel({ stats, loading }: { stats: StatsData | null; loading: boolean }) {
+  if (loading || !stats) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-white rounded-2xl p-6 animate-pulse">
+            <div className="h-5 bg-gray-200 rounded w-48 mb-3" />
+            <div className="h-4 bg-gray-100 rounded w-32" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Volume Stats */}
+      <div className="bg-white rounded-2xl p-5 border border-gray-100">
+        <h3 className="text-base font-bold text-dark mb-4">📊 حجم الرسائل</h3>
+        <div className="grid grid-cols-3 gap-4">
+          <StatBox label="اليوم" value={stats.sentToday} color="text-[#1B7A3D]" />
+          <StatBox label="الأسبوع" value={stats.sentWeek} color="text-blue-600" />
+          <StatBox label="الشهر" value={stats.sentMonth} color="text-purple-600" />
+        </div>
+      </div>
+
+      {/* Conversion Stats */}
+      <div className="bg-white rounded-2xl p-5 border border-gray-100">
+        <h3 className="text-base font-bold text-dark mb-4">📈 معدلات التحويل</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <ConversionBar label="نسبة الرد" value={stats.responseRate} count={stats.totalResponded} total={stats.totalSent} color="bg-blue-500" />
+            <ConversionBar label="نسبة الاهتمام" value={stats.interestRate} count={stats.totalInterested} total={stats.totalSent} color="bg-green-500" />
+            <ConversionBar label="نسبة التسجيل" value={stats.registrationRate} count={stats.totalRegistered} total={stats.totalSent} color="bg-[#D4A843]" />
+          </div>
+          <div className="space-y-3">
+            <StatBox label="إجمالي المُرسل" value={stats.totalSent} color="text-gray-700" />
+            <StatBox label="ردوا" value={stats.totalResponded} color="text-blue-600" />
+            <StatBox label="مهتمين" value={stats.totalInterested} color="text-green-600" />
+            <StatBox label="سجّلوا" value={stats.totalRegistered} color="text-[#D4A843]" />
+          </div>
+        </div>
+      </div>
+
+      {/* Best Template */}
+      {stats.bestTemplate && (
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-base font-bold text-dark mb-3">⭐ أفضل رسالة</h3>
+          <div className="bg-[#E8F5E9] rounded-xl p-3">
+            <p className="text-sm font-bold text-[#1B7A3D]">{stats.bestTemplate.name_ar}</p>
+            <div className="flex gap-4 mt-2 text-xs text-gray-text">
+              <span>📤 {stats.bestTemplate.usage_count} استخدام</span>
+              <span>📈 {stats.bestTemplate.response_rate}% نسبة رد</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* By Category */}
+      {Object.keys(stats.byCategory).length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-base font-bold text-dark mb-3">📂 حسب الفئة</h3>
+          <div className="space-y-2">
+            {Object.entries(stats.byCategory)
+              .sort(([, a], [, b]) => b.sent - a.sent)
+              .map(([cat, data]) => (
+                <div key={cat} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">{CATEGORY_LABELS[cat] || cat}</span>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-gray-text">📤 {data.sent}</span>
+                    <span className="text-green-600">😊 {data.interested}</span>
+                    <span className="text-[#D4A843] font-bold">
+                      {data.sent > 0 ? Math.round((data.interested / data.sent) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatBox({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="text-center">
+      <p className={`text-2xl font-bold ${color}`}>{value}</p>
+      <p className="text-xs text-gray-text mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+function ConversionBar({
+  label,
+  value,
+  count,
+  total,
+  color,
+}: {
+  label: string;
+  value: number;
+  count: number;
+  total: number;
+  color: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs mb-1">
+        <span className="text-gray-text">{label}</span>
+        <span className="font-bold text-dark">{value}%</span>
+      </div>
+      <div className="w-full bg-gray-100 rounded-full h-2">
+        <div
+          className={`h-full rounded-full ${color} transition-all`}
+          style={{ width: `${Math.min(value, 100)}%` }}
+        />
+      </div>
+      <p className="text-[10px] text-gray-400 mt-0.5">{count} من {total}</p>
+    </div>
+  );
+}
+
+// ─── Modal Component ─────────────────────────────────────────────────────────
+
+function Modal({
+  title,
+  children,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-bold text-dark">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+        {children}
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2 bg-[#1B7A3D] text-white rounded-xl text-sm font-bold hover:bg-[#145C2E] transition-colors"
+          >
+            حفظ
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+          >
+            إلغاء
+          </button>
+        </div>
       </div>
     </div>
   );
