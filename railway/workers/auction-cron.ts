@@ -964,19 +964,25 @@ async function tick(): Promise<void> {
     await expireOldAds();
   }
 
-  // Every 60 minutes: convert sellers to buyers (seller_is_buyer)
+  // Every 60 minutes: convert sellers to buyers (seller_is_buyer) + recalculate whale scores
   if (tickCount % 60 === 0) {
     await convertSellersToBuyers();
-  }
 
-  // Every 60 minutes: recalculate whale scores + seller tiers
-  if (tickCount % 60 === 0) {
-    await recalculateWhaleScores();
-  }
+    // كل ساعة: إعادة حساب whale scores (بعد التحويل مباشرة عشان البائعين الجدد ياخدوا score فوراً)
+    try {
+      const { data, error } = await getClient()!.rpc('calculate_whale_scores');
+      console.log(`[${new Date().toISOString()}] [Whale] Recalculated:`, data, error?.message || 'OK');
+    } catch(e: any) {
+      console.log(`[${new Date().toISOString()}] [Whale] Error:`, e.message);
+    }
 
-  // Every 60 minutes: recalculate buyer whale scores + tiers
-  if (tickCount % 60 === 0) {
-    await recalculateBuyerWhaleScores();
+    // وكمان buyer whale scores:
+    try {
+      const { data, error } = await getClient()!.rpc('calculate_buyer_whale_scores');
+      console.log(`[${new Date().toISOString()}] [BuyerWhale] Recalculated:`, data, error?.message || 'OK');
+    } catch(e: any) {
+      console.log(`[${new Date().toISOString()}] [BuyerWhale] Error:`, e.message);
+    }
   }
 
   // Every 360 minutes (6 hours): notify sellers about buyer interest
