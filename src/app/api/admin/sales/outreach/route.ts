@@ -21,7 +21,9 @@ const CATEGORY_AR: Record<string, string> = {
 };
 
 function fillTemplate(template: string, seller: any): string {
-  const name = seller.name ? seller.name.split(" ")[0] : "يا باشا";
+  let name = seller.name || "يا باشا";
+  // Add space between "وكالة" and following name if missing
+  name = name.replace(/^وكالة(?=[A-Za-z\u0621-\u064A])/, 'وكالة ');
   const category = seller.primary_category || "إعلانات";
   const catLabel = CATEGORY_AR[category] || "منتج";
   const relatedCount = seller.total_listings_seen ? Math.max(seller.total_listings_seen * 10, 50) : 50;

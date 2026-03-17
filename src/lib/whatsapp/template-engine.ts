@@ -71,9 +71,11 @@ export function getTemplateVariables(
     governorate?: string;
   } | null
 ): Record<string, string> {
-  const firstName = seller.name?.split(' ')[0] || 'أهلاً';
+  let fullName = seller.name || 'أهلاً';
+  // Add space between "وكالة" and following name if missing
+  fullName = fullName.replace(/^وكالة(?=[A-Za-z\u0621-\u064A])/, 'وكالة ');
   return {
-    first_name: firstName,
+    first_name: fullName,
     customer_name: seller.name || '',
     category_name_ar: getCategoryAr(scope?.maksab_category),
     listings_count: String(seller.total_listings_seen || 0),
