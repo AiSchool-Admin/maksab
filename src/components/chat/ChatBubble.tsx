@@ -68,6 +68,7 @@ export default function ChatBubble({
             className={`text-[10px] ${
               isOwn ? "text-white/70" : "text-gray-text"
             }`}
+            suppressHydrationWarning
           >
             {formatMessageTime(time)}
           </span>
