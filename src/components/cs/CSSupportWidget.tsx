@@ -231,8 +231,14 @@ export default function CSSupportWidget() {
           }),
         });
         if (res.ok) {
-          // Message will come via realtime, but also refresh
-          await fetchConversation();
+          const data = await res.json();
+          // Use messages from response directly (includes AI response)
+          if (data.messages && data.messages.length > 0) {
+            setMessages(data.messages);
+          }
+          if (data.conversation) {
+            setConversation(data.conversation);
+          }
         }
       }
     } catch {
