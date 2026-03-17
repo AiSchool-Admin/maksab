@@ -112,7 +112,7 @@ export type CSIntent =
   | "unknown";
 
 export const CS_INTENT_PATTERNS: Record<CSIntent, RegExp> = {
-  greeting: /مرحبا|السلام|أهلا|هاي|hi|hello|صباح|مساء/i,
+  greeting: /مرحبا|السلام|أهلا|هاي|هاى|هايي|hi|hello|صباح|مساء|ازيك|إزيك|ازاي|إزاي/i,
   registration: /تسجيل|سجّل|حساب|اشترك|sign up|رقم|موبايل/i,
   listing: /إعلان|نشر|انشر|أضيف|حذف|عدّل|صور|سعر/i,
   payment: /دفع|فلوس|عمولة|اشتراك|باقة|فودافون|إنستاباي|فوري/i,
