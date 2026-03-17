@@ -1671,7 +1671,7 @@ async function enrichListings(): Promise<{
     .eq("is_duplicate", false)
     .order("is_likely_buy_request", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(20);
 
   if (result1.error) {
     console.log(`[Enrich] Query with detail_fetched_at failed: ${result1.error.message}`);
@@ -1682,7 +1682,7 @@ async function enrichListings(): Promise<{
       .is("extracted_phone", null)
       .eq("is_duplicate", false)
       .order("created_at", { ascending: false })
-      .limit(10);
+      .limit(20);
     listings = result2.data;
     error = result2.error;
   } else {
