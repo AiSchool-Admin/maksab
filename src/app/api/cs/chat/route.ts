@@ -206,14 +206,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         status: testRes.status,
         apiKeyExists: !!process.env.ANTHROPIC_API_KEY,
-        apiKeyPrefix: process.env.ANTHROPIC_API_KEY?.slice(0, 8),
+        apiKeyPrefix: process.env.ANTHROPIC_API_KEY?.slice(0, 8) ?? 'NOT_FOUND',
+        allEnvKeys: Object.keys(process.env).filter(k => k.includes('ANTHROPIC') || k.includes('API')),
+        rawValue: process.env['ANTHROPIC_API_KEY'] ? 'EXISTS' : 'MISSING',
         response: testData
       });
     } catch (testErr: any) {
       return NextResponse.json({
         error: testErr.message,
         apiKeyExists: !!process.env.ANTHROPIC_API_KEY,
-        apiKeyPrefix: process.env.ANTHROPIC_API_KEY?.slice(0, 8),
+        apiKeyPrefix: process.env.ANTHROPIC_API_KEY?.slice(0, 8) ?? 'NOT_FOUND',
+        allEnvKeys: Object.keys(process.env).filter(k => k.includes('ANTHROPIC') || k.includes('API')),
+        rawValue: process.env['ANTHROPIC_API_KEY'] ? 'EXISTS' : 'MISSING',
       });
     }
   }
