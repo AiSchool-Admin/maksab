@@ -299,17 +299,29 @@ async function handleAIResponse(
   userMessage: string,
   userId: string
 ) {
+  try {
   const csSettings = await getCSSettings(sb);
-  if (!csSettings.ai_enabled) return;
+  if (!csSettings.ai_enabled) {
+    console.log("[CS AI] ai_enabled is false — skipping response");
+    return;
+  }
 
   // Get conversation state
-  const { data: conv } = await sb
+  const { data: conv, error: convError } = await sb
     .from("cs_conversations")
     .select("status, ai_message_count, category")
     .eq("id", conversationId)
     .single();
 
-  if (!conv) return;
+  if (convError) {
+    console.error("[CS AI] Error fetching conversation:", convError.message);
+    return;
+  }
+
+  if (!conv) {
+    console.error("[CS AI] Conversation not found:", conversationId);
+    return;
+  }
 
   // Don't respond if agent is handling
   if (conv.status === "agent_handling") return;
@@ -393,13 +405,20 @@ async function handleAIResponse(
       ? CS_AI_RESPONSES[intent]
       : "فاهم — ممكن توضحلي أكتر عشان أقدر أساعدك؟ 😊\n\nأو لو عايز تتكلم مع حد من فريقنا قولي \"عايز أتكلم مع موظف\"";
 
-  await sb.from("cs_messages").insert({
+  console.log(`[CS AI] Responding to intent="${intent}" for conversation=${conversationId}`);
+
+  const { error: msgError } = await sb.from("cs_messages").insert({
     conversation_id: conversationId,
     sender_type: "ai",
     sender_name: "سارة",
     message: response,
     message_type: "text",
   });
+
+  if (msgError) {
+    console.error("[CS AI] Error inserting AI response:", msgError.message);
+    return;
+  }
 
   // Update conversation to ai_handling
   await sb
@@ -410,4 +429,7 @@ async function handleAIResponse(
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversationId);
+  } catch (error) {
+    console.error("[CS AI] handleAIResponse failed:", error);
+  }
 }
