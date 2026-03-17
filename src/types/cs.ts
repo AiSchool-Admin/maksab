@@ -100,44 +100,6 @@ export interface CSSettings {
   outside_hours_ai_only: boolean;
 }
 
-// Sara AI Intent Detection
-export type CSIntent =
-  | "greeting"
-  | "registration"
-  | "listing"
-  | "payment"
-  | "technical"
-  | "complaint"
-  | "search"
-  | "unknown";
-
-export const CS_INTENT_PATTERNS: Record<CSIntent, RegExp> = {
-  greeting: /مرحبا|السلام|[اأ]هلا|هاي|هاى|هايي|hi|hello|صباح|مساء|[اإ]زيك|[اإ]زاي|يا هلا/i,
-  registration: /تسجيل|سج[لّ]|اسجل|حساب|اشترك|sign up|رقم|موبايل|انشئ/i,
-  listing: /[اإ]علان|نشر|انشر|[اأ]ضيف|حذف|عد[لّ]|صور|سعر/i,
-  payment: /دفع|فلوس|عمولة|اشتراك|باقة|باقات|الباقات|فودافون|[اإ]نستاباي|فوري|اسعار|أسعار|سعر|تكلفة|كام|بكام/i,
-  technical: /مش شغال|خط[اأ]|error|bug|مشكلة تقنية|بطي[ءئ]|مش بيفتح|مش بيشتغل/i,
-  complaint: /شكوى|شكوي|نصب|احتيال|مزيف|سرقة|بلاغ|مضروب/i,
-  search: /ابحث|دو[رّ]|فين|عايز اشتري|عايز [اأ]بيع|بدور/i,
-  unknown: /./,
-};
-
-export const CS_AI_RESPONSES: Record<Exclude<CSIntent, "unknown">, string> = {
-  greeting: "أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟",
-  registration:
-    "عشان تسجّل:\n1. اضغط \"انشئ حساب\"\n2. اختار فرد أو تاجر\n3. دخّل رقمك\n4. فعّل بالكود\n\nلو عندك مشكلة قولي إيه بالظبط 😊",
-  listing:
-    "عشان تنشر إعلان:\n1. اضغط \"انشر إعلانك\"\n2. اختار الفئة\n3. أضف صور + وصف + سعر\n4. اضغط \"نشر\"\n\nعايز مساعدة في خطوة معينة؟",
-  payment:
-    "الباقات المتاحة في مكسب 💰:\n\n🆓 مجاني: 10 إعلانات\n🥈 Silver: 199 ج/شهر — 50 إعلان\n🥇 Gold: 499 ج/شهر — 200 إعلان\n💎 Diamond: 999 ج/شهر — غير محدود\n\nوللأفراد: عمولة طوعية 1% فقط (بحد أقصى 200 ج)\n\nعايز تعرف أكتر؟ 😊",
-  technical:
-    "فاهم — خليني أساعدك! 🔧\nممكن تقولي:\n1. إيه اللي حصل بالظبط؟\n2. على أي صفحة؟\n3. screenshot لو ممكن\n\nأو أحوّلك لزميلي المتخصص؟",
-  complaint:
-    "⚠️ فاهم إن فيه مشكلة — آسفين جداً!\nهحوّلك لزميلي المتخصص فوراً.\nممكن تقولي التفاصيل؟",
-  search:
-    "ابحث عن أي حاجة على مكسب:\n🔍 افتح الصفحة الرئيسية\n📂 اختار الفئة\n📍 حدد المكان\n\nأو قولي بتدوّر على إيه وأنا أساعدك! 😊",
-};
-
 // Status display config
 export const CS_STATUS_CONFIG: Record<
   CSConversationStatus,
