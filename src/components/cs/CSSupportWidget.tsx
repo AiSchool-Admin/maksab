@@ -190,11 +190,47 @@ export default function CSSupportWidget() {
     setSending(false);
   };
 
+  // Refetch all messages for a conversation (safety net)
+  const refetchMessages = useCallback(async (convId: string) => {
+    try {
+      const res = await fetch("/api/cs/chat", {
+        headers: getHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.conversation) {
+          setConversation(data.conversation);
+        }
+        if (data.messages) {
+          setMessages(data.messages);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const handleSend = async () => {
     if (!input.trim() || sending) return;
     const text = input.trim();
     setInput("");
     setSending(true);
+
+    // Optimistically add user message to UI
+    const optimisticMsg: CSMessage = {
+      id: `temp-${Date.now()}`,
+      conversation_id: conversation?.id || "",
+      sender_type: "user",
+      sender_id: null,
+      sender_name: "أنا",
+      message: text,
+      message_type: "text",
+      template_id: null,
+      is_read: false,
+      read_at: null,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
 
     try {
       if (!conversation) {
@@ -215,6 +251,11 @@ export default function CSSupportWidget() {
           const data = await res.json();
           setConversation(data.conversation);
           setMessages(data.messages || []);
+
+          // Safety net: refetch after 1.5s to catch any AI response
+          if (data.conversation?.id) {
+            setTimeout(() => refetchMessages(data.conversation.id), 1500);
+          }
         }
       } else {
         // Send to existing conversation
@@ -239,10 +280,14 @@ export default function CSSupportWidget() {
           if (data.conversation) {
             setConversation(data.conversation);
           }
+
+          // Safety net: refetch after 1.5s in case AI response wasn't in initial response
+          setTimeout(() => refetchMessages(conversation.id), 1500);
         }
       }
     } catch {
-      // Network error
+      // Network error — remove optimistic message
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
     }
     setSending(false);
   };
@@ -373,12 +418,14 @@ export default function CSSupportWidget() {
                       {!isUser && (
                         <div className="flex items-center gap-1 mb-0.5">
                           {msg.sender_type === "ai" ? (
-                            <Bot size={10} className="text-purple-500" />
+                            <span className="text-[10px]">🤖</span>
                           ) : (
                             <User size={10} className="text-blue-500" />
                           )}
                           <span className="text-[10px] text-gray-400">
-                            {msg.sender_name}
+                            {msg.sender_type === "ai"
+                              ? "سارة"
+                              : msg.sender_name || "موظف"}
                           </span>
                         </div>
                       )}
@@ -388,8 +435,8 @@ export default function CSSupportWidget() {
                           isUser
                             ? "bg-[#1B7A3D] text-white rounded-bl-md"
                             : msg.sender_type === "ai"
-                            ? "bg-purple-50 border border-purple-100 text-gray-900 rounded-br-md"
-                            : "bg-white border border-gray-200 text-gray-900 rounded-br-md"
+                            ? "bg-gray-100 border border-gray-200 text-gray-900 rounded-br-md"
+                            : "bg-blue-50 border border-blue-200 text-gray-900 rounded-br-md"
                         }`}
                       >
                         <p className="whitespace-pre-line">{msg.message}</p>

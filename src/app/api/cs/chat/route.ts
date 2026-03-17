@@ -482,12 +482,13 @@ async function handleAIResponse(
 
   console.log("[CS-AI] AI response saved successfully!");
 
-  // Update conversation to ai_handling
+  // Update conversation to ai_handling and increment ai_message_count
   const { error: updateError } = await sb
     .from("cs_conversations")
     .update({
       status: "ai_handling",
       ai_handled: true,
+      ai_message_count: (conv.ai_message_count || 0) + 1,
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversationId);
