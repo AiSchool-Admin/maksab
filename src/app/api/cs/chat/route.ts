@@ -27,23 +27,46 @@ function detectIntent(message: string): CSIntent {
   return "unknown";
 }
 
+function toBool(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  if (v === "true" || v === 1) return true;
+  return false;
+}
+
 async function getCSSettings(sb: ReturnType<typeof getServiceClient>) {
-  const { data } = await sb.from("cs_settings").select("*");
+  const { data, error } = await sb.from("cs_settings").select("*");
+
+  if (error) {
+    console.error("[CS-SETTINGS] Error fetching cs_settings:", error.message);
+  }
+
   const settings: Record<string, unknown> = {};
   for (const row of data || []) {
     settings[row.key] = row.value;
   }
-  return {
-    ai_enabled: settings.ai_enabled === true,
-    ai_auto_greet: settings.ai_auto_greet === true,
-    ai_auto_transfer: settings.ai_auto_transfer === true,
-    ai_handle_complaints: settings.ai_handle_complaints === true,
-    ai_max_messages: (settings.ai_max_messages as number) || 3,
-    ai_transfer_delay_seconds: (settings.ai_transfer_delay_seconds as number) || 30,
-    working_hours_start: (settings.working_hours_start as string) || "09:00",
-    working_hours_end: (settings.working_hours_end as string) || "17:00",
-    outside_hours_ai_only: settings.outside_hours_ai_only === true,
+
+  console.log("[CS-SETTINGS] Raw DB values:", JSON.stringify(settings));
+
+  // If table is empty, use safe defaults (AI enabled)
+  const isEmpty = Object.keys(settings).length === 0;
+  if (isEmpty) {
+    console.warn("[CS-SETTINGS] cs_settings table is EMPTY — using defaults with AI enabled");
+  }
+
+  const parsed = {
+    ai_enabled: isEmpty ? true : toBool(settings.ai_enabled),
+    ai_auto_greet: isEmpty ? true : toBool(settings.ai_auto_greet),
+    ai_auto_transfer: isEmpty ? true : toBool(settings.ai_auto_transfer),
+    ai_handle_complaints: toBool(settings.ai_handle_complaints),
+    ai_max_messages: Number(settings.ai_max_messages) || 3,
+    ai_transfer_delay_seconds: Number(settings.ai_transfer_delay_seconds) || 30,
+    working_hours_start: String(settings.working_hours_start || "09:00").replace(/^"|"$/g, ""),
+    working_hours_end: String(settings.working_hours_end || "17:00").replace(/^"|"$/g, ""),
+    outside_hours_ai_only: isEmpty ? true : toBool(settings.outside_hours_ai_only),
   };
+
+  console.log("[CS-SETTINGS] Parsed settings:", JSON.stringify(parsed));
+  return parsed;
 }
 
 function isWithinWorkingHours(start: string, end: string): boolean {
@@ -184,7 +207,8 @@ export async function POST(req: NextRequest) {
 
       // Send user's message if provided
       if (message) {
-        await sb.from("cs_messages").insert({
+        console.log("[CS-CHAT] START action — saving user message:", message);
+        const { error: msgInsertErr } = await sb.from("cs_messages").insert({
           conversation_id: conversationId,
           sender_type: "user",
           sender_id: session.userId,
@@ -193,8 +217,13 @@ export async function POST(req: NextRequest) {
           message_type: "text",
         });
 
-        // AI auto-response
-        await handleAIResponse(sb, conversationId, message, session.userId);
+        if (msgInsertErr) {
+          console.error("[CS-CHAT] Error saving user message:", msgInsertErr.message);
+        } else {
+          console.log("[CS-CHAT] User message saved, calling handleAIResponse...");
+          await handleAIResponse(sb, conversationId, message, session.userId);
+          console.log("[CS-CHAT] handleAIResponse completed for START action");
+        }
       }
 
       // Return conversation + messages
@@ -241,6 +270,7 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
 
       // Insert user message
+      console.log("[CS-CHAT] SEND action — saving user message:", message, "conv:", conversation_id);
       const { data: msg, error } = await sb
         .from("cs_messages")
         .insert({
@@ -255,13 +285,33 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (error) {
+        console.error("[CS-CHAT] Error saving user message:", error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      // AI auto-response
+      console.log("[CS-CHAT] User message saved, calling handleAIResponse...");
+      // AI auto-response — MUST await before returning response
       await handleAIResponse(sb, conversation_id, message, session.userId);
+      console.log("[CS-CHAT] handleAIResponse completed for SEND action");
 
-      return NextResponse.json({ message: msg });
+      // Return ALL messages (not just user's) so frontend shows AI response immediately
+      const { data: allMessages } = await sb
+        .from("cs_messages")
+        .select("*")
+        .eq("conversation_id", conversation_id)
+        .order("created_at", { ascending: true });
+
+      const { data: updatedConv } = await sb
+        .from("cs_conversations")
+        .select("*")
+        .eq("id", conversation_id)
+        .single();
+
+      return NextResponse.json({
+        message: msg,
+        messages: allMessages || [],
+        conversation: updatedConv,
+      });
     }
 
     if (action === "rate") {
@@ -300,9 +350,13 @@ async function handleAIResponse(
   userId: string
 ) {
   try {
+  console.log(`[CS-AI] === handleAIResponse START === conv=${conversationId} msg="${userMessage}"`);
+
   const csSettings = await getCSSettings(sb);
+  console.log(`[CS-AI] ai_enabled=${csSettings.ai_enabled}, ai_auto_greet=${csSettings.ai_auto_greet}, ai_max_messages=${csSettings.ai_max_messages}`);
+
   if (!csSettings.ai_enabled) {
-    console.log("[CS AI] ai_enabled is false — skipping response");
+    console.log("[CS-AI] ai_enabled is false — SKIPPING response. THIS IS WHY AI IS NOT RESPONDING!");
     return;
   }
 
@@ -314,19 +368,25 @@ async function handleAIResponse(
     .single();
 
   if (convError) {
-    console.error("[CS AI] Error fetching conversation:", convError.message);
+    console.error("[CS-AI] Error fetching conversation:", convError.message);
     return;
   }
 
   if (!conv) {
-    console.error("[CS AI] Conversation not found:", conversationId);
+    console.error("[CS-AI] Conversation not found:", conversationId);
     return;
   }
 
+  console.log(`[CS-AI] Conversation state: status=${conv.status}, ai_message_count=${conv.ai_message_count}, category=${conv.category}`);
+
   // Don't respond if agent is handling
-  if (conv.status === "agent_handling") return;
+  if (conv.status === "agent_handling") {
+    console.log("[CS-AI] Agent is handling — skipping AI response");
+    return;
+  }
 
   const intent = detectIntent(userMessage);
+  console.log(`[CS-AI] Intent detected: "${intent}" for message: "${userMessage}"`);
 
   // Immediate transfer for complaints/fraud if not configured
   if (
@@ -405,7 +465,7 @@ async function handleAIResponse(
       ? CS_AI_RESPONSES[intent]
       : "فاهم — ممكن توضحلي أكتر عشان أقدر أساعدك؟ 😊\n\nأو لو عايز تتكلم مع حد من فريقنا قولي \"عايز أتكلم مع موظف\"";
 
-  console.log(`[CS AI] Responding to intent="${intent}" for conversation=${conversationId}`);
+  console.log(`[CS-AI] Sending AI response for intent="${intent}": "${response.substring(0, 80)}..."`);
 
   const { error: msgError } = await sb.from("cs_messages").insert({
     conversation_id: conversationId,
@@ -416,12 +476,14 @@ async function handleAIResponse(
   });
 
   if (msgError) {
-    console.error("[CS AI] Error inserting AI response:", msgError.message);
+    console.error("[CS-AI] ERROR inserting AI response:", msgError.message);
     return;
   }
 
+  console.log("[CS-AI] AI response saved successfully!");
+
   // Update conversation to ai_handling
-  await sb
+  const { error: updateError } = await sb
     .from("cs_conversations")
     .update({
       status: "ai_handling",
@@ -429,7 +491,13 @@ async function handleAIResponse(
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversationId);
+
+  if (updateError) {
+    console.error("[CS-AI] Error updating conversation status:", updateError.message);
+  }
+
+  console.log("[CS-AI] === handleAIResponse DONE ===");
   } catch (error) {
-    console.error("[CS AI] handleAIResponse failed:", error);
+    console.error("[CS-AI] handleAIResponse CRASHED:", error);
   }
 }
