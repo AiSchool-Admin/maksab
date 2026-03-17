@@ -212,28 +212,45 @@ export async function POST(req: NextRequest) {
             console.log('[CS-AI-INLINE-START] aiEnabled:', startAiEnabled);
 
             if (startAiEnabled) {
+              // Check message count — start action with greeting already sent means count >= 1
+              const { count: startMsgCount } = await sb
+                .from('cs_messages')
+                .select('*', { count: 'exact', head: true })
+                .eq('conversation_id', conversationId);
+              const startIsFirst = (startMsgCount ?? 0) <= 2;
+              console.log('[CS-AI-INLINE-START] Message count:', startMsgCount, 'isFirst:', startIsFirst);
+
               const msgLower = message.toLowerCase();
               let intent = 'unknown';
-              let aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟';
+              let aiResponse = '';
 
               if (/مرحبا|السلام|[اأ]هلا|هاي|هاى|hi|hello|صباح|مساء/.test(msgLower)) {
                 intent = 'greeting';
-                aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
+                if (startIsFirst) {
+                  aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
+                } else {
+                  aiResponse = 'أهلاً! 💚 إزاي أقدر أساعدك تاني؟';
+                }
               } else if (/سج[لّ]|اسجل|تسجيل|حساب|اشترك|sign up/.test(msgLower)) {
                 intent = 'registration';
                 aiResponse = 'عشان تسجّل على مكسب:\n1. اضغط "انشئ حساب" 📱\n2. اختار فرد أو تاجر 🏪\n3. دخّل رقمك 📞\n4. فعّل بالكود ✅\n\nلو عندك مشكلة قولي وأنا أساعدك! 😊';
               } else if (/[اإ]علان|نشر|انشر|[اأ]ضيف|حذف|عد[لّ]/.test(msgLower)) {
                 intent = 'listing';
                 aiResponse = 'عشان تنشر إعلان:\n1. اضغط "انشر إعلانك" ➕\n2. اختار الفئة 📂\n3. أضف صور واضحة 📸\n4. اكتب وصف مفصّل ✏️\n5. حدد السعر 💰\n6. اضغط "نشر" 🚀';
-              } else if (/دفع|فلوس|عمولة|اشتراك|باقة|سعر/.test(msgLower)) {
+              } else if (/دفع|فلوس|عمولة|اشتراك|باقة|باقات|الباقات|سعر|اسعار|أسعار|تكلفة|كام|بكام/.test(msgLower)) {
                 intent = 'payment';
-                aiResponse = 'مكسب عمولته طوعية — مش إجبارية! 💚\n\nباقات التجار:\n🥈 Silver: 199 ج/شهر\n🥇 Gold: 499 ج/شهر\n💎 Diamond: 999 ج/شهر';
+                aiResponse = 'الباقات المتاحة في مكسب 💰:\n\n🆓 مجاني: 10 إعلانات\n🥈 Silver: 199 ج/شهر — 50 إعلان\n🥇 Gold: 499 ج/شهر — 200 إعلان\n💎 Diamond: 999 ج/شهر — غير محدود\n\nوللأفراد: عمولة طوعية 1% فقط (بحد أقصى 200 ج)\n\nعايز تعرف أكتر؟ 😊';
               } else if (/شكوى|نصب|احتيال|مزيف|سرقة/.test(msgLower)) {
                 intent = 'complaint';
                 aiResponse = '⚠️ فاهم إن فيه مشكلة — آسفين جداً!\nهحوّلك لزميلي المتخصص فوراً.\nممكن تقولي التفاصيل؟';
               } else if (/مش شغال|خطأ|error|bug|مشكلة/.test(msgLower)) {
                 intent = 'technical';
                 aiResponse = 'فاهم إن فيه مشكلة تقنية 🔧\nمحتاج منك:\n1. إيه اللي حصل بالظبط؟\n2. على أي صفحة؟\n3. screenshot لو ممكن 📸';
+              }
+
+              // Fallback
+              if (!aiResponse) {
+                aiResponse = 'مش متأكد فهمت — ممكن توضحلي أكتر؟ 😊\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
               }
 
               console.log('[CS-AI-INLINE-START] Intent:', intent);
@@ -341,29 +358,75 @@ export async function POST(req: NextRequest) {
         console.log('[CS-AI-INLINE] aiEnabled:', aiEnabled);
 
         if (aiEnabled) {
-          // 2. كشف النية
+          // 1.5. Check message count to avoid greeting loop
+          const { count: msgCount } = await sb
+            .from('cs_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('conversation_id', conversation_id);
+          const isFirstMessage = (msgCount ?? 0) <= 2; // greeting + first user message
+          console.log('[CS-AI-INLINE] Message count:', msgCount, 'isFirstMessage:', isFirstMessage);
+
+          // 1.6. Fetch last 5 messages for context memory
+          const { data: historyRows } = await sb
+            .from('cs_messages')
+            .select('message, sender_type')
+            .eq('conversation_id', conversation_id)
+            .order('created_at', { ascending: false })
+            .limit(5);
+          const conversationHistory = (historyRows || []).reverse();
+          console.log('[CS-AI-INLINE] History:', conversationHistory.length, 'messages');
+
+          // 2. كشف النية — check current message + history context
           const msgLower = message.toLowerCase();
           let intent = 'unknown';
-          let aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟';
+          let aiResponse = '';
+
+          // Build context string from history for better intent detection
+          const historyContext = conversationHistory
+            .map((m: any) => m.message)
+            .join(' ')
+            .toLowerCase();
 
           if (/مرحبا|السلام|[اأ]هلا|هاي|هاى|hi|hello|صباح|مساء/.test(msgLower)) {
             intent = 'greeting';
-            aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
+            // Only send full greeting on first message, otherwise be brief
+            if (isFirstMessage) {
+              aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
+            } else {
+              aiResponse = 'أهلاً! 💚 إزاي أقدر أساعدك تاني؟';
+            }
           } else if (/سج[لّ]|اسجل|تسجيل|حساب|اشترك|sign up/.test(msgLower)) {
             intent = 'registration';
             aiResponse = 'عشان تسجّل على مكسب:\n1. اضغط "انشئ حساب" 📱\n2. اختار فرد أو تاجر 🏪\n3. دخّل رقمك 📞\n4. فعّل بالكود ✅\n\nلو عندك مشكلة قولي وأنا أساعدك! 😊';
           } else if (/[اإ]علان|نشر|انشر|[اأ]ضيف|حذف|عد[لّ]/.test(msgLower)) {
             intent = 'listing';
             aiResponse = 'عشان تنشر إعلان:\n1. اضغط "انشر إعلانك" ➕\n2. اختار الفئة 📂\n3. أضف صور واضحة 📸\n4. اكتب وصف مفصّل ✏️\n5. حدد السعر 💰\n6. اضغط "نشر" 🚀';
-          } else if (/دفع|فلوس|عمولة|اشتراك|باقة|سعر/.test(msgLower)) {
+          } else if (/دفع|فلوس|عمولة|اشتراك|باقة|باقات|الباقات|سعر|اسعار|أسعار|تكلفة|كام|بكام/.test(msgLower)) {
             intent = 'payment';
-            aiResponse = 'مكسب عمولته طوعية — مش إجبارية! 💚\n\nباقات التجار:\n🥈 Silver: 199 ج/شهر\n🥇 Gold: 499 ج/شهر\n💎 Diamond: 999 ج/شهر';
+            aiResponse = 'الباقات المتاحة في مكسب 💰:\n\n🆓 مجاني: 10 إعلانات\n🥈 Silver: 199 ج/شهر — 50 إعلان\n🥇 Gold: 499 ج/شهر — 200 إعلان\n💎 Diamond: 999 ج/شهر — غير محدود\n\nوللأفراد: عمولة طوعية 1% فقط (بحد أقصى 200 ج)\n\nعايز تعرف أكتر؟ 😊';
           } else if (/شكوى|نصب|احتيال|مزيف|سرقة/.test(msgLower)) {
             intent = 'complaint';
             aiResponse = '⚠️ فاهم إن فيه مشكلة — آسفين جداً!\nهحوّلك لزميلي المتخصص فوراً.\nممكن تقولي التفاصيل؟';
           } else if (/مش شغال|خطأ|error|bug|مشكلة/.test(msgLower)) {
             intent = 'technical';
             aiResponse = 'فاهم إن فيه مشكلة تقنية 🔧\nمحتاج منك:\n1. إيه اللي حصل بالظبط؟\n2. على أي صفحة؟\n3. screenshot لو ممكن 📸';
+          } else {
+            // Check history context for ongoing topic
+            if (/دفع|فلوس|عمولة|اشتراك|باقة|باقات|الباقات|سعر|اسعار|أسعار|تكلفة|كام|بكام/.test(historyContext)) {
+              intent = 'payment_followup';
+              aiResponse = 'بخصوص الباقات — عايز تعرف تفاصيل أكتر عن باقة معينة؟ 😊\n\n🆓 مجاني: 10 إعلانات\n🥈 Silver: 199 ج/شهر — 50 إعلان\n🥇 Gold: 499 ج/شهر — 200 إعلان\n💎 Diamond: 999 ج/شهر — غير محدود';
+            } else if (/سج[لّ]|تسجيل|حساب/.test(historyContext)) {
+              intent = 'registration_followup';
+              aiResponse = 'لسه محتاج مساعدة في التسجيل؟ قولي إيه المشكلة بالظبط وأنا أساعدك! 😊';
+            } else if (/[اإ]علان|نشر/.test(historyContext)) {
+              intent = 'listing_followup';
+              aiResponse = 'لسه محتاج مساعدة في الإعلان؟ قولي إيه الخطوة اللي واقف فيها! 😊';
+            }
+          }
+
+          // Fallback if no intent matched
+          if (!aiResponse) {
+            aiResponse = 'مش متأكد فهمت — ممكن توضحلي أكتر؟ 😊\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
           }
 
           console.log('[CS-AI-INLINE] Intent:', intent, 'Response length:', aiResponse.length);
@@ -383,10 +446,14 @@ export async function POST(req: NextRequest) {
             console.log('[CS-AI-INLINE] ✅ AI response saved!');
 
             // 4. تحديث المحادثة
+            const { count: updatedCount } = await sb
+              .from('cs_messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', conversation_id);
             await sb.from('cs_conversations').update({
               status: 'ai_handling',
               ai_handled: true,
-              messages_count: (await sb.from('cs_messages').select('id', { count: 'exact', head: true }).eq('conversation_id', conversation_id)).count || 0,
+              messages_count: updatedCount || 0,
             }).eq('id', conversation_id);
           }
         }
