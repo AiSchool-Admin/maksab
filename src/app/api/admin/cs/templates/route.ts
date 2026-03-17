@@ -1,7 +1,7 @@
 /**
- * CS Conversations API
- * GET  — List conversations with filtering
- * POST — Create conversation or update status
+ * CS Templates API
+ * GET    — List all templates
+ * POST   — Create/Update/Delete template
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -35,40 +35,21 @@ export async function GET(req: NextRequest) {
     }
 
     const sb = getServiceClient();
-    const url = new URL(req.url);
-    const status = url.searchParams.get("status");
-    const category = url.searchParams.get("category");
-    const search = url.searchParams.get("search");
-
-    let query = sb
-      .from("cs_conversations")
+    const { data, error } = await sb
+      .from("cs_templates")
       .select("*")
-      .order("updated_at", { ascending: false })
-      .limit(100);
-
-    if (status && status !== "all") {
-      query = query.eq("status", status);
-    }
-    if (category && category !== "all") {
-      query = query.eq("category", category);
-    }
-    if (search) {
-      query = query.or(
-        `user_name.ilike.%${search}%,user_phone.ilike.%${search}%,last_message_preview.ilike.%${search}%`
-      );
-    }
-
-    const { data, error } = await query;
+      .order("category")
+      .order("name_ar");
 
     if (error) {
-      console.error("CS conversations fetch error:", error);
-      return NextResponse.json({ conversations: [] });
+      console.error("CS templates fetch error:", error);
+      return NextResponse.json({ templates: [] });
     }
 
-    return NextResponse.json({ conversations: data || [] });
+    return NextResponse.json({ templates: data || [] });
   } catch (error) {
-    console.error("CS conversations error:", error);
-    return NextResponse.json({ conversations: [] });
+    console.error("CS templates error:", error);
+    return NextResponse.json({ templates: [] });
   }
 }
 
@@ -92,38 +73,68 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action } = body;
 
-    if (action === "update_status") {
-      const { conversation_id, status, assigned_agent_id, assigned_agent_name } = body;
-      const updates: Record<string, unknown> = {
-        status,
-        updated_at: new Date().toISOString(),
-      };
-      if (assigned_agent_id) updates.assigned_agent_id = assigned_agent_id;
-      if (assigned_agent_name) updates.assigned_agent_name = assigned_agent_name;
-      if (status === "resolved") updates.resolved_at = new Date().toISOString();
+    if (action === "create") {
+      const { name, name_ar, category, message_text, shortcut } = body;
+      if (!name_ar || !message_text) {
+        return NextResponse.json({ error: "الاسم والنص مطلوبين" }, { status: 400 });
+      }
 
-      const { error } = await sb
-        .from("cs_conversations")
-        .update(updates)
-        .eq("id", conversation_id);
+      const { data, error } = await sb
+        .from("cs_templates")
+        .insert({
+          name: name || name_ar,
+          name_ar,
+          category: category || "general",
+          message_text,
+          shortcut: shortcut || null,
+        })
+        .select()
+        .single();
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ template: data });
     }
 
-    if (action === "assign") {
-      const { conversation_id, agent_id, agent_name } = body;
-      const { error } = await sb
-        .from("cs_conversations")
-        .update({
-          assigned_agent_id: agent_id,
-          assigned_agent_name: agent_name,
-          status: "agent_handling",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", conversation_id);
+    if (action === "update") {
+      const { id, name_ar, category, message_text, shortcut, is_active } = body;
+      if (!id) {
+        return NextResponse.json({ error: "id مطلوب" }, { status: 400 });
+      }
+
+      const updates: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (name_ar !== undefined) {
+        updates.name_ar = name_ar;
+        updates.name = name_ar;
+      }
+      if (category !== undefined) updates.category = category;
+      if (message_text !== undefined) updates.message_text = message_text;
+      if (shortcut !== undefined) updates.shortcut = shortcut;
+      if (is_active !== undefined) updates.is_active = is_active;
+
+      const { data, error } = await sb
+        .from("cs_templates")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ template: data });
+    }
+
+    if (action === "delete") {
+      const { id } = body;
+      if (!id) {
+        return NextResponse.json({ error: "id مطلوب" }, { status: 400 });
+      }
+
+      const { error } = await sb.from("cs_templates").delete().eq("id", id);
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -133,7 +144,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (error) {
-    console.error("CS conversations POST error:", error);
+    console.error("CS templates POST error:", error);
     return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

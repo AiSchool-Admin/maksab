@@ -126,6 +126,8 @@ const navSections: NavSection[] = [
     icon: "📞",
     items: [
       { href: "/admin/cs/conversations", label: "المحادثات", icon: Headphones },
+      { href: "/admin/cs/templates", label: "قوالب الرد", icon: ClipboardCheck },
+      { href: "/admin/cs/settings", label: "إعدادات CS", icon: Settings },
       { href: "/admin/cs/escalations", label: "التصعيدات", icon: ArrowUpRight },
       { href: "/admin/cs/reports", label: "رضا العملاء", icon: SmilePlus },
     ],

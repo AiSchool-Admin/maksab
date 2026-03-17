@@ -1,233 +1,318 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowRight,
   Send,
-  Phone,
-  Link2,
-  ClipboardList,
-  CheckCircle2,
   Bot,
-  AlertTriangle,
-  MapPin,
-  Calendar,
-  ShoppingBag,
-  StickyNote,
-  Plus,
-  ChevronDown,
-  ChevronUp,
   User,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  ClipboardList,
+  Star,
+  Clock,
   MessageSquare,
-  Image as ImageIcon,
+  ChevronDown,
 } from "lucide-react";
+import { getAdminHeaders, useAdmin } from "@/app/admin/layout";
+import { supabase } from "@/lib/supabase/client";
+import type {
+  CSConversation,
+  CSMessage,
+  CSTemplate,
+  CSConversationStatus,
+} from "@/types/cs";
+import { CS_STATUS_CONFIG, CS_PRIORITY_CONFIG, CS_CATEGORY_CONFIG } from "@/types/cs";
 
-interface ChatMessage {
-  id: string;
-  sender: "customer" | "ai" | "agent";
-  sender_name: string;
-  content: string;
-  time: string;
-  delivery_status: "sent" | "delivered" | "read";
-  intent?: string;
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("ar-EG", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
-interface CustomerInfo {
-  name: string;
-  phone: string;
-  whale_score: number;
-  type: "whale" | "trader" | "individual";
-  governorate: string;
-  city: string;
-  listing_count: number;
-  registered: boolean;
-  member_since: string;
-  discovery_date: string;
-  total_conversations: number;
-  notes: string[];
+function formatTimeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "الآن";
+  if (mins < 60) return `منذ ${mins} دقيقة`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `منذ ${hours} ساعة`;
+  const days = Math.floor(hours / 24);
+  return `منذ ${days} يوم`;
 }
-
-const CUSTOMER_TYPE_LABELS: Record<string, { label: string; emoji: string }> = {
-  whale: { label: "حوت", emoji: "\u{1F40B}" },
-  trader: { label: "تاجر", emoji: "\u{1F3EA}" },
-  individual: { label: "فرد", emoji: "\u{1F464}" },
-};
-
-const INTENT_LABELS: Record<string, { label: string; color: string }> = {
-  question: { label: "سؤال", color: "bg-blue-100 text-blue-700" },
-  want_human: { label: "عايز بشري", color: "bg-orange-100 text-orange-700" },
-  complaint: { label: "شكوى", color: "bg-red-100 text-red-700" },
-  greeting: { label: "تحية", color: "bg-green-100 text-green-700" },
-  thanks: { label: "شكر", color: "bg-emerald-100 text-emerald-700" },
-  registration: { label: "تسجيل", color: "bg-purple-100 text-purple-700" },
-  pricing: { label: "أسعار", color: "bg-yellow-100 text-yellow-700" },
-};
-
-const DELIVERY_STATUS_LABELS: Record<string, string> = {
-  sent: "تم الإرسال",
-  delivered: "وصلت",
-  read: "\u2705 مقروءة",
-};
-
-const MOCK_CUSTOMER: CustomerInfo = {
-  name: "أحمد محمود",
-  phone: "01012345678",
-  whale_score: 92,
-  type: "whale",
-  governorate: "القاهرة",
-  city: "مدينة نصر",
-  listing_count: 47,
-  registered: false,
-  member_since: "",
-  discovery_date: "5 مارس 2026",
-  total_conversations: 3,
-  notes: [
-    "تاجر سيارات كبير في مدينة نصر",
-    "عنده showroom على الرئيسي",
-    "مهتم بالباقة الذهبية",
-  ],
-};
-
-const MOCK_MESSAGES: ChatMessage[] = [
-  {
-    id: "msg-1",
-    sender: "customer",
-    sender_name: "أحمد محمود",
-    content: "السلام عليكم",
-    time: "10:30 ص",
-    delivery_status: "read",
-    intent: "greeting",
-  },
-  {
-    id: "msg-2",
-    sender: "ai",
-    sender_name: "سارة (AI)",
-    content:
-      "وعليكم السلام يا أحمد! أهلاً بيك في مكسب \u{1F49A}\nأنا سارة، المساعدة الذكية. إزاي أقدر أساعدك النهارده؟",
-    time: "10:30 ص",
-    delivery_status: "read",
-  },
-  {
-    id: "msg-3",
-    sender: "customer",
-    sender_name: "أحمد محمود",
-    content: "أنا عندي شوروم سيارات وعايز أعرف إزاي أضيف إعلاناتي عندكم",
-    time: "10:31 ص",
-    delivery_status: "read",
-    intent: "question",
-  },
-  {
-    id: "msg-4",
-    sender: "ai",
-    sender_name: "سارة (AI)",
-    content:
-      "ممتاز يا أحمد! مكسب هو المكان الصح لشوروم السيارات \u{1F697}\n\nتقدر تضيف إعلاناتك بسهولة:\n1. سجّل حسابك برقم الموبايل\n2. اضغط \"أضف إعلان\"\n3. اختار قسم السيارات\n4. املا البيانات وارفع الصور\n\nوكمان عندنا باقات خاصة للتجار بمميزات إضافية. تحب أعرفك عليها؟",
-    time: "10:32 ص",
-    delivery_status: "read",
-  },
-  {
-    id: "msg-5",
-    sender: "customer",
-    sender_name: "أحمد محمود",
-    content: "لا أنا مش فاهم، عايز أكلم حد من الفريق",
-    time: "10:33 ص",
-    delivery_status: "read",
-    intent: "want_human",
-  },
-  {
-    id: "msg-6",
-    sender: "ai",
-    sender_name: "سارة (AI)",
-    content:
-      "طبعاً يا أحمد! هحوّلك لأحد زملائي من فريق خدمة العملاء دلوقتي. لحظة واحدة \u{1F64F}",
-    time: "10:33 ص",
-    delivery_status: "read",
-  },
-  {
-    id: "msg-7",
-    sender: "agent",
-    sender_name: "خدمة العملاء",
-    content:
-      "أهلاً يا أحمد! أنا محمد من فريق مكسب. شوفت إنك عندك شوروم سيارات — ده ممتاز! \nتحب أشرحلك عن باقة التجار اللي هتناسبك؟",
-    time: "10:35 ص",
-    delivery_status: "delivered",
-  },
-  {
-    id: "msg-8",
-    sender: "customer",
-    sender_name: "أحمد محمود",
-    content: "أيوا يا محمد، كلمني عن الباقات والأسعار",
-    time: "10:36 ص",
-    delivery_status: "read",
-    intent: "pricing",
-  },
-];
-
-const QUICK_REPLIES = [
-  "أنا هساعدك",
-  "هبعتلك رابط",
-  "دقيقة واحدة",
-  "شكراً",
-];
 
 export default function ConversationDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const admin = useAdmin();
   const conversationId = params.id as string;
 
-  const [messages, setMessages] = useState<ChatMessage[]>(MOCK_MESSAGES);
+  const [conversation, setConversation] = useState<CSConversation | null>(null);
+  const [messages, setMessages] = useState<CSMessage[]>([]);
+  const [templates, setTemplates] = useState<CSTemplate[]>([]);
   const [replyText, setReplyText] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [newNote, setNewNote] = useState("");
-  const [showNoteInput, setShowNoteInput] = useState(false);
-  const [notes, setNotes] = useState<string[]>(MOCK_CUSTOMER.notes);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
 
-  const customer = MOCK_CUSTOMER;
-  const typeCfg = CUSTOMER_TYPE_LABELS[customer.type];
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const templateRef = useRef<HTMLDivElement>(null);
 
-  const handleSendReply = () => {
-    if (!replyText.trim()) return;
-    const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      sender: "agent",
-      sender_name: "خدمة العملاء",
-      content: replyText,
-      time: new Date().toLocaleTimeString("ar-EG", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      }),
-      delivery_status: "sent",
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  // Fetch conversation + messages
+  const fetchData = useCallback(async () => {
+    try {
+      const headers = getAdminHeaders();
+
+      const [convRes, msgsRes, tmplRes] = await Promise.all([
+        fetch(`/api/admin/cs/conversations?status=all`, { headers }),
+        fetch(
+          `/api/admin/cs/messages?conversation_id=${conversationId}`,
+          { headers }
+        ),
+        fetch(`/api/admin/cs/templates`, { headers }),
+      ]);
+
+      if (convRes.ok) {
+        const data = await convRes.json();
+        const conv = (data.conversations || []).find(
+          (c: CSConversation) => c.id === conversationId
+        );
+        if (conv) setConversation(conv);
+      }
+      if (msgsRes.ok) {
+        const data = await msgsRes.json();
+        setMessages(data.messages || []);
+      }
+      if (tmplRes.ok) {
+        const data = await tmplRes.json();
+        setTemplates(
+          (data.templates || []).filter((t: CSTemplate) => t.is_active)
+        );
+      }
+    } catch {
+      // Network error
+    }
+    setLoading(false);
+  }, [conversationId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  // Realtime subscription for new messages
+  useEffect(() => {
+    const channel = supabase
+      .channel(`cs_messages_${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "cs_messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new as CSMessage;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+        }
+      )
+      .subscribe();
+
+    // Also listen to conversation updates
+    const convChannel = supabase
+      .channel(`cs_conv_${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "cs_conversations",
+          filter: `id=eq.${conversationId}`,
+        },
+        (payload) => {
+          setConversation(payload.new as CSConversation);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      supabase.removeChannel(convChannel);
     };
-    setMessages((prev) => [...prev, newMsg]);
-    setReplyText("");
+  }, [conversationId]);
+
+  // Close template dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        templateRef.current &&
+        !templateRef.current.contains(e.target as Node)
+      ) {
+        setShowTemplates(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSendReply = async () => {
+    if (!replyText.trim() || sending) return;
+    setSending(true);
+
+    try {
+      const res = await fetch("/api/admin/cs/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAdminHeaders(),
+        },
+        body: JSON.stringify({
+          conversation_id: conversationId,
+          message: replyText,
+          sender_type: "agent",
+          sender_name: admin?.name || "خدمة العملاء",
+        }),
+      });
+
+      if (res.ok) {
+        setReplyText("");
+
+        // Update status to agent_handling if not already
+        if (
+          conversation &&
+          conversation.status !== "agent_handling" &&
+          conversation.status !== "resolved"
+        ) {
+          await fetch("/api/admin/cs/conversations", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...getAdminHeaders(),
+            },
+            body: JSON.stringify({
+              action: "update_status",
+              conversation_id: conversationId,
+              status: "agent_handling",
+              assigned_agent_id: admin?.id,
+              assigned_agent_name: admin?.name,
+            }),
+          });
+        }
+      }
+    } catch {
+      // Network error
+    }
+    setSending(false);
   };
 
-  const handleQuickReply = (text: string) => {
+  const handleUseTemplate = (template: CSTemplate) => {
+    let text = template.message_text;
+    // Replace placeholders
+    text = text.replace(/\{\{agent_name\}\}/g, admin?.name || "خدمة العملاء");
+    text = text.replace(
+      /\{\{category\}\}/g,
+      CS_CATEGORY_CONFIG[conversation?.category as keyof typeof CS_CATEGORY_CONFIG]?.label || ""
+    );
     setReplyText(text);
+    setShowTemplates(false);
   };
 
-  const handleAddNote = () => {
-    if (!newNote.trim()) return;
-    setNotes((prev) => [...prev, newNote]);
-    setNewNote("");
-    setShowNoteInput(false);
+  const handleUpdateStatus = async (newStatus: CSConversationStatus) => {
+    try {
+      await fetch("/api/admin/cs/conversations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAdminHeaders(),
+        },
+        body: JSON.stringify({
+          action: "update_status",
+          conversation_id: conversationId,
+          status: newStatus,
+          assigned_agent_id: admin?.id,
+          assigned_agent_name: admin?.name,
+        }),
+      });
+      setShowStatusMenu(false);
+    } catch {
+      // Network error
+    }
   };
 
-  const getWhaleIndicator = (score: number) => {
-    if (score >= 90) return { label: "\u{1F40B} حوت كبير", color: "text-blue-600 bg-blue-50" };
-    if (score >= 70) return { label: "\u{1F42C} حوت متوسط", color: "text-cyan-600 bg-cyan-50" };
-    if (score >= 50) return { label: "\u{1F41F} سمكة كبيرة", color: "text-teal-600 bg-teal-50" };
-    return { label: "\u{1F420} سمكة صغيرة", color: "text-gray-600 bg-gray-50" };
+  const handleResolve = async () => {
+    // Send closing message
+    await fetch("/api/admin/cs/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAdminHeaders(),
+      },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        message:
+          "تم حل المشكلة! 😊💚 لو عندك أي سؤال تاني — إحنا هنا.\n\nممكن تقيّم الخدمة؟ ⭐⭐⭐⭐⭐",
+        sender_type: "system",
+        sender_name: "النظام",
+      }),
+    });
+
+    await handleUpdateStatus("resolved");
   };
 
-  const whaleInfo = getWhaleIndicator(customer.whale_score);
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-8 bg-gray-200 rounded w-32 animate-pulse" />
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 animate-pulse">
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-16 bg-gray-100 rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!conversation) {
+    return (
+      <div className="text-center py-12">
+        <MessageSquare size={48} className="mx-auto text-gray-300 mb-3" />
+        <p className="text-gray-500">المحادثة غير موجودة</p>
+        <Link
+          href="/admin/cs/conversations"
+          className="text-[#1B7A3D] text-sm mt-2 inline-block"
+        >
+          رجوع للمحادثات
+        </Link>
+      </div>
+    );
+  }
+
+  const statusCfg = CS_STATUS_CONFIG[conversation.status];
+  const categoryCfg =
+    CS_CATEGORY_CONFIG[conversation.category as keyof typeof CS_CATEGORY_CONFIG];
 
   return (
     <div className="space-y-4">
-      {/* Back Button & Header */}
+      {/* Back Button */}
       <div className="flex items-center gap-3">
         <Link
           href="/admin/cs/conversations"
@@ -241,332 +326,357 @@ export default function ConversationDetailPage() {
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 overflow-hidden">
-          {/* Customer Info Header */}
+          {/* Header */}
           <div className="p-4 border-b border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#1B7A3D] rounded-full flex items-center justify-center text-white font-bold">
-                  {customer.name[0]}
+                  {(conversation.user_name || "م")[0]}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-bold text-gray-900">{customer.name}</h2>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">
-                      {typeCfg.emoji} {typeCfg.label}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="font-bold text-gray-900">
+                      {conversation.user_name || "مستخدم"}
+                    </h2>
+                    {conversation.user_phone && (
+                      <span className="text-xs text-gray-400" dir="ltr">
+                        {conversation.user_phone}
+                      </span>
+                    )}
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusCfg.bg}`}
+                    >
+                      {statusCfg.label}
                     </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${whaleInfo.color}`}>
-                      {whaleInfo.label}
-                    </span>
-                    {!customer.registered && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-50 text-red-600">
-                        غير مسجّل
+                    {categoryCfg && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">
+                        {categoryCfg.icon} {categoryCfg.label}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                    <span dir="ltr">{customer.phone}</span>
-                    <span className="flex items-center gap-1">
-                      <MapPin size={12} />
-                      {customer.governorate} — {customer.city}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <ShoppingBag size={12} />
-                      {customer.listing_count} إعلان
-                    </span>
+                    <span>بدأت {formatTimeAgo(conversation.created_at)}</span>
+                    <span>💬 {conversation.messages_count} رسالة</span>
+                    {conversation.assigned_agent_name && (
+                      <span>👤 {conversation.assigned_agent_name}</span>
+                    )}
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-              >
-                <User size={18} />
-              </button>
             </div>
           </div>
 
           {/* Chat Messages */}
           <div className="flex-1 p-4 space-y-4 overflow-y-auto max-h-[500px] bg-[#FAFAFA]">
             {messages.map((msg) => {
-              const isCustomer = msg.sender === "customer";
-              const isAI = msg.sender === "ai";
-              const isAgent = msg.sender === "agent";
+              const isUser = msg.sender_type === "user";
+              const isAI = msg.sender_type === "ai";
+              const isSystem = msg.sender_type === "system";
+
+              if (isSystem) {
+                return (
+                  <div key={msg.id} className="flex justify-center">
+                    <div className="bg-gray-100 text-gray-500 text-xs px-4 py-2 rounded-full">
+                      {msg.message}
+                    </div>
+                  </div>
+                );
+              }
 
               return (
                 <div
                   key={msg.id}
-                  className={`flex ${isCustomer ? "justify-start" : "justify-end"}`}
+                  className={`flex ${isUser ? "justify-start" : "justify-end"}`}
                 >
-                  <div
-                    className={`max-w-[75%] ${
-                      isCustomer
-                        ? "order-1"
-                        : "order-1"
-                    }`}
-                  >
+                  <div className="max-w-[75%]">
                     {/* Sender label */}
                     <div
                       className={`text-[10px] mb-1 flex items-center gap-1 ${
-                        isCustomer ? "text-gray-400" : "text-gray-400 justify-end"
+                        isUser
+                          ? "text-gray-400"
+                          : "text-gray-400 justify-end"
                       }`}
                     >
                       {isAI && <Bot size={10} className="text-purple-500" />}
-                      {isAgent && <User size={10} className="text-blue-500" />}
-                      <span>{msg.sender_name}</span>
+                      {!isUser && !isAI && (
+                        <User size={10} className="text-blue-500" />
+                      )}
+                      <span>{msg.sender_name || "—"}</span>
                     </div>
 
                     {/* Message bubble */}
                     <div
                       className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                        isCustomer
+                        isUser
                           ? "bg-white border border-gray-200 text-gray-900 rounded-tr-md"
                           : isAI
                           ? "bg-purple-50 border border-purple-100 text-gray-900 rounded-tl-md"
                           : "bg-[#1B7A3D] text-white rounded-tl-md"
                       }`}
                     >
-                      <p className="whitespace-pre-line">{msg.content}</p>
+                      <p className="whitespace-pre-line">{msg.message}</p>
                     </div>
 
-                    {/* Time & delivery status */}
+                    {/* Time */}
                     <div
-                      className={`text-[10px] mt-1 flex items-center gap-2 ${
-                        isCustomer ? "text-gray-400" : "text-gray-400 justify-end"
+                      className={`text-[10px] mt-1 ${
+                        isUser ? "text-gray-400" : "text-gray-400 text-left"
                       }`}
                     >
-                      <span>{msg.time}</span>
-                      {!isCustomer && (
-                        <span>{DELIVERY_STATUS_LABELS[msg.delivery_status]}</span>
+                      {formatTime(msg.created_at)}
+                      {!isUser && msg.is_read && (
+                        <span className="mr-1 text-green-500">✓✓</span>
                       )}
                     </div>
-
-                    {/* Intent label for customer messages */}
-                    {isCustomer && msg.intent && (
-                      <div className="mt-1">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-medium ${
-                            INTENT_LABELS[msg.intent]?.color || "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {INTENT_LABELS[msg.intent]?.label || msg.intent}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
             })}
+            <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Replies */}
-          <div className="px-4 pt-3 border-t border-gray-100">
-            <div className="flex flex-wrap gap-2 mb-3">
-              {QUICK_REPLIES.map((text) => (
+          {/* Template Picker + Reply Input */}
+          <div className="border-t border-gray-200">
+            {/* Action Buttons */}
+            <div className="px-4 pt-3 flex flex-wrap gap-2">
+              {/* Template Button */}
+              <div className="relative" ref={templateRef}>
                 <button
-                  key={text}
-                  onClick={() => handleQuickReply(text)}
-                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium hover:bg-gray-200 transition-colors"
+                  onClick={() => setShowTemplates(!showTemplates)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-cyan-50 text-cyan-700 rounded-xl text-xs font-medium hover:bg-cyan-100 transition-colors"
                 >
-                  {text}
+                  <ClipboardList size={14} />
+                  قالب
+                  <ChevronDown size={12} />
                 </button>
-              ))}
-            </div>
-          </div>
 
-          {/* Reply Input */}
-          <div className="p-4 border-t border-gray-200">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendReply();
-                  }
-                }}
-                placeholder="اكتب رد..."
-                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#1B7A3D]/20 focus:border-[#1B7A3D] outline-none"
-              />
+                {/* Template Dropdown */}
+                {showTemplates && templates.length > 0 && (
+                  <div className="absolute bottom-full mb-2 right-0 w-80 max-h-96 overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 z-50">
+                    <div className="p-3 border-b border-gray-100">
+                      <h4 className="font-bold text-sm text-gray-900">
+                        اختار قالب
+                      </h4>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {templates.map((tmpl) => (
+                        <button
+                          key={tmpl.id}
+                          onClick={() => handleUseTemplate(tmpl)}
+                          className="w-full text-right p-3 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-sm text-gray-900">
+                              {tmpl.name_ar}
+                            </span>
+                            {tmpl.shortcut && (
+                              <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                                {tmpl.shortcut}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 line-clamp-2">
+                            {tmpl.message_text}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status/Action Buttons */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowStatusMenu(!showStatusMenu)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-medium hover:bg-blue-100 transition-colors"
+                >
+                  <RefreshCw size={14} />
+                  تحويل
+                  <ChevronDown size={12} />
+                </button>
+
+                {showStatusMenu && (
+                  <div className="absolute bottom-full mb-2 right-0 w-48 bg-white rounded-xl shadow-xl border border-gray-200 z-50">
+                    <div className="py-1">
+                      {(
+                        [
+                          "open",
+                          "ai_handling",
+                          "waiting_agent",
+                          "agent_handling",
+                        ] as CSConversationStatus[]
+                      ).map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => handleUpdateStatus(s)}
+                          className="w-full text-right px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
+                        >
+                          <div
+                            className={`w-2 h-2 rounded-full ${CS_STATUS_CONFIG[s].dot}`}
+                          />
+                          {CS_STATUS_CONFIG[s].label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <button
-                onClick={handleSendReply}
-                disabled={!replyText.trim()}
-                className="px-4 py-2.5 bg-[#1B7A3D] text-white rounded-xl text-sm font-medium hover:bg-[#145C2E] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                onClick={handleResolve}
+                className="flex items-center gap-1.5 px-3 py-2 bg-green-50 text-green-700 rounded-xl text-xs font-medium hover:bg-green-100 transition-colors"
               >
-                <Send size={16} />
-                إرسال
+                <CheckCircle2 size={14} />
+                حل
+              </button>
+
+              <button
+                onClick={() => handleUpdateStatus("waiting_agent")}
+                className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-700 rounded-xl text-xs font-medium hover:bg-red-100 transition-colors"
+              >
+                <AlertTriangle size={14} />
+                تصعيد
               </button>
             </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="px-4 pb-4">
-            <div className="flex flex-wrap gap-2">
-              <button className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-medium hover:bg-blue-100 transition-colors">
-                <Phone size={14} />
-                اتصل
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-purple-700 rounded-xl text-xs font-medium hover:bg-purple-100 transition-colors">
-                <Link2 size={14} />
-                رابط تسجيل
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-2 bg-cyan-50 text-cyan-700 rounded-xl text-xs font-medium hover:bg-cyan-100 transition-colors">
-                <ClipboardList size={14} />
-                نقل إعلانات
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-2 bg-green-50 text-green-700 rounded-xl text-xs font-medium hover:bg-green-100 transition-colors">
-                <CheckCircle2 size={14} />
-                إغلاق
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-2 bg-yellow-50 text-yellow-700 rounded-xl text-xs font-medium hover:bg-yellow-100 transition-colors">
-                <Bot size={14} />
-                خلّي AI يكمل
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-700 rounded-xl text-xs font-medium hover:bg-red-100 transition-colors">
-                <AlertTriangle size={14} />
-                تصعيد للمدير
-              </button>
+            {/* Reply Input */}
+            <div className="p-4">
+              <div className="flex gap-2">
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendReply();
+                    }
+                  }}
+                  placeholder="اكتب رد..."
+                  rows={2}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#1B7A3D]/20 focus:border-[#1B7A3D] outline-none resize-none"
+                />
+                <button
+                  onClick={handleSendReply}
+                  disabled={!replyText.trim() || sending}
+                  className="px-4 py-2.5 bg-[#1B7A3D] text-white rounded-xl text-sm font-medium hover:bg-[#145C2E] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 self-end"
+                >
+                  <Send size={16} />
+                  إرسال
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Customer Info Sidebar */}
-        {sidebarOpen && (
-          <div className="w-full lg:w-80 shrink-0 space-y-4">
-            {/* Score Card */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-4">
-              <h3 className="text-sm font-bold text-gray-900 mb-3">معلومات العميل</h3>
-
-              {/* Whale Score */}
-              <div className="text-center mb-4">
-                <div className="text-4xl font-bold text-[#1B7A3D]">{customer.whale_score}</div>
-                <div className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold ${whaleInfo.color}`}>
-                  {whaleInfo.label}
-                </div>
-              </div>
-
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    <ShoppingBag size={14} />
-                    عدد الإعلانات
-                  </span>
-                  <span className="font-bold text-gray-900">{customer.listing_count}</span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    <MapPin size={14} />
-                    الموقع
-                  </span>
-                  <span className="font-medium text-gray-900">
-                    {customer.governorate} — {customer.city}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    <Calendar size={14} />
-                    تاريخ الاكتشاف
-                  </span>
-                  <span className="font-medium text-gray-900">{customer.discovery_date}</span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    <MessageSquare size={14} />
-                    المحادثات
-                  </span>
-                  <span className="font-bold text-gray-900">{customer.total_conversations}</span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500">حالة التسجيل</span>
-                  {customer.registered ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700">
-                      مسجّل \u2705
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-50 text-red-600">
-                      غير مسجّل
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Contact History */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-4">
-              <h3 className="text-sm font-bold text-gray-900 mb-3">سجل التواصل</h3>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-gray-600">محادثة واتساب</span>
-                  <span className="mr-auto text-gray-400">اليوم</span>
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                  <div className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="text-gray-600">رسالة AI تلقائية</span>
-                  <span className="mr-auto text-gray-400">أمس</span>
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                  <div className="w-2 h-2 rounded-full bg-purple-500" />
-                  <span className="text-gray-600">اكتشاف من OLX</span>
-                  <span className="mr-auto text-gray-400">5 مارس</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                  <StickyNote size={14} />
-                  ملاحظات
-                </h3>
-                <button
-                  onClick={() => setShowNoteInput(!showNoteInput)}
-                  className="text-[#1B7A3D] hover:text-[#145C2E] transition-colors"
+        {/* Sidebar — Conversation Info */}
+        <div className="w-full lg:w-72 shrink-0 space-y-4">
+          {/* Conversation Info */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4">
+            <h3 className="text-sm font-bold text-gray-900 mb-3">
+              معلومات المحادثة
+            </h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">الحالة</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusCfg.bg}`}
                 >
-                  <Plus size={16} />
-                </button>
+                  {statusCfg.label}
+                </span>
               </div>
-
-              {showNoteInput && (
-                <div className="mb-3 flex gap-2">
-                  <input
-                    type="text"
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAddNote();
-                    }}
-                    placeholder="أضف ملاحظة..."
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-[#1B7A3D]/20 focus:border-[#1B7A3D] outline-none"
-                  />
-                  <button
-                    onClick={handleAddNote}
-                    className="px-3 py-2 bg-[#1B7A3D] text-white rounded-lg text-xs hover:bg-[#145C2E] transition-colors"
-                  >
-                    أضف
-                  </button>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">الفئة</span>
+                <span className="font-medium text-gray-900">
+                  {categoryCfg?.icon} {categoryCfg?.label}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">الأولوية</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                    CS_PRIORITY_CONFIG[conversation.priority].color
+                  }`}
+                >
+                  {CS_PRIORITY_CONFIG[conversation.priority].label}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">عدد الرسائل</span>
+                <span className="font-bold text-gray-900">
+                  {conversation.messages_count}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">AI ردت</span>
+                <span className="font-medium text-gray-900">
+                  {conversation.ai_handled ? "نعم" : "لا"} (
+                  {conversation.ai_message_count})
+                </span>
+              </div>
+              {conversation.assigned_agent_name && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">الموظف</span>
+                  <span className="font-medium text-gray-900">
+                    {conversation.assigned_agent_name}
+                  </span>
                 </div>
               )}
-
-              <div className="space-y-2">
-                {notes.map((note, i) => (
-                  <div
-                    key={i}
-                    className="p-2 bg-yellow-50 border border-yellow-100 rounded-lg text-xs text-gray-700"
-                  >
-                    {note}
+              {conversation.csat_rating && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">التقييم</span>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Star
+                        key={i}
+                        size={12}
+                        className={
+                          i <= conversation.csat_rating!
+                            ? "text-yellow-400 fill-yellow-400"
+                            : "text-gray-300"
+                        }
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
+
+          {/* Timeline */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4">
+            <h3 className="text-sm font-bold text-gray-900 mb-3">
+              الجدول الزمني
+            </h3>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                <Clock size={12} className="text-gray-400" />
+                <span className="text-gray-600">أُنشئت</span>
+                <span className="mr-auto text-gray-400">
+                  {formatTimeAgo(conversation.created_at)}
+                </span>
+              </div>
+              {conversation.first_response_at && (
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                  <MessageSquare size={12} className="text-blue-400" />
+                  <span className="text-gray-600">أول رد</span>
+                  <span className="mr-auto text-gray-400">
+                    {formatTimeAgo(conversation.first_response_at)}
+                  </span>
+                </div>
+              )}
+              {conversation.resolved_at && (
+                <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
+                  <CheckCircle2 size={12} className="text-green-500" />
+                  <span className="text-gray-600">تم الحل</span>
+                  <span className="mr-auto text-gray-400">
+                    {formatTimeAgo(conversation.resolved_at)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
