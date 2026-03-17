@@ -7,8 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifySessionToken } from "@/lib/auth/session-token";
-import type { CSIntent } from "@/types/cs";
-import { CS_INTENT_PATTERNS, CS_AI_RESPONSES } from "@/types/cs";
+
+
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -17,14 +17,6 @@ function getServiceClient() {
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-}
-
-function detectIntent(message: string): CSIntent {
-  for (const [intent, pattern] of Object.entries(CS_INTENT_PATTERNS)) {
-    if (intent === "unknown") continue;
-    if (pattern.test(message)) return intent as CSIntent;
-  }
-  return "unknown";
 }
 
 function toBool(v: unknown): boolean {
@@ -67,21 +59,6 @@ async function getCSSettings(sb: ReturnType<typeof getServiceClient>) {
 
   console.log("[CS-SETTINGS] Parsed settings:", JSON.stringify(parsed));
   return parsed;
-}
-
-function isWithinWorkingHours(start: string, end: string): boolean {
-  const now = new Date();
-  // Egypt timezone offset (UTC+2)
-  const egyptHour = (now.getUTCHours() + 2) % 24;
-  const egyptMin = now.getUTCMinutes();
-  const currentTime = egyptHour * 60 + egyptMin;
-
-  const [startH, startM] = start.split(":").map(Number);
-  const [endH, endM] = end.split(":").map(Number);
-  const startTime = startH * 60 + startM;
-  const endTime = endH * 60 + endM;
-
-  return currentTime >= startTime && currentTime <= endTime;
 }
 
 export async function GET(req: NextRequest) {
@@ -220,9 +197,68 @@ export async function POST(req: NextRequest) {
         if (msgInsertErr) {
           console.error("[CS-CHAT] Error saving user message:", msgInsertErr.message);
         } else {
-          console.log("[CS-CHAT] User message saved, calling handleAIResponse...");
-          await handleAIResponse(sb, conversationId, message, session.userId);
-          console.log("[CS-CHAT] handleAIResponse completed for START action");
+          // ═══ AI RESPONSE — INLINE for START action ═══
+          try {
+            console.log('[CS-AI-INLINE-START] Starting...');
+
+            const { data: startSettingsRows } = await sb
+              .from('cs_settings')
+              .select('key, value');
+
+            const startSettings: Record<string, string> = {};
+            (startSettingsRows || []).forEach((s: any) => { startSettings[s.key] = s.value; });
+
+            const startAiEnabled = startSettings.ai_enabled === 'true';
+            console.log('[CS-AI-INLINE-START] aiEnabled:', startAiEnabled);
+
+            if (startAiEnabled) {
+              const msgLower = message.toLowerCase();
+              let intent = 'unknown';
+              let aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟';
+
+              if (/مرحبا|السلام|[اأ]هلا|هاي|هاى|hi|hello|صباح|مساء/.test(msgLower)) {
+                intent = 'greeting';
+                aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
+              } else if (/سج[لّ]|اسجل|تسجيل|حساب|اشترك|sign up/.test(msgLower)) {
+                intent = 'registration';
+                aiResponse = 'عشان تسجّل على مكسب:\n1. اضغط "انشئ حساب" 📱\n2. اختار فرد أو تاجر 🏪\n3. دخّل رقمك 📞\n4. فعّل بالكود ✅\n\nلو عندك مشكلة قولي وأنا أساعدك! 😊';
+              } else if (/[اإ]علان|نشر|انشر|[اأ]ضيف|حذف|عد[لّ]/.test(msgLower)) {
+                intent = 'listing';
+                aiResponse = 'عشان تنشر إعلان:\n1. اضغط "انشر إعلانك" ➕\n2. اختار الفئة 📂\n3. أضف صور واضحة 📸\n4. اكتب وصف مفصّل ✏️\n5. حدد السعر 💰\n6. اضغط "نشر" 🚀';
+              } else if (/دفع|فلوس|عمولة|اشتراك|باقة|سعر/.test(msgLower)) {
+                intent = 'payment';
+                aiResponse = 'مكسب عمولته طوعية — مش إجبارية! 💚\n\nباقات التجار:\n🥈 Silver: 199 ج/شهر\n🥇 Gold: 499 ج/شهر\n💎 Diamond: 999 ج/شهر';
+              } else if (/شكوى|نصب|احتيال|مزيف|سرقة/.test(msgLower)) {
+                intent = 'complaint';
+                aiResponse = '⚠️ فاهم إن فيه مشكلة — آسفين جداً!\nهحوّلك لزميلي المتخصص فوراً.\nممكن تقولي التفاصيل؟';
+              } else if (/مش شغال|خطأ|error|bug|مشكلة/.test(msgLower)) {
+                intent = 'technical';
+                aiResponse = 'فاهم إن فيه مشكلة تقنية 🔧\nمحتاج منك:\n1. إيه اللي حصل بالظبط؟\n2. على أي صفحة؟\n3. screenshot لو ممكن 📸';
+              }
+
+              console.log('[CS-AI-INLINE-START] Intent:', intent);
+
+              const { error: aiStartErr } = await sb.from('cs_messages').insert({
+                conversation_id: conversationId,
+                sender_type: 'ai',
+                sender_name: 'سارة',
+                message: aiResponse,
+                message_type: 'text',
+              });
+
+              if (aiStartErr) {
+                console.error('[CS-AI-INLINE-START] Insert error:', aiStartErr.message);
+              } else {
+                console.log('[CS-AI-INLINE-START] ✅ AI response saved!');
+                await sb.from('cs_conversations').update({
+                  status: 'ai_handling',
+                  ai_handled: true,
+                }).eq('id', conversationId);
+              }
+            }
+          } catch (aiStartCrash: any) {
+            console.error('[CS-AI-INLINE-START] CRASH:', aiStartCrash.message);
+          }
         }
       }
 
@@ -289,12 +325,76 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      console.log("[CS-CHAT] User message saved, calling handleAIResponse...");
-      // AI auto-response — MUST await before returning response
-      await handleAIResponse(sb, conversation_id, message, session.userId);
-      console.log("[CS-CHAT] handleAIResponse completed for SEND action");
+      // ═══ AI RESPONSE — INLINE (لا تستخدم handleAIResponse) ═══
+      try {
+        console.log('[CS-AI-INLINE] Starting...');
 
-      // Return ALL messages (not just user's) so frontend shows AI response immediately
+        // 1. جلب الإعدادات
+        const { data: settingsRows } = await sb
+          .from('cs_settings')
+          .select('key, value');
+
+        const settings: Record<string, string> = {};
+        (settingsRows || []).forEach((s: any) => { settings[s.key] = s.value; });
+
+        const aiEnabled = settings.ai_enabled === 'true';
+        console.log('[CS-AI-INLINE] aiEnabled:', aiEnabled);
+
+        if (aiEnabled) {
+          // 2. كشف النية
+          const msgLower = message.toLowerCase();
+          let intent = 'unknown';
+          let aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟';
+
+          if (/مرحبا|السلام|[اأ]هلا|هاي|هاى|hi|hello|صباح|مساء/.test(msgLower)) {
+            intent = 'greeting';
+            aiResponse = 'أهلاً بيك في مكسب! 💚 إزاي أقدر أساعدك؟\n\nممكن أساعدك في:\n📱 التسجيل\n📢 نشر إعلان\n💰 الأسعار والباقات\n🔧 مشكلة تقنية';
+          } else if (/سج[لّ]|اسجل|تسجيل|حساب|اشترك|sign up/.test(msgLower)) {
+            intent = 'registration';
+            aiResponse = 'عشان تسجّل على مكسب:\n1. اضغط "انشئ حساب" 📱\n2. اختار فرد أو تاجر 🏪\n3. دخّل رقمك 📞\n4. فعّل بالكود ✅\n\nلو عندك مشكلة قولي وأنا أساعدك! 😊';
+          } else if (/[اإ]علان|نشر|انشر|[اأ]ضيف|حذف|عد[لّ]/.test(msgLower)) {
+            intent = 'listing';
+            aiResponse = 'عشان تنشر إعلان:\n1. اضغط "انشر إعلانك" ➕\n2. اختار الفئة 📂\n3. أضف صور واضحة 📸\n4. اكتب وصف مفصّل ✏️\n5. حدد السعر 💰\n6. اضغط "نشر" 🚀';
+          } else if (/دفع|فلوس|عمولة|اشتراك|باقة|سعر/.test(msgLower)) {
+            intent = 'payment';
+            aiResponse = 'مكسب عمولته طوعية — مش إجبارية! 💚\n\nباقات التجار:\n🥈 Silver: 199 ج/شهر\n🥇 Gold: 499 ج/شهر\n💎 Diamond: 999 ج/شهر';
+          } else if (/شكوى|نصب|احتيال|مزيف|سرقة/.test(msgLower)) {
+            intent = 'complaint';
+            aiResponse = '⚠️ فاهم إن فيه مشكلة — آسفين جداً!\nهحوّلك لزميلي المتخصص فوراً.\nممكن تقولي التفاصيل؟';
+          } else if (/مش شغال|خطأ|error|bug|مشكلة/.test(msgLower)) {
+            intent = 'technical';
+            aiResponse = 'فاهم إن فيه مشكلة تقنية 🔧\nمحتاج منك:\n1. إيه اللي حصل بالظبط؟\n2. على أي صفحة؟\n3. screenshot لو ممكن 📸';
+          }
+
+          console.log('[CS-AI-INLINE] Intent:', intent, 'Response length:', aiResponse.length);
+
+          // 3. حفظ رد AI
+          const { error: aiInsertError } = await sb.from('cs_messages').insert({
+            conversation_id: conversation_id,
+            sender_type: 'ai',
+            sender_name: 'سارة',
+            message: aiResponse,
+            message_type: 'text',
+          });
+
+          if (aiInsertError) {
+            console.error('[CS-AI-INLINE] Insert error:', aiInsertError.message);
+          } else {
+            console.log('[CS-AI-INLINE] ✅ AI response saved!');
+
+            // 4. تحديث المحادثة
+            await sb.from('cs_conversations').update({
+              status: 'ai_handling',
+              ai_handled: true,
+              messages_count: (await sb.from('cs_messages').select('id', { count: 'exact', head: true }).eq('conversation_id', conversation_id)).count || 0,
+            }).eq('id', conversation_id);
+          }
+        }
+      } catch (aiErr: any) {
+        console.error('[CS-AI-INLINE] CRASH:', aiErr.message);
+      }
+
+      // ═══ جلب كل الرسائل (بما فيها رد AI) ═══
       const { data: allMessages } = await sb
         .from("cs_messages")
         .select("*")
@@ -308,6 +408,7 @@ export async function POST(req: NextRequest) {
         .single();
 
       return NextResponse.json({
+        success: true,
         message: msg,
         messages: allMessages || [],
         conversation: updatedConv,
@@ -340,165 +441,5 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("CS chat POST error:", error);
     return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
-  }
-}
-
-async function handleAIResponse(
-  sb: ReturnType<typeof getServiceClient>,
-  conversationId: string,
-  userMessage: string,
-  userId: string
-) {
-  try {
-  console.log(`[CS-AI] === handleAIResponse START === conv=${conversationId} msg="${userMessage}"`);
-
-  const csSettings = await getCSSettings(sb);
-  console.log(`[CS-AI] ai_enabled=${csSettings.ai_enabled}, ai_auto_greet=${csSettings.ai_auto_greet}, ai_max_messages=${csSettings.ai_max_messages}`);
-
-  if (!csSettings.ai_enabled) {
-    console.log("[CS-AI] ai_enabled is false — SKIPPING response. THIS IS WHY AI IS NOT RESPONDING!");
-    return;
-  }
-
-  // Get conversation state
-  const { data: conv, error: convError } = await sb
-    .from("cs_conversations")
-    .select("status, ai_message_count, category")
-    .eq("id", conversationId)
-    .single();
-
-  if (convError) {
-    console.error("[CS-AI] Error fetching conversation:", convError.message);
-    return;
-  }
-
-  if (!conv) {
-    console.error("[CS-AI] Conversation not found:", conversationId);
-    return;
-  }
-
-  console.log(`[CS-AI] Conversation state: status=${conv.status}, ai_message_count=${conv.ai_message_count}, category=${conv.category}`);
-
-  // Don't respond if agent is handling
-  if (conv.status === "agent_handling") {
-    console.log("[CS-AI] Agent is handling — skipping AI response");
-    return;
-  }
-
-  const intent = detectIntent(userMessage);
-  console.log(`[CS-AI] Intent detected: "${intent}" for message: "${userMessage}"`);
-
-  // Immediate transfer for complaints/fraud if not configured
-  if (
-    (intent === "complaint" && !csSettings.ai_handle_complaints) ||
-    conv.category === "fraud"
-  ) {
-    // Send transfer message
-    await sb.from("cs_messages").insert({
-      conversation_id: conversationId,
-      sender_type: "ai",
-      sender_name: "سارة",
-      message:
-        "⚠️ فاهم إن فيه مشكلة — هحوّلك لزميلي المتخصص فوراً.\nهيرد عليك في أقل من 5 دقائق! 🙏",
-      message_type: "text",
-    });
-
-    await sb
-      .from("cs_conversations")
-      .update({
-        status: "waiting_agent",
-        priority: "high",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", conversationId);
-    return;
-  }
-
-  // Check if AI has hit max messages
-  if (conv.ai_message_count >= csSettings.ai_max_messages && csSettings.ai_auto_transfer) {
-    const withinHours = isWithinWorkingHours(
-      csSettings.working_hours_start,
-      csSettings.working_hours_end
-    );
-
-    if (withinHours) {
-      await sb.from("cs_messages").insert({
-        conversation_id: conversationId,
-        sender_type: "ai",
-        sender_name: "سارة",
-        message:
-          "هحوّلك لزميلي من فريق خدمة العملاء — هيقدر يساعدك أحسن! ⏱️\nلحظة واحدة...",
-        message_type: "text",
-      });
-
-      await sb
-        .from("cs_conversations")
-        .update({
-          status: "waiting_agent",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", conversationId);
-    } else if (csSettings.outside_hours_ai_only) {
-      await sb.from("cs_messages").insert({
-        conversation_id: conversationId,
-        sender_type: "ai",
-        sender_name: "سارة",
-        message:
-          "للأسف ساعات العمل انتهت النهارده 🕐\nفريقنا هيرد عليك الصبح إن شاء الله.\nلو الموضوع مستعجل ابعتلنا التفاصيل وهنرد أول ما نفتح! 💚",
-        message_type: "text",
-      });
-
-      await sb
-        .from("cs_conversations")
-        .update({
-          status: "waiting_agent",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", conversationId);
-    }
-    return;
-  }
-
-  // Send AI response based on intent
-  const response =
-    intent !== "unknown"
-      ? CS_AI_RESPONSES[intent]
-      : "فاهم — ممكن توضحلي أكتر عشان أقدر أساعدك؟ 😊\n\nأو لو عايز تتكلم مع حد من فريقنا قولي \"عايز أتكلم مع موظف\"";
-
-  console.log(`[CS-AI] Sending AI response for intent="${intent}": "${response.substring(0, 80)}..."`);
-
-  const { error: msgError } = await sb.from("cs_messages").insert({
-    conversation_id: conversationId,
-    sender_type: "ai",
-    sender_name: "سارة",
-    message: response,
-    message_type: "text",
-  });
-
-  if (msgError) {
-    console.error("[CS-AI] ERROR inserting AI response:", msgError.message);
-    return;
-  }
-
-  console.log("[CS-AI] AI response saved successfully!");
-
-  // Update conversation to ai_handling and increment ai_message_count
-  const { error: updateError } = await sb
-    .from("cs_conversations")
-    .update({
-      status: "ai_handling",
-      ai_handled: true,
-      ai_message_count: (conv.ai_message_count || 0) + 1,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", conversationId);
-
-  if (updateError) {
-    console.error("[CS-AI] Error updating conversation status:", updateError.message);
-  }
-
-  console.log("[CS-AI] === handleAIResponse DONE ===");
-  } catch (error) {
-    console.error("[CS-AI] handleAIResponse CRASHED:", error);
   }
 }
