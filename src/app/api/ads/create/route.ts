@@ -271,8 +271,28 @@ export async function POST(req: NextRequest) {
     // Record rate limit usage after successful creation
     await recordRateLimit(user_id, "ad_create");
 
-    // Fire-and-forget: notify matching buyers and exchange matches
+    // Fire-and-forget: Mazen auto-moderation review
     const adId = (insertedAd as Record<string, unknown>)?.id as string | null;
+    if (adId) {
+      fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/admin/moderation/ai-review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          listing: {
+            id: adId,
+            title: ad_data.title,
+            description: ad_data.description || '',
+            category_id: ad_data.category_id,
+            sale_type: ad_data.sale_type,
+            price: ad_data.price ?? null,
+            images: uploadedUrls.length > 0 ? uploadedUrls : (ad_data.images || []),
+            user_id,
+          },
+        }),
+      }).catch(err => console.error('[MAZEN] Auto-review failed:', err));
+    }
+
+    // Fire-and-forget: notify matching buyers and exchange matches
     if (adId) {
       const adNotifData = {
         id: adId,
