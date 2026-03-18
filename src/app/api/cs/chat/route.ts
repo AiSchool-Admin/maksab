@@ -9,7 +9,19 @@ import { createClient } from "@supabase/supabase-js";
 import { verifySessionToken } from "@/lib/auth/session-token";
 import { trackInteraction } from "@/lib/ai/tracker";
 
-const SARA_PROMPT = `أنتِ سارة — موظفة خدمة عملاء أولى في مكسب، خبرة 10 سنين.
+const SARA_PROMPT = `تكلمي بالعامية المصرية الودودة دايماً.
+ممنوع: حاضر / تفضل / بكل سرور / يسعدني (خليجي)
+الصح: تمام / ماشي / أيوه / طب / يلا / عندك حق
+أمثلة:
+❌ "حاضر، فهمت إنك في مشكلة" → ✅ "تمام، فاهمة إن عندك مشكلة"
+❌ "تفضل، قول لي" → ✅ "قولي بقى"
+❌ "يسعدني مساعدتك" → ✅ "أنا هساعدك"
+❌ "بكل سرور" → ✅ "بسيطة"
+
+ممنوع استخدام Markdown — لا ** ولا # ولا - للقوائم.
+اكتبي النص عادي بدون أي formatting.
+
+أنتِ سارة — موظفة خدمة عملاء أولى في مكسب، خبرة 10 سنين.
 أسلوبك: عامية مصرية راقية، جملتين أو 3، سؤال واحد للتوضيح، بلا ترحيب متكرر.
 مكسب: بيع + مزادات + مقايضة.
 الباقات: مجاني(10) | Silver 199ج(50) | Gold 499ج(200) | Diamond 999ج(∞)
@@ -19,6 +31,15 @@ const SARA_PROMPT = `أنتِ سارة — موظفة خدمة عملاء أول
 قبل كل رد: إيه اللي وراء السؤال؟ إيه اللي هيرضيه؟
 لو زعلان: اعترف بإحساسه الأول.
 لو مشكلة معقدة: "هحوّلك لزميلي دلوقتي."`;
+
+// Strip Markdown formatting from AI responses
+function cleanMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')  // Remove bold
+    .replace(/\*(.*?)\*/g, '$1')       // Remove italic
+    .replace(/^#{1,6}\s/gm, '')        // Remove headers
+    .trim();
+}
 
 // Retry function for Anthropic API (handles 529 Overloaded)
 async function callClaudeWithRetry(body: object, maxRetries = 3) {
@@ -273,8 +294,10 @@ export async function POST(req: NextRequest) {
                   messages: cleanMessages
                 });
 
-                aiResponse = aiData.content?.[0]?.text
-                  ?? 'لحظة — في ضغط على الخدمة دلوقتي. جرب تاني بعد ثانية.';
+                aiResponse = cleanMarkdown(
+                  aiData.content?.[0]?.text
+                  ?? 'لحظة — في ضغط على الخدمة دلوقتي. جرب تاني بعد ثانية.'
+                );
               } catch {
                 aiResponse = 'في ضغط على الخدمة دلوقتي. جرب تاني بعد شوية 🙏';
               }
@@ -420,8 +443,10 @@ export async function POST(req: NextRequest) {
               messages: cleanMessages
             });
 
-            aiResponse = aiData.content?.[0]?.text
-              ?? 'لحظة — في ضغط على الخدمة دلوقتي. جرب تاني بعد ثانية.';
+            aiResponse = cleanMarkdown(
+              aiData.content?.[0]?.text
+              ?? 'لحظة — في ضغط على الخدمة دلوقتي. جرب تاني بعد ثانية.'
+            );
           } catch {
             aiResponse = 'في ضغط على الخدمة دلوقتي. جرب تاني بعد شوية 🙏';
           }
