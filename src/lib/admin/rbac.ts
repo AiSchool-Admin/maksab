@@ -37,6 +37,7 @@ export type AdminSection =
   | "locations"         // المواقع
   | "settings"          // الإعدادات
   | "crm"              // CRM (العملاء، الاكتشاف، الحملات)
+  | "ai"               // فريق AI
   | "team";             // إدارة الفريق
 
 // ─── Granular Actions ────────────────────────────────────────
@@ -101,7 +102,7 @@ export const ROLE_CONFIGS: Record<TeamRole, RoleConfig> = {
     description: "صلاحيات كاملة على جميع أقسام النظام",
     icon: "👑",
     level: 1,
-    sections: ["dashboard", "cs", "sales", "marketing", "ops", "finance", "tech", "users", "ads", "analytics", "locations", "settings", "crm", "team"],
+    sections: ["dashboard", "cs", "sales", "marketing", "ops", "finance", "tech", "users", "ads", "analytics", "locations", "settings", "crm", "ai", "team"],
     permissions: {
       dashboard: FULL,
       cs: FULL,
@@ -116,6 +117,7 @@ export const ROLE_CONFIGS: Record<TeamRole, RoleConfig> = {
       locations: FULL,
       settings: FULL,
       crm: FULL,
+      ai: FULL,
       team: FULL,
     },
   },
@@ -128,13 +130,14 @@ export const ROLE_CONFIGS: Record<TeamRole, RoleConfig> = {
     icon: "💻",
     level: 2,
     department: "tech",
-    sections: ["dashboard", "tech", "analytics", "settings", "crm", "users"],
+    sections: ["dashboard", "tech", "analytics", "settings", "crm", "ai", "users"],
     permissions: {
       dashboard: VIEW_EXPORT,
       tech: FULL,
       analytics: FULL,
       settings: FULL,
       crm: { view: true, create: true, edit: true, export: true },
+      ai: FULL,
       users: VIEW_EXPORT,
     },
   },
