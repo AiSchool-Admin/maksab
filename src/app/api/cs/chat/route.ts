@@ -115,7 +115,15 @@ async function callClaudeWithRetry(body: object, maxRetries = 3) {
     });
     const data = await response.json();
     // Success
-    if (response.ok) return data;
+    if (response.ok) {
+      console.log('[TOKEN-USAGE]', {
+        input_tokens: data.usage?.input_tokens,
+        output_tokens: data.usage?.output_tokens,
+        model: data.model || 'claude-haiku-4-5-20251001',
+        stop_reason: data.stop_reason,
+      });
+      return data;
+    }
     // Overloaded → wait and retry
     if (response.status === 529 || response.status === 503) {
       console.log(`[SARA-CS] Attempt ${attempt} overloaded — waiting...`);
