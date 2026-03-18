@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifySessionToken } from "@/lib/auth/session-token";
+import { trackInteraction } from "@/lib/ai/tracker";
 
 const SARA_PROMPT = `
 أنتِ سارة — موظفة خدمة العملاء الأولى في مكسب.
@@ -367,6 +368,17 @@ export async function POST(req: NextRequest) {
                   status: 'ai_handling',
                   ai_handled: true,
                 }).eq('id', conversationId);
+
+                // Track Sara interaction (fire-and-forget)
+                trackInteraction({
+                  agent: 'sara',
+                  source: 'cs_chat_start',
+                  user_message: message,
+                  ai_response: aiResponse,
+                  model_used: 'claude-haiku-4-5-20251001',
+                  conversation_id: conversationId,
+                  user_id: session.userId,
+                });
               }
             }
           } catch (aiStartCrash: any) {
@@ -500,6 +512,17 @@ export async function POST(req: NextRequest) {
             console.error('[CS-AI-INLINE] Insert error:', aiInsertError.message);
           } else {
             console.log('[CS-AI-INLINE] ✅ AI response saved!');
+
+            // Track Sara interaction (fire-and-forget)
+            trackInteraction({
+              agent: 'sara',
+              source: 'cs_chat',
+              user_message: message,
+              ai_response: aiResponse,
+              model_used: 'claude-haiku-4-5-20251001',
+              conversation_id: conversation_id,
+              user_id: session.userId,
+            });
 
             // 4. تحديث المحادثة
             const { count: updatedCount } = await sb

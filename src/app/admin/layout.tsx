@@ -193,6 +193,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/admin/tech/dashboard", label: "حالة النظام", icon: Monitor },
       { href: "/admin/crm/harvester", label: "محرك الحصاد", icon: Cpu },
+      { href: "/admin/ai/team", label: "فريق AI", icon: Cpu },
     ],
   },
   {
