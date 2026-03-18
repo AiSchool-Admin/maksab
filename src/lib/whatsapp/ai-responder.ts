@@ -144,6 +144,8 @@ export async function generateAIResponse(
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
+          // Sonnet intentional: WhatsApp outreach requires higher quality
+          // to convert potential sellers. ROI justifies the cost difference.
           model: 'claude-sonnet-4-20250514',
           max_tokens: 500,
           system: systemPrompt,
