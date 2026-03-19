@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
   const tierFilter = searchParams.get("tier");
   const governorate = searchParams.get("governorate");
   const search = searchParams.get("search");
+  const hasFeatured = searchParams.get("has_featured");
 
   try {
     // Main query — sorted by whale_score desc
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest) {
     if (whalesOnly === "true") query = query.eq("is_whale", true);
     if (tierFilter) query = query.eq("seller_tier", tierFilter);
     if (governorate) query = query.eq("primary_governorate", governorate);
+    if (hasFeatured === "true") query = query.eq("has_featured_listings", true);
     if (search)
       query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
 

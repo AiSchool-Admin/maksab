@@ -135,6 +135,7 @@ const navSections: NavSection[] = [
       { href: "/admin/sales/buyer-harvest", label: "حصاد المشترين", icon: ShoppingBag },
       { href: "/admin/sales/buyer-outreach", label: "التواصل — مشترين", icon: Inbox },
       { href: "/admin/sales/scopes", label: "النطاقات", icon: Globe },
+      { href: "/admin/crm/harvester", label: "محرك الحصاد", icon: Cpu },
       { href: "/admin/crm/customers", label: "العملاء (CRM)", icon: UserSearch },
       { href: "/admin/crm/discovery", label: "الاكتشاف", icon: Target },
       { href: "/admin/crm/campaigns", label: "الحملات", icon: Megaphone },
@@ -183,7 +184,6 @@ const navSections: NavSection[] = [
     icon: "💻",
     items: [
       { href: "/admin/tech/dashboard", label: "حالة النظام", icon: Monitor },
-      { href: "/admin/crm/harvester", label: "محرك الحصاد", icon: Cpu },
       { href: "/admin/ai/team", label: "فريق AI", icon: Cpu },
     ],
   },

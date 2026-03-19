@@ -78,6 +78,7 @@ export default function AdminAdsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [saleTypeFilter, setSaleTypeFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [featuredFilter, setFeaturedFilter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const limit = 20;
 
@@ -109,6 +110,7 @@ export default function AdminAdsPage() {
       if (statusFilter) params.set("status", statusFilter);
       if (saleTypeFilter) params.set("sale_type", saleTypeFilter);
       if (categoryFilter) params.set("category", categoryFilter);
+      if (featuredFilter) params.set("featured", featuredFilter);
 
       const res = await fetch(`/api/admin/stats?${params}`, {
         headers: getAdminHeaders(),
@@ -122,7 +124,7 @@ export default function AdminAdsPage() {
       // Silent
     }
     setIsLoading(false);
-  }, [admin, page, search, statusFilter, saleTypeFilter, categoryFilter]);
+  }, [admin, page, search, statusFilter, saleTypeFilter, categoryFilter, featuredFilter]);
 
   useEffect(() => {
     loadAds();
@@ -131,7 +133,7 @@ export default function AdminAdsPage() {
   // Clear selection on filter/page change
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [page, search, statusFilter, saleTypeFilter, categoryFilter]);
+  }, [page, search, statusFilter, saleTypeFilter, categoryFilter, featuredFilter]);
 
   const totalPages = Math.ceil(total / limit);
 
@@ -317,6 +319,15 @@ export default function AdminAdsPage() {
           {categoriesConfig.map((cat) => (
             <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
           ))}
+        </select>
+        <select
+          value={featuredFilter}
+          onChange={(e) => { setFeaturedFilter(e.target.value); setPage(1); }}
+          className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+        >
+          <option value="">كل الإعلانات</option>
+          <option value="featured">⭐ مميزة فقط</option>
+          <option value="not_featured">غير مميزة</option>
         </select>
       </div>
 
