@@ -150,6 +150,221 @@ const ROLE_TARGETS: Record<string, number> = {
   sales_rep: 50,
 };
 
+// ─── Daily Target Directive from ممدوح ──────────────────────────────────────
+
+interface DailyDirective {
+  category: string;
+  governorate: string;
+  tier: string;
+  messageCount: number;
+  notes: string;
+}
+
+function DailyDirectivePanel({
+  onApply,
+}: {
+  onApply: (d: DailyDirective) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [directive, setDirective] = useState<DailyDirective>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("outreach_daily_directive");
+      if (saved) {
+        try { return JSON.parse(saved); } catch { /* ignore */ }
+      }
+    }
+    return { category: "all", governorate: "all", tier: "all", messageCount: 50, notes: "" };
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      localStorage.setItem("outreach_daily_directive", JSON.stringify(directive));
+      // Save to DB
+      await fetch("/api/admin/sales/daily-target", {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(directive),
+      });
+      onApply(directive);
+      setIsOpen(false);
+    } catch {
+      // silent
+    }
+    setSaving(false);
+  };
+
+  const today = new Date().toLocaleDateString("ar-EG", { weekday: "long", day: "numeric", month: "long" });
+
+  return (
+    <div className="bg-gradient-to-l from-[#1B7A3D]/5 to-[#D4A843]/5 rounded-2xl border border-[#1B7A3D]/20 overflow-hidden">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-4"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🎯</span>
+          <div className="text-right">
+            <h3 className="text-sm font-bold text-dark">هدف اليوم — توجيه وليد</h3>
+            <p className="text-[10px] text-gray-text">{today}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {directive.category !== "all" && (
+            <span className="text-[10px] bg-[#1B7A3D] text-white px-2 py-0.5 rounded-full">
+              {CATEGORY_LABELS[directive.category] || directive.category}
+            </span>
+          )}
+          {directive.tier !== "all" && (
+            <span className="text-[10px] bg-[#D4A843] text-white px-2 py-0.5 rounded-full">
+              {directive.tier === "whale" ? "حوت" : directive.tier === "big" ? "كبير" : "متوسط"}
+            </span>
+          )}
+          <span className="text-[10px] font-bold text-[#1B7A3D]">{directive.messageCount} رسالة</span>
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="px-4 pb-4 space-y-3 border-t border-[#1B7A3D]/10 pt-3">
+          {/* Category */}
+          <div>
+            <label className="text-xs text-gray-text mb-1 block">الفئة المستهدفة:</label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: "all", label: "الكل" },
+                { key: "vehicles", label: "🚗 سيارات" },
+                { key: "properties", label: "🏠 عقارات" },
+                { key: "phones", label: "📱 موبايلات" },
+                { key: "electronics", label: "💻 إلكترونيات" },
+                { key: "furniture", label: "🪑 أثاث" },
+                { key: "fashion", label: "👗 ملابس" },
+                { key: "gold", label: "💰 ذهب" },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setDirective((d) => ({ ...d, category: key }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    directive.category === key
+                      ? "bg-[#1B7A3D] text-white"
+                      : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Governorate */}
+          <div>
+            <label className="text-xs text-gray-text mb-1 block">المحافظة المستهدفة:</label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: "all", label: "الكل" },
+                { key: "cairo", label: "القاهرة" },
+                { key: "alexandria", label: "الإسكندرية" },
+                { key: "giza", label: "الجيزة" },
+                { key: "qalyubia", label: "القليوبية" },
+                { key: "sharqia", label: "الشرقية" },
+                { key: "dakahlia", label: "الدقهلية" },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setDirective((d) => ({ ...d, governorate: key }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    directive.governorate === key
+                      ? "bg-[#1B7A3D] text-white"
+                      : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tier */}
+          <div>
+            <label className="text-xs text-gray-text mb-1 block">الشريحة:</label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: "all", label: "الكل" },
+                { key: "whale", label: "🐋 حوت" },
+                { key: "big", label: "💪 كبير" },
+                { key: "medium", label: "📦 متوسط" },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setDirective((d) => ({ ...d, tier: key }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    directive.tier === key
+                      ? "bg-[#D4A843] text-white"
+                      : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Message count */}
+          <div>
+            <label className="text-xs text-gray-text mb-1 block">عدد الرسائل المطلوبة:</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={directive.messageCount}
+                onChange={(e) => setDirective((d) => ({ ...d, messageCount: Math.max(1, parseInt(e.target.value) || 1) }))}
+                className="w-20 px-3 py-2 border border-gray-200 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#1B7A3D]/20"
+                min={1}
+              />
+              <span className="text-xs text-gray-text">رسالة</span>
+              <div className="flex gap-1 mr-2">
+                {[20, 50, 100].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setDirective((d) => ({ ...d, messageCount: n }))}
+                    className={`text-[10px] px-2 py-1 rounded-full transition-colors ${
+                      directive.messageCount === n
+                        ? "bg-[#1B7A3D] text-white"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="text-xs text-gray-text mb-1 block">ملاحظات إضافية (اختياري):</label>
+            <input
+              type="text"
+              value={directive.notes}
+              onChange={(e) => setDirective((d) => ({ ...d, notes: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B7A3D]/20"
+              placeholder="مثال: ركّز على البائعين اللي عندهم أكتر من 5 إعلانات..."
+            />
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-2.5 bg-[#1B7A3D] text-white rounded-xl text-sm font-bold hover:bg-[#145C2E] transition-colors disabled:opacity-50"
+          >
+            {saving ? "بيتحفظ..." : "حفظ وتطبيق الهدف"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type TabType = "new" | "followup" | "interested" | "stats";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -322,6 +537,16 @@ export default function SalesOutreachPage() {
           </button>
         </div>
       </div>
+
+      {/* ═══ Daily Directive from ممدوح ═══ */}
+      <DailyDirectivePanel
+        onApply={(d) => {
+          if (d.category !== "all") setCategoryFilter(d.category);
+          if (d.governorate !== "all") setGovFilter(d.governorate);
+          if (d.tier !== "all") setTierFilter(d.tier);
+          updateDailyTarget(d.messageCount);
+        }}
+      />
 
       {/* ═══ Improvement 1: Editable Daily Target + Progress ═══ */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100">

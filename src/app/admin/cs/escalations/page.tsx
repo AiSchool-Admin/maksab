@@ -11,6 +11,8 @@ import {
   RefreshCw,
   ArrowUpRight,
   MessageSquare,
+  Send,
+  X,
 } from "lucide-react";
 import { getAdminHeaders } from "@/app/admin/layout";
 
@@ -25,6 +27,7 @@ interface Escalation {
   time_ago: string;
   status: "pending" | "resolved";
   resolved_at?: string;
+  admin_response?: string | null;
 }
 
 const PRIORITY_CONFIG: Record<string, { label: string; emoji: string; border: string; bg: string }> = {
@@ -52,8 +55,11 @@ type FilterTab = "all" | "pending" | "resolved";
 
 export default function CSEscalationsPage() {
   const [escalations, setEscalations] = useState<Escalation[]>([]);
-  const [activeTab, setActiveTab] = useState<FilterTab>("all");
+  const [activeTab, setActiveTab] = useState<FilterTab>("pending");
   const [loading, setLoading] = useState(true);
+  const [replyModal, setReplyModal] = useState<{ id: string; customerName: string; reason: string } | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [sending, setSending] = useState(false);
 
   const stats = {
     total: escalations.length,
@@ -83,18 +89,58 @@ export default function CSEscalationsPage() {
     setLoading(false);
   };
 
-  const handleResolve = (id: string) => {
-    setEscalations((prev) =>
-      prev.map((e) =>
-        e.id === id
-          ? { ...e, status: "resolved" as const, resolved_at: "الآن" }
-          : e
-      )
-    );
+  const handleResolve = async (id: string) => {
+    try {
+      await fetch("/api/admin/cs/escalations", {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resolve", escalation_id: id }),
+      });
+      setEscalations((prev) =>
+        prev.map((e) =>
+          e.id === id
+            ? { ...e, status: "resolved" as const, resolved_at: "الآن" }
+            : e
+        )
+      );
+    } catch {
+      // silent
+    }
+  };
+
+  const handleReply = async () => {
+    if (!replyModal || !replyText.trim()) return;
+    setSending(true);
+    try {
+      await fetch("/api/admin/cs/escalations", {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "respond",
+          escalation_id: replyModal.id,
+          response: replyText.trim(),
+        }),
+      });
+      setEscalations((prev) =>
+        prev.map((e) =>
+          e.id === replyModal.id
+            ? { ...e, status: "resolved" as const, resolved_at: "الآن", admin_response: replyText.trim() }
+            : e
+        )
+      );
+      setReplyModal(null);
+      setReplyText("");
+    } catch {
+      // silent
+    }
+    setSending(false);
   };
 
   useEffect(() => {
     handleRefresh();
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(handleRefresh, 30000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -107,7 +153,7 @@ export default function CSEscalationsPage() {
             <ArrowUpRight size={24} className="text-red-500" />
             التصعيدات
           </h1>
-          <p className="text-sm text-gray-500 mt-1">الحالات اللي محتاجة تدخل بشري</p>
+          <p className="text-sm text-gray-500 mt-1">الحالات اللي سارة حوّلتها وتحتاج تدخل ممدوح</p>
         </div>
         <button
           onClick={handleRefresh}
@@ -127,11 +173,11 @@ export default function CSEscalationsPage() {
         </div>
         <div className="bg-white rounded-2xl border border-red-100 p-4 text-center">
           <div className="text-3xl font-bold text-red-600">{stats.pending}</div>
-          <div className="text-xs text-gray-500 mt-1">معلّقة</div>
+          <div className="text-xs text-gray-500 mt-1">تحتاج رد</div>
         </div>
         <div className="bg-white rounded-2xl border border-green-100 p-4 text-center">
           <div className="text-3xl font-bold text-green-600">{stats.resolved}</div>
-          <div className="text-xs text-gray-500 mt-1">تم الحل</div>
+          <div className="text-xs text-gray-500 mt-1">تم الرد</div>
         </div>
       </div>
 
@@ -140,8 +186,8 @@ export default function CSEscalationsPage() {
         {(
           [
             { key: "all", label: "الكل" },
-            { key: "pending", label: "معلّقة" },
-            { key: "resolved", label: "تم الحل" },
+            { key: "pending", label: `تحتاج رد (${stats.pending})` },
+            { key: "resolved", label: "تم الرد" },
           ] as const
         ).map((tab) => (
           <button
@@ -163,7 +209,9 @@ export default function CSEscalationsPage() {
         {filteredEscalations.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
             <CheckCircle2 size={48} className="mx-auto text-green-300 mb-3" />
-            <p className="text-gray-500 text-sm">مفيش تصعيدات حالياً</p>
+            <p className="text-gray-500 text-sm">
+              {activeTab === "pending" ? "مفيش تصعيدات تحتاج رد حالياً" : "مفيش تصعيدات حالياً"}
+            </p>
           </div>
         ) : (
           filteredEscalations.map((esc) => {
@@ -187,9 +235,11 @@ export default function CSEscalationsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="font-bold text-gray-900">{esc.customer_name}</span>
-                      <span className="text-xs text-gray-400" dir="ltr">
-                        {esc.customer_phone}
-                      </span>
+                      {esc.customer_phone && (
+                        <span className="text-xs text-gray-400" dir="ltr">
+                          {esc.customer_phone}
+                        </span>
+                      )}
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">
                         {typeCfg.emoji} {typeCfg.label}
                       </span>
@@ -207,6 +257,14 @@ export default function CSEscalationsPage() {
                     {/* Reason */}
                     <p className="text-sm text-gray-700 mb-2">{esc.reason}</p>
 
+                    {/* Admin Response (if exists) */}
+                    {esc.admin_response && (
+                      <div className="bg-green-50 border border-green-100 rounded-xl p-3 mb-2">
+                        <p className="text-[10px] text-green-600 font-bold mb-1">رد ممدوح:</p>
+                        <p className="text-sm text-green-800">{esc.admin_response}</p>
+                      </div>
+                    )}
+
                     {/* Footer */}
                     <div className="flex items-center gap-3 text-xs text-gray-400">
                       <span className="flex items-center gap-1">
@@ -216,7 +274,7 @@ export default function CSEscalationsPage() {
                       {esc.status === "resolved" && esc.resolved_at && (
                         <span className="flex items-center gap-1 text-green-600">
                           <CheckCircle2 size={12} />
-                          تم الحل {esc.resolved_at}
+                          تم الرد {esc.resolved_at}
                         </span>
                       )}
                     </div>
@@ -224,16 +282,28 @@ export default function CSEscalationsPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <Link
-                      href={`/admin/cs/conversations/${esc.conversation_id}`}
-                      className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-medium hover:bg-gray-200 transition-colors"
-                    >
-                      <Eye size={14} />
-                      عرض المحادثة
-                    </Link>
+                    {esc.conversation_id && (
+                      <Link
+                        href={`/admin/cs/conversations/${esc.conversation_id}`}
+                        className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-medium hover:bg-gray-200 transition-colors"
+                      >
+                        <Eye size={14} />
+                        المحادثة
+                      </Link>
+                    )}
 
                     {esc.status === "pending" && (
                       <>
+                        <button
+                          onClick={() => {
+                            setReplyModal({ id: esc.id, customerName: esc.customer_name, reason: esc.reason });
+                            setReplyText("");
+                          }}
+                          className="flex items-center gap-1 px-3 py-2 bg-[#1B7A3D] text-white rounded-xl text-xs font-medium hover:bg-[#145C2E] transition-colors"
+                        >
+                          <MessageSquare size={14} />
+                          رد على العميل
+                        </button>
                         <button
                           onClick={() => handleResolve(esc.id)}
                           className="flex items-center gap-1 px-3 py-2 bg-green-50 text-green-700 rounded-xl text-xs font-medium hover:bg-green-100 transition-colors"
@@ -257,6 +327,50 @@ export default function CSEscalationsPage() {
           })
         )}
       </div>
+
+      {/* Reply Modal */}
+      {replyModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setReplyModal(null)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-gray-900">رد على {replyModal.customerName}</h3>
+              <button onClick={() => setReplyModal(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-3 mb-4">
+              <p className="text-[10px] text-gray-500 mb-1">المشكلة:</p>
+              <p className="text-sm text-gray-700">{replyModal.reason}</p>
+            </div>
+
+            <textarea
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-[#1B7A3D]/20 resize-none"
+              placeholder="اكتب ردك هنا... (هيوصل للعميل في المحادثة)"
+              autoFocus
+            />
+
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleReply}
+                disabled={!replyText.trim() || sending}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1B7A3D] text-white rounded-xl text-sm font-bold hover:bg-[#145C2E] transition-colors disabled:opacity-50"
+              >
+                <Send size={16} />
+                {sending ? "بيتبعت..." : "أرسل الرد"}
+              </button>
+              <button
+                onClick={() => setReplyModal(null)}
+                className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
