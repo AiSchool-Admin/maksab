@@ -565,6 +565,7 @@ function ListingsTab() {
     price_min: "",
     price_max: "",
     search: "",
+    featured: "",
   });
 
   const loadData = useCallback(async () => {
@@ -578,6 +579,7 @@ function ListingsTab() {
       if (filters.price_min) params.set("price_min", filters.price_min);
       if (filters.price_max) params.set("price_max", filters.price_max);
       if (filters.search) params.set("search", filters.search);
+      if (filters.featured) params.set("featured", filters.featured);
 
       const res = await fetch(
         `/api/admin/crm/harvester/listings?${params.toString()}`,
@@ -697,6 +699,15 @@ function ListingsTab() {
             {Object.entries(categoryLabels).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
+          </select>
+          <select
+            value={filters.featured}
+            onChange={(e) => { setFilters({ ...filters, featured: e.target.value }); setPage(1); }}
+            className="border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">كل الإعلانات</option>
+            <option value="featured">⭐ مميزة فقط</option>
+            <option value="not_featured">غير مميزة</option>
           </select>
           <div className="flex items-center gap-1">
             <input
