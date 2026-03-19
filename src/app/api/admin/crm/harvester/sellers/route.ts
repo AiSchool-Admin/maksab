@@ -35,7 +35,32 @@ export async function GET(req: NextRequest) {
     if (whalesOnly === "true") query = query.eq("is_whale", true);
     if (tierFilter) query = query.eq("seller_tier", tierFilter);
     if (governorate) query = query.eq("primary_governorate", governorate);
-    if (hasFeatured === "true") query = query.eq("has_featured_listings", true);
+    // Featured filter: query actual ahe_listings instead of denormalized field
+    if (hasFeatured === "true") {
+      const { data: featuredSellerRows } = await supabase
+        .from("ahe_listings")
+        .select("ahe_seller_id")
+        .eq("is_featured", true)
+        .not("ahe_seller_id", "is", null);
+
+      const featuredSellerIds = [
+        ...new Set((featuredSellerRows || []).map((r) => r.ahe_seller_id).filter(Boolean)),
+      ];
+
+      if (featuredSellerIds.length > 0) {
+        query = query.in("id", featuredSellerIds);
+      } else {
+        // No featured listings at all → return empty
+        return NextResponse.json({
+          sellers: [],
+          total: 0,
+          page,
+          totalPages: 0,
+          stats: { with_phone: 0, whales: 0, big: 0, medium: 0, small: 0, contacted: 0, signed_up: 0 },
+        });
+      }
+    }
+
     if (search)
       query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
 

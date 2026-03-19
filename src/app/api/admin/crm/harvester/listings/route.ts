@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
   const priceMin = searchParams.get("price_min");
   const priceMax = searchParams.get("price_max");
   const search = searchParams.get("search");
+  const featured = searchParams.get("featured");
 
   try {
     let query = supabase
@@ -32,6 +33,8 @@ export async function GET(req: NextRequest) {
     if (priceMin) query = query.gte("price", parseFloat(priceMin));
     if (priceMax) query = query.lte("price", parseFloat(priceMax));
     if (search) query = query.ilike("title", `%${search}%`);
+    if (featured === "featured") query = query.eq("is_featured", true);
+    if (featured === "not_featured") query = query.eq("is_featured", false);
 
     const { data: listings, count, error } = await query;
 
