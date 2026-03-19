@@ -486,9 +486,18 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
       if (sellerId?.isNew) newSellersCount++;
       if (listing.extractedPhone) phonesExtracted++;
 
+      // Fetch actual total_listings_seen for existing sellers
+      let actualListingsSeen = 1;
+      if (sellerId?.id && !sellerId.isNew) {
+        const { data: sellerData } = await supabase
+          .from("ahe_sellers")
+          .select("total_listings_seen")
+          .eq("id", sellerId.id)
+          .single();
+        if (sellerData) actualListingsSeen = sellerData.total_listings_seen || 1;
+      }
+
       // Strategy 1: كل بائع جديد = مشتري محتمل
-      // بدل الاعتماد على sellerId (ممكن يرجع undefined لو RLS تمنع SELECT بعد INSERT)
-      // نستخدم البيانات مباشرة من الـ listing
       const sellerPhone = listing.extractedPhone || null;
       const sellerName = cleanSellerName(listing.sellerNameFromDetail || listing.sellerName || null);
       const sellerProfileUrl = listing.sellerProfileUrlFromDetail || listing.sellerProfileUrl || null;
@@ -502,7 +511,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
             profile_url: sellerProfileUrl,
             is_business: listing.isBusiness,
             is_verified: listing.isVerified,
-            total_listings_seen: 1,
+            total_listings_seen: actualListingsSeen,
           }, {
             title: listing.title,
             price: listing.price,
@@ -526,7 +535,7 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
         await updateSellerBuyProbability(supabase, sellerId.id, {
           is_business: listing.isBusiness,
           is_verified: listing.isVerified,
-          total_listings_seen: 1,
+          total_listings_seen: actualListingsSeen,
         });
       }
 
@@ -1089,6 +1098,49 @@ async function upsertSeller(
       .eq("profile_url", data.profileUrl)
       .maybeSingle();
     existingSeller = byProfile;
+  }
+
+  // Fallback: match by name + platform + governorate (dedup same company with different phones)
+  if (!existingSeller && data.name && data.name.length >= 3) {
+    const { data: byName } = await supabase
+      .from("ahe_sellers")
+      .select("id")
+      .eq("name", data.name)
+      .eq("source_platform", data.platform)
+      .eq("primary_governorate", data.primaryGovernorate)
+      .maybeSingle();
+    existingSeller = byName;
+
+    // If matched by name but we have a new phone, add it as alternate
+    if (existingSeller && data.phone) {
+      const { data: seller } = await supabase
+        .from("ahe_sellers")
+        .select("phone, alternate_phones")
+        .eq("id", existingSeller.id)
+        .single();
+
+      if (seller) {
+        const existingPhones = new Set<string>([
+          ...(seller.phone ? [seller.phone] : []),
+          ...(seller.alternate_phones || []),
+        ]);
+        if (!existingPhones.has(data.phone)) {
+          const altPhones = [...(seller.alternate_phones || []), data.phone];
+          // If no primary phone, promote this one
+          if (!seller.phone) {
+            await supabase.from("ahe_sellers").update({
+              phone: data.phone,
+              updated_at: new Date().toISOString(),
+            }).eq("id", existingSeller.id);
+          } else {
+            await supabase.from("ahe_sellers").update({
+              alternate_phones: altPhones,
+              updated_at: new Date().toISOString(),
+            }).eq("id", existingSeller.id);
+          }
+        }
+      }
+    }
   }
 
   if (existingSeller) {

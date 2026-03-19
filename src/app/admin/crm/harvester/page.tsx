@@ -924,6 +924,28 @@ function SellersTab() {
     governorate: "",
   });
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [mergeResult, setMergeResult] = useState<{ merged_count: number; active_listings_refreshed: number } | null>(null);
+
+  async function mergeDuplicates() {
+    setMergeLoading(true);
+    setMergeResult(null);
+    try {
+      const res = await fetch("/api/admin/crm/harvester/sellers/merge", {
+        method: "POST",
+        headers: getAdminHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMergeResult({ merged_count: data.merged_count, active_listings_refreshed: data.active_listings_refreshed });
+        loadData(); // Refresh list
+      }
+    } catch (err) {
+      console.error("Merge error:", err);
+    } finally {
+      setMergeLoading(false);
+    }
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -1094,6 +1116,20 @@ function SellersTab() {
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
+          <div className="mr-auto flex items-center gap-2">
+            <button
+              onClick={mergeDuplicates}
+              disabled={mergeLoading}
+              className="px-3 py-2 rounded-lg text-sm font-medium border bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 transition-colors disabled:opacity-50"
+            >
+              {mergeLoading ? "جاري الدمج..." : "🔗 دمج المكررين"}
+            </button>
+            {mergeResult && (
+              <span className="text-xs text-green-600">
+                ✅ تم دمج {mergeResult.merged_count} مكرر — تحديث {mergeResult.active_listings_refreshed} معلن
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
