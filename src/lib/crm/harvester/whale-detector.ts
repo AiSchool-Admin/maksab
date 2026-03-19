@@ -101,24 +101,36 @@ export async function updateSellerWhaleScore(
 
   if (!seller) return null;
 
-  const { count: featuredCount } = await supabase
-    .from("ahe_listings")
-    .select("id", { count: "exact", head: true })
-    .eq("ahe_seller_id", sellerId)
-    .eq("is_featured", true);
+  // Count actual listings for this seller (fixes active_listings always = 0)
+  const [
+    { count: totalListingsCount },
+    { count: featuredCount },
+    { count: eliteCount },
+  ] = await Promise.all([
+    supabase
+      .from("ahe_listings")
+      .select("id", { count: "exact", head: true })
+      .eq("ahe_seller_id", sellerId),
+    supabase
+      .from("ahe_listings")
+      .select("id", { count: "exact", head: true })
+      .eq("ahe_seller_id", sellerId)
+      .eq("is_featured", true),
+    supabase
+      .from("ahe_listings")
+      .select("id", { count: "exact", head: true })
+      .eq("ahe_seller_id", sellerId)
+      .eq("is_elite", true),
+  ]);
 
-  const { count: eliteCount } = await supabase
-    .from("ahe_listings")
-    .select("id", { count: "exact", head: true })
-    .eq("ahe_seller_id", sellerId)
-    .eq("is_elite", true);
+  const actualActiveListings = totalListingsCount || 0;
 
   const result = calculateWhaleScore({
     is_business: seller.is_business,
     is_verified: seller.is_verified,
     has_featured_listings: (featuredCount || 0) > 0 || (eliteCount || 0) > 0,
-    total_listings_seen: seller.total_listings_seen,
-    active_listings: seller.active_listings || 0,
+    total_listings_seen: Math.max(seller.total_listings_seen, actualActiveListings),
+    active_listings: actualActiveListings,
     primary_category: seller.primary_category,
     phone: seller.phone,
     featured_listings_count: featuredCount || 0,
@@ -134,6 +146,8 @@ export async function updateSellerWhaleScore(
       is_whale: result.is_whale,
       seller_tier: result.tier,
       estimated_monthly_value: result.estimated_monthly_value,
+      active_listings: actualActiveListings,
+      total_listings_seen: Math.max(seller.total_listings_seen, actualActiveListings),
       whale_detected_at:
         result.is_whale && !wasWhale
           ? new Date().toISOString()

@@ -322,11 +322,19 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       }
     }
 
-    // Strategy 1+3: كل بائع جديد = مشتري محتمل (مش لازم يكون عنده رقم)
+    // Fetch actual total_listings_seen for existing sellers
+    let actualListingsSeen = 1;
     if (aheSellerId) {
-      console.log('=== [SIB-CHECK] seller upsert done, calling SIB ===');
-      console.log('=== [SIB-CHECK] seller:', JSON.stringify({ name: sellerName, phone: phone || 'NO_PHONE' }).substring(0, 100));
+      const { data: sellerData } = await supabase
+        .from("ahe_sellers")
+        .select("total_listings_seen")
+        .eq("id", aheSellerId)
+        .single();
+      if (sellerData) actualListingsSeen = sellerData.total_listings_seen || 1;
+    }
 
+    // Strategy 1+3: كل بائع جديد = مشتري محتمل
+    if (aheSellerId) {
       try {
         const sibResult = await createBuyerFromSeller(supabase, {
           id: aheSellerId,
@@ -335,7 +343,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
           profile_url: listing.sellerProfileUrl || null,
           is_business: listing.isBusiness,
           is_verified: listing.isVerified,
-          total_listings_seen: 1,
+          total_listings_seen: actualListingsSeen,
         }, {
           title: listing.title,
           price: listing.price,
@@ -355,7 +363,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       await updateSellerBuyProbability(supabase, aheSellerId, {
         is_business: listing.isBusiness,
         is_verified: listing.isVerified,
-        total_listings_seen: 1,
+        total_listings_seen: actualListingsSeen,
       });
     }
 
