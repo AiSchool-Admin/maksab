@@ -57,8 +57,8 @@ export function classifySeller(seller: SellerInput): TierInfo {
     return { tier: "no_phone", ...TIER_CONFIG.no_phone };
   }
 
-  // الشريحة 1: حوت
-  if (seller.whale_score >= 60) {
+  // الشريحة 1: حوت (V2: whale_score >= 70)
+  if (seller.whale_score >= 70) {
     return { tier: "whale", ...TIER_CONFIG.whale };
   }
 
