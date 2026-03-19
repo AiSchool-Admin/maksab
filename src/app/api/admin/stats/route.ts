@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
           sale_type: url.searchParams.get("sale_type") || undefined,
           governorate: url.searchParams.get("governorate") || undefined,
           search: url.searchParams.get("search") || undefined,
+          featured: url.searchParams.get("featured") || undefined,
         });
         return NextResponse.json(data);
       }

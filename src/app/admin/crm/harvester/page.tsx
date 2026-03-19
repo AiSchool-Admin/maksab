@@ -919,6 +919,7 @@ function SellersTab() {
   const [filters, setFilters] = useState({
     has_phone: false,
     whales_only: false,
+    has_featured: false,
     status: "",
     governorate: "",
   });
@@ -932,6 +933,7 @@ function SellersTab() {
       params.set("limit", "20");
       if (filters.has_phone) params.set("has_phone", "true");
       if (filters.whales_only) params.set("whales_only", "true");
+      if (filters.has_featured) params.set("has_featured", "true");
       if (filters.status) params.set("status", filters.status);
       if (filters.governorate) params.set("governorate", filters.governorate);
 
@@ -1063,6 +1065,14 @@ function SellersTab() {
             }`}
           >
             🐋 حيتان فقط
+          </button>
+          <button
+            onClick={() => { setFilters({ ...filters, has_featured: !filters.has_featured }); setPage(1); }}
+            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              filters.has_featured ? "bg-amber-100 border-amber-300 text-amber-700" : "bg-white border-gray-200 text-gray-600"
+            }`}
+          >
+            ⭐ بإعلانات مميزة
           </button>
           <select
             value={filters.status}

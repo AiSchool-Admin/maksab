@@ -272,6 +272,7 @@ export async function getAds(page = 1, limit = 20, filters?: {
   sale_type?: string;
   governorate?: string;
   search?: string;
+  featured?: string;
 }): Promise<{ ads: AdminAd[]; total: number }> {
   const sb = getServiceClient();
   let query = sb.from("ads").select("*", { count: "exact" });
@@ -280,6 +281,8 @@ export async function getAds(page = 1, limit = 20, filters?: {
   if (filters?.status) query = query.eq("status", filters.status);
   if (filters?.sale_type) query = query.eq("sale_type", filters.sale_type);
   if (filters?.governorate) query = query.eq("governorate", filters.governorate);
+  if (filters?.featured === "featured") query = query.eq("is_featured", true);
+  if (filters?.featured === "not_featured") query = query.eq("is_featured", false);
   if (filters?.search) {
     const s = filters.search.replace(/[%_\\]/g, "\\$&").replace(/[(),."']/g, "");
     if (s.trim()) query = query.ilike("title", `%${s}%`);
