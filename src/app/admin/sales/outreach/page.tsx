@@ -87,10 +87,14 @@ interface StatsData {
 
 const TIER_DISPLAY: Record<string, { emoji: string; label: string; color: string }> = {
   whale: { emoji: "🐋", label: "حوت", color: "bg-red-100 text-red-700" },
-  big_fish: { emoji: "🦈", label: "كبير", color: "bg-orange-100 text-orange-700" },
-  regular: { emoji: "🐟", label: "عادي", color: "bg-blue-100 text-blue-700" },
-  small_fish: { emoji: "🐠", label: "صغير", color: "bg-gray-100 text-gray-500" },
-  visitor: { emoji: "👻", label: "زائر", color: "bg-gray-50 text-gray-400" },
+  big: { emoji: "💪", label: "كبير", color: "bg-orange-100 text-orange-700" },
+  medium: { emoji: "📦", label: "متوسط", color: "bg-blue-100 text-blue-700" },
+  small: { emoji: "🔹", label: "صغير", color: "bg-gray-100 text-gray-500" },
+  visitor: { emoji: "👁️", label: "زائر", color: "bg-gray-50 text-gray-400" },
+  // Legacy aliases for backward compatibility
+  big_fish: { emoji: "💪", label: "كبير", color: "bg-orange-100 text-orange-700" },
+  regular: { emoji: "📦", label: "متوسط", color: "bg-blue-100 text-blue-700" },
+  small_fish: { emoji: "🔹", label: "صغير", color: "bg-gray-100 text-gray-500" },
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -199,10 +203,12 @@ export default function SalesOutreachPage() {
       });
       if (selectedTemplateId) params.set("templateId", selectedTemplateId);
 
+      console.log('[OUTREACH UI] Filter params:', { tier: tierFilter, category: categoryFilter, governorate: govFilter, tab: activeTab });
       const res = await fetch(`/api/admin/sales/outreach?${params}`, {
         headers: getAdminHeaders(),
       });
       const json = await res.json();
+      console.log('[OUTREACH UI] Results count:', json.contacts?.length, 'tierCounts:', json.tierCounts);
 
       if (activeTab === "stats") {
         setStats(json.stats);
@@ -448,9 +454,10 @@ export default function SalesOutreachPage() {
                   {[
                     { key: "all", label: "الكل" },
                     { key: "whale", label: `🐋 حوت ${tierCounts.whale ? `(${tierCounts.whale})` : ""}` },
-                    { key: "big_fish", label: `🦈 كبير ${tierCounts.big_fish ? `(${tierCounts.big_fish})` : ""}` },
-                    { key: "regular", label: `🐟 عادي ${tierCounts.regular ? `(${tierCounts.regular})` : ""}` },
-                    { key: "small_fish", label: `🐠 صغير ${tierCounts.small_fish ? `(${tierCounts.small_fish})` : ""}` },
+                    { key: "big", label: `💪 كبير ${tierCounts.big ? `(${tierCounts.big})` : ""}` },
+                    { key: "medium", label: `📦 متوسط ${tierCounts.medium ? `(${tierCounts.medium})` : ""}` },
+                    { key: "small", label: `🔹 صغير ${tierCounts.small ? `(${tierCounts.small})` : ""}` },
+                    { key: "visitor", label: `👁️ زائر ${tierCounts.visitor ? `(${tierCounts.visitor})` : ""}` },
                   ].map(({ key, label }) => (
                     <button
                       key={key}

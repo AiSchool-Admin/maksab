@@ -118,8 +118,10 @@ export async function GET(request: NextRequest) {
       .order("buy_probability_score", { ascending: false })
       .limit(limit);
 
+    console.log('[OUTREACH API] Query params:', { tab, tier, category, governorate, limit });
     const { data: sellers, error } = await query;
 
+    console.log('[OUTREACH API] Results count:', sellers?.length);
     if (error) {
       console.error("Outreach fetch error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -134,7 +136,7 @@ export async function GET(request: NextRequest) {
     const contacts = (sellers || []).map((s: any) => {
       const listingCount = s.total_listings_seen || s.active_listings || 0;
       const whaleScore = s.whale_score || 0;
-      const sellerTier = s.seller_tier || "small_fish";
+      const sellerTier = s.seller_tier || "small";
 
       // Choose tier-appropriate template
       let tplForSeller = selectedTemplate;
