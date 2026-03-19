@@ -47,8 +47,9 @@ export async function GET(req: NextRequest) {
     const [
       withPhoneRes,
       whalesRes,
-      bigFishRes,
-      regularsRes,
+      bigRes,
+      mediumRes,
+      smallRes,
       contactedRes,
       signedUpRes,
     ] = await Promise.all([
@@ -63,11 +64,15 @@ export async function GET(req: NextRequest) {
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
-        .eq("seller_tier", "big_fish"),
+        .eq("seller_tier", "big"),
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
-        .eq("seller_tier", "regular"),
+        .eq("seller_tier", "medium"),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "small"),
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
@@ -86,8 +91,9 @@ export async function GET(req: NextRequest) {
       stats: {
         with_phone: withPhoneRes.count || 0,
         whales: whalesRes.count || 0,
-        big_fish: bigFishRes.count || 0,
-        regulars: regularsRes.count || 0,
+        big: bigRes.count || 0,
+        medium: mediumRes.count || 0,
+        small: smallRes.count || 0,
         contacted: contactedRes.count || 0,
         signed_up: signedUpRes.count || 0,
       },

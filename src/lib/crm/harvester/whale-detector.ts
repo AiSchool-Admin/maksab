@@ -1,26 +1,27 @@
 /**
- * AHE — Whale Detection System (v2)
- * نظام تصنيف البائعين — 5 عوامل × نقاط
+ * AHE — Whale Detection System (V2)
+ * نظام تصنيف البائعين — 4 عوامل × نقاط
  *
- * Whale Score = 0-75:
- *   1. الفئة (0-30): vehicles=30, properties=25, phones=15, electronics/furniture=10, else=5
- *   2. عدد الإعلانات (0-20): >=10→20, >=5→15, >=2→10, else→5
- *   3. نوع الحساب (0-15): business+verified=15, business=10, verified=5, else=0
- *   4. الرقم (0-10): phone→10, else→0
+ * Whale Score = 0-100:
+ *   1. إجمالي الإعلانات (0-40): >=50→40, >=20→25, >=10→15, else→5
+ *   2. الإعلانات النشطة (0-30): >=20→30, >=10→20, >=5→10, else→3
+ *   3. حساب تجاري (0-20): business→20, else→0
+ *   4. موثّق (0-10): verified→10, else→0
  *
  * Tiers:
- *   whale (>=60) | big_fish (>=45) | regular (>=30) | small_fish (>=15) | visitor (<15)
+ *   whale (>=70) | big (>=40) | medium (>=20) | small (<20)
  */
 
 import { SupabaseClient } from "@supabase/supabase-js";
 
-export type SellerTier = "whale" | "big_fish" | "regular" | "small_fish" | "visitor";
+export type SellerTier = "whale" | "big" | "medium" | "small";
 
 export interface WhaleScoreInput {
   is_business: boolean;
   is_verified: boolean;
   has_featured_listings: boolean;
   total_listings_seen: number;
+  active_listings: number;
   primary_category?: string | null;
   phone?: string | null;
   featured_listings_count?: number;
@@ -33,56 +34,44 @@ export interface WhaleScoreResult {
   is_whale: boolean;
   estimated_monthly_value: number;
   breakdown: {
-    category_points: number;
-    listings_points: number;
-    account_type_points: number;
-    phone_points: number;
+    total_listings_points: number;
+    active_listings_points: number;
+    business_points: number;
+    verified_points: number;
   };
 }
 
-export const WHALE_THRESHOLD = 60;
-
-const CATEGORY_SCORES: Record<string, number> = {
-  vehicles: 30,
-  properties: 25,
-  phones: 15,
-  electronics: 10,
-  furniture: 10,
-};
+export const WHALE_THRESHOLD = 70;
 
 function getTier(score: number): SellerTier {
-  if (score >= 60) return "whale";
-  if (score >= 45) return "big_fish";
-  if (score >= 30) return "regular";
-  if (score >= 15) return "small_fish";
-  return "visitor";
+  if (score >= 70) return "whale";
+  if (score >= 40) return "big";
+  if (score >= 20) return "medium";
+  return "small";
 }
 
 function getEstimatedMonthlyValue(score: number): number {
-  if (score >= 60) return 999;
-  if (score >= 45) return 499;
-  if (score >= 30) return 199;
-  if (score >= 15) return 15;
-  return 0;
+  if (score >= 70) return 999;
+  if (score >= 40) return 499;
+  if (score >= 20) return 199;
+  return 15;
 }
 
 /**
- * حساب whale score بناءً على 5 عوامل
+ * حساب whale score بناءً على 4 عوامل (V2)
  */
 export function calculateWhaleScore(input: WhaleScoreInput): WhaleScoreResult {
-  const category = input.primary_category || "";
-
   const breakdown = {
-    category_points: CATEGORY_SCORES[category] || 5,
-    listings_points:
-      input.total_listings_seen >= 10 ? 20 :
-      input.total_listings_seen >= 5 ? 15 :
-      input.total_listings_seen >= 2 ? 10 : 5,
-    account_type_points:
-      input.is_business && input.is_verified ? 15 :
-      input.is_business ? 10 :
-      input.is_verified ? 5 : 0,
-    phone_points: input.phone ? 10 : 0,
+    total_listings_points:
+      input.total_listings_seen >= 50 ? 40 :
+      input.total_listings_seen >= 20 ? 25 :
+      input.total_listings_seen >= 10 ? 15 : 5,
+    active_listings_points:
+      input.active_listings >= 20 ? 30 :
+      input.active_listings >= 10 ? 20 :
+      input.active_listings >= 5 ? 10 : 3,
+    business_points: input.is_business ? 20 : 0,
+    verified_points: input.is_verified ? 10 : 0,
   };
 
   const score = Object.values(breakdown).reduce((sum, v) => sum + v, 0);
@@ -129,6 +118,7 @@ export async function updateSellerWhaleScore(
     is_verified: seller.is_verified,
     has_featured_listings: (featuredCount || 0) > 0 || (eliteCount || 0) > 0,
     total_listings_seen: seller.total_listings_seen,
+    active_listings: seller.active_listings || 0,
     primary_category: seller.primary_category,
     phone: seller.phone,
     featured_listings_count: featuredCount || 0,
