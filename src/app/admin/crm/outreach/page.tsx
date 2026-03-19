@@ -105,6 +105,34 @@ const TIER_CONFIG: Record<string, { label: string; color: string; icon: string }
   unknown: { label: "غير مصنف", color: "bg-gray-100 text-gray-500", icon: "❓" },
 };
 
+// Only these tiers exist in the DB — used for the filter dropdown
+const FILTERABLE_TIERS = ["whale", "big", "medium", "small", "visitor"] as const;
+
+const GOVERNORATE_OPTIONS = [
+  { value: "cairo", label: "القاهرة" },
+  { value: "giza", label: "الجيزة" },
+  { value: "alexandria", label: "الإسكندرية" },
+  { value: "qalyubia", label: "القليوبية" },
+  { value: "sharqia", label: "الشرقية" },
+  { value: "dakahlia", label: "الدقهلية" },
+  { value: "monufia", label: "المنوفية" },
+  { value: "gharbia", label: "الغربية" },
+  { value: "beheira", label: "البحيرة" },
+  { value: "kafr_el_sheikh", label: "كفر الشيخ" },
+  { value: "damietta", label: "دمياط" },
+  { value: "port_said", label: "بورسعيد" },
+  { value: "ismailia", label: "الإسماعيلية" },
+  { value: "suez", label: "السويس" },
+  { value: "fayoum", label: "الفيوم" },
+  { value: "beni_suef", label: "بني سويف" },
+  { value: "minya", label: "المنيا" },
+  { value: "assiut", label: "أسيوط" },
+  { value: "sohag", label: "سوهاج" },
+  { value: "qena", label: "قنا" },
+  { value: "luxor", label: "الأقصر" },
+  { value: "aswan", label: "أسوان" },
+];
+
 const PIPELINE_CONFIG: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
   discovered: { label: "لم يُتواصل", color: "bg-gray-100 text-gray-600", icon: Clock },
   contacted: { label: "تم التواصل", color: "bg-blue-100 text-blue-700", icon: MessageCircle },
@@ -151,6 +179,7 @@ export default function OutreachPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterTier, setFilterTier] = useState("");
+  const [filterGovernorate, setFilterGovernorate] = useState("");
   const [whalesOnly, setWhalesOnly] = useState(false);
 
   // Chat state
@@ -173,6 +202,7 @@ export default function OutreachPage() {
       if (searchQuery) params.set("search", searchQuery);
       if (filterStatus) params.set("status", filterStatus);
       if (filterTier) params.set("tier", filterTier);
+      if (filterGovernorate) params.set("governorate", filterGovernorate);
       if (whalesOnly) params.set("whales_only", "true");
       params.set("has_phone", "true");
 
@@ -189,7 +219,7 @@ export default function OutreachPage() {
       console.error("Failed to fetch sellers:", err);
     }
     setLoading(false);
-  }, [page, searchQuery, filterStatus, filterTier, whalesOnly]);
+  }, [page, searchQuery, filterStatus, filterTier, filterGovernorate, whalesOnly]);
 
   // ─── Fetch Today Stats ───
 
@@ -455,8 +485,20 @@ export default function OutreachPage() {
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/20"
             >
               <option value="">كل الشرائح</option>
-              {Object.entries(TIER_CONFIG).map(([key, cfg]) => (
-                <option key={key} value={key}>{cfg.icon} {cfg.label}</option>
+              {FILTERABLE_TIERS.map((key) => (
+                <option key={key} value={key}>{TIER_CONFIG[key].icon} {TIER_CONFIG[key].label}</option>
+              ))}
+            </select>
+
+            {/* Governorate Filter */}
+            <select
+              value={filterGovernorate}
+              onChange={(e) => { setFilterGovernorate(e.target.value); setPage(1); }}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+            >
+              <option value="">كل المحافظات</option>
+              {GOVERNORATE_OPTIONS.map((gov) => (
+                <option key={gov.value} value={gov.value}>{gov.label}</option>
               ))}
             </select>
 
