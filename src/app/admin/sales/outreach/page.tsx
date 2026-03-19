@@ -162,6 +162,7 @@ export default function SalesOutreachPage() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tierCounts, setTierCounts] = useState<Record<string, number>>({});
+  const [totalFiltered, setTotalFiltered] = useState(0);
 
   // Filters
   const [tierFilter, setTierFilter] = useState("all");
@@ -217,6 +218,7 @@ export default function SalesOutreachPage() {
         setProgress(json.progress || { sent: 0, skipped: 0, remaining: 0, target: dailyTarget });
         setTemplates(json.templates || []);
         setTierCounts(json.tierCounts || {});
+        setTotalFiltered(json.totalFiltered ?? json.contacts?.length ?? 0);
       }
       setProcessedIds(new Set());
     } catch (err) {
@@ -593,7 +595,7 @@ export default function SalesOutreachPage() {
                     {activeTab === "new" && "في الانتظار"}
                     {activeTab === "followup" && "تحتاج متابعة"}
                     {activeTab === "interested" && "مهتمين"}
-                    {" "}({pendingContacts.length})
+                    {" "}({totalFiltered} بائع{pendingContacts.length < totalFiltered ? ` — عرض ${pendingContacts.length}` : ""})
                   </h2>
 
                   {pendingContacts.map((contact) => (
