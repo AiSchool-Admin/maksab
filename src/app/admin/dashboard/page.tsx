@@ -19,6 +19,7 @@ import {
   CreditCard,
   Monitor,
   Scale,
+  ChevronLeft,
 } from "lucide-react";
 import { useAdmin, getAdminHeaders } from "../layout";
 import {
@@ -199,6 +200,178 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   );
 }
 
+/* ─── Leader Card (بطاقة القائد) ─── */
+
+interface LeaderCardData {
+  pendingEscalations: number;
+  pendingModeration: number;
+  outreachSentToday: number;
+  outreachTarget: number;
+  csConversationsToday: number;
+  hasNoraDailyReport: boolean;
+  alerts: Array<{ id: string; message: string; priority: string; type: string }>;
+}
+
+function LeaderCard() {
+  const [data, setData] = useState<LeaderCardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const headers = getAdminHeaders();
+        const [escalRes, reportRes, dashRes] = await Promise.all([
+          fetch("/api/admin/cs/escalations", { headers }),
+          fetch("/api/admin/ai/daily-report", { headers }),
+          fetch("/api/admin/dashboard/leader-card", { headers }),
+        ]);
+
+        let pendingEscalations = 0;
+        if (escalRes.ok) {
+          const escData = await escalRes.json();
+          pendingEscalations = (escData.escalations || []).filter((e: any) => e.status === "pending").length;
+        }
+
+        let hasNoraDailyReport = false;
+        if (reportRes.ok) {
+          const reportData = await reportRes.json();
+          hasNoraDailyReport = !!reportData.report;
+        }
+
+        let extraData: any = {};
+        if (dashRes.ok) {
+          extraData = await dashRes.json();
+        }
+
+        setData({
+          pendingEscalations,
+          pendingModeration: extraData.pendingModeration || 0,
+          outreachSentToday: extraData.outreachSentToday || 0,
+          outreachTarget: extraData.outreachTarget || 50,
+          csConversationsToday: extraData.csConversationsToday || 0,
+          hasNoraDailyReport,
+          alerts: extraData.alerts || [],
+        });
+      } catch {
+        // silent
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="bg-gradient-to-l from-[#1B7A3D]/10 to-[#D4A843]/10 rounded-2xl p-6 animate-pulse border border-[#1B7A3D]/20">
+        <div className="h-6 bg-gray-200 rounded w-48 mb-4" />
+        <div className="h-4 bg-gray-100 rounded w-64" />
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const urgentItems = [
+    data.pendingEscalations > 0 && {
+      emoji: "🔴",
+      text: `${data.pendingEscalations} تصعيد يحتاج ردك`,
+      href: "/admin/cs/escalations",
+      priority: "critical",
+    },
+    data.pendingModeration > 0 && {
+      emoji: "🟡",
+      text: `${data.pendingModeration} إعلان في قائمة الانتظار`,
+      href: "/admin/ops/moderation",
+      priority: "warning",
+    },
+    ...data.alerts.map((a) => ({
+      emoji: a.priority === "critical" ? "🔴" : a.priority === "high" ? "🟠" : "🔵",
+      text: a.message,
+      href: "#",
+      priority: a.priority,
+    })),
+  ].filter(Boolean) as Array<{ emoji: string; text: string; href: string; priority: string }>;
+
+  // Sort by priority
+  const priorityOrder: Record<string, number> = { critical: 0, high: 1, warning: 2, medium: 3, low: 4 };
+  urgentItems.sort((a, b) => (priorityOrder[a.priority] ?? 5) - (priorityOrder[b.priority] ?? 5));
+
+  return (
+    <div className="bg-gradient-to-l from-[#1B7A3D]/10 to-[#D4A843]/10 rounded-2xl border border-[#1B7A3D]/20 overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">👑</span>
+            <div>
+              <h2 className="text-lg font-bold text-dark">بطاقة القائد</h2>
+              <p className="text-[10px] text-gray-text">
+                {new Date().toLocaleDateString("ar-EG", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              </p>
+            </div>
+          </div>
+          {data.hasNoraDailyReport && (
+            <Link
+              href="/admin/ai/team"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#1B7A3D] text-white rounded-xl text-sm font-bold hover:bg-[#145C2E] transition-colors shadow-sm"
+            >
+              📊 ابدأ يومك
+            </Link>
+          )}
+        </div>
+
+        {/* Urgent Items */}
+        {urgentItems.length > 0 ? (
+          <div className="space-y-2 mb-4">
+            <p className="text-xs font-bold text-gray-600 mb-2">تنبيهات تحتاج تدخلك:</p>
+            {urgentItems.slice(0, 5).map((item, i) => (
+              <Link
+                key={i}
+                href={item.href}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  item.priority === "critical"
+                    ? "bg-red-50 text-red-700 hover:bg-red-100 border border-red-100"
+                    : item.priority === "high"
+                    ? "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-100"
+                    : "bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-100"
+                }`}
+              >
+                <span>{item.emoji}</span>
+                <span className="flex-1">{item.text}</span>
+                <ChevronLeft size={16} className="opacity-50" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-green-50 border border-green-100 rounded-xl p-3 mb-4 text-center">
+            <p className="text-sm text-green-700 font-medium">✅ مفيش حاجات عاجلة — الفريق شغّال تمام</p>
+          </div>
+        )}
+
+        {/* Team Summary */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
+            <p className="text-lg font-bold text-blue-600">{data.csConversationsToday}</p>
+            <p className="text-[10px] text-gray-text">محادثات سارة</p>
+          </div>
+          <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
+            <p className="text-lg font-bold text-green-600">{data.outreachSentToday}</p>
+            <p className="text-[10px] text-gray-text">
+              رسائل وليد
+              {data.outreachTarget > 0 && (
+                <span className="text-gray-400"> / {data.outreachTarget}</span>
+              )}
+            </p>
+          </div>
+          <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
+            <p className="text-lg font-bold text-yellow-600">{data.pendingModeration}</p>
+            <p className="text-[10px] text-gray-text">بانتظار مازن</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main Dashboard Page ─── */
 
 export default function CEODashboardPage() {
@@ -280,6 +453,9 @@ export default function CEODashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Leader Card — بطاقة القائد */}
+      <LeaderCard />
+
       {/* Welcome */}
       <div>
         <h2 className="text-2xl font-bold text-dark">لوحة القيادة الاستراتيجية</h2>

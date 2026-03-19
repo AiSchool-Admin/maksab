@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getAdminHeaders } from "@/app/admin/layout";
+import { Send, X } from "lucide-react";
 
 interface AgentStats {
   agent: string;
@@ -24,6 +25,14 @@ interface Alert {
   priority: string;
   message: string;
   resolved: boolean;
+}
+
+interface DailyReport {
+  date: string;
+  report_text: string;
+  raw_data: Record<string, any>;
+  admin_decision: string | null;
+  admin_decision_at: string | null;
 }
 
 const AGENTS = [
@@ -51,7 +60,13 @@ export default function AITeamPage() {
   const [agentStats, setAgentStats] = useState<AgentStats[]>([]);
   const [moderationStats, setModerationStats] = useState<ModerationStats>({ total: 0, approved: 0, rejected: 0, review: 0 });
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [latestReport, setLatestReport] = useState<DailyReport | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Decision modal
+  const [showDecisionModal, setShowDecisionModal] = useState(false);
+  const [decisionText, setDecisionText] = useState("");
+  const [savingDecision, setSavingDecision] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -60,12 +75,21 @@ export default function AITeamPage() {
   async function fetchData() {
     try {
       const headers = getAdminHeaders();
-      const res = await fetch("/api/admin/ai/team-stats", { headers });
-      if (res.ok) {
-        const data = await res.json();
+      const [teamRes, reportRes] = await Promise.all([
+        fetch("/api/admin/ai/team-stats", { headers }),
+        fetch("/api/admin/ai/daily-report", { headers }),
+      ]);
+
+      if (teamRes.ok) {
+        const data = await teamRes.json();
         setAgentStats(data.agents || []);
         setModerationStats(data.moderation || { total: 0, approved: 0, rejected: 0, review: 0 });
         setAlerts(data.alerts || []);
+      }
+
+      if (reportRes.ok) {
+        const reportData = await reportRes.json();
+        setLatestReport(reportData.report || null);
       }
     } catch (err) {
       console.error("Failed to fetch AI team stats:", err);
@@ -86,6 +110,27 @@ export default function AITeamPage() {
     } catch {
       // Silent
     }
+  }
+
+  async function saveDecision() {
+    if (!decisionText.trim()) return;
+    setSavingDecision(true);
+    try {
+      const headers = getAdminHeaders();
+      await fetch("/api/admin/ai/daily-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ decision: decisionText.trim() }),
+      });
+      setLatestReport((prev) =>
+        prev ? { ...prev, admin_decision: decisionText.trim(), admin_decision_at: new Date().toISOString() } : prev
+      );
+      setShowDecisionModal(false);
+      setDecisionText("");
+    } catch {
+      // silent
+    }
+    setSavingDecision(false);
   }
 
   function getAgentStat(agentId: string): AgentStats {
@@ -112,6 +157,51 @@ export default function AITeamPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-dark">فريق AI مكسب</h2>
+
+      {/* Nora Daily Report */}
+      {latestReport && (
+        <div className="bg-gradient-to-l from-purple-50 to-white rounded-xl p-5 border border-purple-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📊</span>
+              <div>
+                <h3 className="font-bold text-dark">تقرير نورا — {latestReport.date}</h3>
+                <p className="text-[10px] text-gray-text">أحدث تقرير يومي</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {latestReport.admin_decision ? (
+                <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium">
+                  ✅ تم اتخاذ قرار
+                </span>
+              ) : (
+                <button
+                  onClick={() => { setShowDecisionModal(true); setDecisionText(""); }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors"
+                >
+                  📝 قرار اليوم
+                </button>
+              )}
+            </div>
+          </div>
+
+          <pre className="text-sm text-dark whitespace-pre-wrap font-[Cairo] leading-relaxed bg-white/50 rounded-lg p-4 border border-purple-50">
+            {latestReport.report_text}
+          </pre>
+
+          {latestReport.admin_decision && (
+            <div className="mt-3 bg-green-50 border border-green-100 rounded-xl p-3">
+              <p className="text-[10px] text-green-600 font-bold mb-1">قرار ممدوح:</p>
+              <p className="text-sm text-green-800">{latestReport.admin_decision}</p>
+              {latestReport.admin_decision_at && (
+                <p className="text-[10px] text-green-500 mt-1">
+                  {new Date(latestReport.admin_decision_at).toLocaleString("ar-EG")}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Agent Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -213,6 +303,49 @@ export default function AITeamPage() {
           </div>
         )}
       </div>
+
+      {/* Decision Modal */}
+      {showDecisionModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowDecisionModal(false)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-gray-900">📝 قرار اليوم</h3>
+              <button onClick={() => setShowDecisionModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500 mb-3">
+              اكتب قرارك بناءً على تقرير نورا. هيتحفظ كـ context للفريق AI.
+            </p>
+
+            <textarea
+              value={decisionText}
+              onChange={(e) => setDecisionText(e.target.value)}
+              className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-purple-500/20 resize-none"
+              placeholder="مثال: ركّز على استقطاب بائعين سيارات في القاهرة النهارده. وسارة تتابع التصعيدات المعلّقة..."
+              autoFocus
+            />
+
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={saveDecision}
+                disabled={!decisionText.trim() || savingDecision}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 transition-colors disabled:opacity-50"
+              >
+                <Send size={16} />
+                {savingDecision ? "بيتحفظ..." : "حفظ القرار"}
+              </button>
+              <button
+                onClick={() => setShowDecisionModal(false)}
+                className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

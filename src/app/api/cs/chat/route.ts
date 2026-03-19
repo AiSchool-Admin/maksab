@@ -9,6 +9,47 @@ import { createClient } from "@supabase/supabase-js";
 import { verifySessionToken } from "@/lib/auth/session-token";
 import { trackInteraction } from "@/lib/ai/tracker";
 
+// Auto-escalate to admin when Sara decides to transfer
+async function createEscalation(
+  sb: ReturnType<typeof getServiceClient>,
+  conversationId: string,
+  userName: string | null,
+  userPhone: string | null,
+  issueSummary: string,
+  priority: 'medium' | 'high' | 'critical' = 'high'
+) {
+  try {
+    await sb.from('admin_alerts').insert({
+      type: 'cs_escalation',
+      priority,
+      message: `تصعيد من سارة: ${issueSummary}`,
+      conversation_id: conversationId,
+      user_name: userName || 'مستخدم',
+      issue_summary: issueSummary,
+      resolved: false,
+    });
+    console.log('[ESCALATION] Created escalation for conversation:', conversationId);
+  } catch (err: any) {
+    console.error('[ESCALATION] Failed:', err.message);
+  }
+}
+
+// Detect if Sara's response indicates an escalation
+function detectEscalation(aiResponse: string): boolean {
+  const escalationPhrases = [
+    'هحوّلك',
+    'هحولك',
+    'هنقلك',
+    'زميلي',
+    'المشرف',
+    'الدعم الفني',
+    'مشكلة معقدة',
+    'هتواصل معاك',
+    'حد متخصص',
+  ];
+  return escalationPhrases.some(phrase => aiResponse.includes(phrase));
+}
+
 const SARA_PROMPT = `تكلمي بالعامية المصرية الودودة دايماً.
 ممنوع: حاضر / تفضل / بكل سرور / يسعدني (خليجي)
 الصح: تمام / ماشي / أيوه / طب / يلا / عندك حق
@@ -329,6 +370,21 @@ export async function POST(req: NextRequest) {
                   conversation_id: conversationId,
                   user_id: session.userId,
                 });
+
+                // Auto-escalate if Sara decided to transfer
+                if (detectEscalation(aiResponse)) {
+                  await createEscalation(
+                    sb,
+                    conversationId!,
+                    user?.display_name || null,
+                    user?.phone || null,
+                    message,
+                    'high'
+                  );
+                  await sb.from('cs_conversations').update({
+                    status: 'waiting_agent',
+                  }).eq('id', conversationId);
+                }
               }
             }
           } catch (aiStartCrash: any) {
@@ -475,6 +531,26 @@ export async function POST(req: NextRequest) {
               conversation_id: conversation_id,
               user_id: session.userId,
             });
+
+            // Auto-escalate if Sara decided to transfer
+            if (detectEscalation(aiResponse)) {
+              const { data: convUser } = await sb
+                .from('cs_conversations')
+                .select('user_name, user_phone')
+                .eq('id', conversation_id)
+                .maybeSingle();
+              await createEscalation(
+                sb,
+                conversation_id,
+                convUser?.user_name || null,
+                convUser?.user_phone || null,
+                message,
+                'high'
+              );
+              await sb.from('cs_conversations').update({
+                status: 'waiting_agent',
+              }).eq('id', conversation_id);
+            }
 
             // 4. تحديث المحادثة
             const { count: updatedCount } = await sb
