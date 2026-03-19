@@ -22,10 +22,12 @@ export async function GET(req: NextRequest) {
   const hasFeatured = searchParams.get("has_featured");
 
   try {
-    // Main query — sorted by whale_score desc
+    // Main query — sorted by outreach priority (medium→big→small→whale→visitor)
+    // then whale_score desc within each tier
     let query = supabase
       .from("ahe_sellers")
       .select("*", { count: "exact" })
+      .order("outreach_priority", { ascending: true, nullsFirst: false })
       .order("whale_score", { ascending: false })
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -72,14 +74,22 @@ export async function GET(req: NextRequest) {
 
     // Stats queries in parallel
     const [
+      totalSellersRes,
       withPhoneRes,
       whalesRes,
       bigRes,
       mediumRes,
       smallRes,
+      visitorRes,
+      mediumWithPhoneRes,
+      bigWithPhoneRes,
+      smallWithPhoneRes,
       contactedRes,
       signedUpRes,
     ] = await Promise.all([
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true }),
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
@@ -103,6 +113,26 @@ export async function GET(req: NextRequest) {
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "visitor"),
+      // Priority counts: tier + has phone
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "medium")
+        .not("phone", "is", null),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "big")
+        .not("phone", "is", null),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_tier", "small")
+        .not("phone", "is", null),
+      supabase
+        .from("ahe_sellers")
+        .select("id", { count: "exact", head: true })
         .eq("pipeline_status", "contacted"),
       supabase
         .from("ahe_sellers")
@@ -110,17 +140,26 @@ export async function GET(req: NextRequest) {
         .eq("pipeline_status", "signed_up"),
     ]);
 
+    const totalSellers = totalSellersRes.count || 0;
+    const withPhone = withPhoneRes.count || 0;
+
     return NextResponse.json({
       sellers: sellers || [],
       total: count || 0,
       page,
       totalPages: Math.ceil((count || 0) / limit),
       stats: {
-        with_phone: withPhoneRes.count || 0,
+        total_sellers: totalSellers,
+        with_phone: withPhone,
+        without_phone: totalSellers - withPhone,
         whales: whalesRes.count || 0,
         big: bigRes.count || 0,
         medium: mediumRes.count || 0,
         small: smallRes.count || 0,
+        visitor: visitorRes.count || 0,
+        medium_with_phone: mediumWithPhoneRes.count || 0,
+        big_with_phone: bigWithPhoneRes.count || 0,
+        small_with_phone: smallWithPhoneRes.count || 0,
         contacted: contactedRes.count || 0,
         signed_up: signedUpRes.count || 0,
       },

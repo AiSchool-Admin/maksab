@@ -53,10 +53,17 @@ interface ChatMessage {
 }
 
 interface OutreachStats {
+  total_sellers: number;
   with_phone: number;
+  without_phone: number;
   whales: number;
-  big_fish: number;
-  regulars: number;
+  big: number;
+  medium: number;
+  small: number;
+  visitor: number;
+  medium_with_phone: number;
+  big_with_phone: number;
+  small_with_phone: number;
   contacted: number;
   signed_up: number;
 }
@@ -83,6 +90,10 @@ const CATEGORY_AR: Record<string, string> = {
 
 const TIER_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   whale: { label: "حوت", color: "bg-purple-100 text-purple-700", icon: "🐋" },
+  big: { label: "كبير", color: "bg-indigo-100 text-indigo-700", icon: "💪" },
+  medium: { label: "متوسط", color: "bg-blue-100 text-blue-700", icon: "📦" },
+  small: { label: "صغير", color: "bg-sky-100 text-sky-700", icon: "🔹" },
+  visitor: { label: "زائر", color: "bg-gray-100 text-gray-600", icon: "👁️" },
   premium_merchant: { label: "تاجر مميز", color: "bg-blue-100 text-blue-700", icon: "🏪" },
   regular_merchant: { label: "تاجر عادي", color: "bg-sky-100 text-sky-700", icon: "🏬" },
   verified_seller: { label: "بائع موثق", color: "bg-green-100 text-green-700", icon: "✅" },
@@ -321,21 +332,22 @@ export default function OutreachPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <StatCard
           label="إجمالي البائعين"
-          value={total}
+          value={(stats?.total_sellers || total).toLocaleString("en")}
           icon={<Users size={18} />}
           color="bg-blue-50 text-blue-600"
         />
         <StatCard
-          label="عندهم رقم"
-          value={stats?.with_phone || 0}
+          label="بأرقام"
+          value={(stats?.with_phone || 0).toLocaleString("en")}
+          subtitle={stats?.total_sellers ? `${((stats.with_phone / stats.total_sellers) * 100).toFixed(1)}%` : undefined}
           icon={<Phone size={18} />}
           color="bg-green-50 text-green-600"
         />
         <StatCard
-          label="حيتان"
-          value={stats?.whales || 0}
-          icon={<span className="text-lg">🐋</span>}
-          color="bg-purple-50 text-purple-600"
+          label="بدون أرقام"
+          value={(stats?.without_phone || 0).toLocaleString("en")}
+          icon={<span className="text-base">🚫</span>}
+          color="bg-red-50 text-red-500"
         />
         <StatCard
           label="تم التواصل"
@@ -355,6 +367,47 @@ export default function OutreachPage() {
           icon={<TrendingUp size={18} />}
           color="bg-emerald-50 text-emerald-600"
         />
+      </div>
+
+      {/* ═══ Outreach Priority Board ═══ */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h3 className="text-sm font-bold text-dark mb-3 flex items-center gap-2">
+          🎯 أولوية التواصل
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <PriorityCard
+            priority={1}
+            label="📦 متوسط + رقم"
+            count={stats?.medium_with_phone || 0}
+            color="bg-blue-50 border-blue-200 text-blue-700"
+            onClick={() => { setFilterTier("medium"); setPage(1); }}
+          />
+          <PriorityCard
+            priority={2}
+            label="💪 كبير + رقم"
+            count={stats?.big_with_phone || 0}
+            color="bg-indigo-50 border-indigo-200 text-indigo-700"
+            onClick={() => { setFilterTier("big"); setPage(1); }}
+          />
+          <PriorityCard
+            priority={3}
+            label="🔹 صغير + رقم"
+            count={stats?.small_with_phone || 0}
+            color="bg-sky-50 border-sky-200 text-sky-700"
+            onClick={() => { setFilterTier("small"); setPage(1); }}
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-400">
+          <span>🐋 حيتان: {stats?.whales || 0}</span>
+          <span>·</span>
+          <span>💪 كبير: {stats?.big || 0}</span>
+          <span>·</span>
+          <span>📦 متوسط: {stats?.medium || 0}</span>
+          <span>·</span>
+          <span>🔹 صغير: {stats?.small || 0}</span>
+          <span>·</span>
+          <span>👁️ زائر: {stats?.visitor || 0}</span>
+        </div>
       </div>
 
       {/* ═══ Section 1: Sellers List ═══ */}
@@ -706,11 +759,13 @@ function StatCard({
   value,
   icon,
   color,
+  subtitle,
 }: {
   label: string;
   value: number | string;
   icon: React.ReactNode;
   color: string;
+  subtitle?: string;
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -719,8 +774,40 @@ function StatCard({
           {icon}
         </span>
       </div>
-      <p className="text-2xl font-bold text-dark">{value}</p>
+      <div className="flex items-baseline gap-1.5">
+        <p className="text-2xl font-bold text-dark">{value}</p>
+        {subtitle && (
+          <span className="text-xs font-medium text-green-600">({subtitle})</span>
+        )}
+      </div>
       <p className="text-xs text-gray-400 mt-0.5">{label}</p>
     </div>
+  );
+}
+
+function PriorityCard({
+  priority,
+  label,
+  count,
+  color,
+  onClick,
+}: {
+  priority: number;
+  label: string;
+  count: number;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl border p-4 text-right transition-all hover:shadow-md ${color}`}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-bold opacity-60">أولوية {priority}</span>
+        <span className="text-2xl font-bold">{count.toLocaleString("en")}</span>
+      </div>
+      <p className="text-sm font-medium">{label}</p>
+    </button>
   );
 }
