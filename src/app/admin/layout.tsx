@@ -4,6 +4,7 @@ import { useState, useEffect, createContext, useContext } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
+  LayoutDashboard,
   Users,
   ShoppingBag,
   TrendingUp,
@@ -16,34 +17,30 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronUp,
+  UserSearch,
   Target,
   Megaphone,
   Inbox,
+  BarChart3,
+  Wheat,
   Bell,
   Headphones,
   ArrowUpRight,
-  Smile,
+  SmilePlus,
   PieChart,
   Mail,
-  MailOpen,
   Globe,
   Search,
-  PenLine,
+  Pencil,
   Facebook,
   ClipboardCheck,
-  ClipboardList,
   Flag,
   DollarSign,
   CreditCard,
   Monitor,
   Cpu,
+  UserCog,
   Lock,
-  Phone,
-  Settings2,
-  Coins,
-  BarChart2,
-  BarChart,
-  Users2,
 } from "lucide-react";
 import type { TeamRole, AdminSection, RoleConfig } from "@/lib/admin/rbac";
 import { ROLE_CONFIGS, hasAccess } from "@/lib/admin/rbac";
@@ -83,7 +80,7 @@ export function getAdminHeaders(): Record<string, string> {
   return {};
 }
 
-// ─── Navigation Definition (Unified — reorganized) ────
+// ─── Navigation Definition (Unified — no legacy section) ────
 
 interface NavItem {
   href: string;
@@ -95,140 +92,135 @@ interface NavSection {
   id: string;
   sectionKey: AdminSection; // Maps to RBAC section for access control
   label: string;
-  icon: React.ComponentType<{ size?: number }>;
-  color?: string;
-  single?: boolean; // Single-item section renders as a direct link
-  href?: string;    // For single-item sections
+  icon: string;
   items: NavItem[];
 }
 
+/**
+ * Unified navigation — all former "legacy/أخرى" items are now distributed
+ * to their appropriate department sections.
+ */
 const navSections: NavSection[] = [
-  // ─── لوحة القيادة ───
   {
     id: "dashboard",
     sectionKey: "dashboard",
     label: "لوحة القيادة",
-    icon: Target,
-    single: true,
-    href: "/admin",
+    icon: "🎯",
     items: [
-      { href: "/admin", label: "لوحة القيادة", icon: Target },
+      { href: "/admin/dashboard", label: "لوحة القيادة", icon: LayoutDashboard },
     ],
   },
-  // ─── خدمة العملاء ───
   {
     id: "cs",
     sectionKey: "cs",
     label: "خدمة العملاء",
-    icon: Phone,
-    color: "text-pink-500",
+    icon: "📞",
     items: [
       { href: "/admin/cs/conversations", label: "المحادثات", icon: Headphones },
-      { href: "/admin/cs/inbox", label: "صندوق الوارد الموحد", icon: Inbox },
-      { href: "/admin/cs/escalations", label: "التصعيدات", icon: ArrowUpRight },
-      { href: "/admin/cs/satisfaction", label: "رضا العملاء", icon: Smile },
-      { href: "/admin/cs/templates", label: "قوالب الرد", icon: ClipboardList },
+      { href: "/admin/cs/templates", label: "قوالب الرد", icon: ClipboardCheck },
       { href: "/admin/cs/settings", label: "إعدادات CS", icon: Settings },
+      { href: "/admin/cs/escalations", label: "التصعيدات", icon: ArrowUpRight },
+      { href: "/admin/cs/reports", label: "رضا العملاء", icon: SmilePlus },
     ],
   },
-  // ─── المبيعات والاستحواذ ───
   {
     id: "sales",
     sectionKey: "sales",
     label: "المبيعات والاستحواذ",
-    icon: TrendingUp,
-    color: "text-blue-500",
+    icon: "📈",
     items: [
-      { href: "/admin/crm/pipeline", label: "Pipeline", icon: PieChart },
-      { href: "/admin/crm/outreach", label: "التواصل — بائعين", icon: Mail },
-      { href: "/admin/crm/buyers/outreach", label: "التواصل — مشترين", icon: MailOpen },
-      { href: "/admin/crm/messages", label: "مكتبة الرسائل", icon: ClipboardCheck },
-      { href: "/admin/crm/harvester/buyers", label: "حصاد المشترين", icon: ShoppingBag },
-      { href: "/admin/crm/harvester/scopes", label: "النطاقات", icon: Globe },
-      { href: "/admin/crm/customers", label: "العملاء CRM", icon: Users },
-      { href: "/admin/crm/analytics", label: "تحليلات CRM", icon: BarChart2 },
+      { href: "/admin/sales/pipeline", label: "Pipeline", icon: PieChart },
+      { href: "/admin/sales/outreach", label: "التواصل — بائعين", icon: Mail },
+      { href: "/admin/sales/templates", label: "مكتبة الرسائل", icon: ClipboardCheck },
+      { href: "/admin/sales/buyer-harvest", label: "حصاد المشترين", icon: ShoppingBag },
+      { href: "/admin/sales/buyer-outreach", label: "التواصل — مشترين", icon: Inbox },
+      { href: "/admin/sales/scopes", label: "النطاقات", icon: Globe },
+      { href: "/admin/crm/customers", label: "العملاء (CRM)", icon: UserSearch },
+      { href: "/admin/crm/discovery", label: "الاكتشاف", icon: Target },
+      { href: "/admin/crm/campaigns", label: "الحملات", icon: Megaphone },
+      { href: "/admin/crm/inbox", label: "الوارد", icon: Inbox },
+      { href: "/admin/crm/analytics", label: "تحليلات CRM", icon: BarChart3 },
     ],
   },
-  // ─── التسويق والنمو ───
   {
     id: "marketing",
     sectionKey: "marketing",
     label: "التسويق والنمو",
-    icon: Megaphone,
-    color: "text-orange-500",
+    icon: "📣",
     items: [
-      { href: "/admin/marketing/campaigns", label: "الحملات", icon: Megaphone },
-      { href: "/admin/marketing/facebook-groups", label: "Facebook Groups", icon: Facebook },
-      { href: "/admin/marketing/content", label: "المحتوى", icon: PenLine },
+      { href: "/admin/marketing/dashboard", label: "الحملات", icon: Megaphone },
+      { href: "/admin/marketing/content", label: "المحتوى", icon: Pencil },
+      { href: "/admin/marketing/groups", label: "Facebook Groups", icon: Facebook },
       { href: "/admin/marketing/seo", label: "SEO", icon: Search },
     ],
   },
-  // ─── العمليات والجودة ───
   {
     id: "ops",
     sectionKey: "ops",
     label: "العمليات والجودة",
-    icon: Settings2,
-    color: "text-purple-500",
+    icon: "⚙️",
     items: [
       { href: "/admin/ops/moderation", label: "مراجعة الإعلانات", icon: ClipboardCheck },
-      { href: "/admin/ops/listings", label: "إدارة الإعلانات", icon: ShoppingBag },
       { href: "/admin/ops/reports", label: "البلاغات", icon: Flag },
-      { href: "/admin/ops/locations", label: "المواقع", icon: MapPin },
+      { href: "/admin/ads", label: "إدارة الإعلانات", icon: ShoppingBag },
+      { href: "/admin/locations", label: "المواقع", icon: MapPin },
     ],
   },
-  // ─── المالية ───
   {
     id: "finance",
     sectionKey: "finance",
     label: "المالية",
-    icon: Coins,
-    color: "text-yellow-500",
+    icon: "💰",
     items: [
-      { href: "/admin/finance/revenue", label: "الإيرادات", icon: DollarSign },
+      { href: "/admin/finance/dashboard", label: "الإيرادات", icon: DollarSign },
       { href: "/admin/finance/subscriptions", label: "الاشتراكات", icon: CreditCard },
     ],
   },
-  // ─── فريق AI ───
-  {
-    id: "ai",
-    sectionKey: "ai",
-    label: "فريق AI",
-    icon: Cpu,
-    color: "text-green-600",
-    items: [
-      { href: "/admin/ai/team", label: "أداء الفريق", icon: Cpu },
-      { href: "/admin/ai/sara", label: "سارة — CS", icon: Headphones },
-      { href: "/admin/ai/waleed", label: "وليد — المبيعات", icon: TrendingUp },
-      { href: "/admin/ai/mazen", label: "مازن — المراجعة", icon: Shield },
-      { href: "/admin/ai/settings", label: "إعدادات AI", icon: Settings },
-    ],
-  },
-  // ─── التقنية ───
   {
     id: "tech",
     sectionKey: "tech",
     label: "التقنية",
-    icon: Monitor,
-    color: "text-gray-500",
+    icon: "💻",
     items: [
-      { href: "/admin/tech/status", label: "حالة النظام", icon: Monitor },
+      { href: "/admin/tech/dashboard", label: "حالة النظام", icon: Monitor },
       { href: "/admin/crm/harvester", label: "محرك الحصاد", icon: Cpu },
-      { href: "/admin/tech/users", label: "المستخدمين", icon: Users },
-      { href: "/admin/tech/analytics", label: "التحليلات", icon: BarChart },
+      { href: "/admin/ai/team", label: "فريق AI", icon: Cpu },
     ],
   },
-  // ─── الإعدادات ───
+  {
+    id: "users",
+    sectionKey: "users",
+    label: "المستخدمين",
+    icon: "👥",
+    items: [
+      { href: "/admin/users", label: "المستخدمين", icon: Users },
+    ],
+  },
+  {
+    id: "analytics",
+    sectionKey: "analytics",
+    label: "التحليلات",
+    icon: "📊",
+    items: [
+      { href: "/admin/analytics", label: "التحليلات", icon: TrendingUp },
+    ],
+  },
+  {
+    id: "team",
+    sectionKey: "team",
+    label: "إدارة الفريق",
+    icon: "🏢",
+    items: [
+      { href: "/admin/team", label: "أعضاء الفريق", icon: UserCog },
+    ],
+  },
   {
     id: "settings",
     sectionKey: "settings",
     label: "الإعدادات",
-    icon: Settings,
-    color: "text-gray-400",
+    icon: "⚙️",
     items: [
-      { href: "/admin/team", label: "أعضاء الفريق", icon: Users2 },
-      { href: "/admin/settings/permissions", label: "الصلاحيات", icon: Shield },
-      { href: "/admin/settings", label: "الإعدادات العامة", icon: Settings },
+      { href: "/admin/settings", label: "الإعدادات", icon: Settings },
     ],
   },
 ];
@@ -438,17 +430,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {filteredSections.map((section) => {
                 const isCollapsed = collapsedSections[section.id] ?? false;
                 const hasActiveItem = section.items.some(
-                  (item) => pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href + "/"))
+                  (item) => pathname === item.href || pathname.startsWith(item.href + "/")
                 );
-                const SectionIcon = section.icon;
 
                 // Single-item sections render directly as a link
-                if (section.single && section.href) {
-                  const isActive = pathname === section.href;
+                if (section.items.length === 1) {
+                  const item = section.items[0];
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                   return (
                     <Link
                       key={section.id}
-                      href={section.href}
+                      href={item.href}
                       onClick={() => setSidebarOpen(false)}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                         isActive
@@ -456,8 +448,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                           : "text-gray-600 hover:bg-gray-100 hover:text-dark"
                       }`}
                     >
-                      <SectionIcon size={18} />
-                      {section.label}
+                      <span className="text-base">{section.icon}</span>
+                      {item.label}
                     </Link>
                   );
                 }
@@ -471,11 +463,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <button
                       onClick={() => toggleSection(section.id)}
                       className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
-                        hasActiveItem ? "text-brand-green" : section.color || "text-gray-400"
+                        hasActiveItem ? "text-brand-green" : "text-gray-400"
                       } hover:bg-gray-50`}
                     >
                       <span className="flex items-center gap-2">
-                        <SectionIcon size={16} />
+                        <span className="text-sm">{section.icon}</span>
                         {section.label}
                       </span>
                       {shouldCollapse ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -485,7 +477,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     {!shouldCollapse && (
                       <div className="mt-0.5 mr-3 border-r border-gray-100 space-y-0.5">
                         {section.items.map((item) => {
-                          const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href + "/"));
+                          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                           return (
                             <Link
                               key={item.href}
