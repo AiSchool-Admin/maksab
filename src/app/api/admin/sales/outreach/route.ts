@@ -118,10 +118,42 @@ export async function GET(request: NextRequest) {
       .order("buy_probability_score", { ascending: false })
       .limit(limit);
 
-    console.log('[OUTREACH API] Query params:', { tab, tier, category, governorate, limit });
-    const { data: sellers, error } = await query;
+    // Count query — same filters but no limit, for accurate total
+    let countQuery = supabase
+      .from("ahe_sellers")
+      .select("*", { count: "exact", head: true })
+      .not("phone", "is", null);
 
-    console.log('[OUTREACH API] Results count:', sellers?.length);
+    if (tab === "new") {
+      if (status === "all" || status === "new") {
+        countQuery = countQuery.in("pipeline_status", ["phone_found", "discovered"]);
+      } else if (status === "contacted") {
+        countQuery = countQuery.eq("pipeline_status", "contacted");
+      } else if (status === "no_response") {
+        countQuery = countQuery.eq("pipeline_status", "contacted")
+          .lt("last_outreach_at", new Date(Date.now() - 48 * 3600000).toISOString());
+      }
+    } else if (tab === "followup") {
+      const hours48ago = new Date(Date.now() - 48 * 3600000).toISOString();
+      const hours72ago = new Date(Date.now() - 72 * 3600000).toISOString();
+      countQuery = countQuery
+        .lt("outreach_count", 3)
+        .or(`and(pipeline_status.eq.contacted,last_outreach_at.lt.${hours48ago}),and(pipeline_status.eq.considering,last_response_at.lt.${hours72ago})`);
+    } else if (tab === "interested") {
+      countQuery = countQuery.in("pipeline_status", ["interested", "considering"]);
+    }
+
+    if (tier !== "all") countQuery = countQuery.eq("seller_tier", tier);
+    if (category !== "all") countQuery = countQuery.eq("primary_category", category);
+    if (governorate !== "all") countQuery = countQuery.eq("primary_governorate", governorate);
+
+    console.log('[OUTREACH API] Query params:', { tab, tier, category, governorate, limit });
+    const [{ data: sellers, error }, { count: totalFiltered }] = await Promise.all([
+      query,
+      countQuery,
+    ]);
+
+    console.log('[OUTREACH API] Results count:', sellers?.length, 'totalFiltered:', totalFiltered);
     if (error) {
       console.error("Outreach fetch error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -188,6 +220,7 @@ export async function GET(request: NextRequest) {
         target: dailyTarget,
       },
       contacts,
+      totalFiltered: totalFiltered ?? contacts.length,
       templates: templates || [],
       tierCounts: tierCounts || {},
     });
