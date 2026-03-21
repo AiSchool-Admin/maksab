@@ -38,7 +38,7 @@ export function buildWhatsAppMessage(params: ShareAdParams): string {
  * Build WhatsApp deep link.
  */
 export function buildWhatsAppLink(message: string): string {
-  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+  return `https://web.whatsapp.com/send?text=${encodeURIComponent(message)}`;
 }
 
 /**

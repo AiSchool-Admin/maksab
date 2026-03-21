@@ -109,7 +109,7 @@ export default function BuyerOutreachPage() {
   };
 
   const openWhatsApp = (phone: string, message: string) => {
-    const url = `https://wa.me/2${phone}?text=${encodeURIComponent(message)}`;
+    const url = `https://web.whatsapp.com/send?phone=2${phone}&text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
   };
 

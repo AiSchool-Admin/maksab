@@ -152,7 +152,7 @@ export default function OffersListSection({
     const message = isSeller
       ? `مرحباً ${offer.buyerName}، بخصوص عرضك ${formatPrice(offer.amount)} على إعلاني في مكسب: ${adTitle || "إعلان"}\n${adUrl}`
       : `مرحباً، بخصوص عرضي ${formatPrice(offer.amount)} على إعلانك في مكسب: ${adTitle || offer.adTitle || "إعلان"}\n${adUrl}`;
-    return `https://wa.me/2${phone}?text=${encodeURIComponent(message)}`;
+    return `https://web.whatsapp.com/send?phone=2${phone}&text=${encodeURIComponent(message)}`;
   };
 
   if (isLoading) {

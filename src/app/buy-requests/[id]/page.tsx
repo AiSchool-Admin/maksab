@@ -365,7 +365,7 @@ export default function BuyRequestDetailPage() {
                         </button>
                         {offer.sellerPhone && (
                           <Link
-                            href={`https://wa.me/2${offer.sellerPhone}?text=${encodeURIComponent(`مرحباً، بخصوص عرضك على طلبي "${request.title}" في مكسب`)}`}
+                            href={`https://web.whatsapp.com/send?phone=2${offer.sellerPhone}&text=${encodeURIComponent(`مرحباً، بخصوص عرضك على طلبي "${request.title}" في مكسب`)}`}
                             target="_blank"
                             className="flex items-center justify-center px-3 py-2 bg-[#25D366] text-white rounded-lg text-xs font-bold"
                           >

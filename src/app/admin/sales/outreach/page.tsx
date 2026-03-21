@@ -517,7 +517,7 @@ export default function SalesOutreachPage() {
 
   const openWhatsApp = (phone: string, message: string) => {
     const formattedPhone = formatEgyptPhone(phone);
-    const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+    const url = `https://web.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
   };
 
@@ -525,7 +525,7 @@ export default function SalesOutreachPage() {
   const openWaleedWhatsApp = async (contact: OutreachContact) => {
     const formattedPhone = formatEgyptPhone(contact.phone);
     const waleedMsg = getWaleedMessage(contact);
-    const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(waleedMsg)}`;
+    const url = `https://web.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waleedMsg)}`;
     window.open(url, "_blank");
     // Auto-log outreach
     try {
@@ -560,7 +560,7 @@ export default function SalesOutreachPage() {
       const contact = eligible[i];
       const formattedPhone = formatEgyptPhone(contact.phone);
       const waleedMsg = getWaleedMessage(contact);
-      const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(waleedMsg)}`;
+      const url = `https://web.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waleedMsg)}`;
       window.open(url, "_blank");
 
       // Log outreach

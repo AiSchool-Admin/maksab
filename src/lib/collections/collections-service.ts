@@ -575,7 +575,7 @@ export function generateWhatsAppShareUrl(
     `مكسب — كل صفقة مكسب`,
   ].join("\n");
 
-  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+  return `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`;
 }
 
 /**

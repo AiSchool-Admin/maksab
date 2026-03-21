@@ -127,7 +127,7 @@ function generateWhatsAppUrl(
   adUrl: string,
 ): string {
   const message = `مرحباً، أنا مهتم بإعلانك على مكسب: ${adTitle}\n${adUrl}`;
-  return `https://wa.me/2${sellerPhone}?text=${encodeURIComponent(message)}`;
+  return `https://web.whatsapp.com/send?phone=2${sellerPhone}&text=${encodeURIComponent(message)}`;
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -352,7 +352,7 @@ describe("Chat Flow", () => {
         "تويوتا كورولا 2020",
         "https://maksab.app/ad/123",
       );
-      expect(url).toContain("https://wa.me/201012345678");
+      expect(url).toContain("https://web.whatsapp.com/send?phone=201012345678");
       expect(url).toContain("text=");
       expect(url).toContain(encodeURIComponent("مرحباً"));
     });
@@ -375,7 +375,7 @@ describe("Chat Flow", () => {
     it("should use correct country code prefix", () => {
       const url = generateWhatsAppUrl("01012345678", "test", "https://test.com");
       // Should be 2 + 01012345678 = 201012345678
-      expect(url).toContain("wa.me/201012345678");
+      expect(url).toContain("web.whatsapp.com/send?phone=201012345678");
     });
   });
 

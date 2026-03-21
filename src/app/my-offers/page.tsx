@@ -62,7 +62,7 @@ export default function MyOffersPage() {
   const getWhatsAppUrl = (phone: string, offer: PriceOffer) => {
     const adUrl = typeof window !== "undefined" ? `${window.location.origin}/ad/${offer.adId}` : "";
     const message = `مرحباً، بخصوص عرضي ${formatPrice(offer.amount)} على إعلانك في مكسب: ${offer.adTitle || "إعلان"}\n${adUrl}`;
-    return `https://wa.me/2${phone}?text=${encodeURIComponent(message)}`;
+    return `https://web.whatsapp.com/send?phone=2${phone}&text=${encodeURIComponent(message)}`;
   };
 
   const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);

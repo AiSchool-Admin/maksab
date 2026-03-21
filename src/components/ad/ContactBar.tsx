@@ -20,7 +20,7 @@ export default function ContactBar({
       ? `${window.location.origin}/ad/${adId}`
       : "";
 
-  const whatsappUrl = `https://wa.me/2${sellerPhone}?text=${encodeURIComponent(
+  const whatsappUrl = `https://web.whatsapp.com/send?phone=2${sellerPhone}&text=${encodeURIComponent(
     `مرحباً، أنا مهتم بإعلانك على مكسب: ${adTitle}\n${adUrl}`,
   )}`;
 

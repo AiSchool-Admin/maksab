@@ -166,7 +166,7 @@ export default function PreLaunchPage() {
   const handleShareWhatsApp = () => {
     const url = `${window.location.origin}/pre-launch?ref=${userReferralCode}`;
     const text = `🟢 مكسب جاي قريب!\nأول سوق مصري فيه مزادات + تبديل\nسجّل من الأوائل واحصل على شارة رائد مكسب 🏆\n\n${url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const features = [

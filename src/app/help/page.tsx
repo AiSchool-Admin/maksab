@@ -92,7 +92,7 @@ export default function HelpPage() {
           </h2>
           <div className="space-y-2">
             <a
-              href="https://wa.me/201000000000?text=محتاج مساعدة في تطبيق مكسب"
+              href="https://web.whatsapp.com/send?phone=201000000000&text=محتاج مساعدة في تطبيق مكسب"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 bg-white rounded-lg p-3 hover:shadow-sm transition-shadow"
