@@ -605,49 +605,59 @@ export default function SalesOutreachPage() {
     }
   };
 
-  // Batch WhatsApp send state
-  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; active: boolean }>({
-    current: 0, total: 0, active: false,
-  });
+  // Batch WhatsApp send state — one message at a time
+  const [batchQueue, setBatchQueue] = useState<OutreachContact[]>([]);
+  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+  const [batchActive, setBatchActive] = useState(false);
 
-  const startBatchWhatsApp = async () => {
+  const openBatchWhatsApp = (contact: OutreachContact) => {
+    const formattedPhone = formatEgyptPhone(contact.phone);
+    const waleedMsg = getWaleedMessage(contact);
+    const url = `https://web.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waleedMsg)}`;
+    window.open(url, "_blank");
+  };
+
+  const markBatchContactAsSent = async (contact: OutreachContact) => {
+    try {
+      await fetch("/api/admin/sales/outreach", {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sellerId: contact.id,
+          action: "sent",
+          templateId: selectedWaleedTemplateId || "waleed_default",
+          notes: "whatsapp_manual",
+        }),
+      });
+      incrementWaleedTemplateUsage();
+      setProcessedIds((prev) => new Set([...prev, contact.id]));
+      setProgress((p) => ({ ...p, sent: p.sent + 1, remaining: Math.max(0, p.remaining - 1) }));
+    } catch (err) {
+      console.error("Failed to log batch whatsapp:", err);
+    }
+  };
+
+  const startBatchWhatsApp = () => {
     const eligible = pendingContacts.filter((c) => c.phone).slice(0, 10);
     if (eligible.length === 0) return;
-    setBatchProgress({ current: 0, total: eligible.length, active: true });
+    setBatchQueue(eligible);
+    setCurrentBatchIndex(0);
+    setBatchActive(true);
+    openBatchWhatsApp(eligible[0]);
+  };
 
-    for (let i = 0; i < eligible.length; i++) {
-      const contact = eligible[i];
-      const formattedPhone = formatEgyptPhone(contact.phone);
-      const waleedMsg = getWaleedMessage(contact);
-      const url = `https://web.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waleedMsg)}`;
-      window.open(url, "_blank");
+  const openNextInBatch = () => {
+    // Mark current contact as sent
+    markBatchContactAsSent(batchQueue[currentBatchIndex]);
 
-      // Log outreach
-      try {
-        await fetch("/api/admin/sales/outreach", {
-          method: "POST",
-          headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sellerId: contact.id,
-            action: "sent",
-            templateId: selectedWaleedTemplateId || "waleed_default",
-            notes: "whatsapp_manual",
-          }),
-        });
-        incrementWaleedTemplateUsage();
-        setProcessedIds((prev) => new Set([...prev, contact.id]));
-        setProgress((p) => ({ ...p, sent: p.sent + 1, remaining: Math.max(0, p.remaining - 1) }));
-      } catch (err) {
-        console.error("Failed to log batch whatsapp:", err);
-      }
-
-      setBatchProgress((prev) => ({ ...prev, current: i + 1 }));
-      // Wait a moment between opens to avoid browser blocking
-      if (i < eligible.length - 1) {
-        await new Promise((r) => setTimeout(r, 1500));
-      }
+    const next = currentBatchIndex + 1;
+    if (next < batchQueue.length) {
+      setCurrentBatchIndex(next);
+      openBatchWhatsApp(batchQueue[next]);
+    } else {
+      setBatchActive(false);
+      alert("تم إرسال كل الرسائل!");
     }
-    setBatchProgress((prev) => ({ ...prev, active: false }));
   };
 
   const toggleMessage = (id: string) => {
@@ -694,11 +704,11 @@ export default function SalesOutreachPage() {
           </select>
           <button
             onClick={startBatchWhatsApp}
-            disabled={batchProgress.active || pendingContacts.length === 0}
+            disabled={batchActive || pendingContacts.length === 0}
             className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 rounded-xl text-sm text-white font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            📱 {batchProgress.active
-              ? `تم ${batchProgress.current} من ${batchProgress.total}`
+            📱 {batchActive
+              ? `رسالة ${currentBatchIndex + 1} من ${batchQueue.length}`
               : "إرسال دفعة واتساب"}
           </button>
           <Link
@@ -1137,6 +1147,30 @@ export default function SalesOutreachPage() {
             }}
           />
         </Modal>
+      )}
+
+      {/* Batch WhatsApp bottom bar */}
+      {batchActive && batchQueue[currentBatchIndex] && (
+        <div className="fixed bottom-0 left-0 right-0 bg-green-600 text-white p-4 flex items-center justify-between z-50 shadow-lg">
+          <span className="text-sm font-bold">رسالة {currentBatchIndex + 1} من {batchQueue.length}</span>
+          <span className="text-sm">{batchQueue[currentBatchIndex]?.name}</span>
+          <button
+            onClick={openNextInBatch}
+            className="bg-white text-green-600 px-4 py-2 rounded font-bold text-sm hover:bg-green-50 transition-colors"
+          >
+            ✅ أرسلت — التالي
+          </button>
+          <button
+            onClick={() => {
+              // Mark current as sent before stopping
+              markBatchContactAsSent(batchQueue[currentBatchIndex]);
+              setBatchActive(false);
+            }}
+            className="text-white underline text-sm hover:text-green-100"
+          >
+            إيقاف
+          </button>
+        </div>
       )}
     </div>
   );
