@@ -160,23 +160,40 @@ function formatEgyptPhone(phone: string): string {
   return '2' + clean;
 }
 
-function getWaleedMessage(seller: OutreachContact): string {
-  const platformName = seller.sourcePlatform === 'opensooq' ? 'السوق المفتوح'
-    : seller.sourcePlatform === 'hatla2ee' ? 'هتلاقي'
-    : seller.sourcePlatform === 'aqarmap' ? 'عقار ماب'
-    : seller.sourcePlatform === 'olx' ? 'OLX'
-    : seller.sourcePlatform === 'facebook' ? 'فيسبوك'
-    : seller.sourcePlatform || 'دوبيزل';
+interface WaleedTemplate {
+  id: string;
+  name: string;
+  content: string;
+  platform: string;
+  is_active: boolean;
+  use_count: number;
+}
 
-  return `أهلاً ${seller.name || 'بالتاجر'}! 👋
+const PLATFORM_NAME_MAP: Record<string, string> = {
+  opensooq: 'السوق المفتوح',
+  hatla2ee: 'هتلاقي',
+  aqarmap: 'عقار ماب',
+  olx: 'OLX',
+  facebook: 'فيسبوك',
+  dubizzle: 'دوبيزل',
+};
+
+function resolveWaleedMessage(template: string, seller: OutreachContact): string {
+  const platformName = PLATFORM_NAME_MAP[seller.sourcePlatform || ''] || seller.sourcePlatform || 'دوبيزل';
+  return template
+    .replace(/\{\{name\}\}/g, seller.name || 'بالتاجر')
+    .replace(/\{\{platform\}\}/g, platformName)
+    .replace(/\{\{city\}\}/g, GOV_LABELS[seller.location] || seller.location || '');
+}
+
+const DEFAULT_WALEED_MSG = `أهلاً {{name}}! 👋
 أنا وليد من مكسب — أول سوق إلكتروني مصري بالبيع المباشر والمزادات والمقايضة.
-شفت إعلاناتك على ${platformName} وحسيت إن مكسب هيفيدك:
+شفت إعلاناتك على {{platform}} وحسيت إن مكسب هيفيدك:
 ✅ مجاني للبداية — مفيش أي خسارة
 ✅ مزادات ومقايضة (مش موجودين في OLX)
 ✅ عمولة طوعية بس — مش إجبارية
 لو عايز تعرف أكتر أو تسجّل: https://maksab.vercel.app
 تقدر تسجّل دلوقتي في 3 دقائق بس 😊`;
-}
 
 // ─── Daily Target Directive from ممدوح ──────────────────────────────────────
 
@@ -425,6 +442,10 @@ export default function SalesOutreachPage() {
   // Template selection
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
+  // Waleed templates
+  const [waleedTemplates, setWaleedTemplates] = useState<WaleedTemplate[]>([]);
+  const [selectedWaleedTemplateId, setSelectedWaleedTemplateId] = useState<string | null>(null);
+
   // UI state
   const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -475,6 +496,28 @@ export default function SalesOutreachPage() {
     fetchData();
   }, [fetchData]);
 
+  // Fetch waleed templates on mount
+  useEffect(() => {
+    const fetchWaleedTemplates = async () => {
+      try {
+        const res = await fetch("/api/admin/sales/waleed-templates", {
+          headers: getAdminHeaders(),
+        });
+        const json = await res.json();
+        setWaleedTemplates(json.templates || []);
+      } catch (err) {
+        console.error("Failed to fetch waleed templates:", err);
+      }
+    };
+    fetchWaleedTemplates();
+  }, []);
+
+  const getWaleedMessage = useCallback((seller: OutreachContact): string => {
+    const selected = waleedTemplates.find((t) => t.id === selectedWaleedTemplateId);
+    const templateContent = selected?.content || DEFAULT_WALEED_MSG;
+    return resolveWaleedMessage(templateContent, seller);
+  }, [waleedTemplates, selectedWaleedTemplateId]);
+
   const updateDailyTarget = (val: number) => {
     setDailyTarget(val);
     if (typeof window !== "undefined") {
@@ -521,13 +564,28 @@ export default function SalesOutreachPage() {
     window.open(url, "_blank");
   };
 
+  // Increment waleed template use_count
+  const incrementWaleedTemplateUsage = async () => {
+    if (!selectedWaleedTemplateId) return;
+    try {
+      await fetch("/api/admin/sales/waleed-templates", {
+        method: "PUT",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedWaleedTemplateId,
+          use_count: (waleedTemplates.find((t) => t.id === selectedWaleedTemplateId)?.use_count || 0) + 1,
+        }),
+      });
+    } catch { /* ignore */ }
+  };
+
   // Open WhatsApp with waleed message + auto-log outreach
   const openWaleedWhatsApp = async (contact: OutreachContact) => {
     const formattedPhone = formatEgyptPhone(contact.phone);
     const waleedMsg = getWaleedMessage(contact);
     const url = `https://web.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waleedMsg)}`;
     window.open(url, "_blank");
-    // Auto-log outreach
+    // Auto-log outreach + increment template usage
     try {
       await fetch("/api/admin/sales/outreach", {
         method: "POST",
@@ -535,10 +593,11 @@ export default function SalesOutreachPage() {
         body: JSON.stringify({
           sellerId: contact.id,
           action: "sent",
-          templateId: "waleed_default",
+          templateId: selectedWaleedTemplateId || "waleed_default",
           notes: "whatsapp_manual",
         }),
       });
+      incrementWaleedTemplateUsage();
       setProcessedIds((prev) => new Set([...prev, contact.id]));
       setProgress((p) => ({ ...p, sent: p.sent + 1, remaining: Math.max(0, p.remaining - 1) }));
     } catch (err) {
@@ -571,10 +630,11 @@ export default function SalesOutreachPage() {
           body: JSON.stringify({
             sellerId: contact.id,
             action: "sent",
-            templateId: "waleed_default",
+            templateId: selectedWaleedTemplateId || "waleed_default",
             notes: "whatsapp_manual",
           }),
         });
+        incrementWaleedTemplateUsage();
         setProcessedIds((prev) => new Set([...prev, contact.id]));
         setProgress((p) => ({ ...p, sent: p.sent + 1, remaining: Math.max(0, p.remaining - 1) }));
       } catch (err) {
@@ -619,6 +679,19 @@ export default function SalesOutreachPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Waleed template selector */}
+          <select
+            value={selectedWaleedTemplateId || ""}
+            onChange={(e) => setSelectedWaleedTemplateId(e.target.value || null)}
+            className="px-3 py-2 border border-green-300 bg-green-50 rounded-xl text-sm font-medium text-green-800 focus:outline-none focus:ring-2 focus:ring-green-300"
+          >
+            <option value="">رسالة وليد الافتراضية</option>
+            {waleedTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.use_count} استخدام)
+              </option>
+            ))}
+          </select>
           <button
             onClick={startBatchWhatsApp}
             disabled={batchProgress.active || pendingContacts.length === 0}
@@ -628,6 +701,13 @@ export default function SalesOutreachPage() {
               ? `تم ${batchProgress.current} من ${batchProgress.total}`
               : "إرسال دفعة واتساب"}
           </button>
+          <Link
+            href="/admin/sales/waleed-templates"
+            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <FileText size={16} />
+            رسائل وليد
+          </Link>
           <Link
             href="/admin/sales/templates"
             className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
