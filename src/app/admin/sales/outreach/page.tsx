@@ -174,7 +174,7 @@ function getWaleedMessage(seller: OutreachContact): string {
 ✅ مجاني للبداية — مفيش أي خسارة
 ✅ مزادات ومقايضة (مش موجودين في OLX)
 ✅ عمولة طوعية بس — مش إجبارية
-لو عايز تعرف أكتر أو تسجّل: https://maksab-git-main-mamdouh-ragabs-projects.vercel.app
+لو عايز تعرف أكتر أو تسجّل: https://maksab.vercel.app
 تقدر تسجّل دلوقتي في 3 دقائق بس 😊`;
 }
 
