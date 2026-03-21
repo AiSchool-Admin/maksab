@@ -535,7 +535,7 @@ export function generateShareMessages(referralCode: string): ShareMessage[] {
     {
       platform: "whatsapp",
       message: `جرّب تطبيق مكسب — أسهل سوق في مصر! \u{1F1EA}\u{1F1EC}\nبيع واشتري وبدّل أي حاجة بسهولة.\nسجّل من هنا: ${link}\nكل صفقة مكسب \u{1F49A}`,
-      url: `https://wa.me/?text=${encodeURIComponent(`جرّب تطبيق مكسب — أسهل سوق في مصر! \u{1F1EA}\u{1F1EC}\nبيع واشتري وبدّل أي حاجة بسهولة.\nسجّل من هنا: ${link}\nكل صفقة مكسب \u{1F49A}`)}`,
+      url: `https://web.whatsapp.com/send?text=${encodeURIComponent(`جرّب تطبيق مكسب — أسهل سوق في مصر! \u{1F1EA}\u{1F1EC}\nبيع واشتري وبدّل أي حاجة بسهولة.\nسجّل من هنا: ${link}\nكل صفقة مكسب \u{1F49A}`)}`,
     },
     {
       platform: "sms",

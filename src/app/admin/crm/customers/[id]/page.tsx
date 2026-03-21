@@ -215,7 +215,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             className="px-3 py-1.5 border rounded-lg text-xs">
             {Object.entries(LIFECYCLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <a href={`https://wa.me/2${c.whatsapp || c.phone}`} target="_blank" rel="noopener noreferrer"
+          <a href={`https://web.whatsapp.com/send?phone=2${c.whatsapp || c.phone}`} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs hover:bg-green-200 transition-colors">
             <MessageSquare size={12} /> واتساب
           </a>

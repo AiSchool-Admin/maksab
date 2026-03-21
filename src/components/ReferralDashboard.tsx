@@ -117,7 +117,7 @@ export default function ReferralDashboard() {
   const handleShareWhatsApp = () => {
     const text = `انضم لمكسب — أكبر سوق مصري لبيع وشراء وتبديل كل حاجة 💚\n\nسجّل من الرابط ده واكسب نقاط ومكافآت:\n${referralLink}`;
     window.open(
-      `https://wa.me/?text=${encodeURIComponent(text)}`,
+      `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`,
       "_blank",
       "noopener,noreferrer",
     );

@@ -183,7 +183,7 @@ export async function GET(req: NextRequest) {
         profile_url: seller.profile_url,
         template_id: template.templateId,
         rendered_message: renderedMessage,
-        whatsapp_url: `https://wa.me/2${seller.phone}?text=${encodeURIComponent(renderedMessage)}`,
+        whatsapp_url: `https://web.whatsapp.com/send?phone=2${seller.phone}&text=${encodeURIComponent(renderedMessage)}`,
       };
     });
 

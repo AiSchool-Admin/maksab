@@ -181,7 +181,7 @@ export default function InvitePage() {
       { ref: userInviteCode },
     );
     const text = `🏛️ انضم لمكسب كمؤسس!\n\nأنا مؤسس مكسب رقم #${founderNumber} — أول سوق مصري فيه مزادات وتبديل\n\nسجّل من الرابط ده واحصل على شارة "مؤسس مكسب" الحصرية 🏆\n\n${url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const handleShareGeneral = async () => {

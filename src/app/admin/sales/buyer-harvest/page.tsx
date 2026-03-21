@@ -331,7 +331,7 @@ export default function BuyerHarvestPage() {
                       <td className="px-4 py-3">
                         {buyer.buyer_phone && buyer.matches_count > 0 ? (
                           <a
-                            href={`https://wa.me/2${buyer.buyer_phone}?text=${encodeURIComponent(
+                            href={`https://web.whatsapp.com/send?phone=2${buyer.buyer_phone}&text=${encodeURIComponent(
                               `السلام عليكم 👋\nشفنا إنك بتدوّر على ${buyer.product_wanted || "منتج"}.\nلقينا ${buyer.matches_count} إعلان مطابق على مكسب!\nسجّل مجاناً وشوفهم: https://maksab.com`
                             )}`}
                             target="_blank"
