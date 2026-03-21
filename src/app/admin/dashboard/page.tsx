@@ -309,14 +309,12 @@ function LeaderCard() {
               </p>
             </div>
           </div>
-          {data.hasNoraDailyReport && (
-            <Link
-              href="/admin/ai/team"
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#1B7A3D] text-white rounded-xl text-sm font-bold hover:bg-[#145C2E] transition-colors shadow-sm"
-            >
-              📊 ابدأ يومك
-            </Link>
-          )}
+          <Link
+            href="/admin/ai/team"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#1B7A3D] text-white rounded-xl text-sm font-bold hover:bg-[#145C2E] transition-colors shadow-sm"
+          >
+            🌅 ابدأ يومك — افتح تقرير نورا
+          </Link>
         </div>
 
         {/* Urgent Items */}
