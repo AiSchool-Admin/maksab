@@ -49,6 +49,7 @@ interface OutreachContact {
   rejectionReason: string | null;
   templateId: string | null;
   message: string;
+  sourcePlatform: string | null;
 }
 
 interface OutreachTemplate {
@@ -149,6 +150,33 @@ const ROLE_TARGETS: Record<string, number> = {
   sales_manager: 30,
   sales_rep: 50,
 };
+
+// ─── WhatsApp Integration ────────────────────────────────────────────────────
+
+function formatEgyptPhone(phone: string): string {
+  const clean = phone.replace(/\D/g, '');
+  if (clean.startsWith('0')) return '2' + clean;
+  if (clean.startsWith('20')) return clean;
+  return '2' + clean;
+}
+
+function getWaleedMessage(seller: OutreachContact): string {
+  const platformName = seller.sourcePlatform === 'opensooq' ? 'السوق المفتوح'
+    : seller.sourcePlatform === 'hatla2ee' ? 'هتلاقي'
+    : seller.sourcePlatform === 'aqarmap' ? 'عقار ماب'
+    : seller.sourcePlatform === 'olx' ? 'OLX'
+    : seller.sourcePlatform === 'facebook' ? 'فيسبوك'
+    : seller.sourcePlatform || 'دوبيزل';
+
+  return `أهلاً ${seller.name || 'بالتاجر'}! 👋
+أنا وليد من مكسب — أول سوق إلكتروني مصري بالبيع المباشر والمزادات والمقايضة.
+شفت إعلاناتك على ${platformName} وحسيت إن مكسب هيفيدك:
+✅ مجاني للبداية — مفيش أي خسارة
+✅ مزادات ومقايضة (مش موجودين في OLX)
+✅ عمولة طوعية بس — مش إجبارية
+لو عايز تعرف أكتر: mksab.app
+تقدر تسجّل دلوقتي في 3 دقائق بس 😊`;
+}
 
 // ─── Daily Target Directive from ممدوح ──────────────────────────────────────
 
@@ -488,8 +516,78 @@ export default function SalesOutreachPage() {
   };
 
   const openWhatsApp = (phone: string, message: string) => {
-    const url = `https://wa.me/2${phone}?text=${encodeURIComponent(message)}`;
+    const formattedPhone = formatEgyptPhone(phone);
+    const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
+  };
+
+  // Open WhatsApp with waleed message + auto-log outreach
+  const openWaleedWhatsApp = async (contact: OutreachContact) => {
+    const formattedPhone = formatEgyptPhone(contact.phone);
+    const waleedMsg = getWaleedMessage(contact);
+    const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(waleedMsg)}`;
+    window.open(url, "_blank");
+    // Auto-log outreach
+    try {
+      await fetch("/api/admin/sales/outreach", {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sellerId: contact.id,
+          action: "sent",
+          templateId: "waleed_default",
+          notes: "whatsapp_manual",
+        }),
+      });
+      setProcessedIds((prev) => new Set([...prev, contact.id]));
+      setProgress((p) => ({ ...p, sent: p.sent + 1, remaining: Math.max(0, p.remaining - 1) }));
+    } catch (err) {
+      console.error("Failed to log whatsapp outreach:", err);
+    }
+  };
+
+  // Batch WhatsApp send state
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; active: boolean }>({
+    current: 0, total: 0, active: false,
+  });
+
+  const startBatchWhatsApp = async () => {
+    const eligible = pendingContacts.filter((c) => c.phone).slice(0, 10);
+    if (eligible.length === 0) return;
+    setBatchProgress({ current: 0, total: eligible.length, active: true });
+
+    for (let i = 0; i < eligible.length; i++) {
+      const contact = eligible[i];
+      const formattedPhone = formatEgyptPhone(contact.phone);
+      const waleedMsg = getWaleedMessage(contact);
+      const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(waleedMsg)}`;
+      window.open(url, "_blank");
+
+      // Log outreach
+      try {
+        await fetch("/api/admin/sales/outreach", {
+          method: "POST",
+          headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sellerId: contact.id,
+            action: "sent",
+            templateId: "waleed_default",
+            notes: "whatsapp_manual",
+          }),
+        });
+        setProcessedIds((prev) => new Set([...prev, contact.id]));
+        setProgress((p) => ({ ...p, sent: p.sent + 1, remaining: Math.max(0, p.remaining - 1) }));
+      } catch (err) {
+        console.error("Failed to log batch whatsapp:", err);
+      }
+
+      setBatchProgress((prev) => ({ ...prev, current: i + 1 }));
+      // Wait a moment between opens to avoid browser blocking
+      if (i < eligible.length - 1) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    setBatchProgress((prev) => ({ ...prev, active: false }));
   };
 
   const toggleMessage = (id: string) => {
@@ -520,7 +618,16 @@ export default function SalesOutreachPage() {
             تواصل مع البائعين المحتملين وحوّلهم لمستخدمين
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={startBatchWhatsApp}
+            disabled={batchProgress.active || pendingContacts.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 rounded-xl text-sm text-white font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            📱 {batchProgress.active
+              ? `تم ${batchProgress.current} من ${batchProgress.total}`
+              : "إرسال دفعة واتساب"}
+          </button>
           <Link
             href="/admin/sales/templates"
             className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
@@ -833,6 +940,7 @@ export default function SalesOutreachPage() {
                       onToggleMessage={() => toggleMessage(contact.id)}
                       onCopy={() => copyMessage(contact.id, contact.message)}
                       onWhatsApp={() => openWhatsApp(contact.phone, contact.message)}
+                      onWaleedWhatsApp={() => openWaleedWhatsApp(contact)}
                       onMarkSent={() => updateSellerStatus(contact.id, "sent", { templateId: contact.templateId || undefined })}
                       onSkip={() => {
                         setReasonModal({ sellerId: contact.id, action: "skipped" });
@@ -964,6 +1072,7 @@ interface ContactCardProps {
   onToggleMessage: () => void;
   onCopy: () => void;
   onWhatsApp: () => void;
+  onWaleedWhatsApp: () => void;
   onMarkSent: () => void;
   onSkip: () => void;
   onInterested: () => void;
@@ -982,6 +1091,7 @@ function ContactCard({
   onToggleMessage,
   onCopy,
   onWhatsApp,
+  onWaleedWhatsApp,
   onMarkSent,
   onSkip,
   onInterested,
@@ -1055,8 +1165,15 @@ function ContactCard({
         {/* Row 1: Send actions */}
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={onWhatsApp}
+            onClick={onWaleedWhatsApp}
             className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 rounded-xl text-xs font-medium text-white transition-colors"
+          >
+            📱 واتساب وليد
+          </button>
+
+          <button
+            onClick={onWhatsApp}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gray-500 hover:bg-gray-600 rounded-xl text-xs font-medium text-white transition-colors"
           >
             📱 واتساب
           </button>

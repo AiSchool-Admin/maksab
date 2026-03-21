@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
     // Build query based on tab
     let query = supabase
       .from("ahe_sellers")
-      .select("id, name, phone, priority_score, whale_score, seller_tier, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, last_outreach_at, last_response_at, outreach_count, notes, rejection_reason, skip_reason, last_outreach_template, buy_probability, buy_probability_score")
+      .select("id, name, phone, priority_score, whale_score, seller_tier, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, last_outreach_at, last_response_at, outreach_count, notes, rejection_reason, skip_reason, last_outreach_template, buy_probability, buy_probability_score, source_platform")
       .not("phone", "is", null);
 
     if (tab === "new") {
@@ -206,6 +206,7 @@ export async function GET(request: NextRequest) {
         rejectionReason: s.rejection_reason,
         templateId: tplForSeller?.id,
         message,
+        sourcePlatform: s.source_platform || null,
       };
     });
 
