@@ -107,12 +107,38 @@ export async function GET(req: NextRequest) {
       .order("next_harvest_at", { ascending: true })
       .limit(availableSlots);
 
+    // Debug: log what we found
+    console.log(`[CRON] Engine status: ${engine.status}, available slots: ${availableSlots}`);
+    console.log(`[CRON] Ready scopes found: ${readyScopes?.length || 0}`);
+    if (readyScopes?.length) {
+      for (const s of readyScopes) {
+        console.log(`[CRON] Scope: ${s.code} | category: ${s.maksab_category} | platform: ${s.source_platform} | blocked: ${s.server_fetch_blocked} | paused: ${s.is_paused}`);
+      }
+    }
+
+    // Also fetch ALL scopes for debug info
+    const { data: allScopes } = await supabase
+      .from("ahe_scopes")
+      .select("code, maksab_category, source_platform, is_active, is_paused, server_fetch_blocked, next_harvest_at")
+      .eq("is_active", true);
+
+    const scopeDebug = (allScopes || []).map((s: any) => ({
+      code: s.code,
+      category: s.maksab_category,
+      platform: s.source_platform,
+      paused: s.is_paused,
+      blocked: s.server_fetch_blocked,
+      next_harvest_at: s.next_harvest_at,
+    }));
+    console.log(`[CRON] All active scopes (${allScopes?.length || 0}):`, JSON.stringify(scopeDebug));
+
     if (!readyScopes?.length) {
       return NextResponse.json({
         message: "لا توجد نطاقات جاهزة للحصاد",
         debug: {
           engine_status: engine.status,
           scopes_found: 0,
+          all_active_scopes: scopeDebug,
         },
       });
     }
@@ -140,6 +166,7 @@ export async function GET(req: NextRequest) {
         .single();
 
       if (job) {
+        console.log(`[CRON] ✅ Job created: ${job.id} for scope: ${scope.code} (${scope.maksab_category})`);
         jobIds.push(job.id);
 
         // Update next harvest time
@@ -174,10 +201,17 @@ export async function GET(req: NextRequest) {
       message: "تم إنشاء عمليات حصاد",
       jobs_created: jobIds.length,
       job_ids: jobIds,
-      scopes: readyScopes.map((s: any) => s.code),
+      scopes: readyScopes.map((s: any) => ({
+        code: s.code,
+        category: s.maksab_category,
+        platform: s.source_platform,
+        blocked: s.server_fetch_blocked,
+      })),
       debug: {
         engine_status: engine.status,
+        available_slots: availableSlots,
         scopes_found: readyScopes.length,
+        all_active_scopes: scopeDebug,
       },
     });
   } catch (error) {
