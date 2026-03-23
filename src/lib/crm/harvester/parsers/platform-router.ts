@@ -17,6 +17,8 @@ import { parseCarSemsarList, parseCarSemsarDetail, getCarSemsarListPageUrl } fro
 import { parsePropertyFinderList, parsePropertyFinderDetail, getPropertyFinderListPageUrl } from "./propertyfinder";
 import { parseYallamotorList, parseYallamotorDetail, getYallamotorListPageUrl } from "./yallamotor";
 import { parseDowwrList, parseDowwrDetail, getDowwrListPageUrl } from "./dowwr";
+import { parseOlxList, parseOlxDetail, getOlxListPageUrl } from "./olx";
+import { parseSemsarMasrList, parseSemsarMasrDetail, getSemsarMasrListPageUrl } from "./semsarmasr";
 import { parseGenericList, parseGenericDetail } from "./generic";
 
 export interface PlatformParser {
@@ -69,6 +71,16 @@ const parsers: Record<string, PlatformParser> = {
     parseList: parseDowwrList,
     parseDetail: parseDowwrDetail,
     getListPageUrl: getDowwrListPageUrl,
+  },
+  olx: {
+    parseList: parseOlxList,
+    parseDetail: parseOlxDetail,
+    getListPageUrl: getOlxListPageUrl,
+  },
+  semsarmasr: {
+    parseList: parseSemsarMasrList,
+    parseDetail: parseSemsarMasrDetail,
+    getListPageUrl: getSemsarMasrListPageUrl,
   },
 };
 
