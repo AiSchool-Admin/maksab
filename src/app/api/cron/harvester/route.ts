@@ -129,15 +129,15 @@ export async function GET(req: NextRequest) {
       .or(
         `next_harvest_at.is.null,next_harvest_at.lte.${now.toISOString()}`
       )
-      .order("priority", { ascending: false })
-      .order("next_harvest_at", { ascending: true })
-      .limit(availableSlots);
+      .order("priority", { ascending: true })
+      .order("next_harvest_at", { ascending: true, nullsFirst: false })
+      .limit(Math.max(availableSlots, 20));
 
     // Debug: log what we found
     console.log(`[CRON] Engine: ${engine.status} | slots: ${availableSlots} | ready: ${readyScopes?.length || 0}`);
     if (readyScopes?.length) {
       for (const s of readyScopes) {
-        console.log(`[CRON] → ${s.code} | ${s.maksab_category} | ${s.source_platform} | gov: ${s.governorate}`);
+        console.log(`[CRON] → ${s.code} | pri=${s.priority} | ${s.maksab_category} | ${s.source_platform} | gov: ${s.governorate} | next: ${s.next_harvest_at}`);
       }
     }
 
