@@ -208,6 +208,9 @@ export default function HarvesterDashboard() {
           <Link href="/admin/crm/harvester/scopes" className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
             📋 النطاقات
           </Link>
+          <Link href="/admin/crm/harvester/alexandria" className="px-3 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+            📍 الإسكندرية MVP
+          </Link>
           <Link href="/admin/crm/harvester/bookmarklet" className="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700">
             🔖 Bookmarklet
           </Link>
