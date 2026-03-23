@@ -109,10 +109,41 @@ function getStatusBadge(scope: { is_active: boolean; server_fetch_blocked: boole
   return <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-800">متوقف</span>;
 }
 
+interface InspectResult {
+  scope: string;
+  platform: string;
+  category: string;
+  governorate: string;
+  priority: number;
+  harvest_interval_minutes: number;
+  last_harvest_at: string | null;
+  total_listings: number;
+  total_sellers: number;
+  sellers_with_phone: number;
+  last_harvest_new_listings: number;
+  last_harvest_new_sellers: number;
+  consecutive_failures: number;
+  server_fetch_blocked: boolean;
+  status: "healthy" | "paused" | "failing";
+  last_job: {
+    id: string;
+    status: string;
+    listings_new: number;
+    sellers_new: number;
+    phones_extracted: number;
+    duration_seconds: number;
+    created_at: string;
+    errors: string[];
+  } | null;
+}
+
 export default function AlexandriaMVPDashboard() {
   const [data, setData] = useState<AlexStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inspecting, setInspecting] = useState<string | null>(null);
+  const [inspectResult, setInspectResult] = useState<InspectResult | null>(null);
+  const [inspectError, setInspectError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -129,6 +160,30 @@ export default function AlexandriaMVPDashboard() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const inspectScope = useCallback(async (scopeCode: string) => {
+    setInspecting(scopeCode);
+    setInspectResult(null);
+    setInspectError(null);
+    try {
+      const headers = getAdminHeaders();
+      const res = await fetch(`/api/admin/harvest/status?scope=${scopeCode}`, { headers });
+      if (res.ok) {
+        setInspectResult(await res.json());
+      } else {
+        const data = await res.json();
+        setInspectError(data.error || "فشل في الفحص");
+      }
+    } catch {
+      setInspectError("خطأ في الاتصال");
+    }
+  }, []);
+
+  const closeInspect = useCallback(() => {
+    setInspecting(null);
+    setInspectResult(null);
+    setInspectError(null);
   }, []);
 
   useEffect(() => {
@@ -281,6 +336,7 @@ export default function AlexandriaMVPDashboard() {
                 <th className="px-4 py-2 text-center">إعلانات جديدة</th>
                 <th className="px-4 py-2 text-center">إجمالي الحصاد</th>
                 <th className="px-4 py-2 text-center">أرقام مستخرجة</th>
+                <th className="px-4 py-2 text-center">فحص</th>
               </tr>
             </thead>
             <tbody>
@@ -310,6 +366,15 @@ export default function AlexandriaMVPDashboard() {
                   </td>
                   <td className="px-4 py-2 text-center text-green-600 font-medium">
                     {formatNumber(scope.total_phones_extracted || 0)}
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    <button
+                      onClick={() => inspectScope(scope.code)}
+                      className="px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
+                      disabled={inspecting === scope.code}
+                    >
+                      {inspecting === scope.code ? "جاري..." : "فحص"}
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -373,6 +438,116 @@ export default function AlexandriaMVPDashboard() {
           </table>
         </div>
       </div>
+      {/* Inspect Modal */}
+      {inspecting && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={closeInspect}>
+          <div className="bg-white rounded-lg max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <h3 className="font-semibold text-gray-800">فحص النطاق: {inspecting}</h3>
+              <button onClick={closeInspect} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <div className="p-4">
+              {inspectError && (
+                <div className="bg-red-50 border border-red-200 rounded p-3 text-red-800 text-sm">{inspectError}</div>
+              )}
+              {!inspectResult && !inspectError && (
+                <div className="text-center py-8 text-gray-400">جاري الفحص...</div>
+              )}
+              {inspectResult && (
+                <div className="space-y-4">
+                  {/* Status Badge */}
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      inspectResult.status === "healthy" ? "bg-green-100 text-green-800" :
+                      inspectResult.status === "paused" ? "bg-gray-100 text-gray-800" :
+                      "bg-red-100 text-red-800"
+                    }`}>
+                      {inspectResult.status === "healthy" ? "يعمل بشكل طبيعي" :
+                       inspectResult.status === "paused" ? "متوقف" : "فشل متكرر"}
+                    </span>
+                    {inspectResult.server_fetch_blocked && (
+                      <span className="px-2 py-1 rounded text-xs bg-orange-100 text-orange-800">محظور WAF</span>
+                    )}
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 rounded p-3">
+                      <div className="text-xs text-gray-500">المنصة</div>
+                      <div className="font-medium">{inspectResult.platform}</div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-3">
+                      <div className="text-xs text-gray-500">الفئة</div>
+                      <div className="font-medium">{inspectResult.category}</div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-3">
+                      <div className="text-xs text-gray-500">إجمالي الإعلانات</div>
+                      <div className="font-bold text-blue-600">{formatNumber(inspectResult.total_listings)}</div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-3">
+                      <div className="text-xs text-gray-500">إجمالي البائعين</div>
+                      <div className="font-bold">{formatNumber(inspectResult.total_sellers)}</div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-3">
+                      <div className="text-xs text-gray-500">بائعين بأرقام</div>
+                      <div className="font-bold text-green-600">{formatNumber(inspectResult.sellers_with_phone)}</div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-3">
+                      <div className="text-xs text-gray-500">فشل متتالي</div>
+                      <div className={`font-bold ${inspectResult.consecutive_failures > 0 ? "text-red-600" : "text-gray-600"}`}>
+                        {inspectResult.consecutive_failures}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Last Harvest */}
+                  <div className="bg-gray-50 rounded p-3">
+                    <div className="text-xs text-gray-500 mb-1">آخر حصاد</div>
+                    <div className="text-sm">
+                      {inspectResult.last_harvest_at ? timeAgo(inspectResult.last_harvest_at) : "لم يبدأ بعد"}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      إعلانات جديدة: {inspectResult.last_harvest_new_listings} | بائعين جدد: {inspectResult.last_harvest_new_sellers}
+                    </div>
+                  </div>
+
+                  {/* Last Job */}
+                  {inspectResult.last_job && (
+                    <div className="bg-gray-50 rounded p-3">
+                      <div className="text-xs text-gray-500 mb-1">آخر عملية</div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded text-xs ${
+                          inspectResult.last_job.status === "completed" ? "bg-green-100 text-green-800" :
+                          inspectResult.last_job.status === "failed" ? "bg-red-100 text-red-800" :
+                          "bg-yellow-100 text-yellow-800"
+                        }`}>
+                          {inspectResult.last_job.status === "completed" ? "مكتمل" :
+                           inspectResult.last_job.status === "failed" ? "فشل" : "جاري"}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {inspectResult.last_job.duration_seconds
+                            ? `${inspectResult.last_job.duration_seconds.toFixed(0)} ثانية`
+                            : ""}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {inspectResult.last_job.listings_new} إعلان | {inspectResult.last_job.sellers_new} بائع | {inspectResult.last_job.phones_extracted} رقم
+                      </div>
+                      {inspectResult.last_job.errors && inspectResult.last_job.errors.length > 0 && (
+                        <div className="mt-2 text-xs text-red-600 bg-red-50 rounded p-2">
+                          {inspectResult.last_job.errors.slice(0, 3).map((err, i) => (
+                            <div key={i}>{err}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
