@@ -2415,6 +2415,85 @@ async function handleCronHarvest(req: IncomingMessage, res: ServerResponse) {
   }
 }
 
+// ─── Process Job Handler (called by Vercel Cron) ────────────
+async function handleProcessJob(req: IncomingMessage, res: ServerResponse) {
+  try {
+    if (req.method !== "POST") {
+      return sendJson(res, { error: "POST only" }, 405);
+    }
+
+    const body = await readBody(req);
+    const { job_id } = JSON.parse(body || "{}");
+
+    if (!job_id) {
+      return sendJson(res, { error: "job_id مطلوب" }, 400);
+    }
+
+    console.log(`[API] POST /process-job — job_id: ${job_id}`);
+
+    const supabase = getSupabase();
+
+    // Get the job and its scope
+    const { data: job, error: jobError } = await supabase
+      .from("ahe_harvest_jobs")
+      .select("*, ahe_scopes(*)")
+      .eq("id", job_id)
+      .single();
+
+    if (jobError || !job) {
+      return sendJson(res, { error: "Job not found", details: jobError?.message }, 404);
+    }
+
+    if (job.status !== "pending") {
+      return sendJson(res, { message: `Job already ${job.status}`, job_id });
+    }
+
+    const scope = job.ahe_scopes;
+    if (!scope) {
+      return sendJson(res, { error: "Scope not found for job" }, 404);
+    }
+
+    console.log(`[API] 🚀 Processing job ${job_id} for scope ${scope.code} (${scope.maksab_category})`);
+
+    // Check if platform should be delegated to Vercel
+    const shouldDelegateToVercel =
+      VERCEL_HARVEST_URL &&
+      VERCEL_DELEGATED_PLATFORMS.includes(scope.source_platform);
+
+    let result: HarvestResult;
+
+    if (shouldDelegateToVercel) {
+      console.log(`[API] 🌐 Delegating ${scope.code} to Vercel (${scope.source_platform} blocked on Railway)`);
+      result = await harvestViaVercel(scope.code);
+    } else {
+      result = await harvestScope(scope.code);
+    }
+
+    // Update job with results
+    await supabase
+      .from("ahe_harvest_jobs")
+      .update({
+        status: result.success ? "completed" : "failed",
+        pages_fetched: result.pages_fetched,
+        listings_new: result.new,
+        listings_duplicate: result.duplicate,
+        sellers_new: result.sellers_new,
+        phones_extracted: result.phones_extracted,
+        auto_queued: result.crm_queued,
+        errors: result.errors,
+        completed_at: new Date().toISOString(),
+        duration_seconds: result.duration_ms / 1000,
+      })
+      .eq("id", job_id);
+
+    console.log(`[API] ✅ Job ${job_id} done: new=${result.new}, phones=${result.phones_extracted}`);
+    sendJson(res, { message: "Job processed", job_id, ...result });
+  } catch (err: any) {
+    console.error(`[API] /process-job error: ${err.message}`);
+    sendJson(res, { error: true, message: err.message }, 500);
+  }
+}
+
 // ─── Enrichment Handler ─────────────────────────────────────
 async function handleEnrich(_req: IncomingMessage, res: ServerResponse) {
   try {
@@ -2708,6 +2787,8 @@ const server = createServer(async (req, res) => {
       await handleBuyerMatch(req, res);
     } else if (path === "/cron/reverse-buyers") {
       await handleReverseBuyers(req, res);
+    } else if (path === "/process-job") {
+      await handleProcessJob(req, res);
     } else if (path === "/health") {
       sendJson(res, {
         ok: true,
@@ -2720,6 +2801,7 @@ const server = createServer(async (req, res) => {
         endpoints: {
           "GET /harvest?scope_code=XXX": "Harvest a specific scope (browser-testable)",
           "POST /harvest": "Harvest a specific scope { scope_code }",
+          "POST /process-job": "Process a pending harvest job { job_id }",
           "GET /harvest/status": "Engine & scopes status overview",
           "GET /cron/harvest": "Automated harvest (picks ready scopes)",
           "GET /cron/enrich": "Enrich listings without phone/name (detail fetch)",
@@ -2738,7 +2820,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[Server] 🟢 HTTP server running on port ${PORT}`);
-  console.log(`[Server] Endpoints: /harvest, /harvest/status, /cron/harvest, /cron/enrich, /health`);
+  console.log(`[Server] Endpoints: /harvest, /harvest/status, /process-job, /cron/harvest, /cron/enrich, /health`);
 
   // Railway Cron بيعمل restart كل 15 دقيقة
   // عند كل restart — شغّل حصادة واحدة ثم 5 دورات إثراء
