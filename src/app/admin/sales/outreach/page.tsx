@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { getAdminHeaders } from "@/app/admin/layout";
 import Link from "next/link";
 import {
@@ -411,11 +412,25 @@ function DailyDirectivePanel({
 }
 
 type TabType = "new" | "followup" | "interested" | "stats";
+type EmployeeTab = "waleed" | "ahmed";
+
+// ─── Ahmed Default Message (Real Estate) ───
+const DEFAULT_AHMED_MSG = `أهلاً {{name}}! 🏠
+أنا أحمد من مكسب — أول سوق إلكتروني مصري متخصص في العقارات بنظام المزادات والمقايضة.
+شفت إعلانك على {{platform}} وحسيت إن مكسب هيفيدك:
+✅ مجاني للبداية — مفيش أي خسارة
+✅ مزادات عقارية (مش موجودة في أي منصة تانية)
+✅ وصول لآلاف المشترين في الإسكندرية
+✅ عمولة طوعية بس — مش إجبارية
+سجّل دلوقتي في 3 دقائق: https://maksab.vercel.app`;
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SalesOutreachPage() {
+  const searchParams = useSearchParams();
+  const initialEmployee = (searchParams.get("tab") === "ahmed" ? "ahmed" : "waleed") as EmployeeTab;
   const [activeTab, setActiveTab] = useState<TabType>("new");
+  const [employeeTab, setEmployeeTab] = useState<EmployeeTab>(initialEmployee);
   const [contacts, setContacts] = useState<OutreachContact[]>([]);
   const [templates, setTemplates] = useState<OutreachTemplate[]>([]);
   const [progress, setProgress] = useState<OutreachProgress>({ sent: 0, skipped: 0, remaining: 0, target: 50 });
@@ -456,14 +471,18 @@ export default function SalesOutreachPage() {
   const [reasonModal, setReasonModal] = useState<{ sellerId: string; action: string } | null>(null);
   const [modalText, setModalText] = useState("");
 
+  // Employee tab → auto-set category & governorate for Alexandria focus
+  const effectiveCategory = employeeTab === "waleed" ? "vehicles" : employeeTab === "ahmed" ? "properties" : categoryFilter;
+  const effectiveGov = "alexandria"; // MVP: الإسكندرية فقط
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
         tab: activeTab,
         tier: tierFilter,
-        category: categoryFilter,
-        governorate: govFilter,
+        category: effectiveCategory,
+        governorate: effectiveGov,
         dailyTarget: String(dailyTarget),
       });
       if (selectedTemplateId) params.set("templateId", selectedTemplateId);
@@ -490,7 +509,7 @@ export default function SalesOutreachPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, tierFilter, categoryFilter, govFilter, dailyTarget, selectedTemplateId]);
+  }, [activeTab, tierFilter, effectiveCategory, effectiveGov, dailyTarget, selectedTemplateId, employeeTab]);
 
   useEffect(() => {
     fetchData();
@@ -517,6 +536,15 @@ export default function SalesOutreachPage() {
     const templateContent = selected?.content || DEFAULT_WALEED_MSG;
     return resolveWaleedMessage(templateContent, seller);
   }, [waleedTemplates, selectedWaleedTemplateId]);
+
+  const getAhmedMessage = useCallback((seller: OutreachContact): string => {
+    return resolveWaleedMessage(DEFAULT_AHMED_MSG, seller);
+  }, []);
+
+  // Get the right message based on active employee tab
+  const getEmployeeMessage = useCallback((seller: OutreachContact): string => {
+    return employeeTab === "ahmed" ? getAhmedMessage(seller) : getWaleedMessage(seller);
+  }, [employeeTab, getAhmedMessage, getWaleedMessage]);
 
   const updateDailyTarget = (val: number) => {
     setDailyTarget(val);
@@ -579,10 +607,10 @@ export default function SalesOutreachPage() {
     } catch { /* ignore */ }
   };
 
-  // Open WhatsApp with waleed message + auto-log outreach
+  // Open WhatsApp with employee message + auto-log outreach
   const openWaleedWhatsApp = async (contact: OutreachContact) => {
     const formattedPhone = formatEgyptPhone(contact.phone);
-    const waleedMsg = getWaleedMessage(contact);
+    const waleedMsg = getEmployeeMessage(contact);
     const url = `https://web.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waleedMsg)}`;
     window.open(url, "_blank");
     // Auto-log outreach + increment template usage
@@ -612,8 +640,8 @@ export default function SalesOutreachPage() {
 
   const openBatchWhatsApp = (contact: OutreachContact) => {
     const formattedPhone = formatEgyptPhone(contact.phone);
-    const waleedMsg = getWaleedMessage(contact);
-    const url = `https://web.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waleedMsg)}`;
+    const msg = getEmployeeMessage(contact);
+    const url = `https://web.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
   };
 
@@ -685,7 +713,7 @@ export default function SalesOutreachPage() {
         <div>
           <h1 className="text-2xl font-bold text-dark">التواصل والاستحواذ</h1>
           <p className="text-sm text-gray-text mt-1">
-            تواصل مع البائعين المحتملين وحوّلهم لمستخدمين
+            {employeeTab === "waleed" ? "🚗 وليد — سيارات الإسكندرية" : "🏠 أحمد — عقارات الإسكندرية"}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -826,6 +854,29 @@ export default function SalesOutreachPage() {
         <p className="text-xs text-gray-text mt-1.5 text-left">
           {progressPercent}% من الهدف اليومي
         </p>
+      </div>
+
+      {/* ═══ Employee Tabs — وليد / أحمد ═══ */}
+      <div className="flex gap-2 bg-gradient-to-l from-[#1B7A3D]/5 to-[#D4A843]/5 rounded-2xl p-2 border border-[#1B7A3D]/20">
+        {[
+          { key: "waleed" as EmployeeTab, label: "🚗 وليد — سيارات", desc: "الإسكندرية" },
+          { key: "ahmed" as EmployeeTab, label: "🏠 أحمد — عقارات", desc: "الإسكندرية" },
+        ].map(({ key, label, desc }) => (
+          <button
+            key={key}
+            onClick={() => setEmployeeTab(key)}
+            className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+              employeeTab === key
+                ? "bg-[#1B7A3D] text-white shadow-md"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <div>{label}</div>
+            <div className={`text-[10px] mt-0.5 ${employeeTab === key ? "text-green-100" : "text-gray-400"}`}>
+              {desc}
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* ═══ Improvement 5: Tabs ═══ */}

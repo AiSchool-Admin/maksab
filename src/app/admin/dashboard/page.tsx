@@ -210,6 +210,12 @@ interface LeaderCardData {
   csConversationsToday: number;
   hasNoraDailyReport: boolean;
   alerts: Array<{ id: string; message: string; priority: string; type: string }>;
+  // Alexandria stats
+  alexCarsSellers: number;
+  alexPropertiesSellers: number;
+  waleedMessagesToday: number;
+  ahmedMessagesToday: number;
+  lastHarvestBySource: Array<{ platform: string; harvested_at: string }>;
 }
 
 function LeaderCard() {
@@ -251,6 +257,11 @@ function LeaderCard() {
           csConversationsToday: extraData.csConversationsToday || 0,
           hasNoraDailyReport,
           alerts: extraData.alerts || [],
+          alexCarsSellers: extraData.alexCarsSellers || 0,
+          alexPropertiesSellers: extraData.alexPropertiesSellers || 0,
+          waleedMessagesToday: extraData.waleedMessagesToday || 0,
+          ahmedMessagesToday: extraData.ahmedMessagesToday || 0,
+          lastHarvestBySource: extraData.lastHarvestBySource || [],
         });
       } catch {
         // silent
@@ -345,20 +356,31 @@ function LeaderCard() {
           </div>
         )}
 
+        {/* Alexandria Stats */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
+            <p className="text-lg font-bold text-blue-600">{data.alexCarsSellers}</p>
+            <p className="text-[10px] text-gray-text">🚗 بائعي سيارات — الإسكندرية</p>
+          </div>
+          <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
+            <p className="text-lg font-bold text-purple-600">{data.alexPropertiesSellers}</p>
+            <p className="text-[10px] text-gray-text">🏠 بائعي عقارات — الإسكندرية</p>
+          </div>
+        </div>
+
         {/* Team Summary */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
             <p className="text-lg font-bold text-blue-600">{data.csConversationsToday}</p>
             <p className="text-[10px] text-gray-text">محادثات سارة</p>
           </div>
           <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
-            <p className="text-lg font-bold text-green-600">{data.outreachSentToday}</p>
-            <p className="text-[10px] text-gray-text">
-              رسائل وليد
-              {data.outreachTarget > 0 && (
-                <span className="text-gray-400"> / {data.outreachTarget}</span>
-              )}
-            </p>
+            <p className="text-lg font-bold text-green-600">{data.waleedMessagesToday}</p>
+            <p className="text-[10px] text-gray-text">🚗 رسائل وليد</p>
+          </div>
+          <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
+            <p className="text-lg font-bold text-purple-600">{data.ahmedMessagesToday}</p>
+            <p className="text-[10px] text-gray-text">🏠 رسائل أحمد</p>
           </div>
           <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
             <p className="text-lg font-bold text-yellow-600">{data.pendingModeration}</p>

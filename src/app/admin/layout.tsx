@@ -130,6 +130,8 @@ const navSections: NavSection[] = [
     icon: "📈",
     items: [
       { href: "/admin/sales/pipeline", label: "Pipeline", icon: PieChart },
+      { href: "/admin/sales/outreach?tab=waleed&category=cars", label: "وليد — سيارات الإسكندرية", icon: Mail },
+      { href: "/admin/sales/outreach?tab=ahmed&category=properties", label: "أحمد — عقارات الإسكندرية", icon: Mail },
       { href: "/admin/sales/outreach", label: "التواصل — بائعين", icon: Mail },
       { href: "/admin/sales/templates", label: "مكتبة الرسائل", icon: ClipboardCheck },
       { href: "/admin/sales/waleed-templates", label: "رسائل وليد", icon: Mail },
