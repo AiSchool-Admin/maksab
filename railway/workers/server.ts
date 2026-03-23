@@ -26,8 +26,20 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
 const VERCEL_HARVEST_URL = process.env.VERCEL_HARVEST_URL || ""; // e.g. https://maksab.vercel.app/api/admin/crm/harvester/harvest-vercel
 
-// Platforms that should be harvested via Vercel (Railway IPs blocked by WAF)
-const VERCEL_DELEGATED_PLATFORMS = ["opensooq", "aqarmap", "dowwr"];
+// Platforms that should be harvested via Vercel (Railway IPs blocked by WAF,
+// or Railway lacks the proper parser — only Dubizzle is parsed locally)
+const VERCEL_DELEGATED_PLATFORMS = [
+  "opensooq",
+  "aqarmap",
+  "dowwr",
+  "hatla2ee",
+  "contactcars",
+  "carsemsar",
+  "propertyfinder",
+  "yallamotor",
+  "olx",
+  "semsarmasr",
+];
 
 const BROWSER_HEADERS: Record<string, string> = {
   "User-Agent":
@@ -2222,56 +2234,57 @@ async function cronHarvest(): Promise<{
   }
 
   const { data: readyScopes } = await query
-    .order("last_harvest_at", { ascending: true, nullsFirst: true })
-    .order("priority", { ascending: false })
-    .limit(1);
+    .order("priority", { ascending: true })
+    .order("next_harvest_at", { ascending: true, nullsFirst: true })
+    .limit(3);
 
   if (!readyScopes || readyScopes.length === 0) {
     console.log("[Cron] 😴 No scopes ready for harvest");
     return { scopes_processed: 0, results: [] };
   }
 
-  const scope = readyScopes[0];
   console.log(
-    `[Cron] 🚀 Harvesting 1 scope: ${scope.code} (last_harvest: ${scope.last_harvest_at || "never"})`
+    `[Cron] 🚀 Harvesting ${readyScopes.length} scopes: ${readyScopes.map((s: any) => `${s.code}(${s.source_platform})`).join(", ")}`
   );
 
   const results: HarvestResult[] = [];
 
-  // Delegate to Vercel for platforms blocked on Railway
-  const shouldDelegateToVercel =
-    VERCEL_HARVEST_URL &&
-    VERCEL_DELEGATED_PLATFORMS.includes(scope.source_platform);
+  for (const scope of readyScopes) {
+    // Delegate to Vercel for non-Dubizzle platforms (Railway only has Dubizzle parser)
+    const shouldDelegateToVercel =
+      VERCEL_HARVEST_URL &&
+      VERCEL_DELEGATED_PLATFORMS.includes(scope.source_platform);
 
-  try {
-    if (shouldDelegateToVercel) {
-      console.log(
-        `[Cron] 🌐 Delegating ${scope.code} (${scope.source_platform}) to Vercel → ${VERCEL_HARVEST_URL}`
-      );
-      const result = await harvestViaVercel(scope.code);
-      results.push(result);
-    } else {
-      const result = await harvestScope(scope.code);
-      results.push(result);
+    try {
+      if (shouldDelegateToVercel) {
+        console.log(
+          `[Cron] 🌐 Delegating ${scope.code} (${scope.source_platform}) to Vercel → ${VERCEL_HARVEST_URL}`
+        );
+        const result = await harvestViaVercel(scope.code);
+        results.push(result);
+      } else {
+        const result = await harvestScope(scope.code);
+        results.push(result);
+      }
+    } catch (err: any) {
+      console.error(`[Cron] ❌ Error harvesting ${scope.code}: ${err.message}`);
+      results.push({
+        success: false,
+        scope_code: scope.code,
+        pages_fetched: 0,
+        fetched: 0,
+        new: 0,
+        duplicate: 0,
+        sellers_new: 0,
+        phones_extracted: 0,
+        crm_queued: 0,
+        errors: [err.message],
+        duration_ms: 0,
+      });
     }
-  } catch (err: any) {
-    console.error(`[Cron] ❌ Error harvesting ${scope.code}: ${err.message}`);
-    results.push({
-      success: false,
-      scope_code: scope.code,
-      pages_fetched: 0,
-      fetched: 0,
-      new: 0,
-      duplicate: 0,
-      sellers_new: 0,
-      phones_extracted: 0,
-      crm_queued: 0,
-      errors: [err.message],
-      duration_ms: 0,
-    });
   }
 
-  return { scopes_processed: 1, results };
+  return { scopes_processed: readyScopes.length, results };
 }
 
 // ─── HTTP Helpers ────────────────────────────────────────────
