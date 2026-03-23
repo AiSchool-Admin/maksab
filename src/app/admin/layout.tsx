@@ -176,8 +176,9 @@ const navSections: NavSection[] = [
     label: "المالية",
     icon: "💰",
     items: [
-      { href: "/admin/finance/dashboard", label: "الإيرادات", icon: DollarSign },
+      { href: "/admin/finance/revenue", label: "الإيرادات", icon: DollarSign },
       { href: "/admin/finance/subscriptions", label: "الاشتراكات", icon: CreditCard },
+      { href: "/admin/finance/leads", label: "الـ Leads", icon: Target },
     ],
   },
   {

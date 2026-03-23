@@ -226,10 +226,11 @@ function LeaderCard() {
     async function load() {
       try {
         const headers = getAdminHeaders();
-        const [escalRes, reportRes, dashRes] = await Promise.all([
+        const [escalRes, reportRes, dashRes, mvpRes] = await Promise.all([
           fetch("/api/admin/cs/escalations", { headers }),
           fetch("/api/admin/ai/daily-report", { headers }),
           fetch("/api/admin/dashboard/leader-card", { headers }),
+          fetch("/api/admin/dashboard/mvp-stats", { headers }).catch(() => null),
         ]);
 
         let pendingEscalations = 0;
@@ -249,6 +250,11 @@ function LeaderCard() {
           extraData = await dashRes.json();
         }
 
+        let mvpData: any = {};
+        if (mvpRes?.ok) {
+          mvpData = await mvpRes.json();
+        }
+
         setData({
           pendingEscalations,
           pendingModeration: extraData.pendingModeration || 0,
@@ -257,11 +263,11 @@ function LeaderCard() {
           csConversationsToday: extraData.csConversationsToday || 0,
           hasNoraDailyReport,
           alerts: extraData.alerts || [],
-          alexCarsSellers: extraData.alexCarsSellers || 0,
-          alexPropertiesSellers: extraData.alexPropertiesSellers || 0,
-          waleedMessagesToday: extraData.waleedMessagesToday || 0,
-          ahmedMessagesToday: extraData.ahmedMessagesToday || 0,
-          lastHarvestBySource: extraData.lastHarvestBySource || [],
+          alexCarsSellers: mvpData.alexCarsSellers || extraData.alexCarsSellers || 0,
+          alexPropertiesSellers: mvpData.alexPropertiesSellers || extraData.alexPropertiesSellers || 0,
+          waleedMessagesToday: mvpData.waleedMessagesToday || extraData.waleedMessagesToday || 0,
+          ahmedMessagesToday: mvpData.ahmedMessagesToday || extraData.ahmedMessagesToday || 0,
+          lastHarvestBySource: mvpData.lastHarvestBySource || extraData.lastHarvestBySource || [],
         });
       } catch {
         // silent

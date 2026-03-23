@@ -461,6 +461,10 @@ export default function SalesOutreachPage() {
   const [waleedTemplates, setWaleedTemplates] = useState<WaleedTemplate[]>([]);
   const [selectedWaleedTemplateId, setSelectedWaleedTemplateId] = useState<string | null>(null);
 
+  // Ahmed templates
+  const [ahmedTemplates, setAhmedTemplates] = useState<WaleedTemplate[]>([]);
+  const [selectedAhmedTemplateId, setSelectedAhmedTemplateId] = useState<string | null>(null);
+
   // UI state
   const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -515,20 +519,27 @@ export default function SalesOutreachPage() {
     fetchData();
   }, [fetchData]);
 
-  // Fetch waleed templates on mount
+  // Fetch waleed + ahmed templates on mount
   useEffect(() => {
-    const fetchWaleedTemplates = async () => {
+    const fetchTemplates = async () => {
       try {
-        const res = await fetch("/api/admin/sales/waleed-templates", {
-          headers: getAdminHeaders(),
-        });
-        const json = await res.json();
-        setWaleedTemplates(json.templates || []);
+        const [waleedRes, ahmedRes] = await Promise.all([
+          fetch("/api/admin/sales/waleed-templates", { headers: getAdminHeaders() }),
+          fetch("/api/admin/sales/ahmed-templates", { headers: getAdminHeaders() }).catch(() => null),
+        ]);
+        if (waleedRes.ok) {
+          const json = await waleedRes.json();
+          setWaleedTemplates(json.templates || []);
+        }
+        if (ahmedRes?.ok) {
+          const json = await ahmedRes.json();
+          setAhmedTemplates(json.templates || []);
+        }
       } catch (err) {
-        console.error("Failed to fetch waleed templates:", err);
+        console.error("Failed to fetch templates:", err);
       }
     };
-    fetchWaleedTemplates();
+    fetchTemplates();
   }, []);
 
   const getWaleedMessage = useCallback((seller: OutreachContact): string => {
@@ -538,8 +549,10 @@ export default function SalesOutreachPage() {
   }, [waleedTemplates, selectedWaleedTemplateId]);
 
   const getAhmedMessage = useCallback((seller: OutreachContact): string => {
-    return resolveWaleedMessage(DEFAULT_AHMED_MSG, seller);
-  }, []);
+    const selected = ahmedTemplates.find((t) => t.id === selectedAhmedTemplateId);
+    const templateContent = selected?.content || DEFAULT_AHMED_MSG;
+    return resolveWaleedMessage(templateContent, seller);
+  }, [ahmedTemplates, selectedAhmedTemplateId]);
 
   // Get the right message based on active employee tab
   const getEmployeeMessage = useCallback((seller: OutreachContact): string => {
@@ -717,19 +730,34 @@ export default function SalesOutreachPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Waleed template selector */}
-          <select
-            value={selectedWaleedTemplateId || ""}
-            onChange={(e) => setSelectedWaleedTemplateId(e.target.value || null)}
-            className="px-3 py-2 border border-green-300 bg-green-50 rounded-xl text-sm font-medium text-green-800 focus:outline-none focus:ring-2 focus:ring-green-300"
-          >
-            <option value="">رسالة وليد الافتراضية</option>
-            {waleedTemplates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} ({t.use_count} استخدام)
-              </option>
-            ))}
-          </select>
+          {/* Employee template selector */}
+          {employeeTab === "waleed" ? (
+            <select
+              value={selectedWaleedTemplateId || ""}
+              onChange={(e) => setSelectedWaleedTemplateId(e.target.value || null)}
+              className="px-3 py-2 border border-green-300 bg-green-50 rounded-xl text-sm font-medium text-green-800 focus:outline-none focus:ring-2 focus:ring-green-300"
+            >
+              <option value="">رسالة وليد الافتراضية</option>
+              {waleedTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.use_count} استخدام)
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={selectedAhmedTemplateId || ""}
+              onChange={(e) => setSelectedAhmedTemplateId(e.target.value || null)}
+              className="px-3 py-2 border border-purple-300 bg-purple-50 rounded-xl text-sm font-medium text-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-300"
+            >
+              <option value="">رسالة أحمد الافتراضية</option>
+              {ahmedTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.use_count} استخدام)
+                </option>
+              ))}
+            </select>
+          )}
           <button
             onClick={startBatchWhatsApp}
             disabled={batchActive || pendingContacts.length === 0}
