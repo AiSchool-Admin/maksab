@@ -1,22 +1,25 @@
 /**
- * جدول حصاد الإسكندرية — Alexandria Harvest Schedule
+ * جدول الحصاد — Harvest Schedule (Dynamic, DB-driven)
  *
- * الجدول اليومي:
+ * يجيب النطاقات ديناميكياً من ahe_scopes في DB
+ * يدعم كل المحافظات (الإسكندرية، القاهرة، إلخ)
+ *
+ * الاستراتيجية:
  * ┌────────────────────────────────────────────────────────────┐
- * │ كل ساعتين — المصادر الأساسية (أولوية 1)                   │
- * │   Dubizzle سيارات + عقارات الإسكندرية                     │
- * │   AqarMap عقارات الإسكندرية                                │
- * │   هتلاقي سيارات الإسكندرية                                │
+ * │ أولوية 1 — المصادر الأساسية: كل ساعتين                    │
+ * │   Dubizzle, AqarMap, هتلاقي                               │
  * ├────────────────────────────────────────────────────────────┤
- * │ كل 3 ساعات — المصادر الثانوية (أولوية 2)                  │
- * │   OpenSooq سيارات + عقارات                                │
- * │   PropertyFinder عقارات                                    │
- * │   ContactCars سيارات                                      │
+ * │ أولوية 2 — المصادر الثانوية: كل 3 ساعات                   │
+ * │   OpenSooq, PropertyFinder, ContactCars                   │
  * ├────────────────────────────────────────────────────────────┤
- * │ كل 4 ساعات — المصادر الإضافية (أولوية 3)                  │
- * │   OLX سيارات                                              │
- * │   سمسار مصر عقارات                                        │
+ * │ أولوية 3 — المصادر الإضافية: كل 4 ساعات                   │
+ * │   OLX, سمسار مصر                                          │
  * └────────────────────────────────────────────────────────────┘
+ *
+ * قواعد التشغيل:
+ * - حد أقصى 3 نطاقات بالتوازي
+ * - 3 فشل متتالي → إيقاف تلقائي + تنبيه
+ * - النطاقات تُجلب ديناميكياً من DB (لا hardcoded)
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
@@ -24,6 +27,12 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const VERCEL_HARVEST_URL = process.env.VERCEL_HARVEST_URL || "";
+
+/** Maximum concurrent harvest jobs */
+const MAX_CONCURRENT_HARVESTS = 3;
+
+/** Auto-pause after this many consecutive failures */
+const MAX_CONSECUTIVE_FAILURES = 3;
 
 function getSupabase(): SupabaseClient {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -40,45 +49,55 @@ interface AheScope {
   governorate: string;
   priority: number;
   is_active: boolean;
+  is_paused: boolean;
   harvest_interval_minutes: number;
   next_harvest_at: string | null;
   server_fetch_blocked: boolean;
+  consecutive_failures: number;
 }
 
 interface ScheduleResult {
   total_scopes: number;
   scopes_run: number;
   scopes_skipped: number;
+  scopes_auto_paused: number;
   jobs_created: string[];
   errors: string[];
   duration_seconds: number;
 }
 
 /**
- * Get active scopes filtered by priority
+ * Get active scopes ready for harvest — dynamic from DB
+ * Respects priority, interval, and pause state
  */
-async function getActiveScopes(
+async function getReadyScopes(
   supabase: SupabaseClient,
   options: {
     priority?: number;
-    category?: string;
     governorate?: string;
+    limit?: number;
   } = {}
 ): Promise<AheScope[]> {
+  const now = new Date().toISOString();
+
   let query = supabase
     .from("ahe_scopes")
     .select("*")
     .eq("is_active", true)
-    .order("priority", { ascending: true });
+    .eq("is_paused", false)
+    .or(`next_harvest_at.is.null,next_harvest_at.lte.${now}`)
+    .or("server_fetch_blocked.eq.false,server_fetch_blocked.is.null")
+    .order("priority", { ascending: true })
+    .order("next_harvest_at", { ascending: true, nullsFirst: true });
 
   if (options.priority !== undefined) {
     query = query.eq("priority", options.priority);
   }
-  if (options.category) {
-    query = query.eq("maksab_category", options.category);
-  }
   if (options.governorate) {
     query = query.eq("governorate", options.governorate);
+  }
+  if (options.limit) {
+    query = query.limit(options.limit);
   }
 
   const { data, error } = await query;
@@ -90,24 +109,46 @@ async function getActiveScopes(
 }
 
 /**
- * Check if a scope is ready for harvest based on its interval
+ * Auto-pause scopes with too many consecutive failures
  */
-function isScopeReady(scope: AheScope): boolean {
-  if (scope.server_fetch_blocked) return false;
-  if (!scope.next_harvest_at) return true;
-  return new Date(scope.next_harvest_at) <= new Date();
+async function autoPauseFailingScopes(supabase: SupabaseClient): Promise<string[]> {
+  const { data: failingScopes } = await supabase
+    .from("ahe_scopes")
+    .select("id, code, consecutive_failures")
+    .eq("is_active", true)
+    .eq("is_paused", false)
+    .gte("consecutive_failures", MAX_CONSECUTIVE_FAILURES);
+
+  if (!failingScopes?.length) return [];
+
+  const pausedCodes: string[] = [];
+
+  for (const scope of failingScopes) {
+    const { error } = await supabase
+      .from("ahe_scopes")
+      .update({ is_paused: true })
+      .eq("id", scope.id);
+
+    if (!error) {
+      pausedCodes.push(scope.code);
+      console.warn(
+        `[SCHEDULE] ⚠️ Auto-paused ${scope.code} — ${scope.consecutive_failures} consecutive failures`
+      );
+    }
+  }
+
+  return pausedCodes;
 }
 
 /**
  * Trigger a harvest for a specific scope
- * Creates a job in ahe_harvest_jobs and delegates to the appropriate worker
+ * Creates a job in ahe_harvest_jobs and delegates to Vercel
  */
 async function triggerHarvest(
   supabase: SupabaseClient,
   scope: AheScope
 ): Promise<string | null> {
   try {
-    // Create harvest job
     const now = new Date();
     const targetFrom = new Date(now.getTime() - scope.harvest_interval_minutes * 60 * 1000);
 
@@ -140,7 +181,7 @@ async function triggerHarvest(
 
     console.log(`[SCHEDULE] 📋 Created job ${job.id} for ${scope.code}`);
 
-    // Delegate to Vercel if needed
+    // Delegate to Vercel if configured
     if (VERCEL_HARVEST_URL) {
       try {
         const res = await fetch(VERCEL_HARVEST_URL, {
@@ -176,90 +217,74 @@ async function triggerHarvest(
 }
 
 /**
- * Main scheduler — runs the appropriate scopes based on time
+ * Main scheduler — dynamic, DB-driven
+ * Fetches ALL ready scopes (any governorate), respects concurrency limit
  */
 export async function runHarvestSchedule(): Promise<ScheduleResult> {
   const supabase = getSupabase();
   const startTime = Date.now();
-  const now = new Date();
-  const hour = now.getHours();
   const errors: string[] = [];
   const jobIds: string[] = [];
   let scopesRun = 0;
   let scopesSkipped = 0;
 
-  console.log(`[SCHEDULE] 🕐 Running harvest schedule at ${now.toISOString()} (hour: ${hour})`);
+  console.log(`[SCHEDULE] 🕐 Running harvest schedule at ${new Date().toISOString()}`);
 
-  // Always run primary scopes (priority 1) — every 2 hours
-  const primaryScopes = await getActiveScopes(supabase, {
-    priority: 1,
-    governorate: "الإسكندرية",
+  // Step 1: Auto-pause failing scopes
+  const pausedScopes = await autoPauseFailingScopes(supabase);
+  if (pausedScopes.length > 0) {
+    console.warn(`[SCHEDULE] ⚠️ Auto-paused ${pausedScopes.length} scopes: ${pausedScopes.join(", ")}`);
+    errors.push(`Auto-paused: ${pausedScopes.join(", ")}`);
+  }
+
+  // Step 2: Get all ready scopes (dynamic — from DB, any governorate)
+  const readyScopes = await getReadyScopes(supabase, {
+    limit: MAX_CONCURRENT_HARVESTS * 2, // fetch extra in case some fail
   });
 
-  console.log(`[SCHEDULE] 📌 Primary scopes: ${primaryScopes.length}`);
-  for (const scope of primaryScopes) {
-    if (isScopeReady(scope)) {
-      const jobId = await triggerHarvest(supabase, scope);
-      if (jobId) {
-        jobIds.push(jobId);
-        scopesRun++;
-      }
-    } else {
-      scopesSkipped++;
-    }
+  console.log(`[SCHEDULE] 📌 Ready scopes: ${readyScopes.length}`);
+
+  if (readyScopes.length === 0) {
+    const duration = (Date.now() - startTime) / 1000;
+    return {
+      total_scopes: 0,
+      scopes_run: 0,
+      scopes_skipped: 0,
+      scopes_auto_paused: pausedScopes.length,
+      jobs_created: [],
+      errors,
+      duration_seconds: duration,
+    };
   }
 
-  // Secondary scopes (priority 2) — every 3 hours
-  if (hour % 3 === 0) {
-    const secondaryScopes = await getActiveScopes(supabase, {
-      priority: 2,
-      governorate: "الإسكندرية",
-    });
+  // Step 3: Run up to MAX_CONCURRENT_HARVESTS in parallel
+  const batch = readyScopes.slice(0, MAX_CONCURRENT_HARVESTS);
+  scopesSkipped = readyScopes.length - batch.length;
 
-    console.log(`[SCHEDULE] 📌 Secondary scopes: ${secondaryScopes.length}`);
-    for (const scope of secondaryScopes) {
-      if (isScopeReady(scope)) {
-        const jobId = await triggerHarvest(supabase, scope);
-        if (jobId) {
-          jobIds.push(jobId);
-          scopesRun++;
-        }
-      } else {
-        scopesSkipped++;
-      }
-    }
-  }
+  const results = await Promise.allSettled(
+    batch.map((scope) => triggerHarvest(supabase, scope))
+  );
 
-  // Tertiary scopes (priority 3) — every 4 hours
-  if (hour % 4 === 0) {
-    const tertiaryScopes = await getActiveScopes(supabase, {
-      priority: 3,
-      governorate: "الإسكندرية",
-    });
-
-    console.log(`[SCHEDULE] 📌 Tertiary scopes: ${tertiaryScopes.length}`);
-    for (const scope of tertiaryScopes) {
-      if (isScopeReady(scope)) {
-        const jobId = await triggerHarvest(supabase, scope);
-        if (jobId) {
-          jobIds.push(jobId);
-          scopesRun++;
-        }
-      } else {
-        scopesSkipped++;
-      }
+  for (const result of results) {
+    if (result.status === "fulfilled" && result.value) {
+      jobIds.push(result.value);
+      scopesRun++;
+    } else if (result.status === "rejected") {
+      errors.push(String(result.reason));
     }
   }
 
   const duration = (Date.now() - startTime) / 1000;
-  const totalScopes = primaryScopes.length + (hour % 3 === 0 ? (await getActiveScopes(supabase, { priority: 2, governorate: "الإسكندرية" })).length : 0);
 
-  console.log(`[SCHEDULE] ✅ Schedule complete: ${scopesRun} run, ${scopesSkipped} skipped, ${jobIds.length} jobs created in ${duration.toFixed(1)}s`);
+  console.log(
+    `[SCHEDULE] ✅ Schedule complete: ${scopesRun} run, ${scopesSkipped} skipped, ${pausedScopes.length} auto-paused, ${jobIds.length} jobs in ${duration.toFixed(1)}s`
+  );
 
   return {
-    total_scopes: scopesRun + scopesSkipped,
+    total_scopes: readyScopes.length,
     scopes_run: scopesRun,
     scopes_skipped: scopesSkipped,
+    scopes_auto_paused: pausedScopes.length,
     jobs_created: jobIds,
     errors,
     duration_seconds: duration,
@@ -267,31 +292,39 @@ export async function runHarvestSchedule(): Promise<ScheduleResult> {
 }
 
 /**
- * Get schedule status — what will run next
+ * Get schedule status — what scopes are active and when they'll run next
  */
 export async function getScheduleStatus(): Promise<{
   next_primary: string;
   next_secondary: string;
   next_tertiary: string;
-  active_scopes: { priority: number; count: number; category: string }[];
+  active_scopes: { priority: number; count: number; category: string; governorate: string }[];
+  paused_scopes: number;
+  failing_scopes: number;
 }> {
   const supabase = getSupabase();
   const now = new Date();
-  const hour = now.getHours();
 
-  const scopes = await getActiveScopes(supabase, { governorate: "الإسكندرية" });
+  // Get all active scopes (any governorate)
+  const { data: scopes } = await supabase
+    .from("ahe_scopes")
+    .select("priority, maksab_category, governorate, is_paused, consecutive_failures")
+    .eq("is_active", true);
 
-  const byPriority = scopes.reduce(
-    (acc, s) => {
-      const key = `${s.priority}-${s.maksab_category}`;
-      if (!acc[key]) acc[key] = { priority: s.priority, count: 0, category: s.maksab_category };
-      acc[key].count++;
-      return acc;
-    },
-    {} as Record<string, { priority: number; count: number; category: string }>
-  );
+  const allScopes = scopes || [];
 
-  // Calculate next run times
+  const byGroup = allScopes
+    .filter((s) => !s.is_paused)
+    .reduce(
+      (acc, s) => {
+        const key = `${s.priority}-${s.maksab_category}-${s.governorate}`;
+        if (!acc[key]) acc[key] = { priority: s.priority, count: 0, category: s.maksab_category, governorate: s.governorate };
+        acc[key].count++;
+        return acc;
+      },
+      {} as Record<string, { priority: number; count: number; category: string; governorate: string }>
+    );
+
   const nextHour = (h: number) => {
     const next = new Date(now);
     next.setMinutes(0, 0, 0);
@@ -305,6 +338,8 @@ export async function getScheduleStatus(): Promise<{
     next_primary: nextHour(2),
     next_secondary: nextHour(3),
     next_tertiary: nextHour(4),
-    active_scopes: Object.values(byPriority),
+    active_scopes: Object.values(byGroup),
+    paused_scopes: allScopes.filter((s) => s.is_paused).length,
+    failing_scopes: allScopes.filter((s) => (s.consecutive_failures || 0) >= MAX_CONSECUTIVE_FAILURES).length,
   };
 }
