@@ -20,6 +20,9 @@ const CATEGORIES = [
   "gold_jewelry",
   "scrap",
   "luxury",
+  // Arabic category names used by newer scopes
+  "سيارات",
+  "عقارات",
 ];
 
 const TARGET_RATIOS: Record<string, number> = {
@@ -35,6 +38,9 @@ const TARGET_RATIOS: Record<string, number> = {
   gold_jewelry: 0.25,
   scrap: 0.5,
   luxury: 0.2,
+  // Arabic category names
+  سيارات: 0.2,
+  عقارات: 0.1,
 };
 
 const CATEGORY_AR: Record<string, string> = {
@@ -50,6 +56,9 @@ const CATEGORY_AR: Record<string, string> = {
   gold_jewelry: "ذهب ومجوهرات",
   scrap: "خُردة",
   luxury: "سلع فاخرة",
+  // Arabic keys map to themselves
+  سيارات: "سيارات",
+  عقارات: "عقارات",
 };
 
 export interface BalanceResult {
