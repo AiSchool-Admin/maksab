@@ -5,6 +5,26 @@
 
 import { SupabaseClient } from "@supabase/supabase-js";
 
+// Map Arabic category names to their English equivalents
+const CATEGORY_NORMALIZE: Record<string, string> = {
+  سيارات: "vehicles",
+  عقارات: "properties",
+  موبايلات: "phones",
+  إلكترونيات: "electronics",
+  أثاث: "furniture",
+  أزياء: "fashion",
+  "أجهزة منزلية": "home_appliances",
+  هوايات: "hobbies",
+  خدمات: "services",
+  "ذهب ومجوهرات": "gold_jewelry",
+  خردة: "scrap",
+  "سلع فاخرة": "luxury",
+};
+
+function normalizeCategory(cat: string): string {
+  return CATEGORY_NORMALIZE[cat] || cat;
+}
+
 const HIGH_DEMAND = ["phones", "vehicles", "properties", "electronics"];
 const MED_DEMAND = ["furniture", "fashion", "home_appliances"];
 
@@ -79,8 +99,9 @@ function getScopeConfig(govTier: string, catDemand: string): ScopeConfig {
 }
 
 function getCatDemand(category: string): string {
-  if (HIGH_DEMAND.includes(category)) return "high";
-  if (MED_DEMAND.includes(category)) return "med";
+  const normalized = normalizeCategory(category);
+  if (HIGH_DEMAND.includes(normalized)) return "high";
+  if (MED_DEMAND.includes(normalized)) return "med";
   return "low";
 }
 
@@ -196,7 +217,7 @@ export async function generateAllScopes(supabase: SupabaseClient): Promise<{
           max_pages_per_harvest: config.maxPages,
           priority: Math.max(1, config.priority + priorityAdjust),
           is_active: platformId === "dubizzle" ? govTier !== "D" : false, // New platforms start inactive
-          target_supply_demand_ratio: TARGET_RATIOS[cat.maksab_category] || 0.33,
+          target_supply_demand_ratio: TARGET_RATIOS[normalizeCategory(cat.maksab_category)] || 0.33,
           gov_tier: govTier,
           cat_demand_level: catDemand,
         });

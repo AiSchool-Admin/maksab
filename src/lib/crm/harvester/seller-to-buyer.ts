@@ -131,8 +131,8 @@ export async function createBuyerFromSeller(
     let productWanted = listing.title || "";
     const category = scope?.maksab_category || "";
 
-    // ترقية ذكية حسب الفئة
-    if (category === "phones") {
+    // ترقية ذكية حسب الفئة (دعم إنجليزي + عربي)
+    if (category === "phones" || category === "موبايلات") {
       if (/iphone|آيفون|ايفون/i.test(productWanted)) {
         const modelMatch = productWanted.match(/(\d{1,2})/);
         if (modelMatch) {
@@ -144,7 +144,7 @@ export async function createBuyerFromSeller(
       } else {
         productWanted = `ترقية من ${productWanted}`;
       }
-    } else if (category === "vehicles") {
+    } else if (category === "vehicles" || category === "سيارات") {
       const yearMatch = productWanted.match(/(20\d{2})/);
       if (yearMatch) {
         const year = parseInt(yearMatch[1]);
@@ -152,7 +152,7 @@ export async function createBuyerFromSeller(
       } else {
         productWanted = `ترقية من ${productWanted} → سيارة أحدث`;
       }
-    } else if (category === "properties") {
+    } else if (category === "properties" || category === "عقارات") {
       productWanted = `يبحث عن عقار مشابه أو أفضل — كان يعرض: ${productWanted}`;
     } else {
       productWanted = `ترقية من ${productWanted}`;
