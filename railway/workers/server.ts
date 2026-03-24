@@ -472,17 +472,42 @@ function calcPriorityScore(data: {
   return Math.min(score, 100);
 }
 
-// ─── Fetch a Dubizzle page ──────────────────────────────────
+// ─── Per-platform headers (stronger for WAF-protected sites) ─
+const PLATFORM_HEADERS: Record<string, Record<string, string>> = {
+  hatla2ee: {
+    ...BROWSER_HEADERS,
+    "Referer": "https://www.google.com/",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "cross-site",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+  },
+  aqarmap: {
+    ...BROWSER_HEADERS,
+    "Referer": "https://www.google.com/",
+    "Cache-Control": "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "cross-site",
+  },
+};
+
+// ─── Fetch a page with platform-specific headers ────────────
 async function fetchDubizzlePage(
   url: string,
-  timeoutMs = 20000
+  timeoutMs = 20000,
+  platform?: string
 ): Promise<{ html: string; status: number }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const headers = (platform && PLATFORM_HEADERS[platform]) || BROWSER_HEADERS;
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: BROWSER_HEADERS,
+      headers,
       redirect: "follow",
     });
     const html = await response.text();
@@ -508,10 +533,11 @@ async function fetchAndExtractDetail(
   supabase: SupabaseClient,
   listing: { id: string; source_listing_url: string; ahe_seller_id: string | null; seller_name?: string | null },
   index: number,
-  phoneSource: string
+  phoneSource: string,
+  platform?: string
 ): Promise<{ phone: string | null; sellerName: string | null }> {
   console.log(`[Detail] Fetching: ${listing.source_listing_url?.substring(0, 80)}`);
-  const { html: detailHtml, status: detailStatus } = await fetchDubizzlePage(listing.source_listing_url);
+  const { html: detailHtml, status: detailStatus } = await fetchDubizzlePage(listing.source_listing_url, 20000, platform);
 
   if (detailStatus === 403) {
     console.log("[Detail] Blocked (403) — stopping");
@@ -1122,7 +1148,7 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       );
       console.log(`[Harvest] 📄 Page ${page}/${maxPages}: ${pageUrl}`);
 
-      const { html, status } = await fetchDubizzlePage(pageUrl);
+      const { html, status } = await fetchDubizzlePage(pageUrl, 20000, scope.source_platform);
 
       if (status === 403) {
         errors.push(`Page ${page}: HTTP 403 — WAF block`);
@@ -1437,7 +1463,7 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
         const listing = newWithoutPhone[i];
         try {
           await new Promise((r) => setTimeout(r, 3000)); // 3s delay
-          const detailResult = await fetchAndExtractDetail(supabase, listing, i, "detail_page");
+          const detailResult = await fetchAndExtractDetail(supabase, listing, i, "detail_page", scope.source_platform);
           if (detailResult.phone) phonesExtracted++;
         } catch (e: any) {
           if (e.message === "HTTP_403_BLOCKED") {
