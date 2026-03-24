@@ -27,7 +27,11 @@ const BROWSER_HEADERS: Record<string, string> = {
 };
 
 // Platforms that need Vercel for fetching
-const VERCEL_DELEGATED_PLATFORMS = ["opensooq", "aqarmap", "dubizzle"];
+const VERCEL_DELEGATED_PLATFORMS = [
+  "opensooq", "aqarmap", "dowwr", "propertyfinder",
+  "hatla2ee", "contactcars", "carsemsar", "yallamotor",
+  "olx", "semsarmasr",
+];
 
 // ─── Types ───────────────────────────────────────────────────
 

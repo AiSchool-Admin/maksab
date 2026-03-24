@@ -33,7 +33,11 @@ import { createBuyerFromSeller, updateSellerBuyProbability } from "@/lib/crm/har
 export const maxDuration = 60; // Vercel max
 
 // Platforms that work from Vercel but are blocked on Railway
-const VERCEL_PLATFORMS = ["opensooq", "aqarmap", "dowwr", "propertyfinder"];
+const VERCEL_PLATFORMS = [
+  "opensooq", "aqarmap", "dowwr", "propertyfinder",
+  "hatla2ee", "contactcars", "carsemsar", "yallamotor",
+  "olx", "semsarmasr",
+];
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
