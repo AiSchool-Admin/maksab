@@ -25,6 +25,10 @@ import {
   parseOpenSooqListWithDebug,
   type OpenSooqParseDebug,
 } from "@/lib/crm/harvester/parsers/opensooq";
+import {
+  parseAqarmapListWithDebug,
+  type AqarmapParseDebug,
+} from "@/lib/crm/harvester/parsers/aqarmap";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
 import { mapLocation, normalizeGovernorate, governorateToArabic } from "@/lib/crm/harvester/parsers/location-mapper";
@@ -61,7 +65,7 @@ interface VercelHarvestResult {
   errors: string[];
   warnings: string[];
   duration_ms: number;
-  parserDebug: OpenSooqParseDebug | null;
+  parserDebug: OpenSooqParseDebug | AqarmapParseDebug | null;
 }
 
 async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult> {
@@ -155,12 +159,17 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       pagesFetched = 1;
       console.log(`[Vercel Harvest] ✅ Received ${html.length} bytes`);
 
-      // Use debug-aware parser for OpenSooq
+      // Use debug-aware parsers where available
       if (scope.source_platform === 'opensooq') {
         const result = parseOpenSooqListWithDebug(html);
         listings = result.listings;
         parserDebug = result.debug;
         console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (patterns: ${result.debug.patternsUsed.join(', ') || 'none'})`);
+      } else if (scope.source_platform === 'aqarmap') {
+        const result = parseAqarmapListWithDebug(html);
+        listings = result.listings;
+        parserDebug = result.debug;
+        console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: ${result.debug.pagePropsKeys.join(', ') || 'none'})`);
       } else {
         listings = parser.parseList(html);
         console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings`);
