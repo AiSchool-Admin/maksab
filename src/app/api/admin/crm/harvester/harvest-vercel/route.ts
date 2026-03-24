@@ -164,12 +164,12 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
         const result = parseOpenSooqListWithDebug(html);
         listings = result.listings;
         parserDebug = result.debug;
-        console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (patterns: ${result.debug.patternsUsed.join(', ') || 'none'})`);
+        console.error(`[Vercel Harvest] 📊 OpenSooq: ${listings.length} listings (patterns: ${result.debug.patternsUsed.join(', ') || 'none'})`);
       } else if (scope.source_platform === 'aqarmap') {
         const result = parseAqarmapListWithDebug(html);
         listings = result.listings;
         parserDebug = result.debug;
-        console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: ${result.debug.pagePropsKeys.join(', ') || 'none'})`);
+        console.error(`[Vercel Harvest] 📊 AqarMap: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}], firstItemKeys: [${result.debug.firstItemKeys.join(', ')}])`);
       } else {
         listings = parser.parseList(html);
         console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings`);
