@@ -33,12 +33,21 @@ export async function GET() {
       .in("primary_governorate", ALEX_GOVS)
       .eq("primary_category", "properties");
 
-    // Waleed messages today (outreach for vehicles)
+    // Waleed messages today
     const { count: waleedMessagesToday } = await supabase
-      .from("ahe_outreach_log")
+      .from("outreach_logs")
       .select("id", { count: "exact", head: true })
       .gte("created_at", todayStart.toISOString())
-      .eq("action", "sent");
+      .eq("action", "sent")
+      .eq("agent_name", "waleed");
+
+    // Ahmed messages today
+    const { count: ahmedMessagesToday } = await supabase
+      .from("outreach_logs")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", todayStart.toISOString())
+      .eq("action", "sent")
+      .eq("agent_name", "ahmed");
 
     // Monthly revenue
     const { data: revenueData } = await supabase
@@ -70,7 +79,7 @@ export async function GET() {
       alexCarsSellers: alexCarsSellers || 0,
       alexPropertiesSellers: alexPropertiesSellers || 0,
       waleedMessagesToday: waleedMessagesToday || 0,
-      ahmedMessagesToday: 0, // Will be split once ahmed has separate tracking
+      ahmedMessagesToday: ahmedMessagesToday || 0,
       monthlyRevenue,
       lastHarvestBySource,
     });

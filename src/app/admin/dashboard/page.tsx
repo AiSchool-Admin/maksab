@@ -265,8 +265,8 @@ function LeaderCard() {
           alerts: extraData.alerts || [],
           alexCarsSellers: mvpData.alexCarsSellers || extraData.alexCarsSellers || 0,
           alexPropertiesSellers: mvpData.alexPropertiesSellers || extraData.alexPropertiesSellers || 0,
-          waleedMessagesToday: mvpData.waleedMessagesToday || extraData.waleedMessagesToday || 0,
-          ahmedMessagesToday: mvpData.ahmedMessagesToday || extraData.ahmedMessagesToday || 0,
+          waleedMessagesToday: extraData.waleedMessagesToday || mvpData.waleedMessagesToday || 0,
+          ahmedMessagesToday: extraData.ahmedMessagesToday || mvpData.ahmedMessagesToday || 0,
           lastHarvestBySource: mvpData.lastHarvestBySource || extraData.lastHarvestBySource || [],
         });
       } catch {

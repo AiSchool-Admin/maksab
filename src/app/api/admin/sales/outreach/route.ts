@@ -241,7 +241,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabase();
     const body = await request.json();
-    const { sellerId, action, templateId, notes, reason } = body;
+    const { sellerId, action, templateId, notes, reason, agent_name } = body;
 
     if (!sellerId || !action) {
       return NextResponse.json({ error: "sellerId and action required" }, { status: 400 });
@@ -300,13 +300,15 @@ export async function POST(request: NextRequest) {
       await supabase.rpc("increment_outreach_count", { p_seller_id: sellerId });
     }
 
-    // Log the action
+    // Log the action with agent_name for Waleed/Ahmed tracking
     if (action !== "note") {
       await supabase.from("outreach_logs").insert({
         seller_id: sellerId,
         template_id: templateId || null,
         action,
         notes: notes || reason || null,
+        agent_name: agent_name || null,
+        phone: null, // Will be filled from seller data if needed
       });
     }
 

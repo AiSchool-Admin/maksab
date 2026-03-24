@@ -575,7 +575,7 @@ export default function SalesOutreachPage() {
       await fetch("/api/admin/sales/outreach", {
         method: "POST",
         headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ sellerId, action, ...extra }),
+        body: JSON.stringify({ sellerId, action, agent_name: employeeTab, ...extra }),
       });
       setProcessedIds((prev) => new Set([...prev, sellerId]));
       // Update progress locally
@@ -628,14 +628,16 @@ export default function SalesOutreachPage() {
     window.open(url, "_blank");
     // Auto-log outreach + increment template usage
     try {
+      const templateId = employeeTab === "ahmed" ? (selectedAhmedTemplateId || "ahmed_default") : (selectedWaleedTemplateId || "waleed_default");
       await fetch("/api/admin/sales/outreach", {
         method: "POST",
         headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           sellerId: contact.id,
           action: "sent",
-          templateId: selectedWaleedTemplateId || "waleed_default",
+          templateId,
           notes: "whatsapp_manual",
+          agent_name: employeeTab,
         }),
       });
       incrementWaleedTemplateUsage();
@@ -660,14 +662,16 @@ export default function SalesOutreachPage() {
 
   const markBatchContactAsSent = async (contact: OutreachContact) => {
     try {
+      const templateId = employeeTab === "ahmed" ? (selectedAhmedTemplateId || "ahmed_default") : (selectedWaleedTemplateId || "waleed_default");
       await fetch("/api/admin/sales/outreach", {
         method: "POST",
         headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           sellerId: contact.id,
           action: "sent",
-          templateId: selectedWaleedTemplateId || "waleed_default",
-          notes: "whatsapp_manual",
+          templateId,
+          notes: "whatsapp_batch",
+          agent_name: employeeTab,
         }),
       });
       incrementWaleedTemplateUsage();

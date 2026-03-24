@@ -29,6 +29,14 @@ import {
   parseAqarmapListWithDebug,
   type AqarmapParseDebug,
 } from "@/lib/crm/harvester/parsers/aqarmap";
+import {
+  parsePropertyFinderListWithDebug,
+  type PFParseDebug,
+} from "@/lib/crm/harvester/parsers/propertyfinder";
+import {
+  parseOlxListWithDebug,
+  type OlxParseDebug,
+} from "@/lib/crm/harvester/parsers/olx";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
 import { mapLocation, normalizeGovernorate, governorateToArabic } from "@/lib/crm/harvester/parsers/location-mapper";
@@ -65,7 +73,7 @@ interface VercelHarvestResult {
   errors: string[];
   warnings: string[];
   duration_ms: number;
-  parserDebug: OpenSooqParseDebug | AqarmapParseDebug | null;
+  parserDebug: OpenSooqParseDebug | AqarmapParseDebug | PFParseDebug | OlxParseDebug | null;
 }
 
 async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult> {
@@ -134,7 +142,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
   const parser = getParser(platform);
   let listings: ListPageListing[] = [];
   let pagesFetched = 0;
-  let parserDebug: OpenSooqParseDebug | AqarmapParseDebug | null = null;
+  let parserDebug: OpenSooqParseDebug | AqarmapParseDebug | PFParseDebug | OlxParseDebug | null = null;
 
   try {
     const pageUrl = scope.base_url;
@@ -180,7 +188,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       console.error('[DEBUG] typeof:', typeof scope.source_platform);
       console.error('[DEBUG] normalized platform:', JSON.stringify(platform));
 
-      // Use debug-aware parsers where available
+      // Use debug-aware parsers for all supported platforms
       const platformCheck = scope.source_platform?.toLowerCase().trim();
       if (platformCheck === 'opensooq') {
         const result = parseOpenSooqListWithDebug(html);
@@ -192,9 +200,19 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
         listings = result.listings;
         parserDebug = result.debug;
         console.error(`[Vercel Harvest] 📊 AqarMap: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}], firstItemKeys: [${result.debug.firstItemKeys.join(', ')}])`);
+      } else if (platformCheck === 'propertyfinder') {
+        const result = parsePropertyFinderListWithDebug(html);
+        listings = result.listings;
+        parserDebug = result.debug;
+        console.error(`[Vercel Harvest] 📊 PropertyFinder: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}])`);
+      } else if (platformCheck === 'olx') {
+        const result = parseOlxListWithDebug(html);
+        listings = result.listings;
+        parserDebug = result.debug;
+        console.error(`[Vercel Harvest] 📊 OLX: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}])`);
       } else {
         listings = parser.parseList(html);
-        console.error(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (platformCheck="${platformCheck}" raw="${scope.source_platform}" — used generic parser, NOT debug parser)`);
+        console.error(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (platform="${platformCheck}" — generic parser)`);
       }
 
       if (listings.length === 0) {
