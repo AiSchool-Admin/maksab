@@ -23,8 +23,8 @@ export function getAqarmapListPageUrl(
 
 export function parseAqarmapList(html: string): ListPageListing[] {
   // Debug: log HTML sample for troubleshooting
-  console.log(`[AqarMap] HTML length: ${html.length}`);
-  console.log(`[AqarMap] HTML sample (first 300): ${html.substring(0, 300).replace(/\n/g, " ")}`);
+  console.error(`[AqarMap] HTML length: ${html.length}`);
+  console.error(`[AqarMap] HTML sample (first 300): ${html.substring(0, 300).replace(/\n/g, " ")}`);
 
   // Try direct JSON response
   const trimmed = html.trim();
@@ -32,7 +32,7 @@ export function parseAqarmapList(html: string): ListPageListing[] {
     try {
       const json = JSON.parse(trimmed);
       const result = parseAqarmapJson(json);
-      console.log(`[AqarMap] Direct JSON: ${result.length} listings`);
+      console.error(`[AqarMap] Direct JSON: ${result.length} listings`);
       return result;
     } catch { /* fall through */ }
   }
@@ -42,21 +42,21 @@ export function parseAqarmapList(html: string): ListPageListing[] {
     html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i) ||
     html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
 
-  console.log(`[AqarMap] __NEXT_DATA__ found: ${!!nextDataMatch}`);
+  console.error(`[AqarMap] __NEXT_DATA__ found: ${!!nextDataMatch}`);
 
   if (nextDataMatch) {
     try {
       const data = JSON.parse(nextDataMatch[1]);
       const pageProps = data?.props?.pageProps || {};
-      console.log(`[AqarMap] pageProps keys: ${Object.keys(pageProps).join(", ")}`);
+      console.error(`[AqarMap] pageProps keys: ${Object.keys(pageProps).join(", ")}`);
 
       // Strategy A: pageProps.listings (direct array)
       const directListings = pageProps.listings || pageProps.properties || pageProps.units || pageProps.results;
       if (Array.isArray(directListings) && directListings.length > 0) {
-        console.log(`[AqarMap] Found ${directListings.length} listings in pageProps, first item keys: ${Object.keys(directListings[0]).join(", ")}`);
+        console.error(`[AqarMap] Found ${directListings.length} listings in pageProps, first item keys: ${Object.keys(directListings[0]).join(", ")}`);
         const mapped = directListings.map(convertAqarmapItem).filter(Boolean) as ListPageListing[];
         if (mapped.length > 0) {
-          console.log(`[AqarMap] Mapped ${mapped.length} listings from pageProps`);
+          console.error(`[AqarMap] Mapped ${mapped.length} listings from pageProps`);
           return mapped;
         }
       }
@@ -64,7 +64,7 @@ export function parseAqarmapList(html: string): ListPageListing[] {
       // Strategy B: dehydratedState.queries (React Query / TanStack Query)
       const queries = pageProps.dehydratedState?.queries;
       if (Array.isArray(queries)) {
-        console.log(`[AqarMap] dehydratedState.queries count: ${queries.length}`);
+        console.error(`[AqarMap] dehydratedState.queries count: ${queries.length}`);
         for (const q of queries) {
           const qData = q?.state?.data;
           // Could be array directly or { data: [...], meta: {...} }
@@ -73,10 +73,10 @@ export function parseAqarmapList(html: string): ListPageListing[] {
               (qData && typeof qData === "object" && Array.isArray((qData as any).listings)) ? (qData as any).listings :
                 null;
           if (items && items.length > 0) {
-            console.log(`[AqarMap] Found ${items.length} in dehydratedState query, key: ${JSON.stringify(q.queryKey)}, first item keys: ${Object.keys(items[0]).join(", ")}`);
+            console.error(`[AqarMap] Found ${items.length} in dehydratedState query, key: ${JSON.stringify(q.queryKey)}, first item keys: ${Object.keys(items[0]).join(", ")}`);
             const mapped = items.map(convertAqarmapItem).filter(Boolean) as ListPageListing[];
             if (mapped.length > 0) {
-              console.log(`[AqarMap] Mapped ${mapped.length} listings from dehydratedState`);
+              console.error(`[AqarMap] Mapped ${mapped.length} listings from dehydratedState`);
               return mapped;
             }
           }
@@ -84,27 +84,27 @@ export function parseAqarmapList(html: string): ListPageListing[] {
       }
 
       // Strategy C: recursive search (fallback for unknown structures)
-      console.log(`[AqarMap] Direct extraction failed, trying recursive search`);
+      console.error(`[AqarMap] Direct extraction failed, trying recursive search`);
       // Log deeper structure for debugging
       for (const [key, val] of Object.entries(pageProps)) {
         if (val && typeof val === "object") {
           if (Array.isArray(val)) {
-            console.log(`[AqarMap]   pageProps.${key}: Array[${val.length}]${val.length > 0 ? ` first item keys: ${Object.keys(val[0] || {}).join(", ")}` : ""}`);
+            console.error(`[AqarMap]   pageProps.${key}: Array[${val.length}]${val.length > 0 ? ` first item keys: ${Object.keys(val[0] || {}).join(", ")}` : ""}`);
           } else {
-            console.log(`[AqarMap]   pageProps.${key}: Object keys: ${Object.keys(val as object).slice(0, 10).join(", ")}`);
+            console.error(`[AqarMap]   pageProps.${key}: Object keys: ${Object.keys(val as object).slice(0, 10).join(", ")}`);
           }
         }
       }
 
       const found = extractFromNextData(data);
       if (found.length > 0) {
-        console.log(`[AqarMap] Recursive search: ${found.length} listings`);
+        console.error(`[AqarMap] Recursive search: ${found.length} listings`);
         return found;
       }
-      console.log(`[AqarMap] __NEXT_DATA__ found but 0 listings extracted`);
+      console.error(`[AqarMap] __NEXT_DATA__ found but 0 listings extracted`);
     } catch (e) {
-      console.log(`[AqarMap] __NEXT_DATA__ parse error: ${e instanceof Error ? e.message : e}`);
-      console.log(`[AqarMap] __NEXT_DATA__ raw start: ${nextDataMatch[1].substring(0, 300)}`);
+      console.error(`[AqarMap] __NEXT_DATA__ parse error: ${e instanceof Error ? e.message : e}`);
+      console.error(`[AqarMap] __NEXT_DATA__ raw start: ${nextDataMatch[1].substring(0, 300)}`);
     }
   }
 
@@ -116,7 +116,7 @@ export function parseAqarmapList(html: string): ListPageListing[] {
       if (ld["@type"] === "ItemList" && ld.itemListElement) {
         const listings = parseJsonLdItemList(ld);
         if (listings.length > 0) {
-          console.log(`[AqarMap] JSON-LD ItemList: ${listings.length} listings`);
+          console.error(`[AqarMap] JSON-LD ItemList: ${listings.length} listings`);
           return listings;
         }
       }
@@ -135,7 +135,7 @@ export function parseAqarmapList(html: string): ListPageListing[] {
         if (Array.isArray(arr) && arr.length > 0 && (arr[0].title || arr[0].name || arr[0].id)) {
           const listings = parseAqarmapJson({ data: arr });
           if (listings.length > 0) {
-            console.log(`[AqarMap] Script JSON array: ${listings.length} listings`);
+            console.error(`[AqarMap] Script JSON array: ${listings.length} listings`);
             return listings;
           }
         }
@@ -146,7 +146,7 @@ export function parseAqarmapList(html: string): ListPageListing[] {
   // ═══ Strategy 4: HTML regex (fallback for server-rendered pages) ═══
   const listings = parseAqarmapHtml(html);
   if (listings.length > 0) {
-    console.log(`[AqarMap] HTML regex: ${listings.length} listings`);
+    console.error(`[AqarMap] HTML regex: ${listings.length} listings`);
     return listings;
   }
 
@@ -154,20 +154,20 @@ export function parseAqarmapList(html: string): ListPageListing[] {
   const hrefSample = [...html.matchAll(/href="([^"]{20,100})"/gi)]
     .slice(0, 30)
     .map(m => m[1]);
-  console.log(`[AqarMap] DEBUG href samples:`, JSON.stringify(hrefSample));
+  console.error(`[AqarMap] DEBUG href samples:`, JSON.stringify(hrefSample));
 
   const classSample = [...html.matchAll(/class="([^"]{5,80})"/gi)]
     .map(m => m[1])
     .filter(c => /card|list|item|unit|property|result|price|title/i.test(c))
     .slice(0, 20);
-  console.log(`[AqarMap] DEBUG relevant classes:`, JSON.stringify(classSample));
+  console.error(`[AqarMap] DEBUG relevant classes:`, JSON.stringify(classSample));
 
   // Check for SPA indicators
-  if (html.includes("__NEXT_DATA__")) console.log("[AqarMap] DEBUG: __NEXT_DATA__ tag present but extraction failed");
-  if (html.includes("react-root") || html.includes("__next")) console.log("[AqarMap] DEBUG: React/Next.js SPA detected");
-  if (html.includes("data-reactroot")) console.log("[AqarMap] DEBUG: data-reactroot found");
+  if (html.includes("__NEXT_DATA__")) console.error("[AqarMap] DEBUG: __NEXT_DATA__ tag present but extraction failed");
+  if (html.includes("react-root") || html.includes("__next")) console.error("[AqarMap] DEBUG: React/Next.js SPA detected");
+  if (html.includes("data-reactroot")) console.error("[AqarMap] DEBUG: data-reactroot found");
 
-  console.log(`[AqarMap] Final result: 0 listings parsed from ${html.length} bytes`);
+  console.error(`[AqarMap] Final result: 0 listings parsed from ${html.length} bytes`);
   return [];
 }
 
@@ -293,7 +293,7 @@ function extractFromNextData(nextData: Record<string, unknown>): ListPageListing
     // Start from pageProps (Next.js standard)
     const props = (nextData as any)?.props?.pageProps;
     if (props) {
-      console.log(`[AqarMap] pageProps keys: ${Object.keys(props).join(", ")}`);
+      console.error(`[AqarMap] pageProps keys: ${Object.keys(props).join(", ")}`);
       findListings(props);
     }
     if (listings.length === 0) {
@@ -301,7 +301,7 @@ function extractFromNextData(nextData: Record<string, unknown>): ListPageListing
       findListings(nextData);
     }
   } catch (e) {
-    console.log(`[AqarMap] __NEXT_DATA__ traversal error: ${e}`);
+    console.error(`[AqarMap] __NEXT_DATA__ traversal error: ${e}`);
   }
 
   return listings;
