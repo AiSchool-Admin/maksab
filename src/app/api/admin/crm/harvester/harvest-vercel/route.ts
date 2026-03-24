@@ -148,16 +148,31 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     });
     clearTimeout(timeout);
 
+    console.error(`[Vercel Harvest] HTTP ${response.status} ${response.statusText} — ${pageUrl.substring(0, 100)}`);
+
     if (!response.ok) {
       if (response.status === 403) {
         errors.push(`HTTP 403 — Vercel أيضاً محظور من ${scope.source_platform}`);
       } else {
         errors.push(`HTTP ${response.status} from ${scope.source_platform}`);
       }
+      // Capture HTTP failure in parserDebug so it's visible in the response
+      if (scope.source_platform === 'aqarmap') {
+        parserDebug = {
+          htmlLength: 0,
+          nextDataFound: false,
+          pagePropsKeys: [],
+          strategyUsed: 'none',
+          listingsFound: 0,
+          firstItemKeys: [],
+          httpStatus: response.status,
+          httpError: `HTTP ${response.status} ${response.statusText}`,
+        };
+      }
     } else {
       const html = await response.text();
       pagesFetched = 1;
-      console.log(`[Vercel Harvest] ✅ Received ${html.length} bytes`);
+      console.error(`[Vercel Harvest] ✅ Received ${html.length} bytes`);
 
       // Use debug-aware parsers where available
       if (scope.source_platform === 'opensooq') {
