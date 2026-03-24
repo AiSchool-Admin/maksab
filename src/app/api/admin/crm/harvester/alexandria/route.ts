@@ -6,6 +6,9 @@
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/crm/auth";
 
+// Match both Arabic and English slug formats for backward compatibility
+const ALEX_GOVS = ["الإسكندرية", "alexandria", "الاسكندرية"];
+
 export async function GET() {
   const supabase = getServiceClient();
 
@@ -37,7 +40,7 @@ export async function GET() {
       // Scope stats (last harvest per scope)
       scopeStatsRes,
     ] = await Promise.all([
-      // Active Alexandria scopes
+      // Active Alexandria scopes (scopes always use Arabic)
       supabase
         .from("ahe_scopes")
         .select("*")
@@ -49,7 +52,7 @@ export async function GET() {
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
-        .eq("primary_governorate", "الإسكندرية")
+        .in("primary_governorate", ALEX_GOVS)
         .eq("primary_category", "سيارات")
         .not("phone", "is", null),
 
@@ -57,14 +60,14 @@ export async function GET() {
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
-        .eq("primary_governorate", "الإسكندرية")
+        .in("primary_governorate", ALEX_GOVS)
         .eq("primary_category", "سيارات"),
 
       // Property sellers with phone
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
-        .eq("primary_governorate", "الإسكندرية")
+        .in("primary_governorate", ALEX_GOVS)
         .eq("primary_category", "عقارات")
         .not("phone", "is", null),
 
@@ -72,28 +75,28 @@ export async function GET() {
       supabase
         .from("ahe_sellers")
         .select("id", { count: "exact", head: true })
-        .eq("primary_governorate", "الإسكندرية")
+        .in("primary_governorate", ALEX_GOVS)
         .eq("primary_category", "عقارات"),
 
       // Total car listings
       supabase
         .from("ahe_listings")
         .select("id", { count: "exact", head: true })
-        .eq("governorate", "الإسكندرية")
+        .in("governorate", ALEX_GOVS)
         .eq("maksab_category", "سيارات"),
 
       // Total property listings
       supabase
         .from("ahe_listings")
         .select("id", { count: "exact", head: true })
-        .eq("governorate", "الإسكندرية")
+        .in("governorate", ALEX_GOVS)
         .eq("maksab_category", "عقارات"),
 
       // Today's car listings
       supabase
         .from("ahe_listings")
         .select("id", { count: "exact", head: true })
-        .eq("governorate", "الإسكندرية")
+        .in("governorate", ALEX_GOVS)
         .eq("maksab_category", "سيارات")
         .gte("created_at", `${today}T00:00:00`),
 
@@ -101,7 +104,7 @@ export async function GET() {
       supabase
         .from("ahe_listings")
         .select("id", { count: "exact", head: true })
-        .eq("governorate", "الإسكندرية")
+        .in("governorate", ALEX_GOVS)
         .eq("maksab_category", "عقارات")
         .gte("created_at", `${today}T00:00:00`),
 
@@ -128,7 +131,7 @@ export async function GET() {
     const { data: platformListings } = await supabase
       .from("ahe_listings")
       .select("source_platform")
-      .eq("governorate", "الإسكندرية")
+      .in("governorate", ALEX_GOVS)
       .in("maksab_category", ["سيارات", "عقارات"]);
 
     if (platformListings) {
@@ -151,14 +154,14 @@ export async function GET() {
         supabase
           .from("ahe_listings")
           .select("id", { count: "exact", head: true })
-          .eq("governorate", "الإسكندرية")
+          .in("governorate", ALEX_GOVS)
           .eq("maksab_category", "سيارات")
           .gte("created_at", `${dateStr}T00:00:00`)
           .lt("created_at", `${dateStr}T23:59:59`),
         supabase
           .from("ahe_listings")
           .select("id", { count: "exact", head: true })
-          .eq("governorate", "الإسكندرية")
+          .in("governorate", ALEX_GOVS)
           .eq("maksab_category", "عقارات")
           .gte("created_at", `${dateStr}T00:00:00`)
           .lt("created_at", `${dateStr}T23:59:59`),

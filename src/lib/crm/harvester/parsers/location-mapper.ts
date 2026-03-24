@@ -169,3 +169,171 @@ export function mapLocation(
 
   return { governorate: null, city: null, area: originalText };
 }
+
+/**
+ * Normalize any governorate format (Arabic, English, slug) to a canonical slug.
+ * Useful for comparing scope.governorate (Arabic) with parsed governorate (slug).
+ *
+ * "الإسكندرية" → "alexandria"
+ * "alexandria"  → "alexandria"
+ * "cairo"       → "cairo"
+ * "القاهرة"     → "cairo"
+ */
+const GOV_NORMALIZE: Record<string, string> = {
+  // Alexandria
+  alexandria: "alexandria",
+  alex: "alexandria",
+  "الإسكندرية": "alexandria",
+  "الاسكندرية": "alexandria",
+  "اسكندرية": "alexandria",
+  // Cairo
+  cairo: "cairo",
+  "القاهرة": "cairo",
+  // Giza
+  giza: "giza",
+  "الجيزة": "giza",
+  // Qalyubia
+  qalyubia: "qalyubia",
+  "القليوبية": "qalyubia",
+  // Sharqia
+  sharqia: "sharqia",
+  "الشرقية": "sharqia",
+  // Dakahlia
+  dakahlia: "dakahlia",
+  "الدقهلية": "dakahlia",
+  // Gharbia
+  gharbia: "gharbia",
+  "الغربية": "gharbia",
+  // Monufia
+  monufia: "monufia",
+  "المنوفية": "monufia",
+  // Beheira
+  beheira: "beheira",
+  "البحيرة": "beheira",
+  // Kafr El Sheikh
+  kafr_el_sheikh: "kafr_el_sheikh",
+  "كفر الشيخ": "kafr_el_sheikh",
+  // Damietta
+  damietta: "damietta",
+  "دمياط": "damietta",
+  // Port Said
+  port_said: "port_said",
+  "بورسعيد": "port_said",
+  // Ismailia
+  ismailia: "ismailia",
+  "الإسماعيلية": "ismailia",
+  "الاسماعيلية": "ismailia",
+  // Suez
+  suez: "suez",
+  "السويس": "suez",
+  // Fayoum
+  fayoum: "fayoum",
+  "الفيوم": "fayoum",
+  // Beni Suef
+  beni_suef: "beni_suef",
+  "بني سويف": "beni_suef",
+  // Minya
+  minya: "minya",
+  "المنيا": "minya",
+  // Assiut
+  assiut: "assiut",
+  "أسيوط": "assiut",
+  // Sohag
+  sohag: "sohag",
+  "سوهاج": "sohag",
+  // Qena
+  qena: "qena",
+  "قنا": "qena",
+  // Luxor
+  luxor: "luxor",
+  "الأقصر": "luxor",
+  // Aswan
+  aswan: "aswan",
+  "أسوان": "aswan",
+  // Red Sea
+  red_sea: "red_sea",
+  "البحر الأحمر": "red_sea",
+  // Matrouh
+  matrouh: "matrouh",
+  "مطروح": "matrouh",
+  // North Sinai
+  north_sinai: "north_sinai",
+  "شمال سيناء": "north_sinai",
+  // South Sinai
+  south_sinai: "south_sinai",
+  "جنوب سيناء": "south_sinai",
+  // New Valley
+  new_valley: "new_valley",
+  "الوادي الجديد": "new_valley",
+};
+
+export function normalizeGovernorate(gov: string | null | undefined): string | null {
+  if (!gov) return null;
+  const lower = gov.trim().toLowerCase();
+
+  // Direct match
+  if (GOV_NORMALIZE[lower]) return GOV_NORMALIZE[lower];
+
+  // Try Arabic (case-sensitive since Arabic has no case)
+  if (GOV_NORMALIZE[gov.trim()]) return GOV_NORMALIZE[gov.trim()];
+
+  // Partial match for English variants (e.g. "Alexandria, Egypt")
+  for (const [key, value] of Object.entries(GOV_NORMALIZE)) {
+    if (lower.includes(key)) return value;
+  }
+
+  return lower;
+}
+
+/**
+ * Convert any governorate format to Arabic display name.
+ * "alexandria" → "الإسكندرية"
+ * "الإسكندرية" → "الإسكندرية"
+ * "cairo"      → "القاهرة"
+ */
+const SLUG_TO_ARABIC: Record<string, string> = {
+  alexandria: "الإسكندرية",
+  cairo: "القاهرة",
+  giza: "الجيزة",
+  qalyubia: "القليوبية",
+  sharqia: "الشرقية",
+  dakahlia: "الدقهلية",
+  gharbia: "الغربية",
+  monufia: "المنوفية",
+  beheira: "البحيرة",
+  kafr_el_sheikh: "كفر الشيخ",
+  damietta: "دمياط",
+  port_said: "بورسعيد",
+  ismailia: "الإسماعيلية",
+  suez: "السويس",
+  fayoum: "الفيوم",
+  beni_suef: "بني سويف",
+  minya: "المنيا",
+  assiut: "أسيوط",
+  sohag: "سوهاج",
+  qena: "قنا",
+  luxor: "الأقصر",
+  aswan: "أسوان",
+  red_sea: "البحر الأحمر",
+  matrouh: "مطروح",
+  north_sinai: "شمال سيناء",
+  south_sinai: "جنوب سيناء",
+  new_valley: "الوادي الجديد",
+};
+
+export function governorateToArabic(gov: string | null | undefined): string | null {
+  if (!gov) return null;
+  const trimmed = gov.trim();
+
+  // Already Arabic? Return as-is if it maps to a known slug
+  if (GOV_NORMALIZE[trimmed]) {
+    const slug = GOV_NORMALIZE[trimmed];
+    return SLUG_TO_ARABIC[slug] || trimmed;
+  }
+
+  // Slug → Arabic
+  const slug = normalizeGovernorate(trimmed);
+  if (slug && SLUG_TO_ARABIC[slug]) return SLUG_TO_ARABIC[slug];
+
+  return trimmed;
+}

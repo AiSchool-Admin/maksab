@@ -333,6 +333,84 @@ function mapLocationFromText(text: string): {
   return { governorate: null, city: null };
 }
 
+// ─── Governorate Normalizer ──────────────────────────────────
+// Converts any governorate format (Arabic, English, slug) to a canonical slug
+// Reuses GOVERNORATE_MAP above + extra English/Arabic variants
+const GOV_NORMALIZE_EXTRA: Record<string, string> = {
+  alex: "alexandria",
+  الاسكندرية: "alexandria",
+  اسكندرية: "alexandria",
+  الاسماعيلية: "ismailia",
+};
+
+function normalizeGovernorate(gov: string | null | undefined): string | null {
+  if (!gov) return null;
+  const trimmed = gov.trim();
+  const lower = trimmed.toLowerCase();
+
+  // Check GOVERNORATE_MAP (Arabic → slug)
+  if (GOVERNORATE_MAP[trimmed]) return GOVERNORATE_MAP[trimmed];
+
+  // Check extras (Arabic without ال variants, etc.)
+  if (GOV_NORMALIZE_EXTRA[trimmed]) return GOV_NORMALIZE_EXTRA[trimmed];
+
+  // English slug — already normalized if it matches a value in GOVERNORATE_MAP
+  const slugValues = new Set(Object.values(GOVERNORATE_MAP));
+  if (slugValues.has(lower)) return lower;
+
+  // Extra English match
+  if (GOV_NORMALIZE_EXTRA[lower]) return GOV_NORMALIZE_EXTRA[lower];
+
+  // Partial match for English variants (e.g. "Alexandria, Egypt")
+  for (const [key, value] of Object.entries(GOV_NORMALIZE_EXTRA)) {
+    if (lower.includes(key)) return value;
+  }
+  for (const [key, value] of Object.entries(GOVERNORATE_MAP)) {
+    if (lower.includes(key.toLowerCase())) return value;
+  }
+
+  return lower;
+}
+
+// ─── Governorate to Arabic ───────────────────────────────────
+// Reverse map: slug → Arabic display name (for consistent DB storage)
+const SLUG_TO_ARABIC: Record<string, string> = {
+  alexandria: "الإسكندرية",
+  cairo: "القاهرة",
+  giza: "الجيزة",
+  qalyubia: "القليوبية",
+  sharqia: "الشرقية",
+  dakahlia: "الدقهلية",
+  gharbia: "الغربية",
+  monufia: "المنوفية",
+  beheira: "البحيرة",
+  kafr_el_sheikh: "كفر الشيخ",
+  damietta: "دمياط",
+  port_said: "بورسعيد",
+  ismailia: "الإسماعيلية",
+  suez: "السويس",
+  fayoum: "الفيوم",
+  beni_suef: "بني سويف",
+  minya: "المنيا",
+  assiut: "أسيوط",
+  sohag: "سوهاج",
+  qena: "قنا",
+  luxor: "الأقصر",
+  aswan: "أسوان",
+  red_sea: "البحر الأحمر",
+  matrouh: "مطروح",
+  north_sinai: "شمال سيناء",
+  south_sinai: "جنوب سيناء",
+  new_valley: "الوادي الجديد",
+};
+
+function governorateToArabic(gov: string | null | undefined): string | null {
+  if (!gov) return null;
+  const slug = normalizeGovernorate(gov);
+  if (slug && SLUG_TO_ARABIC[slug]) return SLUG_TO_ARABIC[slug];
+  return gov.trim();
+}
+
 // ─── Date Parser ──────────────────────────────────────────────
 function parseRelativeDate(text: string): string | null {
   if (!text) return null;
@@ -1098,12 +1176,30 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
 
   console.log(`[Harvest] 📊 Fetched total: ${allListings.length} listings`);
 
-  // 3. Deduplicate against existing listings
+  // 3. Filter listings by scope governorate (e.g. Dubizzle returns mixed governorates)
+  const filteredListings = allListings.filter((listing) => {
+    if (!scope.governorate) return true; // No scope governorate — accept all
+
+    const loc = mapLocationFromText(listing.location);
+    if (!loc.governorate) return true; // Can't determine governorate — accept and use scope default
+
+    const normalizedScope = normalizeGovernorate(scope.governorate);
+    const normalizedListing = normalizeGovernorate(loc.governorate);
+
+    if (normalizedScope && normalizedListing && normalizedScope !== normalizedListing) {
+      console.log(`[Filter] Skipping non-${normalizedScope} listing: ${loc.governorate} — "${listing.title?.substring(0, 50)}"`);
+      return false;
+    }
+    return true;
+  });
+  console.log(`[Filter] ${allListings.length} → ${filteredListings.length} after governorate filter`);
+
+  // 4. Deduplicate against existing listings
   let newCount = 0;
   let dupCount = 0;
   let sellersNew = 0;
 
-  for (const listing of allListings) {
+  for (const listing of filteredListings) {
     // Check if already exists
     const { data: existing } = await supabase
       .from("ahe_listings")
@@ -1124,7 +1220,7 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
 
     // Map location
     const loc = mapLocationFromText(listing.location);
-    const governorate = loc.governorate || scope.governorate;
+    const governorate = governorateToArabic(loc.governorate) || scope.governorate;
     const city = loc.city || scope.city;
 
     // Upsert seller — create even without profile URL (use name + governorate as fallback key)

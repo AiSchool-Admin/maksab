@@ -27,7 +27,7 @@ import {
 } from "@/lib/crm/harvester/parsers/opensooq";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
-import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
+import { mapLocation, normalizeGovernorate, governorateToArabic } from "@/lib/crm/harvester/parsers/location-mapper";
 import { createBuyerFromSeller, updateSellerBuyProbability } from "@/lib/crm/harvester/seller-to-buyer";
 
 export const maxDuration = 60; // Vercel max
@@ -176,17 +176,35 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     errors.push(`Fetch error: ${msg}`);
   }
 
-  // 4. Deduplicate + Store
+  // 4. Filter listings by scope governorate
+  const filteredListings = listings.filter((listing) => {
+    if (!scope.governorate) return true;
+
+    const loc = mapLocation(listing.location || "", scope.source_platform);
+    if (!loc.governorate) return true; // Can't determine — accept and use scope default
+
+    const normalizedScope = normalizeGovernorate(scope.governorate);
+    const normalizedListing = normalizeGovernorate(loc.governorate);
+
+    if (normalizedScope && normalizedListing && normalizedScope !== normalizedListing) {
+      console.log(`[Filter] Skipping non-${normalizedScope} listing: ${loc.governorate} — "${listing.title?.substring(0, 50)}"`);
+      return false;
+    }
+    return true;
+  });
+  console.log(`[Filter] ${listings.length} → ${filteredListings.length} after governorate filter`);
+
+  // 5. Deduplicate + Store
   let newCount = 0;
   let dupCount = 0;
   let sellersNew = 0;
   let phonesExtracted = 0;
   let buyersDetected = 0;
 
-  for (const listing of listings) {
+  for (const listing of filteredListings) {
     // Time guard — stop if approaching timeout
     if (Date.now() - startTime > 50000) {
-      warnings.push(`Stopped at ${newCount + dupCount}/${listings.length} — approaching 60s timeout`);
+      warnings.push(`Stopped at ${newCount + dupCount}/${filteredListings.length} — approaching 60s timeout`);
       break;
     }
 
@@ -209,7 +227,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
 
     // Map location
     const location = mapLocation(listing.location || "", scope.source_platform);
-    const governorate = location.governorate || scope.governorate;
+    const governorate = governorateToArabic(location.governorate) || scope.governorate;
     const city = location.city || scope.city;
 
     // Extract phone from title (no detail fetch)
