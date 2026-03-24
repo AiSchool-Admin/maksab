@@ -38,11 +38,51 @@ export function parseAqarmapList(html: string): ListPageListing[] {
   }
 
   // ═══ Strategy 1: Extract __NEXT_DATA__ JSON (Next.js SSR) ═══
-  const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
+  // Try multiple regex patterns — attribute order varies, and lazy vs greedy for large payloads
+  const nextDataMatch =
+    html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i) ||
+    html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i) ||
+    html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]+)<\/script>/i);
+
+  console.log(`[AqarMap] __NEXT_DATA__ found: ${!!nextDataMatch}`);
+
   if (nextDataMatch) {
     try {
       const nextData = JSON.parse(nextDataMatch[1]);
-      console.log(`[AqarMap] __NEXT_DATA__ found, keys: ${Object.keys(nextData).join(", ")}`);
+      console.log(`[AqarMap] __NEXT_DATA__ top keys: ${Object.keys(nextData).join(", ")}`);
+      console.log(`[AqarMap] props keys: ${Object.keys(nextData.props || {}).join(", ")}`);
+      const pageProps = nextData.props?.pageProps || {};
+      console.log(`[AqarMap] pageProps keys: ${Object.keys(pageProps).join(", ")}`);
+
+      // Log deeper structure for debugging
+      for (const [key, val] of Object.entries(pageProps)) {
+        if (val && typeof val === "object") {
+          if (Array.isArray(val)) {
+            console.log(`[AqarMap]   pageProps.${key}: Array[${val.length}]${val.length > 0 ? ` first item keys: ${Object.keys(val[0] || {}).join(", ")}` : ""}`);
+          } else {
+            console.log(`[AqarMap]   pageProps.${key}: Object keys: ${Object.keys(val as object).slice(0, 10).join(", ")}`);
+          }
+        } else {
+          console.log(`[AqarMap]   pageProps.${key}: ${typeof val} = ${String(val).substring(0, 80)}`);
+        }
+      }
+
+      // Also check dehydratedState (React Query / TanStack Query)
+      if (pageProps.dehydratedState) {
+        const dh = pageProps.dehydratedState as Record<string, unknown>;
+        console.log(`[AqarMap] dehydratedState keys: ${Object.keys(dh).join(", ")}`);
+        if (Array.isArray(dh.queries)) {
+          console.log(`[AqarMap] dehydratedState.queries count: ${dh.queries.length}`);
+          for (const q of (dh.queries as any[]).slice(0, 3)) {
+            console.log(`[AqarMap]   query key: ${JSON.stringify(q.queryKey)}, state.data type: ${Array.isArray(q.state?.data) ? `Array[${q.state.data.length}]` : typeof q.state?.data}`);
+            if (q.state?.data && typeof q.state.data === "object") {
+              const dataKeys = Object.keys(q.state.data);
+              console.log(`[AqarMap]   query data keys: ${dataKeys.slice(0, 10).join(", ")}`);
+            }
+          }
+        }
+      }
+
       const listings = extractFromNextData(nextData);
       if (listings.length > 0) {
         console.log(`[AqarMap] __NEXT_DATA__ extracted: ${listings.length} listings`);
@@ -51,9 +91,9 @@ export function parseAqarmapList(html: string): ListPageListing[] {
       console.log(`[AqarMap] __NEXT_DATA__ found but 0 listings extracted`);
     } catch (e) {
       console.log(`[AqarMap] __NEXT_DATA__ parse error: ${e instanceof Error ? e.message : e}`);
+      // Log raw snippet for debugging
+      console.log(`[AqarMap] __NEXT_DATA__ raw start: ${nextDataMatch[1].substring(0, 300)}`);
     }
-  } else {
-    console.log(`[AqarMap] No __NEXT_DATA__ found`);
   }
 
   // ═══ Strategy 2: Extract JSON-LD structured data ═══
