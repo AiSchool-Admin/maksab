@@ -1127,6 +1127,20 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     const governorate = loc.governorate || scope.governorate;
     const city = loc.city || scope.city;
 
+    // Filter: skip listings that don't match scope governorate
+    if (scope.governorate === "الإسكندرية" && loc.governorate) {
+      const listingGov = loc.governorate.toLowerCase();
+      const isAlex =
+        listingGov.includes("alex") ||
+        listingGov.includes("اسكندرية") ||
+        listingGov.includes("إسكندرية") ||
+        listingGov.includes("الإسكندرية");
+      if (!isAlex) {
+        console.log(`[Filter] Skipping non-Alex listing: ${loc.governorate} — "${listing.title?.substring(0, 50)}"`);
+        continue;
+      }
+    }
+
     // Upsert seller — create even without profile URL (use name + governorate as fallback key)
     let aheSellerId: string | null = null;
     let isNewSeller = false;

@@ -212,6 +212,20 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     const governorate = location.governorate || scope.governorate;
     const city = location.city || scope.city;
 
+    // Filter: skip listings that don't match scope governorate
+    if (scope.governorate === "الإسكندرية" && location.governorate) {
+      const listingGov = location.governorate.toLowerCase();
+      const isAlex =
+        listingGov.includes("alex") ||
+        listingGov.includes("اسكندرية") ||
+        listingGov.includes("إسكندرية") ||
+        listingGov.includes("الإسكندرية");
+      if (!isAlex) {
+        console.log(`[Filter] Skipping non-Alex listing: ${location.governorate} — "${listing.title?.substring(0, 50)}"`);
+        continue;
+      }
+    }
+
     // Extract phone from title (no detail fetch)
     const phone = extractPhone(listing.title || "");
     if (phone) phonesExtracted++;
