@@ -38,22 +38,53 @@ export function parseAqarmapList(html: string): ListPageListing[] {
   }
 
   // ═══ Strategy 1: Extract __NEXT_DATA__ JSON (Next.js SSR) ═══
-  // Try multiple regex patterns — attribute order varies, and lazy vs greedy for large payloads
   const nextDataMatch =
     html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i) ||
-    html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i) ||
-    html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]+)<\/script>/i);
+    html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
 
   console.log(`[AqarMap] __NEXT_DATA__ found: ${!!nextDataMatch}`);
 
   if (nextDataMatch) {
     try {
-      const nextData = JSON.parse(nextDataMatch[1]);
-      console.log(`[AqarMap] __NEXT_DATA__ top keys: ${Object.keys(nextData).join(", ")}`);
-      console.log(`[AqarMap] props keys: ${Object.keys(nextData.props || {}).join(", ")}`);
-      const pageProps = nextData.props?.pageProps || {};
+      const data = JSON.parse(nextDataMatch[1]);
+      const pageProps = data?.props?.pageProps || {};
       console.log(`[AqarMap] pageProps keys: ${Object.keys(pageProps).join(", ")}`);
 
+      // Strategy A: pageProps.listings (direct array)
+      const directListings = pageProps.listings || pageProps.properties || pageProps.units || pageProps.results;
+      if (Array.isArray(directListings) && directListings.length > 0) {
+        console.log(`[AqarMap] Found ${directListings.length} listings in pageProps, first item keys: ${Object.keys(directListings[0]).join(", ")}`);
+        const mapped = directListings.map(convertAqarmapItem).filter(Boolean) as ListPageListing[];
+        if (mapped.length > 0) {
+          console.log(`[AqarMap] Mapped ${mapped.length} listings from pageProps`);
+          return mapped;
+        }
+      }
+
+      // Strategy B: dehydratedState.queries (React Query / TanStack Query)
+      const queries = pageProps.dehydratedState?.queries;
+      if (Array.isArray(queries)) {
+        console.log(`[AqarMap] dehydratedState.queries count: ${queries.length}`);
+        for (const q of queries) {
+          const qData = q?.state?.data;
+          // Could be array directly or { data: [...], meta: {...} }
+          const items = Array.isArray(qData) ? qData :
+            (qData && typeof qData === "object" && Array.isArray((qData as any).data)) ? (qData as any).data :
+              (qData && typeof qData === "object" && Array.isArray((qData as any).listings)) ? (qData as any).listings :
+                null;
+          if (items && items.length > 0) {
+            console.log(`[AqarMap] Found ${items.length} in dehydratedState query, key: ${JSON.stringify(q.queryKey)}, first item keys: ${Object.keys(items[0]).join(", ")}`);
+            const mapped = items.map(convertAqarmapItem).filter(Boolean) as ListPageListing[];
+            if (mapped.length > 0) {
+              console.log(`[AqarMap] Mapped ${mapped.length} listings from dehydratedState`);
+              return mapped;
+            }
+          }
+        }
+      }
+
+      // Strategy C: recursive search (fallback for unknown structures)
+      console.log(`[AqarMap] Direct extraction failed, trying recursive search`);
       // Log deeper structure for debugging
       for (const [key, val] of Object.entries(pageProps)) {
         if (val && typeof val === "object") {
@@ -62,36 +93,17 @@ export function parseAqarmapList(html: string): ListPageListing[] {
           } else {
             console.log(`[AqarMap]   pageProps.${key}: Object keys: ${Object.keys(val as object).slice(0, 10).join(", ")}`);
           }
-        } else {
-          console.log(`[AqarMap]   pageProps.${key}: ${typeof val} = ${String(val).substring(0, 80)}`);
         }
       }
 
-      // Also check dehydratedState (React Query / TanStack Query)
-      if (pageProps.dehydratedState) {
-        const dh = pageProps.dehydratedState as Record<string, unknown>;
-        console.log(`[AqarMap] dehydratedState keys: ${Object.keys(dh).join(", ")}`);
-        if (Array.isArray(dh.queries)) {
-          console.log(`[AqarMap] dehydratedState.queries count: ${dh.queries.length}`);
-          for (const q of (dh.queries as any[]).slice(0, 3)) {
-            console.log(`[AqarMap]   query key: ${JSON.stringify(q.queryKey)}, state.data type: ${Array.isArray(q.state?.data) ? `Array[${q.state.data.length}]` : typeof q.state?.data}`);
-            if (q.state?.data && typeof q.state.data === "object") {
-              const dataKeys = Object.keys(q.state.data);
-              console.log(`[AqarMap]   query data keys: ${dataKeys.slice(0, 10).join(", ")}`);
-            }
-          }
-        }
-      }
-
-      const listings = extractFromNextData(nextData);
-      if (listings.length > 0) {
-        console.log(`[AqarMap] __NEXT_DATA__ extracted: ${listings.length} listings`);
-        return listings;
+      const found = extractFromNextData(data);
+      if (found.length > 0) {
+        console.log(`[AqarMap] Recursive search: ${found.length} listings`);
+        return found;
       }
       console.log(`[AqarMap] __NEXT_DATA__ found but 0 listings extracted`);
     } catch (e) {
       console.log(`[AqarMap] __NEXT_DATA__ parse error: ${e instanceof Error ? e.message : e}`);
-      // Log raw snippet for debugging
       console.log(`[AqarMap] __NEXT_DATA__ raw start: ${nextDataMatch[1].substring(0, 300)}`);
     }
   }
@@ -159,7 +171,79 @@ export function parseAqarmapList(html: string): ListPageListing[] {
   return [];
 }
 
-// ═══ __NEXT_DATA__ extractor ═══
+// ═══ Convert a single Aqarmap item to ListPageListing ═══
+function convertAqarmapItem(item: any): ListPageListing | null {
+  if (!item || typeof item !== "object") return null;
+
+  const title = String(item.title || item.name || "").trim();
+  const id = item.id || item.listing_id;
+  if (!title && !id) return null;
+
+  // Build URL
+  let url = "";
+  if (item.url) url = String(item.url);
+  else if (item.link) url = String(item.link);
+  else if (item.slug) url = `${AQARMAP_BASE}/ar/${item.slug}`;
+  else if (id) url = `${AQARMAP_BASE}/ar/listing/${id}`;
+  if (!url) return null;
+  if (!url.startsWith("http")) url = `${AQARMAP_BASE}${url}`;
+
+  // Price — could be number, string, or nested { value, currency }
+  let price: number | null = null;
+  const rawPrice = item.price ?? item.salePrice ?? item.rentPrice;
+  if (rawPrice !== undefined && rawPrice !== null) {
+    if (typeof rawPrice === "number") price = rawPrice;
+    else if (typeof rawPrice === "object") price = parsePrice(String((rawPrice as any).value ?? (rawPrice as any).amount ?? ""));
+    else price = parsePrice(String(rawPrice));
+  }
+
+  // Location — could be string or nested { city: { name }, area: { name } }
+  const cityName = item.city?.name || item.location?.city || item.cityName || "";
+  const areaName = item.area?.name || item.neighborhood || item.district || item.areaName || "";
+  const location = [areaName, cityName].filter(Boolean).join(", ");
+
+  // Thumbnail — could be in photos array, mainPhoto, or image
+  const thumbnailUrl =
+    item.photos?.[0]?.url || item.photos?.[0]?.file ||
+    item.mainPhoto?.url || item.mainPhoto?.file ||
+    (typeof item.mainPhoto === "string" ? item.mainPhoto : null) ||
+    item.image || item.thumbnail || item.coverPhoto || null;
+
+  // Enrich title with area/rooms
+  let enrichedTitle = title || `عقار #${id}`;
+  const space = item.space || item.area_sqm || item.size;
+  const rooms = item.rooms || item.bedrooms;
+  if (space && !enrichedTitle.includes("م²")) enrichedTitle += ` — ${space} م²`;
+  if (rooms && !enrichedTitle.includes("غرف")) enrichedTitle += ` — ${rooms} غرف`;
+
+  // Seller info
+  const sellerName = item.user?.name || item.owner?.name || item.agent?.name || null;
+  const sellerIsAgent = item.user?.type === "broker" || item.user?.type === "agent" ||
+    item.owner?.type === "broker" || !!item.agent;
+
+  return {
+    url,
+    title: enrichedTitle,
+    price,
+    currency: "EGP",
+    thumbnailUrl: thumbnailUrl ? String(thumbnailUrl) : null,
+    location,
+    dateText: String(item.created_at || item.createdAt || item.publishedAt || item.date || ""),
+    sellerName: cleanSellerName(sellerName),
+    sellerProfileUrl: null,
+    sellerAvatarUrl: null,
+    isVerified: !!(item.isVerified || item.is_verified || item.verified || item.user?.isVerified),
+    isBusiness: sellerIsAgent || !!(item.is_broker || item.isBroker || item.is_company),
+    isFeatured: !!(item.isFeatured || item.is_featured || item.featured || item.isPremium),
+    supportsExchange: false,
+    isNegotiable: !!(item.isNegotiable || item.is_negotiable || item.negotiable),
+    category: "properties",
+    isLikelyBuyRequest: detectBuyRequest(enrichedTitle),
+    detectedBuyerPhone: null,
+  };
+}
+
+// ═══ __NEXT_DATA__ recursive extractor (fallback) ═══
 function extractFromNextData(nextData: Record<string, unknown>): ListPageListing[] {
   const listings: ListPageListing[] = [];
 
@@ -172,7 +256,7 @@ function extractFromNextData(nextData: Record<string, unknown>): ListPageListing
       // Check if this looks like a listings array
       if (obj.length > 0 && isLikelyListing(obj[0])) {
         for (const item of obj) {
-          const listing = convertToListing(item as Record<string, unknown>);
+          const listing = convertAqarmapItem(item);
           if (listing) listings.push(listing);
         }
         return;
@@ -232,68 +316,6 @@ function isLikelyListing(item: unknown): boolean {
     obj.location || obj.address || obj.id || obj.listing_id ||
     obj.propertyType || obj.property_type);
   return hasTitle || hasProperty;
-}
-
-function convertToListing(item: Record<string, unknown>): ListPageListing | null {
-  const title = String(item.title || item.name || item.slug || "").trim();
-  if (!title && !item.id) return null;
-
-  // Build URL
-  let url = "";
-  if (item.url) url = String(item.url);
-  else if (item.link) url = String(item.link);
-  else if (item.slug) url = `${AQARMAP_BASE}/ar/${item.slug}`;
-  else if (item.id) url = `${AQARMAP_BASE}/ar/listing/${item.id}`;
-  if (!url) return null;
-  if (!url.startsWith("http")) url = `${AQARMAP_BASE}${url}`;
-
-  // Price
-  let price: number | null = null;
-  if (item.price !== undefined && item.price !== null) {
-    price = typeof item.price === "number" ? item.price :
-      typeof item.price === "object" ? (item.price as any)?.value || (item.price as any)?.amount || null :
-        parsePrice(String(item.price));
-  }
-
-  // Location
-  const location = String(
-    item.location || item.address || item.area || item.city ||
-    (item.location_name) || ""
-  ).trim();
-
-  // Image
-  const thumbnailUrl = String(
-    item.image || item.thumbnail || item.mainImage || item.main_image ||
-    item.photo || item.coverImage || item.cover_image || ""
-  ) || null;
-
-  // Build enriched title
-  let enrichedTitle = title || `عقار ${item.id}`;
-  const area = item.area || item.size;
-  const rooms = item.rooms || item.bedrooms;
-  if (area && !enrichedTitle.includes("م²")) enrichedTitle += ` — ${area} م²`;
-  if (rooms && !enrichedTitle.includes("غرف")) enrichedTitle += ` — ${rooms} غرف`;
-
-  return {
-    url,
-    title: enrichedTitle,
-    price,
-    currency: "EGP",
-    thumbnailUrl: thumbnailUrl || null,
-    location,
-    dateText: String(item.created_at || item.createdAt || item.date || ""),
-    sellerName: cleanSellerName(String(item.agent_name || item.agentName || item.seller || "")),
-    sellerProfileUrl: null,
-    sellerAvatarUrl: null,
-    isVerified: !!(item.is_verified || item.isVerified || item.verified),
-    isBusiness: !!(item.is_broker || item.isBroker || item.is_company || item.isCompany),
-    isFeatured: !!(item.is_featured || item.isFeatured || item.featured || item.isPremium),
-    supportsExchange: false,
-    isNegotiable: !!(item.is_negotiable || item.isNegotiable),
-    category: "properties",
-    isLikelyBuyRequest: detectBuyRequest(enrichedTitle),
-    detectedBuyerPhone: null,
-  };
 }
 
 // ═══ JSON-LD parser ═══
@@ -591,7 +613,7 @@ function parseAqarmapJson(json: Record<string, unknown>): ListPageListing[] {
   if (!Array.isArray(items)) return [];
 
   for (const item of items) {
-    const listing = convertToListing(item);
+    const listing = convertAqarmapItem(item);
     if (listing) listings.push(listing);
   }
 
