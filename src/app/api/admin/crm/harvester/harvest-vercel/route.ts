@@ -27,7 +27,7 @@ import {
 } from "@/lib/crm/harvester/parsers/opensooq";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
-import { mapLocation, normalizeGovernorate } from "@/lib/crm/harvester/parsers/location-mapper";
+import { mapLocation, normalizeGovernorate, governorateToArabic } from "@/lib/crm/harvester/parsers/location-mapper";
 import { createBuyerFromSeller, updateSellerBuyProbability } from "@/lib/crm/harvester/seller-to-buyer";
 
 export const maxDuration = 60; // Vercel max
@@ -227,7 +227,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
 
     // Map location
     const location = mapLocation(listing.location || "", scope.source_platform);
-    const governorate = normalizeGovernorate(location.governorate) || scope.governorate;
+    const governorate = governorateToArabic(location.governorate) || scope.governorate;
     const city = location.city || scope.city;
 
     // Extract phone from title (no detail fetch)

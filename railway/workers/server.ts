@@ -372,6 +372,45 @@ function normalizeGovernorate(gov: string | null | undefined): string | null {
   return lower;
 }
 
+// ─── Governorate to Arabic ───────────────────────────────────
+// Reverse map: slug → Arabic display name (for consistent DB storage)
+const SLUG_TO_ARABIC: Record<string, string> = {
+  alexandria: "الإسكندرية",
+  cairo: "القاهرة",
+  giza: "الجيزة",
+  qalyubia: "القليوبية",
+  sharqia: "الشرقية",
+  dakahlia: "الدقهلية",
+  gharbia: "الغربية",
+  monufia: "المنوفية",
+  beheira: "البحيرة",
+  kafr_el_sheikh: "كفر الشيخ",
+  damietta: "دمياط",
+  port_said: "بورسعيد",
+  ismailia: "الإسماعيلية",
+  suez: "السويس",
+  fayoum: "الفيوم",
+  beni_suef: "بني سويف",
+  minya: "المنيا",
+  assiut: "أسيوط",
+  sohag: "سوهاج",
+  qena: "قنا",
+  luxor: "الأقصر",
+  aswan: "أسوان",
+  red_sea: "البحر الأحمر",
+  matrouh: "مطروح",
+  north_sinai: "شمال سيناء",
+  south_sinai: "جنوب سيناء",
+  new_valley: "الوادي الجديد",
+};
+
+function governorateToArabic(gov: string | null | undefined): string | null {
+  if (!gov) return null;
+  const slug = normalizeGovernorate(gov);
+  if (slug && SLUG_TO_ARABIC[slug]) return SLUG_TO_ARABIC[slug];
+  return gov.trim();
+}
+
 // ─── Date Parser ──────────────────────────────────────────────
 function parseRelativeDate(text: string): string | null {
   if (!text) return null;
@@ -1181,7 +1220,7 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
 
     // Map location
     const loc = mapLocationFromText(listing.location);
-    const governorate = normalizeGovernorate(loc.governorate) || scope.governorate;
+    const governorate = governorateToArabic(loc.governorate) || scope.governorate;
     const city = loc.city || scope.city;
 
     // Upsert seller — create even without profile URL (use name + governorate as fallback key)

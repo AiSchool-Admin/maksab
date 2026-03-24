@@ -9,6 +9,9 @@ function getSupabase() {
   );
 }
 
+// Match both Arabic and slug formats for backward compatibility
+const ALEX_GOVS = ["الإسكندرية", "alexandria", "الاسكندرية"];
+
 export async function GET() {
   try {
     const supabase = getSupabase();
@@ -20,14 +23,14 @@ export async function GET() {
     const { count: alexCarsSellers } = await supabase
       .from("ahe_sellers")
       .select("id", { count: "exact", head: true })
-      .eq("primary_governorate", "الإسكندرية")
+      .in("primary_governorate", ALEX_GOVS)
       .eq("primary_category", "vehicles");
 
     // Alexandria property sellers
     const { count: alexPropertiesSellers } = await supabase
       .from("ahe_sellers")
       .select("id", { count: "exact", head: true })
-      .eq("primary_governorate", "الإسكندرية")
+      .in("primary_governorate", ALEX_GOVS)
       .eq("primary_category", "properties");
 
     // Waleed messages today (outreach for vehicles)

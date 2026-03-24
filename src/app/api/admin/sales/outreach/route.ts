@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { governorateToArabic } from "@/lib/crm/harvester/parsers/location-mapper";
 
 function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -46,7 +47,11 @@ export async function GET(request: NextRequest) {
     const tab = searchParams.get("tab") || "new"; // new | followup | interested | stats
     const tier = searchParams.get("tier") || "all";
     const category = searchParams.get("category") || "all";
-    const governorate = searchParams.get("governorate") || "all";
+    const governorateParam = searchParams.get("governorate") || "all";
+    // Build array of matching governorate values (Arabic + slug) for backward compat
+    const govVariants = governorateParam !== "all"
+      ? [governorateParam, governorateToArabic(governorateParam)].filter((v, i, a) => v && a.indexOf(v) === i) as string[]
+      : null;
     const status = searchParams.get("status") || "all";
     const dailyTarget = parseInt(searchParams.get("dailyTarget") || "50");
     const templateId = searchParams.get("templateId") || null;
@@ -111,7 +116,7 @@ export async function GET(request: NextRequest) {
     // Apply filters
     if (tier !== "all") query = query.eq("seller_tier", tier);
     if (category !== "all") query = query.eq("primary_category", category);
-    if (governorate !== "all") query = query.eq("primary_governorate", governorate);
+    if (govVariants) query = query.in("primary_governorate", govVariants);
 
     query = query
       .order("whale_score", { ascending: false })
@@ -145,9 +150,9 @@ export async function GET(request: NextRequest) {
 
     if (tier !== "all") countQuery = countQuery.eq("seller_tier", tier);
     if (category !== "all") countQuery = countQuery.eq("primary_category", category);
-    if (governorate !== "all") countQuery = countQuery.eq("primary_governorate", governorate);
+    if (govVariants) countQuery = countQuery.in("primary_governorate", govVariants);
 
-    console.log('[OUTREACH API] Query params:', { tab, tier, category, governorate, limit });
+    console.log('[OUTREACH API] Query params:', { tab, tier, category, governorate: govVariants || 'all', limit });
     const [{ data: sellers, error }, { count: totalFiltered }] = await Promise.all([
       query,
       countQuery,
