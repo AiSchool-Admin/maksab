@@ -175,22 +175,26 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     } else {
       const html = await response.text();
       pagesFetched = 1;
-      console.error(`[Vercel Harvest] ✅ Received ${html.length} bytes — platform="${platform}"`);
+      console.error(`[Vercel Harvest] ✅ Received ${html.length} bytes`);
+      console.error('[DEBUG] platform value:', JSON.stringify(scope.source_platform));
+      console.error('[DEBUG] typeof:', typeof scope.source_platform);
+      console.error('[DEBUG] normalized platform:', JSON.stringify(platform));
 
       // Use debug-aware parsers where available
-      if (platform === 'opensooq') {
+      const platformCheck = scope.source_platform?.toLowerCase().trim();
+      if (platformCheck === 'opensooq') {
         const result = parseOpenSooqListWithDebug(html);
         listings = result.listings;
         parserDebug = result.debug;
         console.error(`[Vercel Harvest] 📊 OpenSooq: ${listings.length} listings (patterns: ${result.debug.patternsUsed.join(', ') || 'none'})`);
-      } else if (platform === 'aqarmap') {
+      } else if (platformCheck === 'aqarmap') {
         const result = parseAqarmapListWithDebug(html);
         listings = result.listings;
         parserDebug = result.debug;
         console.error(`[Vercel Harvest] 📊 AqarMap: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}], firstItemKeys: [${result.debug.firstItemKeys.join(', ')}])`);
       } else {
         listings = parser.parseList(html);
-        console.error(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (platform="${platform}" — used generic parser, NOT debug parser)`);
+        console.error(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (platformCheck="${platformCheck}" raw="${scope.source_platform}" — used generic parser, NOT debug parser)`);
       }
 
       if (listings.length === 0) {
