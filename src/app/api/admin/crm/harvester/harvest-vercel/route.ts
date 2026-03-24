@@ -131,7 +131,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
   const parser = getParser(scope.source_platform);
   let listings: ListPageListing[] = [];
   let pagesFetched = 0;
-  let parserDebug: OpenSooqParseDebug | null = null;
+  let parserDebug: OpenSooqParseDebug | AqarmapParseDebug | null = null;
 
   try {
     const pageUrl = scope.base_url;
