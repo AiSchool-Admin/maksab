@@ -190,6 +190,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
 
       // Use debug-aware parsers for all supported platforms
       const platformCheck = scope.source_platform?.toLowerCase().trim();
+      console.error(`[Vercel Harvest] 🔀 Platform routing: platformCheck="${platformCheck}" (raw="${scope.source_platform}")`);
       if (platformCheck === 'opensooq') {
         const result = parseOpenSooqListWithDebug(html);
         listings = result.listings;
@@ -201,15 +202,17 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
         parserDebug = result.debug;
         console.error(`[Vercel Harvest] 📊 AqarMap: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}], firstItemKeys: [${result.debug.firstItemKeys.join(', ')}])`);
       } else if (platformCheck === 'propertyfinder') {
+        console.error(`[Vercel Harvest] ➡️ Entering PropertyFinder debug parser`);
         const result = parsePropertyFinderListWithDebug(html);
         listings = result.listings;
         parserDebug = result.debug;
-        console.error(`[Vercel Harvest] 📊 PropertyFinder: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}])`);
+        console.error(`[Vercel Harvest] 📊 PropertyFinder: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}], firstItemKeys: [${result.debug.firstItemKeys.join(', ')}])`);
       } else if (platformCheck === 'olx') {
+        console.error(`[Vercel Harvest] ➡️ Entering OLX debug parser`);
         const result = parseOlxListWithDebug(html);
         listings = result.listings;
         parserDebug = result.debug;
-        console.error(`[Vercel Harvest] 📊 OLX: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}])`);
+        console.error(`[Vercel Harvest] 📊 OLX: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}], firstItemKeys: [${result.debug.firstItemKeys.join(', ')}])`);
       } else {
         listings = parser.parseList(html);
         console.error(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (platform="${platformCheck}" — generic parser)`);
