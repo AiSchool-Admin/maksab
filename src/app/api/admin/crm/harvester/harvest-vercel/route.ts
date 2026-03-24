@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getParser } from "@/lib/crm/harvester/parsers/platform-router";
+import { getParser, getPlatformHeaders } from "@/lib/crm/harvester/parsers/platform-router";
 import {
   cleanSellerName,
   detectBuyRequest,
@@ -136,9 +136,10 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000); // 25s timeout for fetch
 
+    const fetchHeaders = getPlatformHeaders(scope.source_platform);
     const response = await fetch(pageUrl, {
       signal: controller.signal,
-      headers: BROWSER_HEADERS,
+      headers: fetchHeaders,
       redirect: "follow",
     });
     clearTimeout(timeout);

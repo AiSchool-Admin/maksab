@@ -20,6 +20,7 @@ import { parseDowwrList, parseDowwrDetail, getDowwrListPageUrl } from "./dowwr";
 import { parseOlxList, parseOlxDetail, getOlxListPageUrl } from "./olx";
 import { parseSemsarMasrList, parseSemsarMasrDetail, getSemsarMasrListPageUrl } from "./semsarmasr";
 import { parseGenericList, parseGenericDetail } from "./generic";
+import { BROWSER_HEADERS } from "./dubizzle";
 
 export interface PlatformParser {
   parseList: (html: string) => ListPageListing[];
@@ -107,4 +108,37 @@ export function getRegisteredPlatforms(): string[] {
  */
 export function hasPlatformParser(platform: string): boolean {
   return platform in parsers;
+}
+
+/**
+ * Per-platform HTTP headers — stronger headers for platforms with WAF/bot detection
+ */
+const PLATFORM_HEADERS: Record<string, Record<string, string>> = {
+  hatla2ee: {
+    ...BROWSER_HEADERS,
+    "Referer": "https://www.google.com/",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "cross-site",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+  },
+  aqarmap: {
+    ...BROWSER_HEADERS,
+    "Referer": "https://www.google.com/",
+    "Cache-Control": "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "cross-site",
+  },
+};
+
+/**
+ * Get HTTP headers for a specific platform.
+ * Returns platform-specific headers if configured, otherwise default BROWSER_HEADERS.
+ */
+export function getPlatformHeaders(platform: string): Record<string, string> {
+  return PLATFORM_HEADERS[platform] || BROWSER_HEADERS;
 }

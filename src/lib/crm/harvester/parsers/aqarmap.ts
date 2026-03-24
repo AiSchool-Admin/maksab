@@ -21,17 +21,22 @@ export function getAqarmapListPageUrl(
 export function parseAqarmapList(html: string): ListPageListing[] {
   const listings: ListPageListing[] = [];
 
+  // Debug: log HTML sample for troubleshooting
+  console.log(`[AqarMap] HTML length: ${html.length}, sample: ${html.substring(0, 500).replace(/\n/g, " ")}`);
+
   // Try JSON
   const trimmed = html.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
       const json = JSON.parse(trimmed);
-      return parseAqarmapJson(json);
+      const result = parseAqarmapJson(json);
+      console.log(`[AqarMap] JSON parsed: ${result.length} listings`);
+      return result;
     } catch { /* fall through */ }
   }
 
-  // HTML: Aqarmap property cards
-  const cardPattern = /href="((?:https?:\/\/aqarmap\.com\.eg)?\/en\/(?:listing|property|for-sale|for-rent)\/[^"]*\d+[^"]*)"/gi;
+  // HTML: Aqarmap property cards — both /ar/ and /en/ paths
+  const cardPattern = /href="((?:https?:\/\/aqarmap\.com\.eg)?\/(?:ar|en)\/(?:listing|property|for-sale|for-rent|sale|rent|عقارات|شقق|فيلات)[^"]*\d+[^"]*)"/gi;
   let match;
   const seenUrls = new Set<string>();
 
@@ -45,19 +50,24 @@ export function parseAqarmapList(html: string): ListPageListing[] {
     const context = html.slice(start, end);
 
     const title = extractText(context, [
-      /class="[^"]*(?:listing-title|property-title|card-title)[^"]*"[^>]*>([^<]+)/i,
+      /class="[^"]*(?:listing-title|property-title|card-title|unit-title|search-card-title|listing__title)[^"]*"[^>]*>([^<]+)/i,
+      /data-testid="[^"]*title[^"]*"[^>]*>([^<]+)/i,
       /aria-label="([^"]+)"/i,
+      /<h[234][^>]*class="[^"]*"[^>]*>([^<]+)<\/h[234]>/i,
       /<h[234][^>]*>([^<]+)<\/h[234]>/i,
+      /title="([^"]{10,})"/i,
     ]);
     if (!title) continue;
 
     const priceText = extractText(context, [
-      /class="[^"]*(?:price|listing-price)[^"]*"[^>]*>([^<]*\d[\d,٬]*[^<]*)/i,
+      /class="[^"]*(?:price|listing-price|unit-price|search-card-price|listing__price)[^"]*"[^>]*>([^<]*\d[\d,٬]*[^<]*)/i,
+      /data-testid="[^"]*price[^"]*"[^>]*>([^<]*\d[\d,٬]*[^<]*)/i,
       /(\d[\d,٬]*)\s*(?:جنيه|ج\.م|EGP|LE)/i,
     ]);
 
     const location = extractText(context, [
-      /class="[^"]*(?:location|address|area-name)[^"]*"[^>]*>([^<]+)/i,
+      /class="[^"]*(?:location|address|area-name|unit-location|search-card-location|listing__location)[^"]*"[^>]*>([^<]+)/i,
+      /data-testid="[^"]*location[^"]*"[^>]*>([^<]+)/i,
     ]);
 
     // Property-specific data
@@ -112,12 +122,15 @@ export function parseAqarmapList(html: string): ListPageListing[] {
     });
   }
 
-  // Broader fallback
+  console.log(`[AqarMap] Primary parse: ${listings.length} listings from card URLs`);
+
+  // Broader fallback — any aqarmap link with a numeric ID
   if (listings.length === 0) {
-    const broadPattern = /href="(https?:\/\/aqarmap\.com\.eg\/[^"]*\/\d+)"/gi;
+    const broadPattern = /href="((?:https?:\/\/aqarmap\.com\.eg)?\/[^"]*\/\d+[^"]*)"/gi;
     while ((match = broadPattern.exec(html)) !== null) {
-      const url = match[1];
-      if (seenUrls.has(url)) continue;
+      const rawUrl = match[1];
+      const url = rawUrl.startsWith("http") ? rawUrl : `${AQARMAP_BASE}${rawUrl}`;
+      if (seenUrls.has(url) || !url.includes("aqarmap")) continue;
       seenUrls.add(url);
 
       const start = Math.max(0, match.index - 500);
@@ -151,8 +164,10 @@ export function parseAqarmapList(html: string): ListPageListing[] {
         detectedBuyerPhone: null,
       });
     }
+    console.log(`[AqarMap] Broad fallback: ${listings.length} listings`);
   }
 
+  console.log(`[AqarMap] Final result: ${listings.length} listings parsed`);
   return listings;
 }
 
