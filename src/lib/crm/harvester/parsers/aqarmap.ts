@@ -17,6 +17,8 @@ export interface AqarmapParseDebug {
   firstItemKeys: string[];
   hrefSamples?: string[];
   relevantClasses?: string[];
+  httpStatus?: number;
+  httpError?: string;
 }
 
 const AQARMAP_BASE = "https://aqarmap.com.eg";

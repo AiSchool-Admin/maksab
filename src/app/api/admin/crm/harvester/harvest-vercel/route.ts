@@ -29,6 +29,14 @@ import {
   parseAqarmapListWithDebug,
   type AqarmapParseDebug,
 } from "@/lib/crm/harvester/parsers/aqarmap";
+import {
+  parsePropertyFinderListWithDebug,
+  type PFParseDebug,
+} from "@/lib/crm/harvester/parsers/propertyfinder";
+import {
+  parseOlxListWithDebug,
+  type OlxParseDebug,
+} from "@/lib/crm/harvester/parsers/olx";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
 import { mapLocation, normalizeGovernorate, governorateToArabic } from "@/lib/crm/harvester/parsers/location-mapper";
@@ -65,7 +73,7 @@ interface VercelHarvestResult {
   errors: string[];
   warnings: string[];
   duration_ms: number;
-  parserDebug: OpenSooqParseDebug | AqarmapParseDebug | null;
+  parserDebug: OpenSooqParseDebug | AqarmapParseDebug | PFParseDebug | OlxParseDebug | null;
 }
 
 async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult> {
@@ -100,8 +108,11 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     };
   }
 
+  // Normalize platform name to avoid case/whitespace mismatches
+  const platform = (scope.source_platform || '').trim().toLowerCase();
+
   // 2. Validate platform — only non-dubizzle platforms
-  if (!VERCEL_PLATFORMS.includes(scope.source_platform)) {
+  if (!VERCEL_PLATFORMS.includes(platform)) {
     return {
       success: false,
       scope_code: scopeCode,
@@ -114,7 +125,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       phones_extracted: 0,
       buyers_detected: 0,
       errors: [
-        `Platform "${scope.source_platform}" غير مدعوم على Vercel. ` +
+        `Platform "${scope.source_platform}" (normalized: "${platform}") غير مدعوم على Vercel. ` +
         `المنصات المدعومة: ${VERCEL_PLATFORMS.join(", ")}`,
       ],
       warnings: [],
@@ -124,14 +135,14 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
   }
 
   console.log(
-    `[Vercel Harvest] 🚀 Starting: "${scope.name}" (${scope.code}) — platform: ${scope.source_platform}`
+    `[Vercel Harvest] 🚀 Starting: "${scope.name}" (${scope.code}) — platform: "${platform}" (raw: "${scope.source_platform}")`
   );
 
   // 3. Fetch list page (max_pages=1 due to 60s timeout)
-  const parser = getParser(scope.source_platform);
+  const parser = getParser(platform);
   let listings: ListPageListing[] = [];
   let pagesFetched = 0;
-  let parserDebug: OpenSooqParseDebug | AqarmapParseDebug | null = null;
+  let parserDebug: OpenSooqParseDebug | AqarmapParseDebug | PFParseDebug | OlxParseDebug | null = null;
 
   try {
     const pageUrl = scope.base_url;
@@ -140,7 +151,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000); // 25s timeout for fetch
 
-    const fetchHeaders = getPlatformHeaders(scope.source_platform);
+    const fetchHeaders = getPlatformHeaders(platform);
     const response = await fetch(pageUrl, {
       signal: controller.signal,
       headers: fetchHeaders,
@@ -148,31 +159,63 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     });
     clearTimeout(timeout);
 
+    console.error(`[Vercel Harvest] HTTP ${response.status} ${response.statusText} — ${pageUrl.substring(0, 100)}`);
+
     if (!response.ok) {
       if (response.status === 403) {
-        errors.push(`HTTP 403 — Vercel أيضاً محظور من ${scope.source_platform}`);
+        errors.push(`HTTP 403 — Vercel أيضاً محظور من ${platform}`);
       } else {
-        errors.push(`HTTP ${response.status} from ${scope.source_platform}`);
+        errors.push(`HTTP ${response.status} from ${platform}`);
+      }
+      // Capture HTTP failure in parserDebug so it's visible in the response
+      if (platform === 'aqarmap') {
+        parserDebug = {
+          htmlLength: 0,
+          nextDataFound: false,
+          pagePropsKeys: [],
+          strategyUsed: 'none',
+          listingsFound: 0,
+          firstItemKeys: [],
+          httpStatus: response.status,
+          httpError: `HTTP ${response.status} ${response.statusText}`,
+        };
       }
     } else {
       const html = await response.text();
       pagesFetched = 1;
-      console.log(`[Vercel Harvest] ✅ Received ${html.length} bytes`);
+      console.error(`[Vercel Harvest] ✅ Received ${html.length} bytes`);
+      console.error('[DEBUG] platform value:', JSON.stringify(scope.source_platform));
+      console.error('[DEBUG] typeof:', typeof scope.source_platform);
+      console.error('[DEBUG] normalized platform:', JSON.stringify(platform));
 
-      // Use debug-aware parsers where available
-      if (scope.source_platform === 'opensooq') {
+      // Use debug-aware parsers for all supported platforms
+      const platformCheck = scope.source_platform?.toLowerCase().trim();
+      console.error(`[Vercel Harvest] 🔀 Platform routing: platformCheck="${platformCheck}" (raw="${scope.source_platform}")`);
+      if (platformCheck === 'opensooq') {
         const result = parseOpenSooqListWithDebug(html);
         listings = result.listings;
         parserDebug = result.debug;
         console.error(`[Vercel Harvest] 📊 OpenSooq: ${listings.length} listings (patterns: ${result.debug.patternsUsed.join(', ') || 'none'})`);
-      } else if (scope.source_platform === 'aqarmap') {
+      } else if (platformCheck === 'aqarmap') {
         const result = parseAqarmapListWithDebug(html);
         listings = result.listings;
         parserDebug = result.debug;
         console.error(`[Vercel Harvest] 📊 AqarMap: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}], firstItemKeys: [${result.debug.firstItemKeys.join(', ')}])`);
+      } else if (platformCheck === 'propertyfinder') {
+        console.error(`[Vercel Harvest] ➡️ Entering PropertyFinder debug parser`);
+        const result = parsePropertyFinderListWithDebug(html);
+        listings = result.listings;
+        parserDebug = result.debug;
+        console.error(`[Vercel Harvest] 📊 PropertyFinder: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}], firstItemKeys: [${result.debug.firstItemKeys.join(', ')}])`);
+      } else if (platformCheck === 'olx') {
+        console.error(`[Vercel Harvest] ➡️ Entering OLX debug parser`);
+        const result = parseOlxListWithDebug(html);
+        listings = result.listings;
+        parserDebug = result.debug;
+        console.error(`[Vercel Harvest] 📊 OLX: ${listings.length} listings (strategy: ${result.debug.strategyUsed}, nextData: ${result.debug.nextDataFound}, pagePropsKeys: [${result.debug.pagePropsKeys.join(', ')}], firstItemKeys: [${result.debug.firstItemKeys.join(', ')}])`);
       } else {
         listings = parser.parseList(html);
-        console.log(`[Vercel Harvest] 📊 Parsed ${listings.length} listings`);
+        console.error(`[Vercel Harvest] 📊 Parsed ${listings.length} listings (platform="${platformCheck}" — generic parser)`);
       }
 
       if (listings.length === 0) {
@@ -190,7 +233,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
   const filteredListings = listings.filter((listing) => {
     if (!scope.governorate) return true;
 
-    const loc = mapLocation(listing.location || "", scope.source_platform);
+    const loc = mapLocation(listing.location || "", platform);
     if (!loc.governorate) return true; // Can't determine — accept and use scope default
 
     const normalizedScope = normalizeGovernorate(scope.governorate);

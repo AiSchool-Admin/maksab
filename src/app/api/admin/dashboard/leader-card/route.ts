@@ -20,7 +20,7 @@ export async function GET() {
     const today = new Date().toISOString().split("T")[0];
 
     // Parallel fetches
-    const [moderationRes, outreachRes, csRes, alertsRes, targetRes] = await Promise.all([
+    const [moderationRes, outreachRes, csRes, alertsRes, targetRes, waleedRes, ahmedRes] = await Promise.all([
       // Pending moderation
       sb
         .from("listing_moderation")
@@ -56,6 +56,22 @@ export async function GET() {
         .select("message_count")
         .eq("target_date", today)
         .maybeSingle(),
+
+      // Waleed messages today
+      sb
+        .from("outreach_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("action", "sent")
+        .eq("agent_name", "waleed")
+        .gte("created_at", today),
+
+      // Ahmed messages today
+      sb
+        .from("outreach_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("action", "sent")
+        .eq("agent_name", "ahmed")
+        .gte("created_at", today),
     ]);
 
     return NextResponse.json({
@@ -64,6 +80,8 @@ export async function GET() {
       csConversationsToday: csRes.count || 0,
       outreachTarget: targetRes.data?.message_count || 50,
       alerts: alertsRes.data || [],
+      waleedMessagesToday: waleedRes.count || 0,
+      ahmedMessagesToday: ahmedRes.count || 0,
     });
   } catch (err: any) {
     console.error("[LEADER-CARD] Error:", err.message);
@@ -73,6 +91,8 @@ export async function GET() {
       csConversationsToday: 0,
       outreachTarget: 50,
       alerts: [],
+      waleedMessagesToday: 0,
+      ahmedMessagesToday: 0,
     });
   }
 }

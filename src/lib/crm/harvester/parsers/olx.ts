@@ -7,6 +7,18 @@ import { cleanSellerName, detectBuyRequest, type ListPageListing, type ListingDe
 
 const OLX_BASE = "https://www.olx.com.eg";
 
+export interface OlxParseDebug {
+  htmlLength: number;
+  nextDataFound: boolean;
+  pagePropsKeys: string[];
+  strategyUsed: string;
+  listingsFound: number;
+  firstItemKeys: string[];
+  hrefSamples?: string[];
+  httpStatus?: number;
+  httpError?: string;
+}
+
 export function getOlxListPageUrl(
   baseUrl: string,
   _category: string,
@@ -19,30 +31,163 @@ export function getOlxListPageUrl(
 }
 
 export function parseOlxList(html: string): ListPageListing[] {
-  const listings: ListPageListing[] = [];
+  return parseOlxListWithDebug(html).listings;
+}
+
+export function parseOlxListWithDebug(html: string): { listings: ListPageListing[]; debug: OlxParseDebug } {
+  const debug: OlxParseDebug = {
+    htmlLength: html.length,
+    nextDataFound: false,
+    pagePropsKeys: [],
+    strategyUsed: "none",
+    listingsFound: 0,
+    firstItemKeys: [],
+  };
+
+  console.error(`[OLX] HTML length: ${html.length}`);
+
+  function done(listings: ListPageListing[], strategy: string) {
+    debug.strategyUsed = strategy;
+    debug.listingsFound = listings.length;
+    if (listings[0]) debug.firstItemKeys = Object.keys(listings[0]);
+    return { listings, debug };
+  }
 
   // Try JSON (__NEXT_DATA__ or API response)
   const trimmed = html.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
       const json = JSON.parse(trimmed);
-      return parseOlxJson(json);
+      const result = parseOlxJson(json);
+      if (result.length > 0) return done(result, "direct_json");
     } catch { /* fall through to HTML */ }
   }
 
-  // Try __NEXT_DATA__
-  const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  // ═══ Strategy 1: __NEXT_DATA__ ═══
+  const nextDataMatch =
+    html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i) ||
+    html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+
+  debug.nextDataFound = !!nextDataMatch;
+  console.error(`[OLX] __NEXT_DATA__ found: ${debug.nextDataFound}`);
+
   if (nextDataMatch) {
     try {
       const nextData = JSON.parse(nextDataMatch[1]);
-      const items = nextData?.props?.pageProps?.ads || nextData?.props?.pageProps?.listings || [];
-      if (items.length > 0) {
-        return items.map((item: Record<string, unknown>) => parseOlxJsonItem(item)).filter(Boolean);
+      const props = nextData?.props?.pageProps || {};
+      debug.pagePropsKeys = Object.keys(props);
+      console.error(`[OLX] pageProps keys: ${debug.pagePropsKeys.join(", ")}`);
+
+      // Strategy A: known direct keys
+      const knownKeys = ['ads', 'listings', 'results', 'data', 'items', 'searchResults',
+        'pageData', 'initialData', 'searchData'];
+      for (const key of knownKeys) {
+        let items = props[key];
+        // Handle nested { data: [...] } etc
+        if (items && typeof items === 'object' && !Array.isArray(items)) {
+          items = items.data || items.ads || items.listings || items.results || items.items;
+        }
+        if (Array.isArray(items) && items.length > 0) {
+          debug.firstItemKeys = Object.keys(items[0] || {});
+          console.error(`[OLX] Found ${items.length} items in pageProps.${key}, first keys: ${debug.firstItemKeys.join(", ")}`);
+          const mapped = items.map((item: Record<string, unknown>) => parseOlxJsonItem(item)).filter(Boolean) as ListPageListing[];
+          if (mapped.length > 0) return done(mapped, `pageProps.${key}`);
+        }
       }
-    } catch { /* fall through */ }
+
+      // Strategy B: dehydratedState.queries (React Query)
+      const queries = props.dehydratedState?.queries;
+      if (Array.isArray(queries)) {
+        console.error(`[OLX] dehydratedState.queries count: ${queries.length}`);
+        for (const q of queries) {
+          const qData = q?.state?.data;
+          const items = Array.isArray(qData) ? qData :
+            (qData && typeof qData === 'object') ? (qData.data || qData.ads || qData.listings || qData.results) : null;
+          if (Array.isArray(items) && items.length > 0) {
+            debug.firstItemKeys = Object.keys(items[0] || {});
+            console.error(`[OLX] Found ${items.length} in dehydratedState, queryKey: ${JSON.stringify(q.queryKey)}, keys: ${debug.firstItemKeys.join(", ")}`);
+            const mapped = items.map((item: Record<string, unknown>) => parseOlxJsonItem(item)).filter(Boolean) as ListPageListing[];
+            if (mapped.length > 0) return done(mapped, "dehydratedState");
+          }
+        }
+      }
+
+      // Strategy C: Log + deep search
+      for (const [key, val] of Object.entries(props)) {
+        if (val && typeof val === 'object') {
+          if (Array.isArray(val)) {
+            console.error(`[OLX]   pageProps.${key}: Array[${val.length}]${val.length > 0 ? ` first keys: ${Object.keys(val[0] || {}).join(", ")}` : ""}`);
+          } else {
+            console.error(`[OLX]   pageProps.${key}: Object keys: ${Object.keys(val as object).slice(0, 10).join(", ")}`);
+          }
+        }
+      }
+
+      const deepSearch = (obj: unknown, depth: number): Record<string, unknown>[] | null => {
+        if (depth <= 0 || !obj || typeof obj !== 'object') return null;
+        if (Array.isArray(obj) && obj.length >= 2) {
+          const first = obj[0];
+          if (first && typeof first === 'object' && !Array.isArray(first)) {
+            const keys = Object.keys(first as Record<string, unknown>);
+            if (keys.some(k => /title|name|price|url|link|slug/i.test(k))) {
+              return obj as Record<string, unknown>[];
+            }
+          }
+        }
+        if (!Array.isArray(obj)) {
+          for (const val of Object.values(obj as Record<string, unknown>)) {
+            if (val && typeof val === 'object') {
+              const found = deepSearch(val, depth - 1);
+              if (found) return found;
+            }
+          }
+        }
+        return null;
+      };
+
+      const foundItems = deepSearch(props, 6);
+      if (foundItems) {
+        console.error(`[OLX] Deep search found ${foundItems.length} items, first keys: ${Object.keys(foundItems[0] || {}).join(", ")}`);
+        const mapped = foundItems.map((item: Record<string, unknown>) => parseOlxJsonItem(item)).filter(Boolean) as ListPageListing[];
+        if (mapped.length > 0) return done(mapped, "deep_search");
+      }
+
+      console.error(`[OLX] __NEXT_DATA__ found but 0 listings extracted`);
+    } catch (e) {
+      console.error(`[OLX] __NEXT_DATA__ parse error: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
-  // HTML regex patterns for OLX listing cards
+  // ═══ Strategy 2: JSON-LD ═══
+  const jsonLdMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+  for (const jm of jsonLdMatches) {
+    try {
+      const ld = JSON.parse(jm[1]);
+      if (ld["@type"] === "ItemList" && ld.itemListElement) {
+        const listings: ListPageListing[] = [];
+        for (const elem of ld.itemListElement) {
+          const item = elem.item || elem;
+          const title = item.name || '';
+          const url = item.url || '';
+          if (!title || !url) continue;
+          listings.push({
+            url: url.startsWith('http') ? url : `${OLX_BASE}${url}`,
+            title, price: typeof item.offers?.price === 'number' ? item.offers.price : null,
+            currency: "EGP", thumbnailUrl: item.image || null,
+            location: item.address?.addressLocality || "", dateText: "",
+            sellerName: null, sellerProfileUrl: null, sellerAvatarUrl: null,
+            isVerified: false, isBusiness: false, isFeatured: false,
+            supportsExchange: false, isNegotiable: false, category: null,
+            isLikelyBuyRequest: false, detectedBuyerPhone: null,
+          });
+        }
+        if (listings.length > 0) return done(listings, "jsonld");
+      }
+    } catch { /* skip */ }
+  }
+
+  // ═══ Strategy 3: HTML regex ═══
+  const listings: ListPageListing[] = [];
   const cardPattern = /href="((?:https?:\/\/www\.olx\.com\.eg)?\/[^"]*item[^"]*|(?:https?:\/\/www\.olx\.com\.eg)?\/[^"]*ad[^"]*\d+[^"]*)"/gi;
   let match;
   const seenUrls = new Set<string>();
@@ -120,7 +265,14 @@ export function parseOlxList(html: string): ListPageListing[] {
     });
   }
 
-  return listings;
+  if (listings.length > 0) return done(listings, "html_regex");
+
+  // ═══ All strategies failed ═══
+  debug.hrefSamples = [...html.matchAll(/href="([^"]{20,100})"/gi)]
+    .slice(0, 30).map(m => m[1]);
+  console.error(`[OLX] DEBUG href samples:`, JSON.stringify(debug.hrefSamples?.slice(0, 10)));
+  console.error(`[OLX] Final: 0 listings from ${html.length} bytes`);
+  return done([], "none");
 }
 
 export function parseOlxDetail(html: string): ListingDetails {
