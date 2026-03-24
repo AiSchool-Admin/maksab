@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Store, MessageCircle, User, Plus, LayoutDashboard } from "lucide-react";
+import { Home, Car, Building2, MessageCircle, User, Plus, LayoutDashboard } from "lucide-react";
 
 interface TabConfig {
   href: string;
@@ -14,9 +14,9 @@ interface TabConfig {
 
 const defaultTabs: TabConfig[] = [
   { href: "/", icon: Home, label: "الرئيسية" },
-  { href: "/stores", icon: Store, label: "المتاجر" },
+  { href: "/browse/cars/alexandria", icon: Car, label: "سيارات 🚗" },
   { href: "/ad/choose", icon: Plus, label: "أضف إعلانك", isAdd: true },
-  { href: "/chat", icon: MessageCircle, label: "الرسائل", hasBadge: true },
+  { href: "/browse/properties/alexandria", icon: Building2, label: "عقارات 🏠" },
   { href: "/profile", icon: User, label: "حسابي" },
 ];
 

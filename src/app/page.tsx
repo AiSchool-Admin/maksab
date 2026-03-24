@@ -9,7 +9,7 @@ import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
 import Button from "@/components/ui/Button";
-import CategoryIcon from "@/components/ui/CategoryIcon";
+
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 
@@ -262,40 +262,30 @@ export default function HomePage() {
             </section>
           )}
 
-          {/* Quick search chips */}
-          <div className="relative">
-            <div className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-hide">
-              {categories.map((cat) => (
-                <Link
-                  key={cat.slug}
-                  href={`/search?category=${cat.slug}`}
-                  className="flex-shrink-0 px-4 py-2 bg-gray-light text-dark text-base font-bold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
-                >
-                  {cat.name}
-                </Link>
-              ))}
-            </div>
-            <div className="absolute start-0 top-0 bottom-0 w-10 bg-gradient-to-l from-transparent to-white pointer-events-none flex items-center justify-start ps-1">
-              <span className="text-gray-text text-sm font-bold animate-pulse">&#x203A;</span>
-            </div>
-          </div>
-
-          {/* Categories Grid */}
-          <section className="px-4 pb-1.5 pt-1">
-            <h2 className="text-xl font-bold text-dark mb-2">الأقسام</h2>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-y-4 gap-x-2">
-              {categories.map((cat) => (
-                <Link
-                  key={cat.slug}
-                  href={`/search?category=${cat.slug}`}
-                  className="flex flex-col items-center gap-1.5 group"
-                >
-                  <CategoryIcon slug={cat.slug} size="md" />
-                  <span className="text-sm sm:text-base font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1">
-                    {cat.name}
-                  </span>
-                </Link>
-              ))}
+          {/* Alexandria Category Tabs */}
+          <section className="px-4 pt-2 pb-1">
+            <h2 className="text-lg font-bold text-dark mb-3">تصفح الإسكندرية</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <Link
+                href="/browse/vehicles/alexandria"
+                className="flex items-center gap-3 p-4 bg-gradient-to-l from-blue-50 to-blue-100 border-2 border-blue-200 rounded-2xl hover:shadow-md transition-all active:scale-[0.98]"
+              >
+                <span className="text-3xl">🚗</span>
+                <div>
+                  <span className="text-base font-bold text-dark block">سيارات</span>
+                  <span className="text-[11px] text-gray-text">الإسكندرية</span>
+                </div>
+              </Link>
+              <Link
+                href="/browse/properties/alexandria"
+                className="flex items-center gap-3 p-4 bg-gradient-to-l from-purple-50 to-purple-100 border-2 border-purple-200 rounded-2xl hover:shadow-md transition-all active:scale-[0.98]"
+              >
+                <span className="text-3xl">🏠</span>
+                <div>
+                  <span className="text-base font-bold text-dark block">عقارات</span>
+                  <span className="text-[11px] text-gray-text">الإسكندرية</span>
+                </div>
+              </Link>
             </div>
           </section>
 
