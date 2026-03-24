@@ -57,20 +57,6 @@ import {
 const categories = [
   { name: "سيارات", slug: "cars" },
   { name: "عقارات", slug: "real-estate" },
-  { name: "موبايلات", slug: "phones" },
-  { name: "موضة", slug: "fashion" },
-  { name: "خردة", slug: "scrap" },
-  { name: "ذهب وفضة", slug: "gold" },
-  { name: "فاخرة", slug: "luxury" },
-  { name: "أجهزة", slug: "appliances" },
-  { name: "أثاث", slug: "furniture" },
-  { name: "هوايات", slug: "hobbies" },
-  { name: "عدد", slug: "tools" },
-  { name: "خدمات", slug: "services" },
-  { name: "كمبيوتر", slug: "computers" },
-  { name: "أطفال", slug: "kids-babies" },
-  { name: "إلكترونيات", slug: "electronics" },
-  { name: "جمال وصحة", slug: "beauty" },
 ];
 
 export default function HomePage() {
