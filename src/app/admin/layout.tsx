@@ -130,6 +130,8 @@ const navSections: NavSection[] = [
     icon: "📈",
     items: [
       { href: "/admin/sales/pipeline", label: "Pipeline", icon: PieChart },
+      { href: "/admin/sales/outreach?tab=waleed&category=cars", label: "وليد — سيارات الإسكندرية", icon: Mail },
+      { href: "/admin/sales/outreach?tab=ahmed&category=properties", label: "أحمد — عقارات الإسكندرية", icon: Mail },
       { href: "/admin/sales/outreach", label: "التواصل — بائعين", icon: Mail },
       { href: "/admin/sales/templates", label: "مكتبة الرسائل", icon: ClipboardCheck },
       { href: "/admin/sales/waleed-templates", label: "رسائل وليد", icon: Mail },
@@ -174,8 +176,9 @@ const navSections: NavSection[] = [
     label: "المالية",
     icon: "💰",
     items: [
-      { href: "/admin/finance/dashboard", label: "الإيرادات", icon: DollarSign },
+      { href: "/admin/finance/revenue", label: "الإيرادات", icon: DollarSign },
       { href: "/admin/finance/subscriptions", label: "الاشتراكات", icon: CreditCard },
+      { href: "/admin/finance/leads", label: "الـ Leads", icon: Target },
     ],
   },
   {

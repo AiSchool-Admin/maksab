@@ -210,6 +210,12 @@ interface LeaderCardData {
   csConversationsToday: number;
   hasNoraDailyReport: boolean;
   alerts: Array<{ id: string; message: string; priority: string; type: string }>;
+  // Alexandria stats
+  alexCarsSellers: number;
+  alexPropertiesSellers: number;
+  waleedMessagesToday: number;
+  ahmedMessagesToday: number;
+  lastHarvestBySource: Array<{ platform: string; harvested_at: string }>;
 }
 
 function LeaderCard() {
@@ -220,10 +226,11 @@ function LeaderCard() {
     async function load() {
       try {
         const headers = getAdminHeaders();
-        const [escalRes, reportRes, dashRes] = await Promise.all([
+        const [escalRes, reportRes, dashRes, mvpRes] = await Promise.all([
           fetch("/api/admin/cs/escalations", { headers }),
           fetch("/api/admin/ai/daily-report", { headers }),
           fetch("/api/admin/dashboard/leader-card", { headers }),
+          fetch("/api/admin/dashboard/mvp-stats", { headers }).catch(() => null),
         ]);
 
         let pendingEscalations = 0;
@@ -243,6 +250,11 @@ function LeaderCard() {
           extraData = await dashRes.json();
         }
 
+        let mvpData: any = {};
+        if (mvpRes?.ok) {
+          mvpData = await mvpRes.json();
+        }
+
         setData({
           pendingEscalations,
           pendingModeration: extraData.pendingModeration || 0,
@@ -251,6 +263,11 @@ function LeaderCard() {
           csConversationsToday: extraData.csConversationsToday || 0,
           hasNoraDailyReport,
           alerts: extraData.alerts || [],
+          alexCarsSellers: mvpData.alexCarsSellers || extraData.alexCarsSellers || 0,
+          alexPropertiesSellers: mvpData.alexPropertiesSellers || extraData.alexPropertiesSellers || 0,
+          waleedMessagesToday: mvpData.waleedMessagesToday || extraData.waleedMessagesToday || 0,
+          ahmedMessagesToday: mvpData.ahmedMessagesToday || extraData.ahmedMessagesToday || 0,
+          lastHarvestBySource: mvpData.lastHarvestBySource || extraData.lastHarvestBySource || [],
         });
       } catch {
         // silent
@@ -345,20 +362,31 @@ function LeaderCard() {
           </div>
         )}
 
+        {/* Alexandria Stats */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
+            <p className="text-lg font-bold text-blue-600">{data.alexCarsSellers}</p>
+            <p className="text-[10px] text-gray-text">🚗 بائعي سيارات — الإسكندرية</p>
+          </div>
+          <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
+            <p className="text-lg font-bold text-purple-600">{data.alexPropertiesSellers}</p>
+            <p className="text-[10px] text-gray-text">🏠 بائعي عقارات — الإسكندرية</p>
+          </div>
+        </div>
+
         {/* Team Summary */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
             <p className="text-lg font-bold text-blue-600">{data.csConversationsToday}</p>
             <p className="text-[10px] text-gray-text">محادثات سارة</p>
           </div>
           <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
-            <p className="text-lg font-bold text-green-600">{data.outreachSentToday}</p>
-            <p className="text-[10px] text-gray-text">
-              رسائل وليد
-              {data.outreachTarget > 0 && (
-                <span className="text-gray-400"> / {data.outreachTarget}</span>
-              )}
-            </p>
+            <p className="text-lg font-bold text-green-600">{data.waleedMessagesToday}</p>
+            <p className="text-[10px] text-gray-text">🚗 رسائل وليد</p>
+          </div>
+          <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
+            <p className="text-lg font-bold text-purple-600">{data.ahmedMessagesToday}</p>
+            <p className="text-[10px] text-gray-text">🏠 رسائل أحمد</p>
           </div>
           <div className="bg-white/80 rounded-xl p-3 text-center border border-gray-100">
             <p className="text-lg font-bold text-yellow-600">{data.pendingModeration}</p>

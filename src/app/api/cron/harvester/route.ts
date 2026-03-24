@@ -120,7 +120,9 @@ export async function GET(req: NextRequest) {
     const availableSlots =
       engine.global_max_concurrent_jobs - engine.running_jobs_count;
 
-    const { data: readyScopes } = await supabase
+    const MVP_MODE = process.env.MVP_MODE === "true";
+
+    let scopeQuery = supabase
       .from("ahe_scopes")
       .select("*")
       .eq("is_active", true)
@@ -128,7 +130,17 @@ export async function GET(req: NextRequest) {
       .or("server_fetch_blocked.eq.false,server_fetch_blocked.is.null")
       .or(
         `next_harvest_at.is.null,next_harvest_at.lte.${now.toISOString()}`
-      )
+      );
+
+    // MVP mode: الإسكندرية فقط — سيارات وعقارات
+    if (MVP_MODE) {
+      scopeQuery = scopeQuery
+        .eq("governorate", "الإسكندرية")
+        .in("maksab_category", ["سيارات", "عقارات"]);
+      console.log("[CRON] 🎯 MVP Mode: الإسكندرية فقط — سيارات + عقارات");
+    }
+
+    const { data: readyScopes } = await scopeQuery
       .order("priority", { ascending: true })
       .order("next_harvest_at", { ascending: true, nullsFirst: false })
       .limit(Math.max(availableSlots, 20));
