@@ -201,6 +201,57 @@ export default function PricingPage() {
         </div>
       </div>
 
+      {/* Payment Methods — InstaPay first */}
+      <div className="max-w-4xl mx-auto px-4 pb-16">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">طرق الدفع</h2>
+          <p className="text-[#6B7280]">اختار الطريقة اللي تناسبك</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* InstaPay — Primary */}
+          <a
+            href={process.env.NEXT_PUBLIC_INSTAPAY_LINK || "https://ipn.eg/S/mamdouhragab1707/instapay/0i4IIx"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-gradient-to-bl from-emerald-50 to-green-100 border-2 border-emerald-400 rounded-2xl p-6 text-center relative hover:shadow-lg transition-all"
+          >
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-4 py-1 rounded-full">
+              الأسرع والأسهل ✅
+            </div>
+            <div className="text-4xl mb-3">💳</div>
+            <h3 className="text-lg font-bold text-[#1A1A2E] mb-1">InstaPay</h3>
+            <p className="text-sm text-[#6B7280] mb-3">ادفع فوراً من أي بنك أو محفظة</p>
+            <div className="bg-white rounded-xl px-4 py-3 border border-emerald-200">
+              <p className="text-xs text-gray-400 mb-1">رقم InstaPay</p>
+              <p className="text-lg font-bold text-emerald-600 font-mono tracking-wider" dir="ltr">
+                {process.env.NEXT_PUBLIC_INSTAPAY_PHONE || "01070078347"}
+              </p>
+            </div>
+          </a>
+
+          {/* Vodafone Cash */}
+          <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 text-center">
+            <div className="text-4xl mb-3">📱</div>
+            <h3 className="text-lg font-bold text-[#1A1A2E] mb-1">فودافون كاش</h3>
+            <p className="text-sm text-[#6B7280] mb-3">حوّل من محفظتك</p>
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-400 mb-1">رقم فودافون كاش</p>
+              <p className="text-lg font-bold text-[#1A1A2E] font-mono tracking-wider" dir="ltr">
+                {process.env.NEXT_PUBLIC_VODAFONE_CASH_NUMBER || "01070078347"}
+              </p>
+            </div>
+          </div>
+
+          {/* Bank Transfer */}
+          <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 text-center">
+            <div className="text-4xl mb-3">🏦</div>
+            <h3 className="text-lg font-bold text-[#1A1A2E] mb-1">تحويل بنكي</h3>
+            <p className="text-sm text-[#6B7280] mb-3">تحويل من أي بنك</p>
+            <p className="text-xs text-gray-400">تواصل معانا للتفاصيل</p>
+          </div>
+        </div>
+      </div>
+
       {/* CTA */}
       <div className="bg-[#1B7A3D] py-12 px-4">
         <div className="max-w-2xl mx-auto text-center">
