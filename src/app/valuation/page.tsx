@@ -9,6 +9,15 @@ import { citiesByGovernorate } from "@/lib/data/governorates";
 
 /* ─── Types ─── */
 
+interface ComparableListing {
+  title: string;
+  price: number;
+  city: string | null;
+  source_platform: string | null;
+  source_listing_url: string | null;
+  created_at: string;
+}
+
 interface ValuationResult {
   estimated_min: number;
   estimated_max: number;
@@ -19,7 +28,14 @@ interface ValuationResult {
   ai_analysis: string;
   market_trend: string;
   trend_pct: number;
-  comparables: Array<{ title: string; price: number; source: string; date: string }>;
+  comparables: ComparableListing[];
+  process_details?: {
+    step1_total_listings: number;
+    step2_after_specific: number;
+    step3_after_iqr: number;
+    outliers_removed_count: number;
+    prices_removed: number[];
+  };
 }
 
 /* ─── Car Options ─── */
@@ -54,6 +70,12 @@ const FINISHING_OPTIONS = [
 ];
 
 const ALEX_DISTRICTS = citiesByGovernorate["الإسكندرية"] || [];
+
+const PLATFORM_LABELS: Record<string, string> = {
+  dubizzle: "Dubizzle", opensooq: "OpenSooq", aqarmap: "AqarMap",
+  propertyfinder: "PF", olx: "OLX", hatla2ee: "Hatla2ee",
+  contactcars: "ContactCars", carsemsar: "CarSemsar",
+};
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 30 }, (_, i) => currentYear - i);
@@ -399,21 +421,69 @@ export default function ValuationPage() {
               </div>
             </div>
 
-            {/* Comparables */}
+            {/* Comparables Table */}
             {result.comparables.length > 0 && (
               <div>
-                <p className="text-sm font-bold text-dark mb-2">إعلانات مشابهة:</p>
-                <div className="space-y-2">
-                  {result.comparables.map((c, i) => (
-                    <div key={i} className="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-dark font-medium truncate">{c.title}</p>
-                        <p className="text-[10px] text-gray-text">{c.source}</p>
-                      </div>
-                      <p className="text-sm font-bold text-brand-green mr-3">{formatPrice(c.price)} ج</p>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-bold text-dark">الإعلانات المستخدمة في التقييم</p>
+                  <p className="text-[10px] text-gray-text">
+                    بناءً على {result.comparable_count} إعلان
+                    {result.process_details?.outliers_removed_count ? ` بعد حذف ${result.process_details.outliers_removed_count} سعر شاذ` : ""}
+                  </p>
                 </div>
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-xs text-gray-400 border-b">
+                        <th className="text-right py-2 px-3 font-medium">العنوان</th>
+                        <th className="text-center py-2 px-2 font-medium">السعر</th>
+                        <th className="text-center py-2 px-2 font-medium">الحي</th>
+                        <th className="text-center py-2 px-2 font-medium">المصدر</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.comparables.map((c, i) => (
+                        <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50">
+                          <td className="py-2 px-3 max-w-[180px]">
+                            {c.source_listing_url ? (
+                              <a href={c.source_listing_url} target="_blank" rel="noopener noreferrer"
+                                className="text-sm text-blue-600 hover:underline font-medium truncate block">
+                                {c.title}
+                              </a>
+                            ) : (
+                              <p className="text-sm text-dark font-medium truncate">{c.title}</p>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 text-center font-bold text-brand-green text-xs whitespace-nowrap">
+                            {formatPrice(c.price)} ج
+                          </td>
+                          <td className="py-2 px-2 text-center text-xs text-gray-500">
+                            {c.city || "—"}
+                          </td>
+                          <td className="py-2 px-2 text-center text-[10px] text-gray-400">
+                            {PLATFORM_LABELS[c.source_platform || ""] || c.source_platform || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Removed outliers */}
+                {result.process_details?.prices_removed && result.process_details.prices_removed.length > 0 && (
+                  <div className="mt-2 p-3 bg-red-50 border border-red-100 rounded-xl">
+                    <p className="text-[10px] font-bold text-red-500 mb-1">
+                      أسعار شاذة تم حذفها ({result.process_details.prices_removed.length}):
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {result.process_details.prices_removed.map((p, i) => (
+                        <span key={i} className="text-[10px] text-red-400 bg-red-100 px-2 py-0.5 rounded-full line-through">
+                          {formatPrice(p)} ج
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

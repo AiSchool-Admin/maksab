@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     // ─── Find comparable listings (Alexandria first) ───
     const { data: allListings, error: queryErr } = await sb
       .from("ahe_listings")
-      .select("title, price, created_at, source_platform, governorate, maksab_category")
+      .select("title, price, created_at, source_platform, governorate, maksab_category, city, source_listing_url")
       .in("maksab_category", catVariants)
       .in("governorate", ALEX_GOVS)
       .gt("price", 0)
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     console.error("[Valuation] No Alexandria listings, trying all governorates...");
     const { data: fallback } = await sb
       .from("ahe_listings")
-      .select("title, price, created_at, source_platform, governorate, maksab_category")
+      .select("title, price, created_at, source_platform, governorate, maksab_category, city, source_listing_url")
       .in("maksab_category", catVariants)
       .gt("price", 0)
       .not("price", "is", null)
@@ -356,6 +356,15 @@ async function processComparables(
 
   await sb.from("asset_valuations").insert(insertData);
 
+  const mapListing = (l: Listing) => ({
+    title: l.title as string,
+    price: l.price as number,
+    city: (l.city as string) || null,
+    source_platform: (l.source_platform as string) || null,
+    source_listing_url: (l.source_listing_url as string) || null,
+    created_at: l.created_at as string,
+  });
+
   return NextResponse.json({
     estimated_min: estimatedMin,
     estimated_max: estimatedMax,
@@ -366,25 +375,16 @@ async function processComparables(
     ai_analysis: aiAnalysis,
     market_trend: marketTrend,
     trend_pct: trendPct,
-    comparables: comparables.slice(0, 5).map((l) => ({
-      title: l.title,
-      price: l.price,
-      source: l.source_platform,
-      date: l.created_at,
-    })),
+    comparables: comparables.slice(0, 10).map(mapListing),
     process_details: {
       step1_total_listings: step1_total,
       step2_after_specific: afterSpecificCount,
       step3_after_iqr: prices.length,
+      outliers_removed_count: removedOutliers.length,
       prices_used: prices,
       prices_removed: removedOutliers,
       filters_applied: filtersApplied,
-      sample_listings: comparables.slice(0, 5).map((l) => ({
-        title: l.title,
-        price: l.price,
-        governorate: l.governorate,
-        platform: l.source_platform,
-      })),
+      sample_listings: comparables.slice(0, 10).map(mapListing),
     },
   });
 }
