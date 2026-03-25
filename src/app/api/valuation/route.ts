@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     // ─── Find comparable listings (Alexandria first) ───
     const { data: allListings, error: queryErr } = await sb
       .from("ahe_listings")
-      .select("title, price, created_at, source_platform, governorate, category_fields, maksab_category")
+      .select("title, price, created_at, source_platform, governorate, maksab_category")
       .in("maksab_category", catVariants)
       .in("governorate", ALEX_GOVS)
       .gt("price", 0)
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     console.error("[Valuation] No Alexandria listings, trying all governorates...");
     const { data: fallback } = await sb
       .from("ahe_listings")
-      .select("title, price, created_at, source_platform, governorate, category_fields, maksab_category")
+      .select("title, price, created_at, source_platform, governorate, maksab_category")
       .in("maksab_category", catVariants)
       .gt("price", 0)
       .not("price", "is", null)
@@ -124,14 +124,12 @@ async function processComparables(
 ) {
   let comparables = allListings;
 
-  // ─── Car similarity filters ───
+  // ─── Car similarity filters (title-based since category_fields not in select) ───
   if (asset_type === "car" && body.car_make) {
     const makeFilter = body.car_make.toLowerCase();
     const filtered = comparables.filter((l) => {
       const title = String(l.title || "").toLowerCase();
-      const fields = l.category_fields as Record<string, unknown> | null;
-      const brand = String(fields?.brand || fields?.make || "").toLowerCase();
-      return title.includes(makeFilter) || brand.includes(makeFilter);
+      return title.includes(makeFilter);
     });
     if (filtered.length >= 3) comparables = filtered;
 
@@ -139,42 +137,52 @@ async function processComparables(
       const modelFilter = body.car_model.toLowerCase();
       const modelFiltered = comparables.filter((l) => {
         const title = String(l.title || "").toLowerCase();
-        const fields = l.category_fields as Record<string, unknown> | null;
-        const model = String(fields?.model || "").toLowerCase();
-        return title.includes(modelFilter) || model.includes(modelFilter);
+        return title.includes(modelFilter);
       });
       if (modelFiltered.length >= 3) comparables = modelFiltered;
     }
 
     if (body.car_year && comparables.length > 5) {
+      const yearStr = String(body.car_year);
       const yearFiltered = comparables.filter((l) => {
-        const fields = l.category_fields as Record<string, unknown> | null;
-        const year = Number(fields?.year || 0);
-        return year > 0 && Math.abs(year - body.car_year!) <= 2;
+        const title = String(l.title || "");
+        return title.includes(yearStr);
       });
       if (yearFiltered.length >= 3) comparables = yearFiltered;
     }
   }
 
-  // ─── Property similarity filters ───
+  // ─── Property similarity filters (title-based) ───
   if (asset_type === "property") {
     if (body.property_type) {
       const typeFilter = body.property_type.toLowerCase();
+      // Map English types to Arabic keywords for title matching
+      const typeKeywords: Record<string, string[]> = {
+        apartment: ["شقة", "شقه", "apartment"],
+        villa: ["فيلا", "فيللا", "villa"],
+        duplex: ["دوبلكس", "duplex"],
+        studio: ["استوديو", "studio"],
+        office: ["مكتب", "office"],
+        shop: ["محل", "shop"],
+        land: ["أرض", "ارض", "land"],
+      };
+      const keywords = typeKeywords[typeFilter] || [typeFilter];
       const filtered = comparables.filter((l) => {
         const title = String(l.title || "").toLowerCase();
-        const fields = l.category_fields as Record<string, unknown> | null;
-        const pType = String(fields?.type || fields?.property_type || "").toLowerCase();
-        return title.includes(typeFilter) || pType.includes(typeFilter);
+        return keywords.some(k => title.includes(k));
       });
       if (filtered.length >= 3) comparables = filtered;
     }
 
+    // Area filter: try to extract area from title (e.g., "150 م²" or "150 متر")
     if (body.property_area_sqm && comparables.length > 5) {
       const areaMin = body.property_area_sqm * 0.7;
       const areaMax = body.property_area_sqm * 1.3;
       const areaFiltered = comparables.filter((l) => {
-        const fields = l.category_fields as Record<string, unknown> | null;
-        const area = Number(fields?.area_sqm || fields?.area || fields?.size || 0);
+        const title = String(l.title || "");
+        const areaMatch = title.match(/(\d+)\s*(?:م²|متر|sqm|م\b)/);
+        if (!areaMatch) return false;
+        const area = Number(areaMatch[1]);
         return area >= areaMin && area <= areaMax;
       });
       if (areaFiltered.length >= 3) comparables = areaFiltered;
