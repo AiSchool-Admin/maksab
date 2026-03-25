@@ -14,6 +14,11 @@ function getSupabase() {
   );
 }
 
+// DB has mixed naming for categories and governorates
+const CAR_CATS = ["سيارات", "cars", "vehicles"];
+const PROPERTY_CATS = ["عقارات", "properties", "real-estate", "real_estate"];
+const ALEX_GOVS = ["الإسكندرية", "alexandria", "Alexandria", "الاسكندرية"];
+
 interface ValuationRequest {
   asset_type: "car" | "property";
   car_make?: string;
@@ -31,6 +36,9 @@ interface ValuationRequest {
   user_id?: string;
 }
 
+type SupabaseClient = ReturnType<typeof getSupabase>;
+type Listing = Record<string, unknown>;
+
 export async function POST(req: NextRequest) {
   try {
     const body: ValuationRequest = await req.json();
@@ -41,173 +49,211 @@ export async function POST(req: NextRequest) {
     }
 
     const sb = getSupabase();
-    const gov = body.governorate || "alexandria";
-    const govVariants = ["الإسكندرية", "alexandria", "الاسكندرية"];
+    const catVariants = asset_type === "car" ? CAR_CATS : PROPERTY_CATS;
 
-    // ─── Find comparable listings ───
-    const category = asset_type === "car" ? "vehicles" : "properties";
-    const cutoff90 = new Date(Date.now() - 90 * 86400000).toISOString();
+    console.error(`[Valuation] asset_type: ${asset_type}, cats: ${catVariants.join(",")}`);
 
-    let query = sb
+    // ─── Find comparable listings (Alexandria first) ───
+    const { data: allListings, error: queryErr } = await sb
       .from("ahe_listings")
-      .select("title, price, created_at, source_platform, governorate, category_fields")
-      .eq("maksab_category", category)
-      .in("governorate", govVariants)
+      .select("title, price, created_at, source_platform, governorate, category_fields, maksab_category")
+      .in("maksab_category", catVariants)
+      .in("governorate", ALEX_GOVS)
       .gt("price", 0)
-      .gte("created_at", cutoff90)
+      .not("price", "is", null)
       .order("created_at", { ascending: false })
       .limit(200);
 
-    const { data: allListings } = await query;
-    if (!allListings || allListings.length === 0) {
-      return NextResponse.json({
-        estimated_min: 0,
-        estimated_max: 0,
-        estimated_avg: 0,
-        confidence_score: 0,
-        comparable_count: 0,
-        ai_analysis: "لا توجد بيانات كافية لتقييم هذا الأصل حالياً. جرّب تاني بعد كام يوم.",
-        market_trend: "unknown",
-        trend_pct: 0,
-        comparables: [],
-      });
+    console.error(`[Valuation] Alexandria results: ${allListings?.length || 0}, error: ${queryErr?.message || "none"}`);
+    if (allListings?.[0]) {
+      console.error(`[Valuation] Sample: ${JSON.stringify({ title: allListings[0].title, price: allListings[0].price, cat: allListings[0].maksab_category, gov: allListings[0].governorate })}`);
     }
 
-    // ─── Filter comparables by similarity ───
-    let comparables = allListings;
+    if (allListings && allListings.length > 0) {
+      return processComparables(sb, body, asset_type, allListings, catVariants);
+    }
 
-    if (asset_type === "car" && body.car_make) {
-      const makeFilter = body.car_make.toLowerCase();
-      const filtered = comparables.filter((l) => {
-        const title = (l.title || "").toLowerCase();
+    // ─── Fallback: try without governorate filter ───
+    console.error("[Valuation] No Alexandria listings, trying all governorates...");
+    const { data: fallback } = await sb
+      .from("ahe_listings")
+      .select("title, price, created_at, source_platform, governorate, category_fields, maksab_category")
+      .in("maksab_category", catVariants)
+      .gt("price", 0)
+      .not("price", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    console.error(`[Valuation] All-gov fallback: ${fallback?.length || 0}`);
+
+    if (fallback && fallback.length > 0) {
+      return processComparables(sb, body, asset_type, fallback, catVariants);
+    }
+
+    // ─── Last resort: check what categories exist ───
+    const { data: catSample } = await sb
+      .from("ahe_listings")
+      .select("maksab_category, governorate, price")
+      .gt("price", 0)
+      .limit(10);
+    console.error(`[Valuation] DB sample (any category): ${JSON.stringify(catSample?.map(r => ({ cat: r.maksab_category, gov: r.governorate, price: r.price })))}`);
+
+    return NextResponse.json({
+      estimated_min: 0, estimated_max: 0, estimated_avg: 0,
+      confidence_score: 0, comparable_count: 0,
+      ai_analysis: "لا توجد بيانات كافية لتقييم هذا الأصل حالياً. جرّب تاني بعد كام يوم.",
+      market_trend: "unknown", trend_pct: 0, comparables: [],
+    });
+  } catch (err) {
+    console.error("[VALUATION] Error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "حصلت مشكلة" },
+      { status: 500 }
+    );
+  }
+}
+
+// ─── Process comparables: filter, calculate, AI, save, return ───
+
+async function processComparables(
+  sb: SupabaseClient,
+  body: ValuationRequest,
+  asset_type: string,
+  allListings: Listing[],
+  catVariants: string[],
+) {
+  let comparables = allListings;
+
+  // ─── Car similarity filters ───
+  if (asset_type === "car" && body.car_make) {
+    const makeFilter = body.car_make.toLowerCase();
+    const filtered = comparables.filter((l) => {
+      const title = String(l.title || "").toLowerCase();
+      const fields = l.category_fields as Record<string, unknown> | null;
+      const brand = String(fields?.brand || fields?.make || "").toLowerCase();
+      return title.includes(makeFilter) || brand.includes(makeFilter);
+    });
+    if (filtered.length >= 3) comparables = filtered;
+
+    if (body.car_model && comparables.length > 5) {
+      const modelFilter = body.car_model.toLowerCase();
+      const modelFiltered = comparables.filter((l) => {
+        const title = String(l.title || "").toLowerCase();
         const fields = l.category_fields as Record<string, unknown> | null;
-        const brand = String(fields?.brand || fields?.make || "").toLowerCase();
-        return title.includes(makeFilter) || brand.includes(makeFilter);
+        const model = String(fields?.model || "").toLowerCase();
+        return title.includes(modelFilter) || model.includes(modelFilter);
+      });
+      if (modelFiltered.length >= 3) comparables = modelFiltered;
+    }
+
+    if (body.car_year && comparables.length > 5) {
+      const yearFiltered = comparables.filter((l) => {
+        const fields = l.category_fields as Record<string, unknown> | null;
+        const year = Number(fields?.year || 0);
+        return year > 0 && Math.abs(year - body.car_year!) <= 2;
+      });
+      if (yearFiltered.length >= 3) comparables = yearFiltered;
+    }
+  }
+
+  // ─── Property similarity filters ───
+  if (asset_type === "property") {
+    if (body.property_type) {
+      const typeFilter = body.property_type.toLowerCase();
+      const filtered = comparables.filter((l) => {
+        const title = String(l.title || "").toLowerCase();
+        const fields = l.category_fields as Record<string, unknown> | null;
+        const pType = String(fields?.type || fields?.property_type || "").toLowerCase();
+        return title.includes(typeFilter) || pType.includes(typeFilter);
       });
       if (filtered.length >= 3) comparables = filtered;
-
-      // Further filter by model
-      if (body.car_model && comparables.length > 5) {
-        const modelFilter = body.car_model.toLowerCase();
-        const modelFiltered = comparables.filter((l) => {
-          const title = (l.title || "").toLowerCase();
-          const fields = l.category_fields as Record<string, unknown> | null;
-          const model = String(fields?.model || "").toLowerCase();
-          return title.includes(modelFilter) || model.includes(modelFilter);
-        });
-        if (modelFiltered.length >= 3) comparables = modelFiltered;
-      }
-
-      // Filter by year ± 2
-      if (body.car_year && comparables.length > 5) {
-        const yearFiltered = comparables.filter((l) => {
-          const fields = l.category_fields as Record<string, unknown> | null;
-          const year = Number(fields?.year || 0);
-          return year && Math.abs(year - body.car_year!) <= 2;
-        });
-        if (yearFiltered.length >= 3) comparables = yearFiltered;
-      }
     }
 
-    if (asset_type === "property") {
-      // Filter by type
-      if (body.property_type) {
-        const typeFilter = body.property_type.toLowerCase();
-        const filtered = comparables.filter((l) => {
-          const title = (l.title || "").toLowerCase();
-          const fields = l.category_fields as Record<string, unknown> | null;
-          const pType = String(fields?.type || fields?.property_type || "").toLowerCase();
-          return title.includes(typeFilter) || pType.includes(typeFilter);
-        });
-        if (filtered.length >= 3) comparables = filtered;
-      }
-
-      // Filter by area ± 30%
-      if (body.property_area_sqm && comparables.length > 5) {
-        const areaMin = body.property_area_sqm * 0.7;
-        const areaMax = body.property_area_sqm * 1.3;
-        const areaFiltered = comparables.filter((l) => {
-          const fields = l.category_fields as Record<string, unknown> | null;
-          const area = Number(fields?.area_sqm || fields?.area || fields?.size || 0);
-          return area >= areaMin && area <= areaMax;
-        });
-        if (areaFiltered.length >= 3) comparables = areaFiltered;
-      }
-    }
-
-    // Take top 50
-    comparables = comparables.slice(0, 50);
-
-    // ─── Calculate prices ───
-    const prices = comparables.map((l) => Number(l.price)).filter((p) => p > 0).sort((a, b) => a - b);
-
-    if (prices.length === 0) {
-      return NextResponse.json({
-        estimated_min: 0, estimated_max: 0, estimated_avg: 0,
-        confidence_score: 0, comparable_count: 0,
-        ai_analysis: "لا توجد إعلانات مشابهة كافية. جرّب تعدّل المواصفات.",
-        market_trend: "unknown", trend_pct: 0, comparables: [],
+    if (body.property_area_sqm && comparables.length > 5) {
+      const areaMin = body.property_area_sqm * 0.7;
+      const areaMax = body.property_area_sqm * 1.3;
+      const areaFiltered = comparables.filter((l) => {
+        const fields = l.category_fields as Record<string, unknown> | null;
+        const area = Number(fields?.area_sqm || fields?.area || fields?.size || 0);
+        return area >= areaMin && area <= areaMax;
       });
+      if (areaFiltered.length >= 3) comparables = areaFiltered;
     }
+  }
 
-    const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-    const median = prices[Math.floor(prices.length / 2)];
-    const estimatedMin = Math.round(prices[0] * 0.9);
-    const estimatedMax = Math.round(prices[prices.length - 1] * 1.1);
-    const estimatedAvg = Math.round((avg + median) / 2);
-    const confidenceScore = Math.min(prices.length * 2, 95);
+  comparables = comparables.slice(0, 50);
+  console.error(`[Valuation] After filters: ${comparables.length} comparables`);
 
-    // ─── Calculate trend from older data ───
-    const cutoff180 = new Date(Date.now() - 180 * 86400000).toISOString();
-    let trendPct = 0;
-    let marketTrend = "stable";
+  // ─── Calculate prices ───
+  const prices = comparables.map((l) => Number(l.price)).filter((p) => p > 0).sort((a, b) => a - b);
 
-    const { data: olderListings } = await sb
-      .from("ahe_listings")
-      .select("price")
-      .eq("maksab_category", category)
-      .in("governorate", govVariants)
-      .gt("price", 0)
-      .gte("created_at", cutoff180)
-      .lt("created_at", cutoff90)
-      .limit(100);
+  if (prices.length === 0) {
+    return NextResponse.json({
+      estimated_min: 0, estimated_max: 0, estimated_avg: 0,
+      confidence_score: 0, comparable_count: 0,
+      ai_analysis: "لا توجد إعلانات مشابهة كافية. جرّب تعدّل المواصفات.",
+      market_trend: "unknown", trend_pct: 0, comparables: [],
+    });
+  }
 
-    if (olderListings && olderListings.length >= 3) {
-      const olderPrices = olderListings.map((l) => Number(l.price)).filter((p) => p > 0);
-      const olderAvg = olderPrices.reduce((a, b) => a + b, 0) / olderPrices.length;
-      if (olderAvg > 0) {
-        trendPct = Math.round(((avg - olderAvg) / olderAvg) * 1000) / 10;
-        marketTrend = trendPct > 2 ? "rising" : trendPct < -2 ? "falling" : "stable";
-      }
+  const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+  const median = prices[Math.floor(prices.length / 2)];
+  const estimatedMin = Math.round(prices[0] * 0.9);
+  const estimatedMax = Math.round(prices[prices.length - 1] * 1.1);
+  const estimatedAvg = Math.round((avg + median) / 2);
+  const confidenceScore = Math.min(prices.length * 2, 95);
+
+  // ─── Trend: compare recent vs older ───
+  const cutoff90 = new Date(Date.now() - 90 * 86400000).toISOString();
+  const cutoff180 = new Date(Date.now() - 180 * 86400000).toISOString();
+  let trendPct = 0;
+  let marketTrend = "stable";
+
+  const { data: olderListings } = await sb
+    .from("ahe_listings")
+    .select("price")
+    .in("maksab_category", catVariants)
+    .in("governorate", ALEX_GOVS)
+    .gt("price", 0)
+    .gte("created_at", cutoff180)
+    .lt("created_at", cutoff90)
+    .limit(100);
+
+  if (olderListings && olderListings.length >= 3) {
+    const olderPrices = olderListings.map((l) => Number(l.price)).filter((p) => p > 0);
+    const olderAvg = olderPrices.reduce((a, b) => a + b, 0) / olderPrices.length;
+    if (olderAvg > 0) {
+      trendPct = Math.round(((avg - olderAvg) / olderAvg) * 1000) / 10;
+      marketTrend = trendPct > 2 ? "rising" : trendPct < -2 ? "falling" : "stable";
     }
+  }
 
-    // Data freshness
-    const newestDate = comparables[0]?.created_at;
-    const freshnessDays = newestDate ? Math.floor((Date.now() - new Date(newestDate).getTime()) / 86400000) : 90;
+  const newestDate = comparables[0]?.created_at as string | undefined;
+  const freshnessDays = newestDate ? Math.floor((Date.now() - new Date(newestDate).getTime()) / 86400000) : 90;
 
-    // ─── AI Analysis (Claude Haiku) ───
-    let aiAnalysis = "";
-    try {
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) throw new Error("No ANTHROPIC_API_KEY");
+  // ─── AI Analysis ───
+  let aiAnalysis = "";
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error("No ANTHROPIC_API_KEY");
 
-      const assetDesc = asset_type === "car"
-        ? `${body.car_make || ""} ${body.car_model || ""} ${body.car_year || ""} — ${(body.car_mileage || 0).toLocaleString()} كم — حالة ${body.car_condition || "جيدة"}`
-        : `${body.property_type || "شقة"} ${body.property_area_sqm || ""}م² — ${body.property_rooms || ""} غرف — ${body.property_finishing || "متشطبة"} — ${body.district || "الإسكندرية"}`;
+    const assetDesc = asset_type === "car"
+      ? `${body.car_make || ""} ${body.car_model || ""} ${body.car_year || ""} — ${(body.car_mileage || 0).toLocaleString()} كم — حالة ${body.car_condition || "جيدة"}`
+      : `${body.property_type || "شقة"} ${body.property_area_sqm || ""}م² — ${body.property_rooms || ""} غرف — ${body.property_finishing || "متشطبة"} — ${body.district || "الإسكندرية"}`;
 
-      const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 300,
-          messages: [{
-            role: "user",
-            content: `أنت خبير تقييم ${asset_type === "car" ? "سيارات" : "عقارات"} في مصر.
+    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+        messages: [{
+          role: "user",
+          content: `أنت خبير تقييم ${asset_type === "car" ? "سيارات" : "عقارات"} في مصر.
 
 الأصل: ${assetDesc}
 بناءً على ${prices.length} إعلان مشابه في الإسكندرية:
@@ -221,76 +267,68 @@ export async function POST(req: NextRequest) {
 3. نصيحة للبائع أو المشتري
 
 لا تستخدم markdown. لا تستخدم نجوم أو رموز تنسيق.`
-          }],
-        }),
-      });
-
-      if (aiRes.ok) {
-        const aiData = await aiRes.json();
-        aiAnalysis = aiData?.content?.[0]?.text || "";
-      }
-    } catch (err) {
-      console.error("[VALUATION] AI error:", err);
-      aiAnalysis = `بناءً على ${prices.length} إعلان مشابه، السعر التقديري ${estimatedAvg.toLocaleString()} جنيه. السوق ${marketTrend === "rising" ? "في ارتفاع" : marketTrend === "falling" ? "في انخفاض" : "مستقر"}.`;
-    }
-
-    // ─── Save to DB ───
-    const insertData: Record<string, unknown> = {
-      asset_type,
-      governorate: gov,
-      district: body.district || null,
-      estimated_min: estimatedMin,
-      estimated_max: estimatedMax,
-      estimated_avg: estimatedAvg,
-      confidence_score: confidenceScore,
-      comparable_count: prices.length,
-      data_freshness_days: freshnessDays,
-      ai_analysis: aiAnalysis,
-      market_trend: marketTrend,
-      trend_pct: trendPct,
-      user_id: body.user_id || null,
-      is_anonymous: !body.user_id,
-    };
-
-    if (asset_type === "car") {
-      insertData.car_make = body.car_make || null;
-      insertData.car_model = body.car_model || null;
-      insertData.car_year = body.car_year || null;
-      insertData.car_mileage = body.car_mileage || null;
-      insertData.car_condition = body.car_condition || null;
-    } else {
-      insertData.property_type = body.property_type || null;
-      insertData.property_area_sqm = body.property_area_sqm || null;
-      insertData.property_floor = body.property_floor || null;
-      insertData.property_rooms = body.property_rooms || null;
-      insertData.property_finishing = body.property_finishing || null;
-    }
-
-    await sb.from("asset_valuations").insert(insertData);
-
-    // ─── Return result ───
-    return NextResponse.json({
-      estimated_min: estimatedMin,
-      estimated_max: estimatedMax,
-      estimated_avg: estimatedAvg,
-      confidence_score: confidenceScore,
-      comparable_count: prices.length,
-      data_freshness_days: freshnessDays,
-      ai_analysis: aiAnalysis,
-      market_trend: marketTrend,
-      trend_pct: trendPct,
-      comparables: comparables.slice(0, 5).map((l) => ({
-        title: l.title,
-        price: l.price,
-        source: l.source_platform,
-        date: l.created_at,
-      })),
+        }],
+      }),
     });
+
+    if (aiRes.ok) {
+      const aiData = await aiRes.json();
+      aiAnalysis = aiData?.content?.[0]?.text || "";
+    }
   } catch (err) {
-    console.error("[VALUATION] Error:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "حصلت مشكلة" },
-      { status: 500 }
-    );
+    console.error("[VALUATION] AI error:", err);
+    aiAnalysis = `بناءً على ${prices.length} إعلان مشابه، السعر التقديري ${estimatedAvg.toLocaleString()} جنيه. السوق ${marketTrend === "rising" ? "في ارتفاع" : marketTrend === "falling" ? "في انخفاض" : "مستقر"}.`;
   }
+
+  // ─── Save to DB ───
+  const insertData: Record<string, unknown> = {
+    asset_type,
+    governorate: body.governorate || "alexandria",
+    district: body.district || null,
+    estimated_min: estimatedMin,
+    estimated_max: estimatedMax,
+    estimated_avg: estimatedAvg,
+    confidence_score: confidenceScore,
+    comparable_count: prices.length,
+    data_freshness_days: freshnessDays,
+    ai_analysis: aiAnalysis,
+    market_trend: marketTrend,
+    trend_pct: trendPct,
+    user_id: body.user_id || null,
+    is_anonymous: !body.user_id,
+  };
+
+  if (asset_type === "car") {
+    insertData.car_make = body.car_make || null;
+    insertData.car_model = body.car_model || null;
+    insertData.car_year = body.car_year || null;
+    insertData.car_mileage = body.car_mileage || null;
+    insertData.car_condition = body.car_condition || null;
+  } else {
+    insertData.property_type = body.property_type || null;
+    insertData.property_area_sqm = body.property_area_sqm || null;
+    insertData.property_floor = body.property_floor || null;
+    insertData.property_rooms = body.property_rooms || null;
+    insertData.property_finishing = body.property_finishing || null;
+  }
+
+  await sb.from("asset_valuations").insert(insertData);
+
+  return NextResponse.json({
+    estimated_min: estimatedMin,
+    estimated_max: estimatedMax,
+    estimated_avg: estimatedAvg,
+    confidence_score: confidenceScore,
+    comparable_count: prices.length,
+    data_freshness_days: freshnessDays,
+    ai_analysis: aiAnalysis,
+    market_trend: marketTrend,
+    trend_pct: trendPct,
+    comparables: comparables.slice(0, 5).map((l) => ({
+      title: l.title,
+      price: l.price,
+      source: l.source_platform,
+      date: l.created_at,
+    })),
+  });
 }
