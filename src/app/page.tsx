@@ -312,7 +312,7 @@ export default function HomePage() {
             title="ليك عروض تحفة"
             subtitle={hasSignals ? "على حسب بحثاتك ومفضلاتك" : "إعلانات جديدة ممكن تعجبك"}
             icon="🔥"
-            ads={personalizedAds.filter(ad => !ad.categoryId || ACTIVE_CATS.includes(ad.categoryId))}
+            ads={personalizedAds.filter(ad => ad.categoryId && ACTIVE_CATS.includes(ad.categoryId))}
             onToggleFavorite={handleToggleFavorite}
           />
 
@@ -320,7 +320,7 @@ export default function HomePage() {
             title="شوف المزادات دي"
             subtitle={hasSignals ? "على حسب اهتماماتك" : "زايد واكسب!"}
             icon="🔥"
-            ads={matchingAuctions.filter(ad => !ad.categoryId || ACTIVE_CATS.includes(ad.categoryId))}
+            ads={matchingAuctions.filter(ad => ad.categoryId && ACTIVE_CATS.includes(ad.categoryId))}
             href="/auctions"
             onToggleFavorite={handleToggleFavorite}
           />
@@ -435,11 +435,11 @@ export default function HomePage() {
 
           {/* ═══ Buy Requests Section — bottom of page ═══ */}
           {/* My Buy Requests — filtered to active categories */}
-          {myBuyRequests.filter(r => !r.categoryId || ACTIVE_CATS.includes(r.categoryId)).length > 0 && (
+          {myBuyRequests.filter(r => r.categoryId && ACTIVE_CATS.includes(r.categoryId)).length > 0 && (
             <section className="px-4 pb-1.5">
               <h3 className="text-sm font-bold text-dark mb-2">طلبات الشراء بتاعتك</h3>
               <div className="space-y-2">
-                {myBuyRequests.filter(r => !r.categoryId || ACTIVE_CATS.includes(r.categoryId)).slice(0, 3).map((req) => (
+                {myBuyRequests.filter(r => r.categoryId && ACTIVE_CATS.includes(r.categoryId)).slice(0, 3).map((req) => (
                   <BuyRequestCard key={req.id} request={req} />
                 ))}
               </div>
@@ -447,7 +447,7 @@ export default function HomePage() {
           )}
 
           {/* Recent Buy Requests from others — filtered to active categories */}
-          {recentBuyRequests.filter((r) => r.userId !== user?.id && (!r.categoryId || ACTIVE_CATS.includes(r.categoryId))).length > 0 && (
+          {recentBuyRequests.filter((r) => r.userId !== user?.id && (r.categoryId && ACTIVE_CATS.includes(r.categoryId))).length > 0 && (
             <section className="pb-2">
               <div className="mx-4 mb-3 bg-gradient-to-l from-amber-50 to-yellow-50 border border-brand-gold/20 rounded-2xl p-3.5">
                 <div className="flex items-center justify-between">
@@ -468,7 +468,7 @@ export default function HomePage() {
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 {recentBuyRequests
-                  .filter((r) => r.userId !== user?.id && (!r.categoryId || ACTIVE_CATS.includes(r.categoryId)))
+                  .filter((r) => r.userId !== user?.id && (r.categoryId && ACTIVE_CATS.includes(r.categoryId)))
                   .slice(0, 10)
                   .map((req) => (
                     <div key={req.id} className="flex-shrink-0 w-[200px] snap-start">

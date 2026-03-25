@@ -7,6 +7,9 @@ import { supabase } from "@/lib/supabase/client";
 import { getCategoryById } from "@/lib/categories/categories-config";
 import { generateAutoTitle } from "@/lib/categories/generate";
 
+/** Alexandria MVP: only show cars + properties */
+const ACTIVE_CATEGORY_IDS = ["cars", "real_estate"];
+
 export interface AdSummary {
   id: string;
   title: string;
@@ -97,6 +100,7 @@ export async function fetchNewListings(page: number): Promise<{ ads: AdSummary[]
         .from("ads" as never)
         .select("*")
         .eq("status", "active")
+        .in("category_id", ACTIVE_CATEGORY_IDS)
         .gte("created_at", cutoff)
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -114,6 +118,7 @@ export async function fetchNewListings(page: number): Promise<{ ads: AdSummary[]
       .from("ads" as never)
       .select("*", { count: "exact" })
       .eq("status", "active")
+      .in("category_id", ACTIVE_CATEGORY_IDS)
       .gte("created_at", cutoff)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -250,6 +255,7 @@ export async function fetchFeedAds(page: number): Promise<{ ads: AdSummary[]; ha
       .from("ads" as never)
       .select("*")
       .eq("status", "active")
+      .in("category_id", ACTIVE_CATEGORY_IDS)
       .order("created_at", { ascending: false })
       .range(from, to);
 
@@ -273,6 +279,7 @@ export async function fetchRecommendedAds(): Promise<AdSummary[]> {
       .from("ads" as never)
       .select("*")
       .eq("status", "active")
+      .in("category_id", ACTIVE_CATEGORY_IDS)
       .order("created_at", { ascending: false })
       .limit(10);
 
@@ -295,6 +302,7 @@ export async function fetchAuctionAds(): Promise<AdSummary[]> {
       .select("*")
       .eq("status", "active")
       .eq("sale_type", "auction")
+      .in("category_id", ACTIVE_CATEGORY_IDS)
       .order("created_at", { ascending: false })
       .limit(8);
 
