@@ -5,6 +5,7 @@ import Link from "next/link";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { citiesByGovernorate } from "@/lib/data/governorates";
 
 /* ─── Types ─── */
 
@@ -52,11 +53,7 @@ const FINISHING_OPTIONS = [
   { value: "bare", label: "على المحارة" },
 ];
 
-const ALEX_DISTRICTS = [
-  "سيدي بشر", "ستانلي", "كليوباترا", "سموحة", "المندرة", "المعمورة",
-  "ميامي", "سيدي جابر", "لوران", "جليم", "رشدي", "بحري",
-  "المنتزه", "العصافرة", "أبو قير", "العجمي", "الدخيلة", "برج العرب",
-];
+const ALEX_DISTRICTS = citiesByGovernorate["الإسكندرية"] || [];
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 30 }, (_, i) => currentYear - i);
