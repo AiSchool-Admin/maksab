@@ -295,6 +295,33 @@ export default function HomePage() {
             </div>
           </section>
 
+          {/* Valuation CTA */}
+          <section className="px-4 pb-1">
+            <div className="bg-gradient-to-l from-blue-50 to-emerald-50 border-2 border-brand-green/20 rounded-2xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xl">🔍</span>
+                <div>
+                  <h3 className="text-sm font-bold text-dark">قيّم أصلك الآن</h3>
+                  <p className="text-[11px] text-gray-text">تقييم فوري مجاني بناءً على بيانات السوق</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/valuation?type=car"
+                  className="py-2.5 bg-white border border-blue-200 rounded-xl text-sm font-bold text-center text-dark hover:bg-blue-50 transition-colors"
+                >
+                  قيّم سيارتي 🚗
+                </Link>
+                <Link
+                  href="/valuation?type=property"
+                  className="py-2.5 bg-white border border-purple-200 rounded-xl text-sm font-bold text-center text-dark hover:bg-purple-50 transition-colors"
+                >
+                  قيّم عقاري 🏠
+                </Link>
+              </div>
+            </div>
+          </section>
+
           {/* Map link */}
           <div className="px-4 pb-2">
             <Link

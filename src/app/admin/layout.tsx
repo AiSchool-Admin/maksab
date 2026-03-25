@@ -139,6 +139,7 @@ const navSections: NavSection[] = [
     icon: "💰",
     items: [
       { href: "/admin/finance/revenue", label: "الإيرادات", icon: DollarSign },
+      { href: "/admin/price-index", label: "مؤشر الأسعار 📊", icon: TrendingUp },
       { href: "/pricing", label: "الباقات", icon: CreditCard },
     ],
   },
