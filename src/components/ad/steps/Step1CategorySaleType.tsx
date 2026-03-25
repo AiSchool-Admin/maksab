@@ -4,6 +4,10 @@ import { categoriesConfig } from "@/lib/categories/categories-config";
 import CategoryIcon from "@/components/ui/CategoryIcon";
 import type { SaleType } from "@/types";
 
+/** Active categories — Alexandria MVP: cars + properties only */
+const ACTIVE_CATEGORY_IDS = ["cars", "real_estate"];
+const activeCategories = categoriesConfig.filter((c) => ACTIVE_CATEGORY_IDS.includes(c.id));
+
 interface Step1Props {
   categoryId: string;
   subcategoryId: string;
@@ -36,7 +40,7 @@ export default function Step1CategorySaleType({
       <div>
         <h3 className="text-sm font-bold text-dark mb-3">اختار القسم</h3>
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-y-4 gap-x-2">
-          {categoriesConfig.map((cat) => (
+          {activeCategories.map((cat) => (
             <button
               key={cat.id}
               type="button"

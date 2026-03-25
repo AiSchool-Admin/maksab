@@ -4,6 +4,9 @@
  * Returns personalized ads + matching auctions based on user_signals.
  */
 
+/** Alexandria MVP: only recommend cars + properties */
+const ACTIVE_CATEGORY_IDS = ["cars", "real_estate"];
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -172,26 +175,37 @@ async function fallbackRecommendations(
     .order("created_at", { ascending: false })
     .limit(limit);
 
+  // Always restrict to active categories (Alexandria MVP)
+  adsQuery = adsQuery.in("category_id", ACTIVE_CATEGORY_IDS);
+
   if (topCategories.length > 0) {
-    adsQuery = adsQuery.in("category_id", topCategories);
+    // Further narrow by user's top categories (intersection with active)
+    const filtered = topCategories.filter(c => ACTIVE_CATEGORY_IDS.includes(c));
+    if (filtered.length > 0) {
+      adsQuery = adsQuery.in("category_id", filtered);
+    }
   } else if (governorate) {
     adsQuery = adsQuery.eq("governorate", governorate);
   }
 
   const { data: adsData } = await adsQuery;
 
-  // Fetch auctions
+  // Fetch auctions — always filtered to active categories
   let auctionQuery = supabase
     .from("ads" as never)
     .select("*")
     .eq("status", "active")
     .eq("sale_type", "auction")
+    .in("category_id", ACTIVE_CATEGORY_IDS)
     .neq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(auctionLimit);
 
   if (topCategories.length > 0) {
-    auctionQuery = auctionQuery.in("category_id", topCategories);
+    const filtered = topCategories.filter(c => ACTIVE_CATEGORY_IDS.includes(c));
+    if (filtered.length > 0) {
+      auctionQuery = auctionQuery.in("category_id", filtered);
+    }
   }
 
   const { data: auctionData } = await auctionQuery;

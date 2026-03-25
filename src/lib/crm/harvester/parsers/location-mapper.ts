@@ -82,21 +82,79 @@ const CITY_MAP: Record<string, { governorate: string; city: string }> = {
   downtown: { governorate: "cairo", city: "downtown" },
   "شبرا": { governorate: "cairo", city: "shubra" },
   shubra: { governorate: "cairo", city: "shubra" },
-  // Alexandria
+  // Alexandria — comprehensive district mapping
   "العجمي": { governorate: "alexandria", city: "agami" },
   agami: { governorate: "alexandria", city: "agami" },
   "سيدي بشر": { governorate: "alexandria", city: "sidi_beshr" },
+  sidi_beshr: { governorate: "alexandria", city: "sidi_beshr" },
   "سموحة": { governorate: "alexandria", city: "smoha" },
   smoha: { governorate: "alexandria", city: "smoha" },
+  smouha: { governorate: "alexandria", city: "smoha" },
   "السيوف": { governorate: "alexandria", city: "seyouf" },
+  seyouf: { governorate: "alexandria", city: "seyouf" },
   "العصافرة": { governorate: "alexandria", city: "asafra" },
-  "محرم بيك": { governorate: "alexandria", city: "moharam_bik" },
+  asafra: { governorate: "alexandria", city: "asafra" },
+  "محرم بك": { governorate: "alexandria", city: "moharam_bek" },
+  "محرم بيك": { governorate: "alexandria", city: "moharam_bek" },
+  moharam_bek: { governorate: "alexandria", city: "moharam_bek" },
   "المندرة": { governorate: "alexandria", city: "mandara" },
+  mandara: { governorate: "alexandria", city: "mandara" },
   "ميامي": { governorate: "alexandria", city: "miami" },
+  miami: { governorate: "alexandria", city: "miami" },
   "جليم": { governorate: "alexandria", city: "glim" },
+  glim: { governorate: "alexandria", city: "glim" },
   "سيدي جابر": { governorate: "alexandria", city: "sidi_gaber" },
+  sidi_gaber: { governorate: "alexandria", city: "sidi_gaber" },
   "سان ستيفانو": { governorate: "alexandria", city: "san_stefano" },
+  san_stefano: { governorate: "alexandria", city: "san_stefano" },
   "فيكتوريا": { governorate: "alexandria", city: "victoria" },
+  "المنتزه": { governorate: "alexandria", city: "montaza" },
+  montaza: { governorate: "alexandria", city: "montaza" },
+  "المعمورة": { governorate: "alexandria", city: "mamoura" },
+  mamoura: { governorate: "alexandria", city: "mamoura" },
+  "ستانلي": { governorate: "alexandria", city: "stanley" },
+  stanley: { governorate: "alexandria", city: "stanley" },
+  "الإبراهيمية": { governorate: "alexandria", city: "ibrahimia" },
+  ibrahimia: { governorate: "alexandria", city: "ibrahimia" },
+  "كفر عبده": { governorate: "alexandria", city: "kafr_abdo" },
+  kafr_abdo: { governorate: "alexandria", city: "kafr_abdo" },
+  "بحري": { governorate: "alexandria", city: "bahary" },
+  bahary: { governorate: "alexandria", city: "bahary" },
+  "العامرية": { governorate: "alexandria", city: "amreya" },
+  amreya: { governorate: "alexandria", city: "amreya" },
+  "برج العرب": { governorate: "alexandria", city: "borg_alarab" },
+  borg_alarab: { governorate: "alexandria", city: "borg_alarab" },
+  "كليوباترا": { governorate: "alexandria", city: "cleopatra" },
+  cleopatra: { governorate: "alexandria", city: "cleopatra" },
+  "لوران": { governorate: "alexandria", city: "laurent" },
+  laurent: { governorate: "alexandria", city: "laurent" },
+  "رشدي": { governorate: "alexandria", city: "rushdy" },
+  rushdy: { governorate: "alexandria", city: "rushdy" },
+  "أبو قير": { governorate: "alexandria", city: "abu_qir" },
+  abu_qir: { governorate: "alexandria", city: "abu_qir" },
+  "الدخيلة": { governorate: "alexandria", city: "dakhela" },
+  dakhela: { governorate: "alexandria", city: "dakhela" },
+  "المنشية": { governorate: "alexandria", city: "manshia" },
+  manshia: { governorate: "alexandria", city: "manshia" },
+  "جناكليس": { governorate: "alexandria", city: "janaklis" },
+  janaklis: { governorate: "alexandria", city: "janaklis" },
+  "بولكلي": { governorate: "alexandria", city: "bolkly" },
+  bolkly: { governorate: "alexandria", city: "bolkly" },
+  "سبورتنج": { governorate: "alexandria", city: "sporting" },
+  sporting: { governorate: "alexandria", city: "sporting" },
+  "فلمنج": { governorate: "alexandria", city: "fleming" },
+  fleming: { governorate: "alexandria", city: "fleming" },
+  "وابور المياه": { governorate: "alexandria", city: "wabour_elmoya" },
+  wabour_elmoya: { governorate: "alexandria", city: "wabour_elmoya" },
+  "كامب شيزار": { governorate: "alexandria", city: "camp_shezar" },
+  camp_shezar: { governorate: "alexandria", city: "camp_shezar" },
+  camp_caesar: { governorate: "alexandria", city: "camp_shezar" },
+  "النخيل": { governorate: "alexandria", city: "nakheel" },
+  "الأنفوشي": { governorate: "alexandria", city: "anfoushi" },
+  anfoushi: { governorate: "alexandria", city: "anfoushi" },
+  "اللبان": { governorate: "alexandria", city: "laban" },
+  laban: { governorate: "alexandria", city: "laban" },
+  "سيدي عبد الرحمن": { governorate: "alexandria", city: "sidi_abdelrahman" },
 };
 
 export interface MappedLocation {
@@ -334,6 +392,49 @@ export function governorateToArabic(gov: string | null | undefined): string | nu
   // Slug → Arabic
   const slug = normalizeGovernorate(trimmed);
   if (slug && SLUG_TO_ARABIC[slug]) return SLUG_TO_ARABIC[slug];
+
+  return trimmed;
+}
+
+// ═══ Alexandria District Normalizer ═══
+
+const DISTRICT_SLUG_TO_ARABIC: Record<string, string> = {
+  smoha: "سموحة", smouha: "سموحة",
+  sidi_beshr: "سيدي بشر", sidi_gaber: "سيدي جابر",
+  miami: "ميامي", mandara: "المندرة", stanley: "ستانلي",
+  glim: "جليم", cleopatra: "كليوباترا", laurent: "لوران",
+  rushdy: "رشدي", sporting: "سبورتنج", fleming: "فلمنج",
+  san_stefano: "سان ستيفانو", asafra: "العصافرة",
+  seyouf: "السيوف", montaza: "المنتزه", mamoura: "المعمورة",
+  agami: "العجمي", amreya: "العامرية", borg_alarab: "برج العرب",
+  ibrahimia: "الإبراهيمية", kafr_abdo: "كفر عبده",
+  bahary: "بحري", moharam_bek: "محرم بك",
+  wabour_elmoya: "وابور المياه", janaklis: "جناكليس",
+  bolkly: "بولكلي", camp_shezar: "كامب شيزار", camp_caesar: "كامب شيزار",
+  nakheel: "النخيل", anfoushi: "الأنفوشي", laban: "اللبان",
+  abu_qir: "أبو قير", dakhela: "الدخيلة", manshia: "المنشية",
+  victoria: "فيكتوريا", sidi_abdelrahman: "سيدي عبد الرحمن",
+};
+
+const ARABIC_DISTRICTS = new Set(Object.values(DISTRICT_SLUG_TO_ARABIC));
+
+/** Normalize any district name (Arabic or English slug) to canonical Arabic */
+export function normalizeAlexDistrict(input: string): string {
+  if (!input) return "";
+  const trimmed = input.trim();
+
+  // Already canonical Arabic
+  if (ARABIC_DISTRICTS.has(trimmed)) return trimmed;
+
+  // Try slug lookup
+  const slug = trimmed.toLowerCase().replace(/[-\s]+/g, "_");
+  if (DISTRICT_SLUG_TO_ARABIC[slug]) return DISTRICT_SLUG_TO_ARABIC[slug];
+
+  // Try without underscores
+  const noUnderscore = slug.replace(/_/g, "");
+  for (const [key, val] of Object.entries(DISTRICT_SLUG_TO_ARABIC)) {
+    if (key.replace(/_/g, "") === noUnderscore) return val;
+  }
 
   return trimmed;
 }

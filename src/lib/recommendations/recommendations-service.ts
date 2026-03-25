@@ -58,6 +58,7 @@ function apiAdToAdSummary(ad: RecommendedAdFromAPI): AdSummary {
     auctionHighestBid: ad.auctionStartPrice,
     auctionEndsAt: ad.auctionEndsAt,
     exchangeDescription: ad.exchangeDescription,
+    categoryId: ad.categoryId,
   };
 }
 
@@ -113,6 +114,9 @@ export async function getRecommendations(
   }
 }
 
+/** Alexandria MVP: only show cars + properties */
+const FALLBACK_ACTIVE_CATS = ["cars", "real_estate"];
+
 /** Client-side fallback when API is down */
 async function fallbackRecommendations(userId: string): Promise<RecommendationResult> {
   try {
@@ -122,6 +126,7 @@ async function fallbackRecommendations(userId: string): Promise<RecommendationRe
       .from("ads" as never)
       .select("*")
       .eq("status", "active")
+      .in("category_id", FALLBACK_ACTIVE_CATS)
       .order("created_at", { ascending: false })
       .limit(10);
 
@@ -141,6 +146,7 @@ async function fallbackRecommendations(userId: string): Promise<RecommendationRe
       .select("*")
       .eq("status", "active")
       .eq("sale_type", "auction")
+      .in("category_id", FALLBACK_ACTIVE_CATS)
       .order("created_at", { ascending: false })
       .limit(8);
 
@@ -175,6 +181,7 @@ function rowToAdSummary(row: Record<string, unknown>): AdSummary {
     auctionHighestBid: row.auction_start_price ? Number(row.auction_start_price) : undefined,
     auctionEndsAt: (row.auction_ends_at as string) ?? undefined,
     exchangeDescription: (row.exchange_description as string) ?? undefined,
+    categoryId: (row.category_id as string) ?? undefined,
   };
 }
 

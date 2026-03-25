@@ -4,21 +4,16 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Search, Plus, MapPin, TrendingUp } from "lucide-react";
-import InstaPayLogo from "@/components/ui/InstaPayLogo";
 import Header from "@/components/layout/Header";
 import BottomNavWithBadge from "@/components/layout/BottomNavWithBadge";
 import AdCard from "@/components/ad/AdCard";
 import Button from "@/components/ui/Button";
-import CategoryIcon from "@/components/ui/CategoryIcon";
+
 import { AdGridSkeleton } from "@/components/ui/SkeletonLoader";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 
 const HorizontalSection = dynamic(
   () => import("@/components/home/HorizontalSection"),
-  { ssr: false },
-);
-const UpgradeToStoreBanner = dynamic(
-  () => import("@/components/store/UpgradeToStoreBanner"),
   { ssr: false },
 );
 const ShoppingAssistantFab = dynamic(
@@ -27,10 +22,6 @@ const ShoppingAssistantFab = dynamic(
 );
 const RecentlyViewed = dynamic(
   () => import("@/components/home/RecentlyViewed"),
-  { ssr: false },
-);
-const PushPromptBanner = dynamic(
-  () => import("@/components/notifications/PushPromptBanner"),
   { ssr: false },
 );
 const BuyRequestCard = dynamic(
@@ -57,21 +48,11 @@ import {
 const categories = [
   { name: "سيارات", slug: "cars" },
   { name: "عقارات", slug: "real-estate" },
-  { name: "موبايلات", slug: "phones" },
-  { name: "موضة", slug: "fashion" },
-  { name: "خردة", slug: "scrap" },
-  { name: "ذهب وفضة", slug: "gold" },
-  { name: "فاخرة", slug: "luxury" },
-  { name: "أجهزة", slug: "appliances" },
-  { name: "أثاث", slug: "furniture" },
-  { name: "هوايات", slug: "hobbies" },
-  { name: "عدد", slug: "tools" },
-  { name: "خدمات", slug: "services" },
-  { name: "كمبيوتر", slug: "computers" },
-  { name: "أطفال", slug: "kids-babies" },
-  { name: "إلكترونيات", slug: "electronics" },
-  { name: "جمال وصحة", slug: "beauty" },
 ];
+
+/** Active category/governorate filters for Alexandria MVP */
+const ACTIVE_CATS = ['cars', 'vehicles', 'properties', 'real-estate', 'real_estate', 'سيارات', 'عقارات'];
+const ACTIVE_GOV = ['alexandria', 'الإسكندرية'];
 
 export default function HomePage() {
   const {
@@ -158,6 +139,17 @@ export default function HomePage() {
       fetchMyBuyRequests().then(setMyBuyRequests);
     }
   }, [user]);
+
+  // Auto-request notification permission after 3 seconds
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof Notification === "undefined") return;
+    const timer = setTimeout(() => {
+      if (Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleToggleFavorite = useCallback(
     async (id: string) => {
@@ -251,8 +243,8 @@ export default function HomePage() {
       </div>
 
       <PullToRefresh onRefresh={handlePullRefresh}>
-          {/* Trending Searches */}
-          {trendingSearches.length > 0 && (
+          {/* Trending Searches — filtered to cars/properties */}
+          {trendingSearches.filter(s => ACTIVE_CATS.some(c => s.query.includes(c) || /سيار|عقار|شق|فيل|أرض|عربي|car|proper/i.test(s.query))).length > 0 && (
             <section className="px-4 pt-2 pb-1">
               <div className="flex items-center gap-1.5 mb-2">
                 <TrendingUp size={14} className="text-brand-green" />
@@ -260,7 +252,7 @@ export default function HomePage() {
                 <span className="text-[8px] text-gray-text bg-gray-100 px-1.5 py-0.5 rounded-full">مباشر</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {trendingSearches.map((item, i) => (
+                {trendingSearches.filter(s => ACTIVE_CATS.some(c => s.query.includes(c) || /سيار|عقار|شق|فيل|أرض|عربي|car|proper/i.test(s.query))).map((item, i) => (
                   <Link
                     key={item.query}
                     href={`/search?q=${encodeURIComponent(item.query)}`}
@@ -276,40 +268,57 @@ export default function HomePage() {
             </section>
           )}
 
-          {/* Quick search chips */}
-          <div className="relative">
-            <div className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-hide">
-              {categories.map((cat) => (
-                <Link
-                  key={cat.slug}
-                  href={`/search?category=${cat.slug}`}
-                  className="flex-shrink-0 px-4 py-2 bg-gray-light text-dark text-base font-bold rounded-full hover:bg-brand-green-light hover:text-brand-green transition-colors"
-                >
-                  {cat.name}
-                </Link>
-              ))}
+          {/* Alexandria Category Tabs */}
+          <section className="px-4 pt-2 pb-1">
+            <h2 className="text-lg font-bold text-dark mb-3">تصفح الإسكندرية</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <Link
+                href="/browse/vehicles/alexandria"
+                className="flex items-center gap-3 p-4 bg-gradient-to-l from-blue-50 to-blue-100 border-2 border-blue-200 rounded-2xl hover:shadow-md transition-all active:scale-[0.98]"
+              >
+                <span className="text-3xl">🚗</span>
+                <div>
+                  <span className="text-base font-bold text-dark block">سيارات</span>
+                  <span className="text-[11px] text-gray-text">الإسكندرية</span>
+                </div>
+              </Link>
+              <Link
+                href="/browse/properties/alexandria"
+                className="flex items-center gap-3 p-4 bg-gradient-to-l from-purple-50 to-purple-100 border-2 border-purple-200 rounded-2xl hover:shadow-md transition-all active:scale-[0.98]"
+              >
+                <span className="text-3xl">🏠</span>
+                <div>
+                  <span className="text-base font-bold text-dark block">عقارات</span>
+                  <span className="text-[11px] text-gray-text">الإسكندرية</span>
+                </div>
+              </Link>
             </div>
-            <div className="absolute start-0 top-0 bottom-0 w-10 bg-gradient-to-l from-transparent to-white pointer-events-none flex items-center justify-start ps-1">
-              <span className="text-gray-text text-sm font-bold animate-pulse">&#x203A;</span>
-            </div>
-          </div>
+          </section>
 
-          {/* Categories Grid */}
-          <section className="px-4 pb-1.5 pt-1">
-            <h2 className="text-xl font-bold text-dark mb-2">الأقسام</h2>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-y-4 gap-x-2">
-              {categories.map((cat) => (
+          {/* Valuation CTA */}
+          <section className="px-4 pb-1">
+            <div className="bg-gradient-to-l from-blue-50 to-emerald-50 border-2 border-brand-green/20 rounded-2xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xl">🔍</span>
+                <div>
+                  <h3 className="text-sm font-bold text-dark">قيّم أصلك الآن</h3>
+                  <p className="text-[11px] text-gray-text">تقييم فوري مجاني بناءً على بيانات السوق</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 <Link
-                  key={cat.slug}
-                  href={`/search?category=${cat.slug}`}
-                  className="flex flex-col items-center gap-1.5 group"
+                  href="/valuation?type=car"
+                  className="py-2.5 bg-white border border-blue-200 rounded-xl text-sm font-bold text-center text-dark hover:bg-blue-50 transition-colors"
                 >
-                  <CategoryIcon slug={cat.slug} size="md" />
-                  <span className="text-sm sm:text-base font-bold text-dark leading-tight text-center group-hover:text-brand-green transition-colors line-clamp-1">
-                    {cat.name}
-                  </span>
+                  قيّم سيارتي 🚗
                 </Link>
-              ))}
+                <Link
+                  href="/valuation?type=property"
+                  className="py-2.5 bg-white border border-purple-200 rounded-xl text-sm font-bold text-center text-dark hover:bg-purple-50 transition-colors"
+                >
+                  قيّم عقاري 🏠
+                </Link>
+              </div>
             </div>
           </section>
 
@@ -324,52 +333,13 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {/* Commission / InstaPay */}
-          <div className="px-4 pb-1">
-            <a
-              href="https://ipn.eg/S/mamdouhragab1707/instapay/0i4IIx"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2.5 active:opacity-70 transition-opacity"
-            >
-              <InstaPayLogo size={30} />
-              <p className="text-xs text-gray-text">
-                <span className="font-bold text-emerald-600">ادفع 0.5% مقدماً</span>
-                {" · "}واحصل على شارة موثوق + أولوية ظهور | أو 1% بعد الصفقة
-              </p>
-            </a>
-          </div>
-
-          {user && (!user.seller_type || user.seller_type === "individual") && (
-            <UpgradeToStoreBanner variant="home" />
-          )}
-
-          <section className="px-4 pb-1.5">
-            <Link
-              href="/stores"
-              className="flex items-center justify-between bg-gradient-to-l from-brand-green-light to-white border border-brand-green/20 rounded-xl p-3 hover:shadow-sm transition-shadow"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">🏪</span>
-                <div>
-                  <p className="text-sm font-bold text-dark">تصفّح المتاجر</p>
-                  <p className="text-xs text-gray-text">
-                    اكتشف متاجر موثوقة وعروض حصرية
-                  </p>
-                </div>
-              </div>
-              <span className="text-gray-text text-lg">←</span>
-            </Link>
-          </section>
-
-          <PushPromptBanner />
           <RecentlyViewed />
 
           <HorizontalSection
             title="ليك عروض تحفة"
             subtitle={hasSignals ? "على حسب بحثاتك ومفضلاتك" : "إعلانات جديدة ممكن تعجبك"}
             icon="🔥"
-            ads={personalizedAds}
+            ads={personalizedAds.filter(ad => ad.categoryId && ACTIVE_CATS.includes(ad.categoryId))}
             onToggleFavorite={handleToggleFavorite}
           />
 
@@ -377,7 +347,7 @@ export default function HomePage() {
             title="شوف المزادات دي"
             subtitle={hasSignals ? "على حسب اهتماماتك" : "زايد واكسب!"}
             icon="🔥"
-            ads={matchingAuctions}
+            ads={matchingAuctions.filter(ad => ad.categoryId && ACTIVE_CATS.includes(ad.categoryId))}
             href="/auctions"
             onToggleFavorite={handleToggleFavorite}
           />
@@ -402,7 +372,7 @@ export default function HomePage() {
                 <span className="text-xs text-gray-text">آخر 3 أيام</span>
               </div>
               <p className="text-xs text-gray-text mb-2">
-                إعلانات طازة من كل الأقسام — نقدي ومزاد وتبديل
+                إعلانات طازة — سيارات وعقارات الإسكندرية
               </p>
               <div className="grid grid-cols-3 gap-2">
                 {newListings.map((ad, idx) => (
@@ -491,20 +461,20 @@ export default function HomePage() {
           )}
 
           {/* ═══ Buy Requests Section — bottom of page ═══ */}
-          {/* My Buy Requests */}
-          {myBuyRequests.length > 0 && (
+          {/* My Buy Requests — filtered to active categories */}
+          {myBuyRequests.filter(r => r.categoryId && ACTIVE_CATS.includes(r.categoryId)).length > 0 && (
             <section className="px-4 pb-1.5">
               <h3 className="text-sm font-bold text-dark mb-2">طلبات الشراء بتاعتك</h3>
               <div className="space-y-2">
-                {myBuyRequests.slice(0, 3).map((req) => (
+                {myBuyRequests.filter(r => r.categoryId && ACTIVE_CATS.includes(r.categoryId)).slice(0, 3).map((req) => (
                   <BuyRequestCard key={req.id} request={req} />
                 ))}
               </div>
             </section>
           )}
 
-          {/* Recent Buy Requests from others — horizontal scroll */}
-          {recentBuyRequests.filter((r) => r.userId !== user?.id).length > 0 && (
+          {/* Recent Buy Requests from others — filtered to active categories */}
+          {recentBuyRequests.filter((r) => r.userId !== user?.id && (r.categoryId && ACTIVE_CATS.includes(r.categoryId))).length > 0 && (
             <section className="pb-2">
               <div className="mx-4 mb-3 bg-gradient-to-l from-amber-50 to-yellow-50 border border-brand-gold/20 rounded-2xl p-3.5">
                 <div className="flex items-center justify-between">
@@ -525,7 +495,7 @@ export default function HomePage() {
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 {recentBuyRequests
-                  .filter((r) => r.userId !== user?.id)
+                  .filter((r) => r.userId !== user?.id && (r.categoryId && ACTIVE_CATS.includes(r.categoryId)))
                   .slice(0, 10)
                   .map((req) => (
                     <div key={req.id} className="flex-shrink-0 w-[200px] snap-start">

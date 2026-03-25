@@ -1,6 +1,10 @@
 import { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
+
+/** Active categories — Alexandria MVP */
+const ACTIVE_CATEGORIES = ["cars", "vehicles", "properties", "real-estate", "real_estate", "سيارات", "عقارات"];
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -70,6 +74,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function BrowseCategoryGovernoratePage({ params }: Props) {
   const { category, governorate } = await params;
+
+  // Guard: only allow active categories
+  if (!ACTIVE_CATEGORIES.includes(category)) {
+    redirect("/");
+  }
+
   const catName = CATEGORY_NAMES[category] || category;
   const govName = GOV_NAMES[governorate] || governorate;
 
