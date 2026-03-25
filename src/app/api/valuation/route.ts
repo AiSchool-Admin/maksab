@@ -69,6 +69,10 @@ export async function POST(req: NextRequest) {
     for (const kw of ['للإيجار', 'للايجار', 'إيجار']) {
       query = query.not("title", "ilike", `%${kw}%`);
     }
+    // Exclude installment/deposit ads
+    for (const kw of ['مقدم', 'قسط', 'تقسيط', 'أقساط']) {
+      query = query.not("title", "ilike", `%${kw}%`);
+    }
 
     const { data: allListings, error: queryErr } = await query
       .order("created_at", { ascending: false })
@@ -92,6 +96,9 @@ export async function POST(req: NextRequest) {
       .gt("price", 0)
       .not("price", "is", null);
     for (const kw of ['للإيجار', 'للايجار', 'إيجار']) {
+      fallbackQuery = fallbackQuery.not("title", "ilike", `%${kw}%`);
+    }
+    for (const kw of ['مقدم', 'قسط', 'تقسيط', 'أقساط']) {
       fallbackQuery = fallbackQuery.not("title", "ilike", `%${kw}%`);
     }
     const { data: fallback } = await fallbackQuery
@@ -145,24 +152,35 @@ async function processComparables(
     governorate: ALEX_GOVS.join(", "),
   };
 
-  // ─── Step 1: Client-side rental exclusion (catch anything DB missed) ───
-  const RENTAL_WORDS = ['للإيجار', 'للايجار', 'ايجار', 'إيجار', 'مفروشة', 'مفروش', 'for rent'];
+  // ─── Step 1: Client-side rental + installment exclusion ───
+  const EXCLUDE_WORDS = [
+    'للإيجار', 'للايجار', 'ايجار', 'إيجار', 'مفروشة', 'مفروش', 'for rent',
+    'مقدم', 'حجز', 'قسط', 'تقسيط', 'أقساط', 'اقساط', 'down payment',
+  ];
   comparables = comparables.filter((l) => {
     const title = String(l.title || "").toLowerCase();
-    return !RENTAL_WORDS.some(kw => title.includes(kw));
+    return !EXCLUDE_WORDS.some(kw => title.includes(kw));
   });
-  console.error(`[Valuation] After rental exclusion: ${comparables.length} (from ${step1_total})`);
+  console.error(`[Valuation] After rental+installment exclusion: ${comparables.length} (from ${step1_total})`);
 
-  // ─── Step 2: District filter (if user selected one) ───
+  // ─── Step 2: District filter — search in title, city, and URL ───
   if (body.district) {
     filtersApplied.district = body.district;
+    const d = body.district;
+    // Create fuzzy variants: ة↔ه, common misspellings
+    const variants = [d];
+    if (d.includes("ة")) variants.push(d.replace(/ة/g, "ه"));
+    if (d.includes("ه")) variants.push(d.replace(/ه/g, "ة"));
+
     const districtFiltered = comparables.filter((l) => {
-      const city = String(l.city || "").toLowerCase();
-      const title = String(l.title || "").toLowerCase();
-      const d = body.district!.toLowerCase();
-      return city.includes(d) || title.includes(d);
+      const title = String(l.title || "");
+      const city = String(l.city || "");
+      const url = String(l.source_listing_url || "");
+      return variants.some(v =>
+        title.includes(v) || city.includes(v) || url.toLowerCase().includes(v.toLowerCase())
+      );
     });
-    console.error(`[Valuation] District "${body.district}" filter: ${districtFiltered.length} results`);
+    console.error(`[Valuation] District "${d}" filter: ${districtFiltered.length} (variants: ${variants.join(",")})`);
     if (districtFiltered.length >= 5) {
       comparables = districtFiltered;
     } else {
@@ -241,24 +259,37 @@ async function processComparables(
 
   afterSpecificCount = comparables.length;
 
-  // ─── Step 5: Platform balancing (max 10 per platform) ───
+  // ─── Step 5: Platform balancing — equal distribution ───
+  const ALL_PLATFORMS = ["dubizzle", "opensooq", "aqarmap", "propertyfinder", "olx", "hatla2ee", "contactcars"];
   const byPlatform: Record<string, Listing[]> = {};
   for (const l of comparables) {
     const p = String(l.source_platform || "unknown");
     if (!byPlatform[p]) byPlatform[p] = [];
     byPlatform[p].push(l);
   }
+  const activePlatforms = ALL_PLATFORMS.filter(p => byPlatform[p]?.length > 0);
   const platformCounts = Object.entries(byPlatform).map(([k, v]) => `${k}:${v.length}`).join(", ");
-  console.error(`[Valuation] Platform distribution: ${platformCounts}`);
+  console.error(`[Valuation] Platform distribution (before): ${platformCounts}`);
 
-  // Take max 10 from each platform, then fill up to 50
+  // Equal share: ceil(50 / active platforms count), e.g. 4 platforms → 13 each
+  const perPlatform = Math.ceil(50 / Math.max(activePlatforms.length, 1));
   const balanced: Listing[] = [];
-  const maxPerPlatform = Math.max(10, Math.ceil(50 / Object.keys(byPlatform).length));
-  for (const listings of Object.values(byPlatform)) {
-    balanced.push(...listings.slice(0, maxPerPlatform));
+  for (const name of activePlatforms) {
+    balanced.push(...byPlatform[name].slice(0, perPlatform));
   }
-  comparables = balanced.slice(0, 50);
-  console.error(`[Valuation] After filters: ${comparables.length} comparables`);
+  // Add remaining from other platforms not in ALL_PLATFORMS
+  for (const [name, listings] of Object.entries(byPlatform)) {
+    if (!activePlatforms.includes(name)) {
+      balanced.push(...listings.slice(0, perPlatform));
+    }
+  }
+
+  if (balanced.length >= 10) {
+    comparables = balanced.slice(0, 50);
+  } else {
+    comparables = comparables.slice(0, 50);
+  }
+  console.error(`[Valuation] After balancing: ${comparables.length} (perPlatform=${perPlatform}, active: ${activePlatforms.join(",")})`);
 
   // ─── Extract and sort prices ───
   const allPrices = comparables.map((l) => Number(l.price)).filter((p) => p > 0).sort((a, b) => a - b);
