@@ -122,11 +122,19 @@ async function processComparables(
   allListings: Listing[],
   catVariants: string[],
 ) {
+  // Track each filter step
+  const step1_total = allListings.length;
   let comparables = allListings;
+  let afterSpecificCount = step1_total;
+  const filtersApplied: Record<string, string> = {
+    category: catVariants.join(", "),
+    governorate: ALEX_GOVS.join(", "),
+  };
 
-  // ─── Car similarity filters (title-based since category_fields not in select) ───
+  // ─── Car similarity filters ───
   if (asset_type === "car" && body.car_make) {
     const makeFilter = body.car_make.toLowerCase();
+    filtersApplied.make = body.car_make;
     const filtered = comparables.filter((l) => {
       const title = String(l.title || "").toLowerCase();
       return title.includes(makeFilter);
@@ -135,6 +143,7 @@ async function processComparables(
 
     if (body.car_model && comparables.length > 5) {
       const modelFilter = body.car_model.toLowerCase();
+      filtersApplied.model = body.car_model;
       const modelFiltered = comparables.filter((l) => {
         const title = String(l.title || "").toLowerCase();
         return title.includes(modelFilter);
@@ -144,6 +153,7 @@ async function processComparables(
 
     if (body.car_year && comparables.length > 5) {
       const yearStr = String(body.car_year);
+      filtersApplied.year_range = `${body.car_year - 2} — ${body.car_year + 2}`;
       const yearFiltered = comparables.filter((l) => {
         const title = String(l.title || "");
         return title.includes(yearStr);
@@ -152,11 +162,11 @@ async function processComparables(
     }
   }
 
-  // ─── Property similarity filters (title-based) ───
+  // ─── Property similarity filters ───
   if (asset_type === "property") {
     if (body.property_type) {
       const typeFilter = body.property_type.toLowerCase();
-      // Map English types to Arabic keywords for title matching
+      filtersApplied.property_type = body.property_type;
       const typeKeywords: Record<string, string[]> = {
         apartment: ["شقة", "شقه", "apartment"],
         villa: ["فيلا", "فيللا", "villa"],
@@ -174,10 +184,10 @@ async function processComparables(
       if (filtered.length >= 3) comparables = filtered;
     }
 
-    // Area filter: try to extract area from title (e.g., "150 م²" or "150 متر")
     if (body.property_area_sqm && comparables.length > 5) {
-      const areaMin = body.property_area_sqm * 0.7;
-      const areaMax = body.property_area_sqm * 1.3;
+      const areaMin = Math.round(body.property_area_sqm * 0.7);
+      const areaMax = Math.round(body.property_area_sqm * 1.3);
+      filtersApplied.area_range = `${areaMin} — ${areaMax} م²`;
       const areaFiltered = comparables.filter((l) => {
         const title = String(l.title || "");
         const areaMatch = title.match(/(\d+)\s*(?:م²|متر|sqm|م\b)/);
@@ -189,20 +199,44 @@ async function processComparables(
     }
   }
 
+  afterSpecificCount = comparables.length;
   comparables = comparables.slice(0, 50);
   console.error(`[Valuation] After filters: ${comparables.length} comparables`);
 
-  // ─── Calculate prices ───
-  const prices = comparables.map((l) => Number(l.price)).filter((p) => p > 0).sort((a, b) => a - b);
+  // ─── Extract and sort prices ───
+  const allPrices = comparables.map((l) => Number(l.price)).filter((p) => p > 0).sort((a, b) => a - b);
 
-  if (prices.length === 0) {
+  if (allPrices.length === 0) {
     return NextResponse.json({
       estimated_min: 0, estimated_max: 0, estimated_avg: 0,
       confidence_score: 0, comparable_count: 0,
       ai_analysis: "لا توجد إعلانات مشابهة كافية. جرّب تعدّل المواصفات.",
       market_trend: "unknown", trend_pct: 0, comparables: [],
+      process_details: {
+        step1_total_listings: step1_total,
+        step2_after_specific: afterSpecificCount,
+        step3_after_iqr: 0,
+        prices_used: [], prices_removed: [],
+        filters_applied: filtersApplied,
+        sample_listings: [],
+      },
     });
   }
+
+  // ─── IQR outlier removal ───
+  const q1Idx = Math.floor(allPrices.length * 0.25);
+  const q3Idx = Math.floor(allPrices.length * 0.75);
+  const q1 = allPrices[q1Idx];
+  const q3 = allPrices[q3Idx];
+  const iqr = q3 - q1;
+  const lowerBound = q1 - 1.5 * iqr;
+  const upperBound = q3 + 1.5 * iqr;
+
+  const filteredPrices = allPrices.filter((p) => p >= lowerBound && p <= upperBound);
+  const removedOutliers = allPrices.filter((p) => p < lowerBound || p > upperBound);
+
+  // Use filtered prices if enough remain, otherwise use all
+  const prices = filteredPrices.length >= 3 ? filteredPrices : allPrices;
 
   const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
   const median = prices[Math.floor(prices.length / 2)];
@@ -338,5 +372,19 @@ async function processComparables(
       source: l.source_platform,
       date: l.created_at,
     })),
+    process_details: {
+      step1_total_listings: step1_total,
+      step2_after_specific: afterSpecificCount,
+      step3_after_iqr: prices.length,
+      prices_used: prices,
+      prices_removed: removedOutliers,
+      filters_applied: filtersApplied,
+      sample_listings: comparables.slice(0, 5).map((l) => ({
+        title: l.title,
+        price: l.price,
+        governorate: l.governorate,
+        platform: l.source_platform,
+      })),
+    },
   });
 }
