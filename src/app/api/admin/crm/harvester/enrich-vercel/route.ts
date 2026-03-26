@@ -15,7 +15,7 @@ import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 
 export const maxDuration = 60;
 
-const SUPPORTED_PLATFORMS = ["aqarmap", "opensooq", "propertyfinder", "dowwr"];
+const SUPPORTED_PLATFORMS = ["aqarmap", "opensooq", "propertyfinder", "dubizzle", "dowwr", "olx", "hatla2ee"];
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -128,13 +128,21 @@ export async function GET(req: NextRequest) {
       const phone = extractPhone(allText);
       result.phone = phone;
 
+      // Extract brand/model from specifications
+      const specs = details.specifications || {};
+      const detectedBrand = specs["الماركة"] || specs["Make"] || specs["Brand"] || specs["brand"] || null;
+      const detectedModel = specs["الموديل"] || specs["Model"] || specs["model"] || null;
+
       // Update listing in DB
       const updates: Record<string, unknown> = {
         description: details.description || null,
         main_image_url: details.mainImageUrl || null,
         all_image_urls: details.allImageUrls || [],
-        specifications: details.specifications || {},
+        specifications: specs,
       };
+
+      if (detectedBrand) updates.detected_brand = detectedBrand;
+      if (detectedModel) updates.detected_model = detectedModel;
 
       if (phone) {
         updates.extracted_phone = phone;
