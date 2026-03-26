@@ -94,9 +94,9 @@ export async function GET(request: NextRequest) {
       .not("phone", "is", null);
 
     if (tab === "new") {
-      // New: not yet contacted
+      // New: not yet contacted (include NULL pipeline_status)
       if (status === "all" || status === "new") {
-        query = query.in("pipeline_status", ["phone_found", "discovered"]);
+        query = query.or("pipeline_status.in.(phone_found,discovered),pipeline_status.is.null");
       } else if (status === "contacted") {
         query = query.eq("pipeline_status", "contacted");
       } else if (status === "no_response") {
@@ -114,9 +114,16 @@ export async function GET(request: NextRequest) {
       query = query.in("pipeline_status", ["interested", "considering"]);
     }
 
-    // Apply filters
+    // Apply filters — widen category to handle mixed naming in DB
     if (tier !== "all") query = query.eq("seller_tier", tier);
-    if (category !== "all") query = query.eq("primary_category", category);
+    if (category !== "all") {
+      const catVariants = category === "vehicles"
+        ? ["vehicles", "سيارات", "cars"]
+        : category === "properties"
+        ? ["properties", "عقارات", "real_estate"]
+        : [category];
+      query = query.in("primary_category", catVariants);
+    }
     if (govVariants) query = query.in("primary_governorate", govVariants);
     if (sellerType === "individual") query = query.lte("total_listings_seen", 1);
     else if (sellerType === "broker") query = query.gte("total_listings_seen", 2).lte("total_listings_seen", 10);
@@ -135,7 +142,7 @@ export async function GET(request: NextRequest) {
 
     if (tab === "new") {
       if (status === "all" || status === "new") {
-        countQuery = countQuery.in("pipeline_status", ["phone_found", "discovered"]);
+        countQuery = countQuery.or("pipeline_status.in.(phone_found,discovered),pipeline_status.is.null");
       } else if (status === "contacted") {
         countQuery = countQuery.eq("pipeline_status", "contacted");
       } else if (status === "no_response") {
@@ -153,13 +160,20 @@ export async function GET(request: NextRequest) {
     }
 
     if (tier !== "all") countQuery = countQuery.eq("seller_tier", tier);
-    if (category !== "all") countQuery = countQuery.eq("primary_category", category);
+    if (category !== "all") {
+      const catVariants = category === "vehicles"
+        ? ["vehicles", "سيارات", "cars"]
+        : category === "properties"
+        ? ["properties", "عقارات", "real_estate"]
+        : [category];
+      countQuery = countQuery.in("primary_category", catVariants);
+    }
     if (govVariants) countQuery = countQuery.in("primary_governorate", govVariants);
     if (sellerType === "individual") countQuery = countQuery.lte("total_listings_seen", 1);
     else if (sellerType === "broker") countQuery = countQuery.gte("total_listings_seen", 2).lte("total_listings_seen", 10);
     else if (sellerType === "agency") countQuery = countQuery.gt("total_listings_seen", 10);
 
-    console.log('[OUTREACH API] Query params:', { tab, tier, category, governorate: govVariants || 'all', limit });
+    console.log('[OUTREACH API] Query params:', { tab, tier, category, sellerType, governorate: govVariants || 'all', limit });
     const [{ data: sellers, error }, { count: totalFiltered }] = await Promise.all([
       query,
       countQuery,
@@ -225,11 +239,13 @@ export async function GET(request: NextRequest) {
     // Tier counts for filter badges
     const { data: tierCounts } = await supabase.rpc("get_outreach_tier_counts").maybeSingle();
 
+    const sentCount = sentToday ?? 0;
+    const skippedCount = skippedToday ?? 0;
     return NextResponse.json({
       progress: {
-        sent: sentToday || 0,
-        skipped: skippedToday || 0,
-        remaining: contacts.filter((c: any) => !["contacted", "interested", "rejected", "exhausted"].includes(c.pipelineStatus)).length,
+        sent: sentCount,
+        skipped: skippedCount,
+        remaining: Math.max(0, dailyTarget - sentCount),
         target: dailyTarget,
       },
       contacts,

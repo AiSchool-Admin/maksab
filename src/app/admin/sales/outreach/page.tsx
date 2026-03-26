@@ -961,63 +961,19 @@ export default function SalesOutreachPage() {
                 </div>
               </div>
 
-              {/* Category filter */}
-              <div>
-                <p className="text-xs text-gray-text mb-1.5">الفئة:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    onClick={() => setCategoryFilter("all")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      categoryFilter === "all"
-                        ? "bg-[#1B7A3D] text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    الكل
-                  </button>
-                  {["vehicles", "properties"].map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setCategoryFilter(cat)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        categoryFilter === cat
-                          ? "bg-[#1B7A3D] text-white"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      {CATEGORY_LABELS[cat] || cat}
-                    </button>
-                  ))}
+              {/* Category + Governorate — locked per agent */}
+              <div className="flex gap-4">
+                <div>
+                  <p className="text-xs text-gray-text mb-1.5">الفئة:</p>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#1B7A3D] text-white" title={`${employeeTab === "waleed" ? "وليد" : "أحمد"} متخصص في ${effectiveCategory === "vehicles" ? "سيارات" : "عقارات"} الإسكندرية`}>
+                    🔒 {effectiveCategory === "vehicles" ? "🚗 سيارات" : "🏠 عقارات"}
+                  </span>
                 </div>
-              </div>
-
-              {/* Governorate filter */}
-              <div>
-                <p className="text-xs text-gray-text mb-1.5">المحافظة:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    onClick={() => setGovFilter("all")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      govFilter === "all"
-                        ? "bg-[#1B7A3D] text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    الكل
-                  </button>
-                  {["alexandria"].map((gov) => (
-                    <button
-                      key={gov}
-                      onClick={() => setGovFilter(gov)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        govFilter === gov
-                          ? "bg-[#1B7A3D] text-white"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      {GOV_LABELS[gov] || gov}
-                    </button>
-                  ))}
+                <div>
+                  <p className="text-xs text-gray-text mb-1.5">المحافظة:</p>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#1B7A3D] text-white" title="الإسكندرية فقط — MVP">
+                    🔒 الإسكندرية
+                  </span>
                 </div>
               </div>
 
