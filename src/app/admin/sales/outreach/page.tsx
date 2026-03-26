@@ -1326,6 +1326,26 @@ function ContactCard({
             {isCopied ? "تم النسخ!" : "📋 نسخ"}
           </button>
 
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/admin/sales/magic-link", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", ...getAdminHeaders() },
+                  body: JSON.stringify({ seller_id: contact.id }),
+                });
+                const data = await res.json();
+                if (data.url) {
+                  await navigator.clipboard.writeText(data.url);
+                  alert("✅ تم نسخ Magic Link");
+                }
+              } catch { alert("حصلت مشكلة"); }
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-purple-100 hover:bg-purple-200 rounded-xl text-xs font-medium text-purple-700 transition-colors"
+          >
+            🔗 Magic Link
+          </button>
+
           {tab === "interested" && (
             <button
               onClick={onCall}
