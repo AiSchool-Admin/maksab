@@ -17,6 +17,42 @@ export const maxDuration = 60;
 
 const SUPPORTED_PLATFORMS = ["aqarmap", "opensooq", "propertyfinder", "dubizzle", "dowwr", "olx", "hatla2ee"];
 
+// ─── Spec normalization ───
+
+const CAR_SPEC_MAP: Record<string, string> = {
+  "الماركة": "brand", "الموديل": "model", "سنة الصنع": "year",
+  "الكيلومترات": "mileage", "ناقل الحركة": "transmission",
+  "نوع الوقود": "fuel", "اللون": "color", "حجم المحرك": "engine_cc",
+  "نوع الهيكل": "body_type", "الحالة": "condition", "مرخصة": "licensed",
+  "Make": "brand", "Model": "model", "Year": "year",
+  "Mileage": "mileage", "Transmission": "transmission",
+  "Fuel Type": "fuel", "Color": "color", "Engine Size": "engine_cc",
+  "Body Type": "body_type", "Condition": "condition",
+  brand: "brand", model: "model", year: "year", mileage: "mileage",
+  transmission: "transmission", fuel: "fuel", color: "color",
+  engine_cc: "engine_cc", body_type: "body_type", condition: "condition",
+};
+
+const PROPERTY_SPEC_MAP: Record<string, string> = {
+  "نوع العقار": "property_type", "المساحة": "area", "عدد الغرف": "rooms",
+  "عدد الحمامات": "bathrooms", "الدور": "floor", "التشطيب": "finishing",
+  "الحالة": "condition", "الإطلالة": "view", "طريقة الدفع": "payment_method",
+  "Property Type": "property_type", Area: "area", Bedrooms: "rooms",
+  Bathrooms: "bathrooms", Floor: "floor", Finishing: "finishing", View: "view",
+  area: "area", rooms: "rooms", bedrooms: "rooms", bathrooms: "bathrooms",
+  floor: "floor", finishing: "finishing", type: "property_type",
+  propertyType: "property_type", payment_method: "payment_method",
+};
+
+function normalizeSpecs(raw: Record<string, string>, category: string): Record<string, string> {
+  const mapping = category === "vehicles" ? CAR_SPEC_MAP : PROPERTY_SPEC_MAP;
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    normalized[mapping[key] || key] = value;
+  }
+  return normalized;
+}
+
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -49,12 +85,12 @@ export async function GET(req: NextRequest) {
 
   const supabase = getServiceClient();
 
-  // Fetch listings without phone for this platform
+  // Fetch listings needing enrichment: no phone OR no specs
   const { data: listings, error: fetchErr } = await supabase
     .from("ahe_listings")
-    .select("id, source_listing_url, title, ahe_seller_id")
+    .select("id, source_listing_url, title, ahe_seller_id, maksab_category")
     .eq("source_platform", platform)
-    .is("extracted_phone", null)
+    .or("extracted_phone.is.null,specifications.eq.{}")
     .eq("is_duplicate", false)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -128,10 +164,13 @@ export async function GET(req: NextRequest) {
       const phone = extractPhone(allText);
       result.phone = phone;
 
-      // Extract brand/model from specifications
-      const specs = details.specifications || {};
-      const detectedBrand = specs["الماركة"] || specs["Make"] || specs["Brand"] || specs["brand"] || null;
-      const detectedModel = specs["الموديل"] || specs["Model"] || specs["model"] || null;
+      // Normalize specifications with car/property mapping
+      const rawSpecs = details.specifications || {};
+      const category = String(listing.maksab_category || "");
+      const specs = normalizeSpecs(rawSpecs, category);
+
+      const detectedBrand = specs.brand || null;
+      const detectedModel = specs.model || null;
 
       // Update listing in DB
       const updates: Record<string, unknown> = {
