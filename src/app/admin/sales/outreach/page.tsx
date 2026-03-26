@@ -102,48 +102,11 @@ const TIER_DISPLAY: Record<string, { emoji: string; label: string; color: string
 const CATEGORY_LABELS: Record<string, string> = {
   vehicles: "سيارات",
   properties: "عقارات",
-  phones: "موبايلات",
-  electronics: "إلكترونيات",
-  furniture: "أثاث",
-  fashion: "ملابس",
-  gold: "ذهب",
-  luxury: "فاخر",
-  appliances: "أجهزة",
-  hobbies: "هوايات",
-  tools: "عدد",
-  services: "خدمات",
-  scrap: "خردة",
-  kids: "أطفال",
-  sports: "رياضة",
-  pets: "حيوانات",
-  other: "أخرى",
 };
 
 const GOV_LABELS: Record<string, string> = {
-  cairo: "القاهرة",
   alexandria: "الإسكندرية",
-  giza: "الجيزة",
-  qalyubia: "القليوبية",
-  sharqia: "الشرقية",
-  dakahlia: "الدقهلية",
-  gharbia: "الغربية",
-  monufia: "المنوفية",
-  beheira: "البحيرة",
-  kafr_el_sheikh: "كفر الشيخ",
-  damietta: "دمياط",
-  port_said: "بورسعيد",
-  ismailia: "الإسماعيلية",
-  suez: "السويس",
-  fayoum: "الفيوم",
-  beni_suef: "بني سويف",
-  minya: "المنيا",
-  assiut: "أسيوط",
-  sohag: "سوهاج",
-  qena: "قنا",
-  luxor: "الأقصر",
-  aswan: "أسوان",
-  red_sea: "البحر الأحمر",
-  matrouh: "مطروح",
+  "الإسكندرية": "الإسكندرية",
 };
 
 const ROLE_TARGETS: Record<string, number> = {
@@ -282,11 +245,6 @@ function DailyDirectivePanel({
                 { key: "all", label: "الكل" },
                 { key: "vehicles", label: "🚗 سيارات" },
                 { key: "properties", label: "🏠 عقارات" },
-                { key: "phones", label: "📱 موبايلات" },
-                { key: "electronics", label: "💻 إلكترونيات" },
-                { key: "furniture", label: "🪑 أثاث" },
-                { key: "fashion", label: "👗 ملابس" },
-                { key: "gold", label: "💰 ذهب" },
               ].map(({ key, label }) => (
                 <button
                   key={key}
@@ -309,12 +267,7 @@ function DailyDirectivePanel({
             <div className="flex flex-wrap gap-1.5">
               {[
                 { key: "all", label: "الكل" },
-                { key: "cairo", label: "القاهرة" },
                 { key: "alexandria", label: "الإسكندرية" },
-                { key: "giza", label: "الجيزة" },
-                { key: "qalyubia", label: "القليوبية" },
-                { key: "sharqia", label: "الشرقية" },
-                { key: "dakahlia", label: "الدقهلية" },
               ].map(({ key, label }) => (
                 <button
                   key={key}
@@ -1022,7 +975,7 @@ export default function SalesOutreachPage() {
                   >
                     الكل
                   </button>
-                  {["vehicles", "properties", "phones", "electronics", "furniture", "fashion"].map((cat) => (
+                  {["vehicles", "properties"].map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setCategoryFilter(cat)}
@@ -1052,7 +1005,7 @@ export default function SalesOutreachPage() {
                   >
                     الكل
                   </button>
-                  {["cairo", "alexandria", "giza", "qalyubia", "sharqia", "dakahlia"].map((gov) => (
+                  {["alexandria"].map((gov) => (
                     <button
                       key={gov}
                       onClick={() => setGovFilter(gov)}
@@ -1088,7 +1041,7 @@ export default function SalesOutreachPage() {
               {/* Clear filters */}
               {(tierFilter !== "all" || categoryFilter !== "all" || govFilter !== "all") && (
                 <button
-                  onClick={() => { setTierFilter("all"); setCategoryFilter("all"); setGovFilter("all"); }}
+                  onClick={() => { setTierFilter("all"); setCategoryFilter("all"); setGovFilter("all"); setSellerTypeFilter("all"); }}
                   className="text-xs text-red-500 hover:text-red-700"
                 >
                   ✕ مسح الفلاتر
