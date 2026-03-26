@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     // Build query based on tab
     let query = supabase
       .from("ahe_sellers")
-      .select("id, name, phone, priority_score, whale_score, seller_tier, seller_type, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, last_outreach_at, last_response_at, outreach_count, notes, rejection_reason, skip_reason, last_outreach_template, buy_probability, buy_probability_score, source_platform")
+      .select("id, name, phone, priority_score, whale_score, seller_tier, detected_account_type, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, last_outreach_at, last_response_at, outreach_count, notes, rejection_reason, skip_reason, last_outreach_template, buy_probability, buy_probability_score, source_platform")
       .not("phone", "is", null);
 
     if (tab === "new") {
@@ -196,8 +196,9 @@ export async function GET(request: NextRequest) {
       const whaleScore = s.whale_score || 0;
       const sellerTier = s.seller_tier || "small";
 
-      // Choose template by seller_type, then tier, then tab
-      const sellerTypeVal = s.seller_type || "فرد";
+      // Map detected_account_type to Arabic seller type
+      const typeMap: Record<string, string> = { agency: "وكيل", broker: "سمسار", individual: "فرد", business: "وكيل" };
+      const sellerTypeVal = typeMap[s.detected_account_type] || "فرد";
       let tplForSeller = selectedTemplate;
       if (!templateId && templates?.length) {
         // Match by seller_type first (agency→agency template, broker→broker, etc.)
@@ -242,7 +243,7 @@ export async function GET(request: NextRequest) {
         templateId: tplForSeller?.id,
         message,
         sourcePlatform: s.source_platform || null,
-        sellerType: s.seller_type || "فرد",
+        sellerType: sellerTypeVal,
       };
     });
 

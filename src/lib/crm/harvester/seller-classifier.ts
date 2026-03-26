@@ -17,6 +17,7 @@ const PROPERTY_AGENCY_KEYWORDS = [
 const ALL_AGENCY_KEYWORDS = [...CAR_AGENCY_KEYWORDS, ...PROPERTY_AGENCY_KEYWORDS];
 
 export type SellerType = "فرد" | "سمسار" | "وكيل";
+export type SellerTypeSlug = "individual" | "broker" | "agency";
 
 /**
  * Detect seller type from name + listing count
@@ -44,6 +45,20 @@ export function detectSellerType(
   if (listingCount > 10) return "وكيل";
   if (listingCount >= 2) return "سمسار";
   return "فرد";
+}
+
+/**
+ * Detect seller type and return English slug for detected_account_type column
+ */
+export function detectSellerTypeSlug(
+  name: string | null | undefined,
+  listingCount: number,
+  isBusiness?: boolean,
+): SellerTypeSlug {
+  const ar = detectSellerType(name, listingCount, isBusiness);
+  if (ar === "وكيل") return "agency";
+  if (ar === "سمسار") return "broker";
+  return "individual";
 }
 
 /**

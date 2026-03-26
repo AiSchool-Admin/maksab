@@ -38,7 +38,7 @@ import {
   type OlxParseDebug,
 } from "@/lib/crm/harvester/parsers/olx";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
-import { detectSellerType } from "@/lib/crm/harvester/seller-classifier";
+import { detectSellerTypeSlug } from "@/lib/crm/harvester/seller-classifier";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
 import { mapLocation, normalizeGovernorate, governorateToArabic } from "@/lib/crm/harvester/parsers/location-mapper";
 import { createBuyerFromSeller, updateSellerBuyProbability } from "@/lib/crm/harvester/seller-to-buyer";
@@ -309,7 +309,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
         } catch { /* RPC may not exist */ }
       } else {
         const priorityScore = (listing.isVerified ? 30 : 0) + (listing.isBusiness ? 20 : 0) + (phone ? 25 : 0);
-        const sellerType = detectSellerType(sellerName, 1, listing.isBusiness);
+        const sellerType = detectSellerTypeSlug(sellerName, 1, listing.isBusiness);
         const { data: newSeller } = await supabase
           .from("ahe_sellers")
           .insert({
@@ -324,7 +324,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
             phone: phone || null,
             priority_score: Math.min(priorityScore, 100),
             pipeline_status: phone ? "phone_found" : "discovered",
-            seller_type: sellerType,
+            detected_account_type: sellerType,
           })
           .select("id")
           .single();
@@ -377,7 +377,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     } else {
       // Anonymous seller
       const priorityScore = (listing.isVerified ? 30 : 0) + (listing.isBusiness ? 20 : 0);
-      const anonSellerType = detectSellerType(null, 1, listing.isBusiness);
+      const anonSellerType = detectSellerTypeSlug(null, 1, listing.isBusiness);
       const { data: newSeller } = await supabase
         .from("ahe_sellers")
         .insert({
@@ -391,7 +391,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
           total_listings_seen: 1,
           priority_score: Math.min(priorityScore, 100),
           pipeline_status: "discovered",
-          seller_type: anonSellerType,
+          detected_account_type: anonSellerType,
         })
         .select("id")
         .single();
