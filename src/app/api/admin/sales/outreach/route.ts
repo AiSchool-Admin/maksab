@@ -125,9 +125,7 @@ export async function GET(request: NextRequest) {
       query = query.in("primary_category", catVariants);
     }
     if (govVariants) query = query.in("primary_governorate", govVariants);
-    if (sellerType === "individual") query = query.lte("total_listings_seen", 1);
-    else if (sellerType === "broker") query = query.gte("total_listings_seen", 2).lte("total_listings_seen", 10);
-    else if (sellerType === "agency") query = query.gt("total_listings_seen", 10);
+    if (sellerType !== "all") query = query.eq("detected_account_type", sellerType);
 
     query = query
       .order("whale_score", { ascending: false })
@@ -169,9 +167,7 @@ export async function GET(request: NextRequest) {
       countQuery = countQuery.in("primary_category", catVariants);
     }
     if (govVariants) countQuery = countQuery.in("primary_governorate", govVariants);
-    if (sellerType === "individual") countQuery = countQuery.lte("total_listings_seen", 1);
-    else if (sellerType === "broker") countQuery = countQuery.gte("total_listings_seen", 2).lte("total_listings_seen", 10);
-    else if (sellerType === "agency") countQuery = countQuery.gt("total_listings_seen", 10);
+    if (sellerType !== "all") countQuery = countQuery.eq("detected_account_type", sellerType);
 
     console.log('[OUTREACH API] Query params:', { tab, tier, category, sellerType, governorate: govVariants || 'all', limit });
     const [{ data: sellers, error }, { count: totalFiltered }] = await Promise.all([
