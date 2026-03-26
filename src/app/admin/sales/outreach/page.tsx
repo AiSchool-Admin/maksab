@@ -443,6 +443,7 @@ export default function SalesOutreachPage() {
   const [tierFilter, setTierFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [govFilter, setGovFilter] = useState("all");
+  const [sellerTypeFilter, setSellerTypeFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
   // Daily target
@@ -487,6 +488,7 @@ export default function SalesOutreachPage() {
         tier: tierFilter,
         category: effectiveCategory,
         governorate: effectiveGov,
+        sellerType: sellerTypeFilter,
         dailyTarget: String(dailyTarget),
       });
       if (selectedTemplateId) params.set("templateId", selectedTemplateId);
@@ -513,7 +515,7 @@ export default function SalesOutreachPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, tierFilter, effectiveCategory, effectiveGov, dailyTarget, selectedTemplateId, employeeTab]);
+  }, [activeTab, tierFilter, effectiveCategory, effectiveGov, sellerTypeFilter, dailyTarget, selectedTemplateId, employeeTab]);
 
   useEffect(() => {
     fetchData();
@@ -981,6 +983,31 @@ export default function SalesOutreachPage() {
                 </div>
               </div>
 
+              {/* Seller type filter */}
+              <div>
+                <p className="text-xs text-gray-text mb-1.5">نوع البائع:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { key: "all", label: "الكل" },
+                    { key: "individual", label: "👤 فرد (1)" },
+                    { key: "broker", label: "🏷️ سمسار (2-10)" },
+                    { key: "agency", label: "🏢 وكيل (+10)" },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setSellerTypeFilter(key)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        sellerTypeFilter === key
+                          ? "bg-[#D4A843] text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Category filter */}
               <div>
                 <p className="text-xs text-gray-text mb-1.5">الفئة:</p>
@@ -1323,6 +1350,15 @@ function ContactCard({
             <span dir="ltr">📞 {contact.phone}</span>
             <span>📍 {GOV_LABELS[contact.location] || contact.location}</span>
             <span>📦 {contact.listingCount} إعلان</span>
+            {contact.listingCount <= 1 && (
+              <span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">👤 فرد</span>
+            )}
+            {contact.listingCount >= 2 && contact.listingCount <= 10 && (
+              <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">🏷️ سمسار</span>
+            )}
+            {contact.listingCount > 10 && (
+              <span className="bg-amber-50 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">🏢 وكيل</span>
+            )}
             <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
               {CATEGORY_LABELS[contact.category] || contact.category}
             </span>

@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
       ? [governorateParam, governorateToArabic(governorateParam)].filter((v, i, a) => v && a.indexOf(v) === i) as string[]
       : null;
     const status = searchParams.get("status") || "all";
+    const sellerType = searchParams.get("sellerType") || "all";
     const dailyTarget = parseInt(searchParams.get("dailyTarget") || "50");
     const templateId = searchParams.get("templateId") || null;
     const limit = parseInt(searchParams.get("limit") || "50");
@@ -117,6 +118,9 @@ export async function GET(request: NextRequest) {
     if (tier !== "all") query = query.eq("seller_tier", tier);
     if (category !== "all") query = query.eq("primary_category", category);
     if (govVariants) query = query.in("primary_governorate", govVariants);
+    if (sellerType === "individual") query = query.lte("total_listings_seen", 1);
+    else if (sellerType === "broker") query = query.gte("total_listings_seen", 2).lte("total_listings_seen", 10);
+    else if (sellerType === "agency") query = query.gt("total_listings_seen", 10);
 
     query = query
       .order("whale_score", { ascending: false })
@@ -151,6 +155,9 @@ export async function GET(request: NextRequest) {
     if (tier !== "all") countQuery = countQuery.eq("seller_tier", tier);
     if (category !== "all") countQuery = countQuery.eq("primary_category", category);
     if (govVariants) countQuery = countQuery.in("primary_governorate", govVariants);
+    if (sellerType === "individual") countQuery = countQuery.lte("total_listings_seen", 1);
+    else if (sellerType === "broker") countQuery = countQuery.gte("total_listings_seen", 2).lte("total_listings_seen", 10);
+    else if (sellerType === "agency") countQuery = countQuery.gt("total_listings_seen", 10);
 
     console.log('[OUTREACH API] Query params:', { tab, tier, category, governorate: govVariants || 'all', limit });
     const [{ data: sellers, error }, { count: totalFiltered }] = await Promise.all([
