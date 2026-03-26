@@ -38,6 +38,7 @@ interface OutreachContact {
   phone: string;
   score: number;
   sellerTier: string;
+  sellerType: string;
   isWhale: boolean;
   listingCount: number;
   location: string;
@@ -1259,15 +1260,12 @@ function ContactCard({
             <span dir="ltr">📞 {contact.phone}</span>
             <span>📍 {GOV_LABELS[contact.location] || contact.location}</span>
             <span>📦 {contact.listingCount} إعلان</span>
-            {contact.listingCount <= 1 && (
-              <span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">👤 فرد</span>
-            )}
-            {contact.listingCount >= 2 && contact.listingCount <= 10 && (
-              <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">🏷️ سمسار</span>
-            )}
-            {contact.listingCount > 10 && (
-              <span className="bg-amber-50 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">🏢 وكيل</span>
-            )}
+            {(() => {
+              const st = contact.sellerType || "فرد";
+              if (st === "وكيل") return <span className="bg-amber-50 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">🏢 وكيل</span>;
+              if (st === "سمسار") return <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">🏷️ سمسار</span>;
+              return <span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">👤 فرد</span>;
+            })()}
             <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
               {CATEGORY_LABELS[contact.category] || contact.category}
             </span>

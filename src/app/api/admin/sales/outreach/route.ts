@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     // Build query based on tab
     let query = supabase
       .from("ahe_sellers")
-      .select("id, name, phone, priority_score, whale_score, seller_tier, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, last_outreach_at, last_response_at, outreach_count, notes, rejection_reason, skip_reason, last_outreach_template, buy_probability, buy_probability_score, source_platform")
+      .select("id, name, phone, priority_score, whale_score, seller_tier, seller_type, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, last_outreach_at, last_response_at, outreach_count, notes, rejection_reason, skip_reason, last_outreach_template, buy_probability, buy_probability_score, source_platform")
       .not("phone", "is", null);
 
     if (tab === "new") {
@@ -196,14 +196,23 @@ export async function GET(request: NextRequest) {
       const whaleScore = s.whale_score || 0;
       const sellerTier = s.seller_tier || "small";
 
-      // Choose tier-appropriate template
+      // Choose template by seller_type, then tier, then tab
+      const sellerTypeVal = s.seller_type || "فرد";
       let tplForSeller = selectedTemplate;
       if (!templateId && templates?.length) {
-        if (sellerTier === "whale") {
-          tplForSeller = templates.find((t: any) => t.target_tier === "whale") || selectedTemplate;
+        // Match by seller_type first (agency→agency template, broker→broker, etc.)
+        if (sellerTypeVal === "وكيل") {
+          tplForSeller = templates.find((t: any) => t.target_tier === "agency" || t.target_tier === "whale") || selectedTemplate;
+        } else if (sellerTypeVal === "سمسار") {
+          tplForSeller = templates.find((t: any) => t.target_tier === "broker") || selectedTemplate;
         }
+        // Override for whales
+        if (sellerTier === "whale") {
+          tplForSeller = templates.find((t: any) => t.target_tier === "whale") || tplForSeller;
+        }
+        // Override for followups
         if (tab === "followup") {
-          tplForSeller = templates.find((t: any) => t.name === "followup_48h") || selectedTemplate;
+          tplForSeller = templates.find((t: any) => t.name === "followup_48h") || tplForSeller;
         }
       }
 
@@ -233,6 +242,7 @@ export async function GET(request: NextRequest) {
         templateId: tplForSeller?.id,
         message,
         sourcePlatform: s.source_platform || null,
+        sellerType: s.seller_type || "فرد",
       };
     });
 
