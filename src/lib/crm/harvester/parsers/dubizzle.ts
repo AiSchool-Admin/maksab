@@ -347,6 +347,67 @@ export function parseDubizzleDetail(html: string): ListingDetails {
     }
   }
 
+  // ═══ Strategy 2: __NEXT_DATA__ (Dubizzle uses Next.js) ═══
+  const nextDataMatch = html.match(/<script\s*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+  if (nextDataMatch) {
+    try {
+      const data = JSON.parse(nextDataMatch[1]);
+      const ad = data?.props?.pageProps?.ad
+        || data?.props?.pageProps?.listing
+        || data?.props?.pageProps?.data
+        || data?.props?.pageProps?.item;
+
+      if (ad && (ad.description || ad.title || ad.parameters)) {
+        result.description = String(ad.description || ad.body || "");
+
+        // Images
+        const imgs = ad.images || ad.photos || [];
+        for (const img of imgs) {
+          const url = typeof img === "string" ? img : (img?.url || img?.src || img?.main);
+          if (url) result.allImageUrls.push(String(url));
+        }
+        result.mainImageUrl = result.allImageUrls[0] || "";
+
+        // Specifications from parameters/details
+        const params = ad.parameters || ad.details || ad.attributes || [];
+        if (Array.isArray(params)) {
+          for (const p of params) {
+            const key = String(p.label || p.name || p.key || "");
+            const val = String(p.value_label || p.value || p.label_value || "");
+            if (key && val && key !== val) result.specifications[key] = val;
+          }
+        }
+
+        // Amenities/features (properties)
+        const features = ad.amenities || ad.features || [];
+        if (Array.isArray(features)) {
+          for (const f of features) {
+            const name = String(f.label || f.name || f);
+            if (name) result.specifications[name] = String(f.value || "true");
+          }
+        }
+
+        // Seller
+        const seller = ad.seller || ad.user || ad.owner;
+        if (seller) {
+          result.sellerName = cleanSellerName(String(seller.name || seller.display_name || ""));
+          result.sellerProfileUrl = seller.profile_url || seller.url || null;
+          result.sellerMemberSince = seller.member_since || seller.created || null;
+        }
+
+        result.condition = result.specifications["الحالة"] || result.specifications["Condition"] || null;
+        result.hasWarranty = result.description.includes("ضمان") || result.specifications["الضمان"] === "نعم";
+
+        console.error(`[Dubizzle Detail] __NEXT_DATA__: ${Object.keys(result.specifications).length} specs, ${result.allImageUrls.length} images`);
+        return result;
+      }
+    } catch (e) {
+      console.error(`[Dubizzle Detail] __NEXT_DATA__ parse error: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  // ═══ Strategy 3: HTML regex fallback ═══
+
   // HTML — Extract description
   const descPatterns = [
     /<div[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i,

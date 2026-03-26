@@ -53,16 +53,30 @@ export async function POST(req: NextRequest) {
 
     console.error(`[Valuation] asset_type: ${asset_type}, cats: ${catVariants.join(",")}`);
 
+    // ─── Rental exclusion keywords ───
+    const RENTAL_KEYWORDS = ['للإيجار', 'للايجار', 'ايجار', 'إيجار', 'مفروشة', 'مفروش', 'for rent', 'rent'];
+
     // ─── Find comparable listings (Alexandria first) ───
-    const { data: allListings, error: queryErr } = await sb
+    let query = sb
       .from("ahe_listings")
-      .select("title, price, created_at, source_platform, governorate, maksab_category")
+      .select("title, price, created_at, source_platform, governorate, maksab_category, city, source_listing_url")
       .in("maksab_category", catVariants)
       .in("governorate", ALEX_GOVS)
       .gt("price", 0)
-      .not("price", "is", null)
+      .not("price", "is", null);
+
+    // Exclude rentals at DB level where possible
+    for (const kw of ['للإيجار', 'للايجار', 'إيجار']) {
+      query = query.not("title", "ilike", `%${kw}%`);
+    }
+    // Exclude installment/deposit ads
+    for (const kw of ['مقدم', 'قسط', 'تقسيط', 'أقساط']) {
+      query = query.not("title", "ilike", `%${kw}%`);
+    }
+
+    const { data: allListings, error: queryErr } = await query
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(300);
 
     console.error(`[Valuation] Alexandria results: ${allListings?.length || 0}, error: ${queryErr?.message || "none"}`);
     if (allListings?.[0]) {
@@ -75,14 +89,21 @@ export async function POST(req: NextRequest) {
 
     // ─── Fallback: try without governorate filter ───
     console.error("[Valuation] No Alexandria listings, trying all governorates...");
-    const { data: fallback } = await sb
+    let fallbackQuery = sb
       .from("ahe_listings")
-      .select("title, price, created_at, source_platform, governorate, maksab_category")
+      .select("title, price, created_at, source_platform, governorate, maksab_category, city, source_listing_url")
       .in("maksab_category", catVariants)
       .gt("price", 0)
-      .not("price", "is", null)
+      .not("price", "is", null);
+    for (const kw of ['للإيجار', 'للايجار', 'إيجار']) {
+      fallbackQuery = fallbackQuery.not("title", "ilike", `%${kw}%`);
+    }
+    for (const kw of ['مقدم', 'قسط', 'تقسيط', 'أقساط']) {
+      fallbackQuery = fallbackQuery.not("title", "ilike", `%${kw}%`);
+    }
+    const { data: fallback } = await fallbackQuery
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(300);
 
     console.error(`[Valuation] All-gov fallback: ${fallback?.length || 0}`);
 
@@ -131,7 +152,43 @@ async function processComparables(
     governorate: ALEX_GOVS.join(", "),
   };
 
-  // ─── Car similarity filters ───
+  // ─── Step 1: Client-side rental + installment exclusion ───
+  const EXCLUDE_WORDS = [
+    'للإيجار', 'للايجار', 'ايجار', 'إيجار', 'مفروشة', 'مفروش', 'for rent',
+    'مقدم', 'حجز', 'قسط', 'تقسيط', 'أقساط', 'اقساط', 'down payment',
+  ];
+  comparables = comparables.filter((l) => {
+    const title = String(l.title || "").toLowerCase();
+    return !EXCLUDE_WORDS.some(kw => title.includes(kw));
+  });
+  console.error(`[Valuation] After rental+installment exclusion: ${comparables.length} (from ${step1_total})`);
+
+  // ─── Step 2: District filter — search in title, city, and URL ───
+  if (body.district) {
+    filtersApplied.district = body.district;
+    const d = body.district;
+    // Create fuzzy variants: ة↔ه, common misspellings
+    const variants = [d];
+    if (d.includes("ة")) variants.push(d.replace(/ة/g, "ه"));
+    if (d.includes("ه")) variants.push(d.replace(/ه/g, "ة"));
+
+    const districtFiltered = comparables.filter((l) => {
+      const title = String(l.title || "");
+      const city = String(l.city || "");
+      const url = String(l.source_listing_url || "");
+      return variants.some(v =>
+        title.includes(v) || city.includes(v) || url.toLowerCase().includes(v.toLowerCase())
+      );
+    });
+    console.error(`[Valuation] District "${d}" filter: ${districtFiltered.length} (variants: ${variants.join(",")})`);
+    if (districtFiltered.length >= 5) {
+      comparables = districtFiltered;
+    } else {
+      console.error(`[Valuation] District too few (${districtFiltered.length}), using all Alexandria`);
+    }
+  }
+
+  // ─── Step 3: Car similarity filters ───
   if (asset_type === "car" && body.car_make) {
     const makeFilter = body.car_make.toLowerCase();
     filtersApplied.make = body.car_make;
@@ -162,7 +219,7 @@ async function processComparables(
     }
   }
 
-  // ─── Property similarity filters ───
+  // ─── Step 4: Property similarity filters ───
   if (asset_type === "property") {
     if (body.property_type) {
       const typeFilter = body.property_type.toLowerCase();
@@ -184,14 +241,15 @@ async function processComparables(
       if (filtered.length >= 3) comparables = filtered;
     }
 
+    // Area filter: ±30%, but KEEP listings without area in title
     if (body.property_area_sqm && comparables.length > 5) {
       const areaMin = Math.round(body.property_area_sqm * 0.7);
       const areaMax = Math.round(body.property_area_sqm * 1.3);
       filtersApplied.area_range = `${areaMin} — ${areaMax} م²`;
       const areaFiltered = comparables.filter((l) => {
         const title = String(l.title || "");
-        const areaMatch = title.match(/(\d+)\s*(?:م²|متر|sqm|م\b)/);
-        if (!areaMatch) return false;
+        const areaMatch = title.match(/(\d+)\s*(?:م²|متر|sqm|م\b|m²)/i);
+        if (!areaMatch) return true; // no area in title → keep it
         const area = Number(areaMatch[1]);
         return area >= areaMin && area <= areaMax;
       });
@@ -200,8 +258,38 @@ async function processComparables(
   }
 
   afterSpecificCount = comparables.length;
-  comparables = comparables.slice(0, 50);
-  console.error(`[Valuation] After filters: ${comparables.length} comparables`);
+
+  // ─── Step 5: Platform balancing — equal distribution ───
+  const ALL_PLATFORMS = ["dubizzle", "opensooq", "aqarmap", "propertyfinder", "olx", "hatla2ee", "contactcars"];
+  const byPlatform: Record<string, Listing[]> = {};
+  for (const l of comparables) {
+    const p = String(l.source_platform || "unknown");
+    if (!byPlatform[p]) byPlatform[p] = [];
+    byPlatform[p].push(l);
+  }
+  const activePlatforms = ALL_PLATFORMS.filter(p => byPlatform[p]?.length > 0);
+  const platformCounts = Object.entries(byPlatform).map(([k, v]) => `${k}:${v.length}`).join(", ");
+  console.error(`[Valuation] Platform distribution (before): ${platformCounts}`);
+
+  // Equal share: ceil(50 / active platforms count), e.g. 4 platforms → 13 each
+  const perPlatform = Math.ceil(50 / Math.max(activePlatforms.length, 1));
+  const balanced: Listing[] = [];
+  for (const name of activePlatforms) {
+    balanced.push(...byPlatform[name].slice(0, perPlatform));
+  }
+  // Add remaining from other platforms not in ALL_PLATFORMS
+  for (const [name, listings] of Object.entries(byPlatform)) {
+    if (!activePlatforms.includes(name)) {
+      balanced.push(...listings.slice(0, perPlatform));
+    }
+  }
+
+  if (balanced.length >= 10) {
+    comparables = balanced.slice(0, 50);
+  } else {
+    comparables = comparables.slice(0, 50);
+  }
+  console.error(`[Valuation] After balancing: ${comparables.length} (perPlatform=${perPlatform}, active: ${activePlatforms.join(",")})`);
 
   // ─── Extract and sort prices ───
   const allPrices = comparables.map((l) => Number(l.price)).filter((p) => p > 0).sort((a, b) => a - b);
@@ -356,6 +444,15 @@ async function processComparables(
 
   await sb.from("asset_valuations").insert(insertData);
 
+  const mapListing = (l: Listing) => ({
+    title: l.title as string,
+    price: l.price as number,
+    city: (l.city as string) || null,
+    source_platform: (l.source_platform as string) || null,
+    source_listing_url: (l.source_listing_url as string) || null,
+    created_at: l.created_at as string,
+  });
+
   return NextResponse.json({
     estimated_min: estimatedMin,
     estimated_max: estimatedMax,
@@ -366,25 +463,16 @@ async function processComparables(
     ai_analysis: aiAnalysis,
     market_trend: marketTrend,
     trend_pct: trendPct,
-    comparables: comparables.slice(0, 5).map((l) => ({
-      title: l.title,
-      price: l.price,
-      source: l.source_platform,
-      date: l.created_at,
-    })),
+    comparables: comparables.slice(0, 10).map(mapListing),
     process_details: {
       step1_total_listings: step1_total,
       step2_after_specific: afterSpecificCount,
       step3_after_iqr: prices.length,
+      outliers_removed_count: removedOutliers.length,
       prices_used: prices,
       prices_removed: removedOutliers,
       filters_applied: filtersApplied,
-      sample_listings: comparables.slice(0, 5).map((l) => ({
-        title: l.title,
-        price: l.price,
-        governorate: l.governorate,
-        platform: l.source_platform,
-      })),
+      sample_listings: comparables.slice(0, 10).map(mapListing),
     },
   });
 }

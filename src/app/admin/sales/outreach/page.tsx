@@ -102,48 +102,11 @@ const TIER_DISPLAY: Record<string, { emoji: string; label: string; color: string
 const CATEGORY_LABELS: Record<string, string> = {
   vehicles: "سيارات",
   properties: "عقارات",
-  phones: "موبايلات",
-  electronics: "إلكترونيات",
-  furniture: "أثاث",
-  fashion: "ملابس",
-  gold: "ذهب",
-  luxury: "فاخر",
-  appliances: "أجهزة",
-  hobbies: "هوايات",
-  tools: "عدد",
-  services: "خدمات",
-  scrap: "خردة",
-  kids: "أطفال",
-  sports: "رياضة",
-  pets: "حيوانات",
-  other: "أخرى",
 };
 
 const GOV_LABELS: Record<string, string> = {
-  cairo: "القاهرة",
   alexandria: "الإسكندرية",
-  giza: "الجيزة",
-  qalyubia: "القليوبية",
-  sharqia: "الشرقية",
-  dakahlia: "الدقهلية",
-  gharbia: "الغربية",
-  monufia: "المنوفية",
-  beheira: "البحيرة",
-  kafr_el_sheikh: "كفر الشيخ",
-  damietta: "دمياط",
-  port_said: "بورسعيد",
-  ismailia: "الإسماعيلية",
-  suez: "السويس",
-  fayoum: "الفيوم",
-  beni_suef: "بني سويف",
-  minya: "المنيا",
-  assiut: "أسيوط",
-  sohag: "سوهاج",
-  qena: "قنا",
-  luxor: "الأقصر",
-  aswan: "أسوان",
-  red_sea: "البحر الأحمر",
-  matrouh: "مطروح",
+  "الإسكندرية": "الإسكندرية",
 };
 
 const ROLE_TARGETS: Record<string, number> = {
@@ -282,11 +245,6 @@ function DailyDirectivePanel({
                 { key: "all", label: "الكل" },
                 { key: "vehicles", label: "🚗 سيارات" },
                 { key: "properties", label: "🏠 عقارات" },
-                { key: "phones", label: "📱 موبايلات" },
-                { key: "electronics", label: "💻 إلكترونيات" },
-                { key: "furniture", label: "🪑 أثاث" },
-                { key: "fashion", label: "👗 ملابس" },
-                { key: "gold", label: "💰 ذهب" },
               ].map(({ key, label }) => (
                 <button
                   key={key}
@@ -309,12 +267,7 @@ function DailyDirectivePanel({
             <div className="flex flex-wrap gap-1.5">
               {[
                 { key: "all", label: "الكل" },
-                { key: "cairo", label: "القاهرة" },
                 { key: "alexandria", label: "الإسكندرية" },
-                { key: "giza", label: "الجيزة" },
-                { key: "qalyubia", label: "القليوبية" },
-                { key: "sharqia", label: "الشرقية" },
-                { key: "dakahlia", label: "الدقهلية" },
               ].map(({ key, label }) => (
                 <button
                   key={key}
@@ -443,6 +396,7 @@ export default function SalesOutreachPage() {
   const [tierFilter, setTierFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [govFilter, setGovFilter] = useState("all");
+  const [sellerTypeFilter, setSellerTypeFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
   // Daily target
@@ -487,6 +441,7 @@ export default function SalesOutreachPage() {
         tier: tierFilter,
         category: effectiveCategory,
         governorate: effectiveGov,
+        sellerType: sellerTypeFilter,
         dailyTarget: String(dailyTarget),
       });
       if (selectedTemplateId) params.set("templateId", selectedTemplateId);
@@ -513,7 +468,7 @@ export default function SalesOutreachPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, tierFilter, effectiveCategory, effectiveGov, dailyTarget, selectedTemplateId, employeeTab]);
+  }, [activeTab, tierFilter, effectiveCategory, effectiveGov, sellerTypeFilter, dailyTarget, selectedTemplateId, employeeTab]);
 
   useEffect(() => {
     fetchData();
@@ -981,63 +936,44 @@ export default function SalesOutreachPage() {
                 </div>
               </div>
 
-              {/* Category filter */}
+              {/* Seller type filter */}
               <div>
-                <p className="text-xs text-gray-text mb-1.5">الفئة:</p>
+                <p className="text-xs text-gray-text mb-1.5">نوع البائع:</p>
                 <div className="flex flex-wrap gap-1.5">
-                  <button
-                    onClick={() => setCategoryFilter("all")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      categoryFilter === "all"
-                        ? "bg-[#1B7A3D] text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    الكل
-                  </button>
-                  {["vehicles", "properties", "phones", "electronics", "furniture", "fashion"].map((cat) => (
+                  {[
+                    { key: "all", label: "الكل" },
+                    { key: "individual", label: "👤 فرد (1)" },
+                    { key: "broker", label: "🏷️ سمسار (2-10)" },
+                    { key: "agency", label: "🏢 وكيل (+10)" },
+                  ].map(({ key, label }) => (
                     <button
-                      key={cat}
-                      onClick={() => setCategoryFilter(cat)}
+                      key={key}
+                      onClick={() => setSellerTypeFilter(key)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        categoryFilter === cat
-                          ? "bg-[#1B7A3D] text-white"
+                        sellerTypeFilter === key
+                          ? "bg-[#D4A843] text-white"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
                     >
-                      {CATEGORY_LABELS[cat] || cat}
+                      {label}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Governorate filter */}
-              <div>
-                <p className="text-xs text-gray-text mb-1.5">المحافظة:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    onClick={() => setGovFilter("all")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      govFilter === "all"
-                        ? "bg-[#1B7A3D] text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    الكل
-                  </button>
-                  {["cairo", "alexandria", "giza", "qalyubia", "sharqia", "dakahlia"].map((gov) => (
-                    <button
-                      key={gov}
-                      onClick={() => setGovFilter(gov)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        govFilter === gov
-                          ? "bg-[#1B7A3D] text-white"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      {GOV_LABELS[gov] || gov}
-                    </button>
-                  ))}
+              {/* Category + Governorate — locked per agent */}
+              <div className="flex gap-4">
+                <div>
+                  <p className="text-xs text-gray-text mb-1.5">الفئة:</p>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#1B7A3D] text-white" title={`${employeeTab === "waleed" ? "وليد" : "أحمد"} متخصص في ${effectiveCategory === "vehicles" ? "سيارات" : "عقارات"} الإسكندرية`}>
+                    🔒 {effectiveCategory === "vehicles" ? "🚗 سيارات" : "🏠 عقارات"}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-text mb-1.5">المحافظة:</p>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#1B7A3D] text-white" title="الإسكندرية فقط — MVP">
+                    🔒 الإسكندرية
+                  </span>
                 </div>
               </div>
 
@@ -1061,7 +997,7 @@ export default function SalesOutreachPage() {
               {/* Clear filters */}
               {(tierFilter !== "all" || categoryFilter !== "all" || govFilter !== "all") && (
                 <button
-                  onClick={() => { setTierFilter("all"); setCategoryFilter("all"); setGovFilter("all"); }}
+                  onClick={() => { setTierFilter("all"); setCategoryFilter("all"); setGovFilter("all"); setSellerTypeFilter("all"); }}
                   className="text-xs text-red-500 hover:text-red-700"
                 >
                   ✕ مسح الفلاتر
@@ -1323,6 +1259,15 @@ function ContactCard({
             <span dir="ltr">📞 {contact.phone}</span>
             <span>📍 {GOV_LABELS[contact.location] || contact.location}</span>
             <span>📦 {contact.listingCount} إعلان</span>
+            {contact.listingCount <= 1 && (
+              <span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">👤 فرد</span>
+            )}
+            {contact.listingCount >= 2 && contact.listingCount <= 10 && (
+              <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">🏷️ سمسار</span>
+            )}
+            {contact.listingCount > 10 && (
+              <span className="bg-amber-50 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">🏢 وكيل</span>
+            )}
             <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
               {CATEGORY_LABELS[contact.category] || contact.category}
             </span>

@@ -118,6 +118,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/admin/crm/harvester", label: "محرك الحصاد", icon: Cpu },
       { href: "/admin/crm/harvester/alexandria", label: "الإسكندرية", icon: MapPin },
+      { href: "/admin/crm/harvester/enrich-specs", label: "استخراج المواصفات", icon: Search },
       { href: "/admin/sales/outreach?tab=waleed", label: "وليد 🚗 سيارات", icon: Mail },
       { href: "/admin/sales/outreach?tab=ahmed", label: "أحمد 🏠 عقارات", icon: Mail },
     ],
