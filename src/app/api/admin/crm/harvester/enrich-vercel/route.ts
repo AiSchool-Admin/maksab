@@ -85,12 +85,12 @@ export async function GET(req: NextRequest) {
 
   const supabase = getServiceClient();
 
-  // Fetch listings needing enrichment: no phone OR no specs
+  // Fetch listings needing enrichment: no phone OR no specs (including Railway-enriched with empty specs)
   const { data: listings, error: fetchErr } = await supabase
     .from("ahe_listings")
     .select("id, source_listing_url, title, ahe_seller_id, maksab_category")
     .eq("source_platform", platform)
-    .or("extracted_phone.is.null,specifications.eq.{}")
+    .or("extracted_phone.is.null,specifications.is.null,specifications.eq.{}")
     .eq("is_duplicate", false)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -188,6 +188,7 @@ export async function GET(req: NextRequest) {
       if (details.paymentMethod) updates.payment_method = details.paymentMethod;
       if (details.hasWarranty) updates.has_warranty = true;
       if (specs.area) updates.area = specs.area;
+      updates.detail_fetched_at = new Date().toISOString();
 
       if (phone) {
         updates.extracted_phone = phone;
