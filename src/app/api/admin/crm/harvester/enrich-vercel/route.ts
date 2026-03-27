@@ -75,7 +75,9 @@ export async function GET(req: NextRequest) {
   const startTime = Date.now();
   const { searchParams } = new URL(req.url);
   const platform = searchParams.get("platform") || "aqarmap";
-  const limit = Math.min(parseInt(searchParams.get("limit") || "30"), 50);
+  const backfill = searchParams.get("backfill") === "true";
+  const maxLimit = backfill ? 8 : 30; // backfill: fewer items, each needs detail fetch
+  const limit = Math.min(parseInt(searchParams.get("limit") || "8"), maxLimit);
 
   if (!SUPPORTED_PLATFORMS.includes(platform)) {
     return NextResponse.json({
@@ -84,18 +86,20 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = getServiceClient();
-  const backfill = searchParams.get("backfill") === "true";
+
+  // Alexandria governorate variants
+  const ALEX_GOVS = ["الإسكندرية", "alexandria", "Alexandria", "الاسكندرية"];
 
   // Fetch listings needing enrichment
   let query = supabase
     .from("ahe_listings")
     .select("id, source_listing_url, title, ahe_seller_id, maksab_category")
     .eq("source_platform", platform)
-    .eq("is_duplicate", false);
+    .eq("is_duplicate", false)
+    .in("governorate", ALEX_GOVS); // Always filter to Alexandria
 
   if (backfill) {
     // Backfill mode: re-enrich listings that Railway processed but didn't extract specs
-    // These have detail_fetched_at set but specifications is empty
     query = query
       .not("detail_fetched_at", "is", null)
       .or("specifications.is.null,specifications.eq.{}");
@@ -145,7 +149,7 @@ export async function GET(req: NextRequest) {
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
+      const timeout = setTimeout(() => controller.abort(), 6000); // 6s per listing
 
       const response = await fetch(listing.source_listing_url, {
         signal: controller.signal,
