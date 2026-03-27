@@ -77,8 +77,9 @@ export async function POST(req: NextRequest) {
         // Map category
         const categoryId = CATEGORY_MAP[listing.maksab_category] || listing.maksab_category || "cars";
 
-        // Determine sale type
-        const saleType = listing.listing_type === "rent" ? "cash" : "cash";
+        // ads.sale_type is the transaction method (cash/auction/exchange), not rent/sale
+        // All harvested listings default to 'cash' (direct sale)
+        const saleType = "cash";
 
         // Build category_fields from specifications
         const categoryFields = listing.specifications || {};
