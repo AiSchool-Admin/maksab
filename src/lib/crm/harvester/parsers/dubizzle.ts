@@ -352,43 +352,80 @@ export function parseDubizzleDetail(html: string): ListingDetails {
   if (nextDataMatch) {
     try {
       const data = JSON.parse(nextDataMatch[1]);
-      const ad = data?.props?.pageProps?.ad
-        || data?.props?.pageProps?.listing
-        || data?.props?.pageProps?.data
-        || data?.props?.pageProps?.item;
+      const pageProps = data?.props?.pageProps || {};
 
-      if (ad && (ad.description || ad.title || ad.parameters)) {
-        result.description = String(ad.description || ad.body || "");
+      // Try multiple keys for the ad object
+      const ad = pageProps.ad || pageProps.listing || pageProps.data
+        || pageProps.item || pageProps.product || pageProps;
+
+      if (ad && (ad.description || ad.title || ad.parameters || ad.specifications)) {
+        result.description = String(ad.description || ad.body || ad.content || "");
 
         // Images
-        const imgs = ad.images || ad.photos || [];
-        for (const img of imgs) {
-          const url = typeof img === "string" ? img : (img?.url || img?.src || img?.main);
+        const imgs = ad.images || ad.photos || ad.gallery || [];
+        for (const img of (Array.isArray(imgs) ? imgs : [])) {
+          const url = typeof img === "string" ? img : (img?.url || img?.src || img?.main || img?.uri);
           if (url) result.allImageUrls.push(String(url));
         }
         result.mainImageUrl = result.allImageUrls[0] || "";
 
-        // Specifications from parameters/details
-        const params = ad.parameters || ad.details || ad.attributes || [];
+        // Specifications — try multiple structures
+        const params = ad.parameters || ad.specifications || ad.details
+          || ad.attributes || ad.props || ad.features || [];
+
         if (Array.isArray(params)) {
           for (const p of params) {
-            const key = String(p.label || p.name || p.key || "");
-            const val = String(p.value_label || p.value || p.label_value || "");
+            const key = String(p.label || p.name || p.key || p.title || "");
+            const val = String(p.value_label || p.value || p.label_value || p.display_value || "");
             if (key && val && key !== val) result.specifications[key] = val;
           }
+        } else if (typeof params === "object" && params !== null) {
+          // specs as flat object { "الماركة": "تويوتا", ... }
+          for (const [k, v] of Object.entries(params)) {
+            if (typeof v === "string" || typeof v === "number") {
+              result.specifications[k] = String(v);
+            }
+          }
+        }
+
+        // Deep search: look for spec-like arrays anywhere in pageProps
+        if (Object.keys(result.specifications).length === 0) {
+          const findSpecs = (obj: unknown, depth: number): void => {
+            if (depth <= 0 || !obj || typeof obj !== "object") return;
+            if (Array.isArray(obj)) {
+              if (obj.length > 2 && obj[0] && typeof obj[0] === "object") {
+                const first = obj[0] as Record<string, unknown>;
+                if (first.label || first.name || first.key) {
+                  for (const item of obj) {
+                    const k = String((item as Record<string, unknown>).label || (item as Record<string, unknown>).name || (item as Record<string, unknown>).key || "");
+                    const v = String((item as Record<string, unknown>).value || (item as Record<string, unknown>).value_label || "");
+                    if (k && v && k !== v) result.specifications[k] = v;
+                  }
+                  return;
+                }
+              }
+            } else {
+              for (const val of Object.values(obj as Record<string, unknown>)) {
+                if (val && typeof val === "object") findSpecs(val, depth - 1);
+              }
+            }
+          };
+          findSpecs(pageProps, 5);
         }
 
         // Amenities/features (properties)
         const features = ad.amenities || ad.features || [];
         if (Array.isArray(features)) {
           for (const f of features) {
-            const name = String(f.label || f.name || f);
-            if (name) result.specifications[name] = String(f.value || "true");
+            const name = typeof f === "string" ? f : String(f?.label || f?.name || f);
+            if (name && name !== "[object Object]") {
+              result.specifications[name] = typeof f === "object" ? String(f?.value || "true") : "true";
+            }
           }
         }
 
         // Seller
-        const seller = ad.seller || ad.user || ad.owner;
+        const seller = ad.seller || ad.user || ad.owner || ad.agent;
         if (seller) {
           result.sellerName = cleanSellerName(String(seller.name || seller.display_name || ""));
           result.sellerProfileUrl = seller.profile_url || seller.url || null;
@@ -399,7 +436,8 @@ export function parseDubizzleDetail(html: string): ListingDetails {
         result.hasWarranty = result.description.includes("ضمان") || result.specifications["الضمان"] === "نعم";
 
         console.error(`[Dubizzle Detail] __NEXT_DATA__: ${Object.keys(result.specifications).length} specs, ${result.allImageUrls.length} images`);
-        return result;
+        if (Object.keys(result.specifications).length > 0) return result;
+        // Fall through to HTML if no specs found in __NEXT_DATA__
       }
     } catch (e) {
       console.error(`[Dubizzle Detail] __NEXT_DATA__ parse error: ${e instanceof Error ? e.message : e}`);
@@ -443,17 +481,28 @@ export function parseDubizzleDetail(html: string): ListingDetails {
   }
   result.mainImageUrl = result.allImageUrls[0] || "";
 
-  // Extract specifications
-  const specPattern =
-    /<(?:li|tr)[^>]*>\s*<(?:span|td|th)[^>]*>([^<]+)<\/(?:span|td|th)>\s*<(?:span|td)[^>]*>([^<]+)<\/(?:span|td)>/gi;
-  let specMatch;
-  while ((specMatch = specPattern.exec(html)) !== null) {
-    const key = specMatch[1].replace(/<[^>]+>/g, "").trim();
-    const value = specMatch[2].replace(/<[^>]+>/g, "").trim();
-    if (key && value && key !== value) {
-      result.specifications[key] = value;
+  // Extract specifications — multiple patterns
+  const specPatterns = [
+    // Pattern 1: li/tr with span/td pairs
+    /<(?:li|tr)[^>]*>\s*<(?:span|td|th)[^>]*>([^<]+)<\/(?:span|td|th)>\s*<(?:span|td)[^>]*>([^<]+)<\/(?:span|td)>/gi,
+    // Pattern 2: div pairs with data-testid
+    /<[^>]*data-testid="[^"]*(?:label|key)[^"]*"[^>]*>([^<]+)<\/[^>]+>\s*<[^>]*data-testid="[^"]*value[^"]*"[^>]*>([^<]+)<\/[^>]+>/gi,
+    // Pattern 3: dt/dd pairs
+    /<dt[^>]*>([^<]+)<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/gi,
+    // Pattern 4: aria-label key-value
+    /aria-label="([^"]+)"\s*[^>]*>\s*([^<]+)</gi,
+  ];
+  for (const pattern of specPatterns) {
+    let specMatch;
+    while ((specMatch = pattern.exec(html)) !== null) {
+      const key = specMatch[1].replace(/<[^>]+>/g, "").trim();
+      const value = specMatch[2].replace(/<[^>]+>/g, "").trim();
+      if (key && value && key !== value && key.length < 50 && value.length < 100) {
+        result.specifications[key] = value;
+      }
     }
   }
+  console.error(`[Dubizzle Detail] HTML specs: ${Object.keys(result.specifications).length}`);
 
   result.condition = result.specifications["الحالة"] || result.specifications["Condition"] || null;
 

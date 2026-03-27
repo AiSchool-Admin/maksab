@@ -580,10 +580,40 @@ export function parseAqarmapDetail(html: string): ListingDetails {
           }
         }
         result.mainImageUrl = result.allImageUrls[0] || "";
-        const specFields = ["area", "rooms", "bedrooms", "bathrooms", "floor", "finishing", "type", "payment_method", "propertyType"];
+
+        // Extract specs from known direct fields
+        const specFields = ["area", "rooms", "bedrooms", "bathrooms", "floor", "finishing",
+          "type", "payment_method", "propertyType", "space", "size", "area_sqm",
+          "furnishing", "view", "compound", "delivery_date"];
         for (const field of specFields) {
           if (listing[field]) result.specifications[field] = String(listing[field]);
         }
+
+        // Extract specs from nested parameters/details array
+        const params = listing.parameters || listing.specifications || listing.details || listing.attributes || [];
+        if (Array.isArray(params)) {
+          for (const p of params) {
+            const k = String(p.label || p.name || p.key || "");
+            const v = String(p.value || p.value_label || "");
+            if (k && v && k !== v) result.specifications[k] = v;
+          }
+        } else if (typeof params === "object" && params !== null) {
+          for (const [k, v] of Object.entries(params)) {
+            if (typeof v === "string" || typeof v === "number") result.specifications[k] = String(v);
+          }
+        }
+
+        // Extract from features/amenities
+        const features = listing.features || listing.amenities || [];
+        if (Array.isArray(features)) {
+          for (const f of features) {
+            const name = typeof f === "string" ? f : String(f?.name || f?.label || "");
+            if (name && name !== "[object Object]") result.specifications[name] = "true";
+          }
+        }
+
+        console.error(`[AqarMap Detail] __NEXT_DATA__: ${Object.keys(result.specifications).length} specs`);
+
         if (listing.agent || listing.seller) {
           const agent = listing.agent || listing.seller;
           result.sellerName = cleanSellerName(String(agent.name || agent.displayName || ""));
