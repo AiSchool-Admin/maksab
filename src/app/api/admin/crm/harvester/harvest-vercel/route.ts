@@ -230,20 +230,42 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     errors.push(`Fetch error: ${msg}`);
   }
 
-  // 4. Filter listings by scope governorate
+  // 4. Filter listings — whitelist: Alexandria only
+  const isAlexandria = (text: string) => {
+    const lower = (text || "").toLowerCase();
+    return lower.includes("الإسكندرية") || lower.includes("اسكندرية")
+      || lower.includes("alexandria") || lower.includes("alex");
+  };
+
   const filteredListings = listings.filter((listing) => {
-    if (!scope.governorate) return true;
-
     const loc = mapLocation(listing.location || "", platform);
-    if (!loc.governorate) return true; // Can't determine — accept and use scope default
+    const url = listing.url || "";
 
-    const normalizedScope = normalizeGovernorate(scope.governorate);
-    const normalizedListing = normalizeGovernorate(loc.governorate);
+    // If mapLocation detected a governorate, check it's Alexandria
+    if (loc.governorate) {
+      const normalized = normalizeGovernorate(loc.governorate);
+      if (normalized && normalized !== "alexandria") {
+        console.log(`[Filter] SKIP non-Alex gov: ${loc.governorate} — "${listing.title?.substring(0, 50)}"`);
+        return false;
+      }
+      if (normalized === "alexandria") return true;
+    }
 
-    if (normalizedScope && normalizedListing && normalizedScope !== normalizedListing) {
-      console.log(`[Filter] Skipping non-${normalizedScope} listing: ${loc.governorate} — "${listing.title?.substring(0, 50)}"`);
+    // Check URL for alexandria
+    if (isAlexandria(url)) return true;
+
+    // Check location text
+    if (isAlexandria(listing.location || "")) return true;
+
+    // If scope is Alexandria and we can't determine listing's gov, accept it
+    if (scope.governorate && isAlexandria(scope.governorate)) return true;
+
+    // No way to determine — skip if scope requires a specific gov
+    if (scope.governorate) {
+      console.log(`[Filter] SKIP unknown gov: "${listing.title?.substring(0, 50)}"`);
       return false;
     }
+
     return true;
   });
   console.log(`[Filter] ${listings.length} → ${filteredListings.length} after governorate filter`);
@@ -279,9 +301,23 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       continue;
     }
 
-    // Map location
+    // Map location — try listing data first, then URL, then scope fallback
     const location = mapLocation(listing.location || "", scope.source_platform);
-    const governorate = governorateToArabic(location.governorate) || scope.governorate;
+    let governorate = governorateToArabic(location.governorate) || null;
+
+    // Try URL for governorate if not found in listing data
+    if (!governorate) {
+      const urlLower = (listing.url || "").toLowerCase();
+      if (urlLower.includes("alexandria") || urlLower.includes("الإسكندرية")) {
+        governorate = "الإسكندرية";
+      }
+    }
+
+    // Final fallback to scope
+    if (!governorate) {
+      governorate = scope.governorate;
+    }
+
     const city = location.city || scope.city;
 
     // Extract phone from title (no detail fetch)
