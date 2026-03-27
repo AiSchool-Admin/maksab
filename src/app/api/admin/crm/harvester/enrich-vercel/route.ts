@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   const startTime = Date.now();
   const { searchParams } = new URL(req.url);
   const platform = searchParams.get("platform") || "aqarmap";
-  const limit = Math.min(parseInt(searchParams.get("limit") || "30"), 30);
+  const limit = Math.min(parseInt(searchParams.get("limit") || "30"), 50);
 
   if (!SUPPORTED_PLATFORMS.includes(platform)) {
     return NextResponse.json({
