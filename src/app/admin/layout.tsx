@@ -121,6 +121,7 @@ const navSections: NavSection[] = [
       { href: "/admin/crm/harvester/enrich-specs", label: "استخراج المواصفات", icon: Search },
       { href: "/admin/sales/outreach?tab=waleed", label: "وليد 🚗 سيارات", icon: Mail },
       { href: "/admin/sales/outreach?tab=ahmed", label: "أحمد 🏠 عقارات", icon: Mail },
+      { href: "/admin/sales/templates", label: "📝 قوالب الرسائل", icon: ClipboardCheck },
     ],
   },
   {

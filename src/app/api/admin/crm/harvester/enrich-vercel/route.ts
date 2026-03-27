@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   const startTime = Date.now();
   const { searchParams } = new URL(req.url);
   const platform = searchParams.get("platform") || "aqarmap";
-  const limit = Math.min(parseInt(searchParams.get("limit") || "30"), 30);
+  const limit = Math.min(parseInt(searchParams.get("limit") || "30"), 50);
 
   if (!SUPPORTED_PLATFORMS.includes(platform)) {
     return NextResponse.json({
@@ -84,14 +84,27 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = getServiceClient();
+  const backfill = searchParams.get("backfill") === "true";
 
-  // Fetch listings needing enrichment: no phone OR no specs
-  const { data: listings, error: fetchErr } = await supabase
+  // Fetch listings needing enrichment
+  let query = supabase
     .from("ahe_listings")
     .select("id, source_listing_url, title, ahe_seller_id, maksab_category")
     .eq("source_platform", platform)
-    .or("extracted_phone.is.null,specifications.eq.{}")
-    .eq("is_duplicate", false)
+    .eq("is_duplicate", false);
+
+  if (backfill) {
+    // Backfill mode: re-enrich listings that Railway processed but didn't extract specs
+    // These have detail_fetched_at set but specifications is empty
+    query = query
+      .not("detail_fetched_at", "is", null)
+      .or("specifications.is.null,specifications.eq.{}");
+  } else {
+    // Normal mode: no phone OR no specs
+    query = query.or("extracted_phone.is.null,specifications.is.null,specifications.eq.{}");
+  }
+
+  const { data: listings, error: fetchErr } = await query
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -182,6 +195,13 @@ export async function GET(req: NextRequest) {
 
       if (detectedBrand) updates.detected_brand = detectedBrand;
       if (detectedModel) updates.detected_model = detectedModel;
+
+      // Save fields that were extracted but previously discarded
+      if (details.condition) updates.condition = details.condition;
+      if (details.paymentMethod) updates.payment_method = details.paymentMethod;
+      if (details.hasWarranty) updates.has_warranty = true;
+      if (specs.area) updates.area = specs.area;
+      updates.detail_fetched_at = new Date().toISOString();
 
       if (phone) {
         updates.extracted_phone = phone;

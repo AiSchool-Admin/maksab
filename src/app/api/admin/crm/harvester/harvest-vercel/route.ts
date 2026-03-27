@@ -38,9 +38,10 @@ import {
   type OlxParseDebug,
 } from "@/lib/crm/harvester/parsers/olx";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
-import { detectSellerType } from "@/lib/crm/harvester/seller-classifier";
+import { detectSellerTypeSlug } from "@/lib/crm/harvester/seller-classifier";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
-import { mapLocation, normalizeGovernorate, governorateToArabic } from "@/lib/crm/harvester/parsers/location-mapper";
+import { mapLocation, normalizeGovernorate, governorateToArabic, extractGovernorateFromUrl } from "@/lib/crm/harvester/parsers/location-mapper";
+import { extractFromTitle } from "@/lib/crm/harvester/title-extractor";
 import { createBuyerFromSeller, updateSellerBuyProbability } from "@/lib/crm/harvester/seller-to-buyer";
 
 export const maxDuration = 60; // Vercel max
@@ -230,23 +231,35 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     errors.push(`Fetch error: ${msg}`);
   }
 
-  // 4. Filter listings by scope governorate
-  const filteredListings = listings.filter((listing) => {
-    if (!scope.governorate) return true;
+  // 4. Filter listings by governorate — uses 3 sources, compares with scope
+  const scopeGov = normalizeGovernorate(scope.governorate || "");
 
+  const filteredListings = scopeGov ? listings.filter((listing) => {
+    // Source 1: Extract governorate from listing URL (most reliable)
+    const urlGov = extractGovernorateFromUrl(listing.url || "");
+
+    // Source 2: Extract from location text via mapLocation
     const loc = mapLocation(listing.location || "", platform);
-    if (!loc.governorate) return true; // Can't determine — accept and use scope default
+    const locGov = loc.governorate ? normalizeGovernorate(loc.governorate) : null;
 
-    const normalizedScope = normalizeGovernorate(scope.governorate);
-    const normalizedListing = normalizeGovernorate(loc.governorate);
+    // Determine listing's actual governorate
+    const listingGov = urlGov || locGov;
 
-    if (normalizedScope && normalizedListing && normalizedScope !== normalizedListing) {
-      console.log(`[Filter] Skipping non-${normalizedScope} listing: ${loc.governorate} — "${listing.title?.substring(0, 50)}"`);
-      return false;
+    if (listingGov) {
+      // We know the listing's governorate — compare with scope
+      if (listingGov !== scopeGov) {
+        console.log(`[Filter] SKIP gov mismatch: listing=${listingGov} scope=${scopeGov} — "${listing.title?.substring(0, 50)}"`);
+        return false;
+      }
+      return true; // matches scope
     }
+
+    // Can't determine from URL or location — accept cautiously
+    // (these are listings where the platform didn't include governorate in URL/location)
     return true;
-  });
-  console.log(`[Filter] ${listings.length} → ${filteredListings.length} after governorate filter`);
+  }) : listings;
+
+  console.log(`[Filter] ${listings.length} → ${filteredListings.length} after governorate filter (scope=${scopeGov})`);
 
   // 5. Deduplicate + Store
   let newCount = 0;
@@ -279,9 +292,12 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       continue;
     }
 
-    // Map location
+    // Map location — prioritize listing data over scope
     const location = mapLocation(listing.location || "", scope.source_platform);
-    const governorate = governorateToArabic(location.governorate) || scope.governorate;
+    const urlGov = extractGovernorateFromUrl(listing.url || "");
+    const governorate = governorateToArabic(location.governorate)
+      || governorateToArabic(urlGov)
+      || scope.governorate;
     const city = location.city || scope.city;
 
     // Extract phone from title (no detail fetch)
@@ -309,7 +325,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
         } catch { /* RPC may not exist */ }
       } else {
         const priorityScore = (listing.isVerified ? 30 : 0) + (listing.isBusiness ? 20 : 0) + (phone ? 25 : 0);
-        const sellerType = detectSellerType(sellerName, 1, listing.isBusiness);
+        const sellerType = detectSellerTypeSlug(sellerName, 1, listing.isBusiness);
         const { data: newSeller } = await supabase
           .from("ahe_sellers")
           .insert({
@@ -324,7 +340,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
             phone: phone || null,
             priority_score: Math.min(priorityScore, 100),
             pipeline_status: phone ? "phone_found" : "discovered",
-            seller_type: sellerType,
+            detected_account_type: sellerType,
           })
           .select("id")
           .single();
@@ -377,7 +393,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     } else {
       // Anonymous seller
       const priorityScore = (listing.isVerified ? 30 : 0) + (listing.isBusiness ? 20 : 0);
-      const anonSellerType = detectSellerType(null, 1, listing.isBusiness);
+      const anonSellerType = detectSellerTypeSlug(null, 1, listing.isBusiness);
       const { data: newSeller } = await supabase
         .from("ahe_sellers")
         .insert({
@@ -391,7 +407,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
           total_listings_seen: 1,
           priority_score: Math.min(priorityScore, 100),
           pipeline_status: "discovered",
-          seller_type: anonSellerType,
+          detected_account_type: anonSellerType,
         })
         .select("id")
         .single();
@@ -447,6 +463,9 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       });
     }
 
+    // Extract structured data from title
+    const titleData = extractFromTitle(listing.title || "", listing.url || "");
+
     // Insert listing
     const { error: insertErr } = await supabase.from("ahe_listings").insert({
       scope_id: scope.id,
@@ -465,6 +484,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       source_location: listing.location || null,
       governorate,
       city,
+      area: titleData.area || null,
       source_date_text: listing.dateText || null,
       estimated_posted_at: estimatedDate?.toISOString() || null,
       seller_name: sellerName,
@@ -474,7 +494,9 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       ahe_seller_id: aheSellerId,
       extracted_phone: phone || null,
       phone_source: phone ? "title" : null,
-      listing_type: listing.isFeatured ? "featured" : "regular",
+      detected_brand: titleData.brand || null,
+      detected_model: titleData.model || null,
+      listing_type: titleData.listingType,
     });
 
     if (insertErr) {

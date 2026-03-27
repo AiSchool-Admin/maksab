@@ -372,24 +372,118 @@ export function parsePropertyFinderDetail(html: string): ListingDetails {
     sellerName: null, sellerProfileUrl: null, sellerMemberSince: null,
   };
 
+  // Strategy 1: __NEXT_DATA__
+  const nextMatch =
+    html.match(/<script\s*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i) ||
+    html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+  if (nextMatch) {
+    try {
+      const nd = JSON.parse(nextMatch[1]);
+      const props = nd?.props?.pageProps || {};
+
+      console.error(`[PF Detail] pageProps keys: ${Object.keys(props).join(", ")}`);
+
+      // Try multiple keys for the listing object
+      const listing = props.listing || props.property || props.ad || props.data || props.unit || null;
+
+      if (listing && typeof listing === "object") {
+        if (listing.description) result.description = String(listing.description);
+
+        const imgs = listing.images || listing.photos || listing.gallery || [];
+        for (const img of (Array.isArray(imgs) ? imgs : [])) {
+          const url = typeof img === "string" ? img : (img?.url || img?.src);
+          if (url) result.allImageUrls.push(String(url));
+        }
+
+        // Specs from known fields
+        const specFields = ["area", "rooms", "bedrooms", "bathrooms", "floor", "finishing",
+          "type", "property_type", "propertyType", "payment_method", "furnishing", "view",
+          "size", "space", "area_sqm"];
+        for (const f of specFields) {
+          if (listing[f]) result.specifications[f] = String(listing[f]);
+        }
+
+        // Specs from parameters array
+        const params = listing.parameters || listing.specifications || listing.details || listing.attributes || [];
+        if (Array.isArray(params)) {
+          for (const p of params) {
+            const k = String(p.label || p.name || p.key || "");
+            const v = String(p.value || p.value_label || "");
+            if (k && v && k !== v) result.specifications[k] = v;
+          }
+        } else if (typeof params === "object" && params !== null && !Array.isArray(params)) {
+          for (const [k, v] of Object.entries(params)) {
+            if (typeof v === "string" || typeof v === "number") result.specifications[k] = String(v);
+          }
+        }
+
+        const agent = listing.agent || listing.agency || listing.broker || listing.seller;
+        if (agent) result.sellerName = cleanSellerName(String(agent.name || ""));
+
+        console.error(`[PF Detail] __NEXT_DATA__: ${Object.keys(result.specifications).length} specs, listing keys: ${Object.keys(listing).slice(0, 15).join(",")}`);
+        if (Object.keys(result.specifications).length > 0 || result.description) {
+          result.mainImageUrl = result.allImageUrls[0] || "";
+          return result;
+        }
+      }
+
+      // Deep search for spec-like data in pageProps
+      const deepSearch = (obj: unknown, depth: number): Record<string, unknown> | null => {
+        if (depth <= 0 || !obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+        const o = obj as Record<string, unknown>;
+        if (o.description || o.area || o.rooms || o.bedrooms) return o;
+        for (const val of Object.values(o)) {
+          if (val && typeof val === "object") {
+            const found = deepSearch(val, depth - 1);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      const deepListing = deepSearch(props, 5);
+      if (deepListing) {
+        if (deepListing.description) result.description = String(deepListing.description);
+        for (const f of ["area", "rooms", "bedrooms", "bathrooms", "floor", "finishing", "type"]) {
+          if (deepListing[f]) result.specifications[f] = String(deepListing[f]);
+        }
+        console.error(`[PF Detail] Deep search: ${Object.keys(result.specifications).length} specs`);
+        if (Object.keys(result.specifications).length > 0) {
+          result.mainImageUrl = result.allImageUrls[0] || "";
+          return result;
+        }
+      }
+    } catch (e) {
+      console.error(`[PF Detail] __NEXT_DATA__ error: ${e instanceof Error ? e.message : e}`);
+    }
+  } else {
+    console.error(`[PF Detail] No __NEXT_DATA__ found in ${html.length} bytes`);
+  }
+
+  // Strategy 2: HTML fallback
   const dm = html.match(/<div[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
   if (dm) result.description = dm[1].replace(/<[^>]+>/g, "").trim();
 
-  const imgs = html.matchAll(/src="(https?:\/\/[^"]*propertyfinder[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/gi);
-  for (const m of imgs) { if (!result.allImageUrls.includes(m[1])) result.allImageUrls.push(m[1]); }
+  const imgMatches = html.matchAll(/src="(https?:\/\/[^"]*propertyfinder[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/gi);
+  for (const m of imgMatches) { if (!result.allImageUrls.includes(m[1])) result.allImageUrls.push(m[1]); }
   if (result.allImageUrls.length === 0) {
     const fallback = html.matchAll(/src="(https?:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/gi);
     for (const m of fallback) { if (!result.allImageUrls.includes(m[1])) result.allImageUrls.push(m[1]); }
   }
   result.mainImageUrl = result.allImageUrls[0] || "";
 
-  const sp = /<(?:li|tr)[^>]*>\s*<(?:span|td)[^>]*>([^<]+)<\/(?:span|td)>\s*<(?:span|td)[^>]*>([^<]+)<\/(?:span|td)>/gi;
-  let sm; while ((sm = sp.exec(html)) !== null) {
-    const k = sm[1].trim(); const v = sm[2].trim();
-    if (k && v && k !== v) result.specifications[k] = v;
+  // Multiple spec patterns
+  const specPatterns = [
+    /<(?:li|tr)[^>]*>\s*<(?:span|td)[^>]*>([^<]+)<\/(?:span|td)>\s*<(?:span|td)[^>]*>([^<]+)<\/(?:span|td)>/gi,
+    /<dt[^>]*>([^<]+)<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/gi,
+  ];
+  for (const sp of specPatterns) {
+    let sm; while ((sm = sp.exec(html)) !== null) {
+      const k = sm[1].trim(); const v = sm[2].trim();
+      if (k && v && k !== v && k.length < 50) result.specifications[k] = v;
+    }
   }
 
-  const sellerMatch = html.match(/class="[^"]*(?:agent-name|broker)[^"]*"[^>]*>([^<]+)/i);
+  const sellerMatch = html.match(/class="[^"]*(?:agent-name|broker|agency)[^"]*"[^>]*>([^<]+)/i);
   if (sellerMatch) result.sellerName = cleanSellerName(sellerMatch[1].trim());
 
   return result;

@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     // Build query based on tab
     let query = supabase
       .from("ahe_sellers")
-      .select("id, name, phone, priority_score, whale_score, seller_tier, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, last_outreach_at, last_response_at, outreach_count, notes, rejection_reason, skip_reason, last_outreach_template, buy_probability, buy_probability_score, source_platform")
+      .select("id, name, phone, priority_score, whale_score, seller_tier, detected_account_type, total_listings_seen, active_listings, primary_governorate, primary_category, pipeline_status, is_business, is_verified, first_outreach_at, last_outreach_at, last_response_at, outreach_count, notes, rejection_reason, skip_reason, last_outreach_template, buy_probability, buy_probability_score, source_platform")
       .not("phone", "is", null);
 
     if (tab === "new") {
@@ -125,9 +125,7 @@ export async function GET(request: NextRequest) {
       query = query.in("primary_category", catVariants);
     }
     if (govVariants) query = query.in("primary_governorate", govVariants);
-    if (sellerType === "individual") query = query.lte("total_listings_seen", 1);
-    else if (sellerType === "broker") query = query.gte("total_listings_seen", 2).lte("total_listings_seen", 10);
-    else if (sellerType === "agency") query = query.gt("total_listings_seen", 10);
+    if (sellerType !== "all") query = query.eq("detected_account_type", sellerType);
 
     query = query
       .order("whale_score", { ascending: false })
@@ -169,9 +167,7 @@ export async function GET(request: NextRequest) {
       countQuery = countQuery.in("primary_category", catVariants);
     }
     if (govVariants) countQuery = countQuery.in("primary_governorate", govVariants);
-    if (sellerType === "individual") countQuery = countQuery.lte("total_listings_seen", 1);
-    else if (sellerType === "broker") countQuery = countQuery.gte("total_listings_seen", 2).lte("total_listings_seen", 10);
-    else if (sellerType === "agency") countQuery = countQuery.gt("total_listings_seen", 10);
+    if (sellerType !== "all") countQuery = countQuery.eq("detected_account_type", sellerType);
 
     console.log('[OUTREACH API] Query params:', { tab, tier, category, sellerType, governorate: govVariants || 'all', limit });
     const [{ data: sellers, error }, { count: totalFiltered }] = await Promise.all([
@@ -196,14 +192,24 @@ export async function GET(request: NextRequest) {
       const whaleScore = s.whale_score || 0;
       const sellerTier = s.seller_tier || "small";
 
-      // Choose tier-appropriate template
+      // Map detected_account_type to Arabic seller type
+      const typeMap: Record<string, string> = { agency: "وكيل", broker: "سمسار", individual: "فرد", business: "وكيل" };
+      const sellerTypeVal = typeMap[s.detected_account_type] || "فرد";
       let tplForSeller = selectedTemplate;
       if (!templateId && templates?.length) {
-        if (sellerTier === "whale") {
-          tplForSeller = templates.find((t: any) => t.target_tier === "whale") || selectedTemplate;
+        // Match by seller_type first (agency→agency template, broker→broker, etc.)
+        if (sellerTypeVal === "وكيل") {
+          tplForSeller = templates.find((t: any) => t.target_tier === "agency" || t.target_tier === "whale") || selectedTemplate;
+        } else if (sellerTypeVal === "سمسار") {
+          tplForSeller = templates.find((t: any) => t.target_tier === "broker") || selectedTemplate;
         }
+        // Override for whales
+        if (sellerTier === "whale") {
+          tplForSeller = templates.find((t: any) => t.target_tier === "whale") || tplForSeller;
+        }
+        // Override for followups
         if (tab === "followup") {
-          tplForSeller = templates.find((t: any) => t.name === "followup_48h") || selectedTemplate;
+          tplForSeller = templates.find((t: any) => t.name === "followup_48h") || tplForSeller;
         }
       }
 
@@ -233,6 +239,7 @@ export async function GET(request: NextRequest) {
         templateId: tplForSeller?.id,
         message,
         sourcePlatform: s.source_platform || null,
+        sellerType: sellerTypeVal,
       };
     });
 

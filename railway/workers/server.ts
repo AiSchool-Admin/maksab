@@ -723,6 +723,68 @@ async function fetchAndExtractDetail(
     });
   }
 
+  // ═══ Specifications Extraction (inline — cheerio-based) ═══
+  const specifications: Record<string, string> = {};
+
+  // Strategy 1: key-value pairs from li/tr elements
+  $detail('li, tr').each(function() {
+    const spans = $detail(this).find('span, td, th');
+    if (spans.length >= 2) {
+      const key = $detail(spans[0]).text().trim();
+      const val = $detail(spans[1]).text().trim();
+      if (key && val && key !== val && key.length < 50 && val.length < 100) {
+        specifications[key] = val;
+      }
+    }
+  });
+
+  // Strategy 2: data-testid or aria-label attribute pairs
+  $detail('[data-testid*="spec"], [data-testid*="detail"], [data-testid*="param"]').each(function() {
+    const key = $detail(this).find('[data-testid*="label"], [data-testid*="key"]').text().trim();
+    const val = $detail(this).find('[data-testid*="value"]').text().trim();
+    if (key && val && key !== val) {
+      specifications[key] = val;
+    }
+  });
+
+  console.log(`[Detail] Specs extracted: ${Object.keys(specifications).length} keys`);
+
+  // ═══ Images Extraction ═══
+  const allImageUrls: string[] = [];
+  $detail('img[src*="dubizzle"], img[src*="olx"], img[src*="classistatic"]').each(function() {
+    const src = $detail(this).attr('src') || '';
+    if (src && (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp'))) {
+      if (!allImageUrls.includes(src)) allImageUrls.push(src);
+    }
+  });
+
+  // ═══ Listing type detection ═══
+  const fullText = bodyText.toLowerCase();
+  const isRental = fullText.includes('للإيجار') || fullText.includes('للايجار') ||
+    fullText.includes('إيجار') || fullText.includes('مفروش') ||
+    listing.source_listing_url?.includes('for-rent');
+  const listingType = isRental ? 'rent' : 'sale';
+
+  // ═══ Normalize specs (inline car/property mapping) ═══
+  const CAR_KEYS: Record<string, string> = {
+    'الماركة': 'brand', 'الموديل': 'model', 'سنة الصنع': 'year',
+    'الكيلومترات': 'mileage', 'ناقل الحركة': 'transmission',
+    'نوع الوقود': 'fuel', 'اللون': 'color', 'حجم المحرك': 'engine_cc',
+    'Make': 'brand', 'Model': 'model', 'Year': 'year', 'Mileage': 'mileage',
+    'Transmission': 'transmission', 'Fuel Type': 'fuel', 'Color': 'color',
+  };
+  const PROP_KEYS: Record<string, string> = {
+    'نوع العقار': 'property_type', 'المساحة': 'area', 'عدد الغرف': 'rooms',
+    'عدد الحمامات': 'bathrooms', 'الدور': 'floor', 'التشطيب': 'finishing',
+    'Property Type': 'property_type', 'Area': 'area', 'Bedrooms': 'rooms',
+    'Bathrooms': 'bathrooms', 'Floor': 'floor', 'Finishing': 'finishing',
+  };
+  const mapping = listing.source_listing_url?.includes('propert') ? PROP_KEYS : CAR_KEYS;
+  const normalizedSpecs: Record<string, string> = {};
+  for (const [k, v] of Object.entries(specifications)) {
+    normalizedSpecs[mapping[k] || k] = v;
+  }
+
   // ═══ Update listing ═══
   const updateData: Record<string, any> = {};
   if (phone) {
@@ -731,6 +793,23 @@ async function fetchAndExtractDetail(
   }
   if (sellerName) updateData.seller_name = sellerName;
   if (sellerProfileUrl) updateData.seller_profile_url = sellerProfileUrl;
+
+  // Add specs + images + description
+  if (Object.keys(normalizedSpecs).length > 0) {
+    updateData.specifications = normalizedSpecs;
+  }
+  if (description && description.length > 20) {
+    updateData.description = description.substring(0, 5000);
+  }
+  if (allImageUrls.length > 0) {
+    updateData.all_image_urls = allImageUrls;
+    updateData.main_image_url = allImageUrls[0];
+  }
+  if (normalizedSpecs.brand) updateData.detected_brand = normalizedSpecs.brand;
+  if (normalizedSpecs.model) updateData.detected_model = normalizedSpecs.model;
+  if (normalizedSpecs.area) updateData.area = normalizedSpecs.area;
+  updateData.listing_type = listingType;
+  updateData.condition = normalizedSpecs.condition || specifications['الحالة'] || null;
 
   // Try with detail_fetched_at (may not exist yet)
   const fullUpdate = { ...updateData, detail_fetched_at: new Date().toISOString() };
