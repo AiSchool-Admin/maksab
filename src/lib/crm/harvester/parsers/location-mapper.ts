@@ -438,3 +438,42 @@ export function normalizeAlexDistrict(input: string): string {
 
   return trimmed;
 }
+
+// ═══ URL-based Governorate Extraction ═══
+
+/** Known governorate slugs that appear in platform URLs */
+const URL_GOV_SLUGS: Record<string, string> = {
+  alexandria: "alexandria", alex: "alexandria",
+  cairo: "cairo", "new-cairo": "cairo", "nasr-city": "cairo",
+  giza: "giza", "6th-october": "giza", "sheikh-zayed": "giza",
+  heliopolis: "cairo", maadi: "cairo", zamalek: "cairo",
+  mansoura: "dakahlia", tanta: "gharbia", zagazig: "sharqia",
+  ismailia: "ismailia", suez: "suez", luxor: "luxor", aswan: "aswan",
+  hurghada: "red_sea", "sharm-el-sheikh": "south_sinai",
+  "port-said": "port_said", damietta: "damietta",
+  fayoum: "fayoum", minya: "minya", assiut: "assiut", sohag: "sohag",
+};
+
+/**
+ * Extract governorate slug from a listing URL.
+ * Returns normalized slug (e.g. "alexandria", "cairo") or null.
+ */
+export function extractGovernorateFromUrl(url: string): string | null {
+  if (!url) return null;
+
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    const segments = pathname.split("/").filter(Boolean);
+
+    for (const seg of segments) {
+      if (URL_GOV_SLUGS[seg]) return URL_GOV_SLUGS[seg];
+    }
+  } catch {
+    const lower = url.toLowerCase();
+    for (const [slug, gov] of Object.entries(URL_GOV_SLUGS)) {
+      if (lower.includes(`/${slug}/`) || lower.includes(`/${slug}?`)) return gov;
+    }
+  }
+
+  return null;
+}

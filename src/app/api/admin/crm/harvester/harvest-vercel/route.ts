@@ -40,7 +40,7 @@ import {
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { detectSellerTypeSlug } from "@/lib/crm/harvester/seller-classifier";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
-import { mapLocation, normalizeGovernorate, governorateToArabic } from "@/lib/crm/harvester/parsers/location-mapper";
+import { mapLocation, normalizeGovernorate, governorateToArabic, extractGovernorateFromUrl } from "@/lib/crm/harvester/parsers/location-mapper";
 import { createBuyerFromSeller, updateSellerBuyProbability } from "@/lib/crm/harvester/seller-to-buyer";
 
 export const maxDuration = 60; // Vercel max
@@ -230,45 +230,35 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     errors.push(`Fetch error: ${msg}`);
   }
 
-  // 4. Filter listings — whitelist: Alexandria only
-  const isAlexandria = (text: string) => {
-    const lower = (text || "").toLowerCase();
-    return lower.includes("الإسكندرية") || lower.includes("اسكندرية")
-      || lower.includes("alexandria") || lower.includes("alex");
-  };
+  // 4. Filter listings by governorate — uses 3 sources, compares with scope
+  const scopeGov = normalizeGovernorate(scope.governorate || "");
 
-  const filteredListings = listings.filter((listing) => {
+  const filteredListings = scopeGov ? listings.filter((listing) => {
+    // Source 1: Extract governorate from listing URL (most reliable)
+    const urlGov = extractGovernorateFromUrl(listing.url || "");
+
+    // Source 2: Extract from location text via mapLocation
     const loc = mapLocation(listing.location || "", platform);
-    const url = listing.url || "";
+    const locGov = loc.governorate ? normalizeGovernorate(loc.governorate) : null;
 
-    // If mapLocation detected a governorate, check it's Alexandria
-    if (loc.governorate) {
-      const normalized = normalizeGovernorate(loc.governorate);
-      if (normalized && normalized !== "alexandria") {
-        console.log(`[Filter] SKIP non-Alex gov: ${loc.governorate} — "${listing.title?.substring(0, 50)}"`);
+    // Determine listing's actual governorate
+    const listingGov = urlGov || locGov;
+
+    if (listingGov) {
+      // We know the listing's governorate — compare with scope
+      if (listingGov !== scopeGov) {
+        console.log(`[Filter] SKIP gov mismatch: listing=${listingGov} scope=${scopeGov} — "${listing.title?.substring(0, 50)}"`);
         return false;
       }
-      if (normalized === "alexandria") return true;
+      return true; // matches scope
     }
 
-    // Check URL for alexandria
-    if (isAlexandria(url)) return true;
-
-    // Check location text
-    if (isAlexandria(listing.location || "")) return true;
-
-    // If scope is Alexandria and we can't determine listing's gov, accept it
-    if (scope.governorate && isAlexandria(scope.governorate)) return true;
-
-    // No way to determine — skip if scope requires a specific gov
-    if (scope.governorate) {
-      console.log(`[Filter] SKIP unknown gov: "${listing.title?.substring(0, 50)}"`);
-      return false;
-    }
-
+    // Can't determine from URL or location — accept cautiously
+    // (these are listings where the platform didn't include governorate in URL/location)
     return true;
-  });
-  console.log(`[Filter] ${listings.length} → ${filteredListings.length} after governorate filter`);
+  }) : listings;
+
+  console.log(`[Filter] ${listings.length} → ${filteredListings.length} after governorate filter (scope=${scopeGov})`);
 
   // 5. Deduplicate + Store
   let newCount = 0;
@@ -301,23 +291,12 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       continue;
     }
 
-    // Map location — try listing data first, then URL, then scope fallback
+    // Map location — prioritize listing data over scope
     const location = mapLocation(listing.location || "", scope.source_platform);
-    let governorate = governorateToArabic(location.governorate) || null;
-
-    // Try URL for governorate if not found in listing data
-    if (!governorate) {
-      const urlLower = (listing.url || "").toLowerCase();
-      if (urlLower.includes("alexandria") || urlLower.includes("الإسكندرية")) {
-        governorate = "الإسكندرية";
-      }
-    }
-
-    // Final fallback to scope
-    if (!governorate) {
-      governorate = scope.governorate;
-    }
-
+    const urlGov = extractGovernorateFromUrl(listing.url || "");
+    const governorate = governorateToArabic(location.governorate)
+      || governorateToArabic(urlGov)
+      || scope.governorate;
     const city = location.city || scope.city;
 
     // Extract phone from title (no detail fetch)
