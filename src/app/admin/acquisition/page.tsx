@@ -219,7 +219,7 @@ export default function AcquisitionEnginePage() {
         ) : queue.length === 0 ? (
           <div className="text-center py-8 text-gray-400">
             <p className="text-3xl mb-2">📭</p>
-            <p className="text-sm">القائمة فاضية — اضغط "جلب جدد"</p>
+            <p className="text-sm">القائمة فاضية — اضغط &quot;جلب جدد&quot;</p>
           </div>
         ) : (
           <div className="space-y-2">
