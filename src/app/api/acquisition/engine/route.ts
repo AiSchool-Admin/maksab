@@ -50,7 +50,8 @@ export async function POST(req: NextRequest) {
       const [newCount, contactedCount, respondedCount, registeredCount, queuedCount] = await Promise.all([
         sb.from("ahe_sellers").select("id", { count: "exact", head: true })
           .in("primary_category", catVariants).in("primary_governorate", ALEX_GOVS)
-          .not("phone", "is", null).or("pipeline_status.in.(phone_found,discovered),pipeline_status.is.null"),
+          .not("phone", "is", null)
+          .not("pipeline_status", "in", '("registered","rejected","exhausted","skipped","contacted")'),
         sb.from("ahe_sellers").select("id", { count: "exact", head: true })
           .in("primary_category", catVariants).in("primary_governorate", ALEX_GOVS)
           .eq("pipeline_status", "contacted"),
@@ -87,19 +88,26 @@ export async function POST(req: NextRequest) {
     if (action === "queue_new") {
       const limit = body.limit || 20;
 
-      // Get sellers with phone, not contacted, in Alexandria
-      const { data: sellers } = await sb
+      // Get sellers with phone, in Alexandria, not yet fully processed
+      // Exclude: registered, rejected, exhausted (these are done)
+      const { data: sellers, error: sellerErr } = await sb
         .from("ahe_sellers")
-        .select("id, name, phone, detected_account_type, total_listings_seen, source_platform")
+        .select("id, name, phone, detected_account_type, total_listings_seen, source_platform, pipeline_status")
         .in("primary_category", catVariants)
         .in("primary_governorate", ALEX_GOVS)
         .not("phone", "is", null)
-        .or("pipeline_status.in.(phone_found,discovered),pipeline_status.is.null")
+        .not("pipeline_status", "in", '("registered","rejected","exhausted","skipped")')
         .order("whale_score", { ascending: false })
         .limit(limit);
 
+      console.error(`[Acquisition] queue_new: ${sellers?.length || 0} sellers found, error: ${sellerErr?.message || "none"}`);
+
       if (!sellers || sellers.length === 0) {
-        return NextResponse.json({ queued: 0, message: "لا يوجد بائعين جدد" });
+        return NextResponse.json({
+          queued: 0,
+          message: sellerErr?.message || "لا يوجد بائعين جدد",
+          debug: { catVariants, govs: ALEX_GOVS, error: sellerErr?.message },
+        });
       }
 
       // Get appropriate template
