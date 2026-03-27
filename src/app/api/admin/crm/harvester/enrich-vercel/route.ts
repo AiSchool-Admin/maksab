@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
     .select("id, source_listing_url, title, ahe_seller_id, maksab_category")
     .eq("source_platform", platform)
     .eq("is_duplicate", false)
+    .or("is_expired.is.null,is_expired.eq.false")
     .in("governorate", ALEX_GOVS); // Always filter to Alexandria
 
   if (backfill) {
