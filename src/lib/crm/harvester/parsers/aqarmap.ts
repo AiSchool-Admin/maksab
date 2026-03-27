@@ -559,7 +559,9 @@ export function parseAqarmapDetail(html: string): ListingDetails {
   }
 
   // Try __NEXT_DATA__ for detail page too
-  const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
+  const nextDataMatch =
+    html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i) ||
+    html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
   if (nextDataMatch) {
     try {
       const nextData = JSON.parse(nextDataMatch[1]);
