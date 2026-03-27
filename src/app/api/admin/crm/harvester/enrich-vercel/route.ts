@@ -84,14 +84,27 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = getServiceClient();
+  const backfill = searchParams.get("backfill") === "true";
 
-  // Fetch listings needing enrichment: no phone OR no specs (including Railway-enriched with empty specs)
-  const { data: listings, error: fetchErr } = await supabase
+  // Fetch listings needing enrichment
+  let query = supabase
     .from("ahe_listings")
     .select("id, source_listing_url, title, ahe_seller_id, maksab_category")
     .eq("source_platform", platform)
-    .or("extracted_phone.is.null,specifications.is.null,specifications.eq.{}")
-    .eq("is_duplicate", false)
+    .eq("is_duplicate", false);
+
+  if (backfill) {
+    // Backfill mode: re-enrich listings that Railway processed but didn't extract specs
+    // These have detail_fetched_at set but specifications is empty
+    query = query
+      .not("detail_fetched_at", "is", null)
+      .or("specifications.is.null,specifications.eq.{}");
+  } else {
+    // Normal mode: no phone OR no specs
+    query = query.or("extracted_phone.is.null,specifications.is.null,specifications.eq.{}");
+  }
+
+  const { data: listings, error: fetchErr } = await query
     .order("created_at", { ascending: false })
     .limit(limit);
 
