@@ -16,6 +16,7 @@ interface Template {
   is_default: boolean;
   usage_count: number;
   response_rate: number;
+  agent: string;
 }
 
 const PREVIEW_VALUES: Record<string, string> = {
@@ -53,12 +54,8 @@ function previewMessage(text: string): string {
   return result;
 }
 
-function detectAgent(t: Template): string {
-  const name = (t.name || "").toLowerCase();
-  const text = (t.message_text || "").toLowerCase();
-  if (name.includes("وليد") || name.includes("waleed") || name.includes("سيارات") || text.includes("وليد")) return "waleed";
-  if (name.includes("أحمد") || name.includes("ahmed") || name.includes("عقارات") || text.includes("أحمد")) return "ahmed";
-  return "general";
+function getAgent(t: Template): string {
+  return t.agent || "general";
 }
 
 export default function TemplatesPage() {
@@ -74,7 +71,7 @@ export default function TemplatesPage() {
 
   const [editForm, setEditForm] = useState({
     name: "", name_ar: "", category: "acquisition",
-    target_type: "seller", target_tier: "all", message_text: "",
+    target_type: "seller", target_tier: "all", message_text: "", agent: "general",
   });
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
@@ -93,7 +90,7 @@ export default function TemplatesPage() {
 
   const filtered = useMemo(() => {
     return templates.filter((t) => {
-      const agent = detectAgent(t);
+      const agent = getAgent(t);
       if (agentFilter !== "all" && agent !== agentFilter) return false;
       if (tierFilter !== "all" && t.target_tier !== tierFilter) return false;
       return true;
@@ -105,6 +102,7 @@ export default function TemplatesPage() {
     setEditForm({
       name: t.name, name_ar: t.name_ar, category: t.category,
       target_type: t.target_type, target_tier: t.target_tier, message_text: t.message_text,
+      agent: t.agent || "general",
     });
   };
 
@@ -131,7 +129,7 @@ export default function TemplatesPage() {
         body: JSON.stringify({ ...editForm, name_ar: editForm.name_ar || editForm.name }),
       });
       setShowNew(false);
-      setEditForm({ name: "", name_ar: "", category: "acquisition", target_type: "seller", target_tier: "all", message_text: "" });
+      setEditForm({ name: "", name_ar: "", category: "acquisition", target_type: "seller", target_tier: "all", message_text: "", agent: "general" });
       fetchTemplates();
       showToast("✅ تم الإنشاء");
     } catch { showToast("❌ حدث خطأ"); }
@@ -174,6 +172,22 @@ export default function TemplatesPage() {
             <label className="text-sm font-bold text-dark mb-1 block">الاسم بالعربي</label>
             <input value={editForm.name_ar} onChange={(e) => setEditForm({ ...editForm, name_ar: e.target.value })}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:border-brand-green focus:outline-none" placeholder="رسالة وليد — أفراد" />
+          </div>
+
+          <div>
+            <label className="text-sm font-bold text-dark mb-1 block">الـ Agent</label>
+            <div className="flex gap-2">
+              {[
+                { key: "waleed", label: "🚗 وليد" },
+                { key: "ahmed", label: "🏠 أحمد" },
+                { key: "general", label: "عام" },
+              ].map(({ key, label }) => (
+                <button key={key} type="button" onClick={() => setEditForm({ ...editForm, agent: key })}
+                  className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
+                    editForm.agent === key ? "bg-brand-green text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}>{label}</button>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -259,7 +273,7 @@ export default function TemplatesPage() {
           <h1 className="text-xl font-bold text-dark">📝 قوالب الرسائل</h1>
           <p className="text-sm text-gray-text">{templates.length} قالب</p>
         </div>
-        <button onClick={() => { setShowNew(true); setEditForm({ name: "", name_ar: "", category: "acquisition", target_type: "seller", target_tier: "all", message_text: "" }); }}
+        <button onClick={() => { setShowNew(true); setEditForm({ name: "", name_ar: "", category: "acquisition", target_type: "seller", target_tier: "all", message_text: "", agent: "general" }); }}
           className="flex items-center gap-1.5 px-4 py-2.5 bg-brand-green text-white rounded-xl text-sm font-bold hover:bg-brand-green-dark">
           <Plus size={16} /> قالب جديد
         </button>
@@ -310,7 +324,7 @@ export default function TemplatesPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((t) => {
-            const agent = detectAgent(t);
+            const agent = getAgent(t);
             const isPreview = previewId === t.id;
             return (
               <div key={t.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
