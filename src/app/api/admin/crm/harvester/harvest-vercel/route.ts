@@ -41,6 +41,7 @@ import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { detectSellerTypeSlug } from "@/lib/crm/harvester/seller-classifier";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
 import { mapLocation, normalizeGovernorate, governorateToArabic, extractGovernorateFromUrl } from "@/lib/crm/harvester/parsers/location-mapper";
+import { extractFromTitle } from "@/lib/crm/harvester/title-extractor";
 import { createBuyerFromSeller, updateSellerBuyProbability } from "@/lib/crm/harvester/seller-to-buyer";
 
 export const maxDuration = 60; // Vercel max
@@ -462,6 +463,9 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       });
     }
 
+    // Extract structured data from title
+    const titleData = extractFromTitle(listing.title || "", listing.url || "");
+
     // Insert listing
     const { error: insertErr } = await supabase.from("ahe_listings").insert({
       scope_id: scope.id,
@@ -480,6 +484,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       source_location: listing.location || null,
       governorate,
       city,
+      area: titleData.area || null,
       source_date_text: listing.dateText || null,
       estimated_posted_at: estimatedDate?.toISOString() || null,
       seller_name: sellerName,
@@ -489,7 +494,9 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       ahe_seller_id: aheSellerId,
       extracted_phone: phone || null,
       phone_source: phone ? "title" : null,
-      listing_type: listing.isFeatured ? "featured" : "regular",
+      detected_brand: titleData.brand || null,
+      detected_model: titleData.model || null,
+      listing_type: titleData.listingType,
     });
 
     if (insertErr) {

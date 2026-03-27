@@ -183,6 +183,12 @@ export async function GET(req: NextRequest) {
       if (detectedBrand) updates.detected_brand = detectedBrand;
       if (detectedModel) updates.detected_model = detectedModel;
 
+      // Save fields that were extracted but previously discarded
+      if (details.condition) updates.condition = details.condition;
+      if (details.paymentMethod) updates.payment_method = details.paymentMethod;
+      if (details.hasWarranty) updates.has_warranty = true;
+      if (specs.area) updates.area = specs.area;
+
       if (phone) {
         updates.extracted_phone = phone;
         updates.phone_source = "detail_enrichment";
