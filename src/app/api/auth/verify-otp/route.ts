@@ -186,6 +186,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── Link to ahe_sellers if this phone belongs to a harvested seller ──
+    try {
+      await supabase
+        .from("ahe_sellers" as never)
+        .update({
+          user_id: profile.id,
+          pipeline_status: "registered",
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq("phone", phone)
+        .is("user_id", null);
+    } catch (linkErr) {
+      console.warn("[verify-otp] ahe_sellers linking failed:", linkErr);
+    }
+
     // ── Generate session ─────────────────────────────────────────────
     const virtualEmail = `${phone}@maksab.auth`;
 

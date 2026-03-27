@@ -120,7 +120,16 @@ export default function JoinPage() {
         body: JSON.stringify({ seller_id: sellerId, ref }),
       }).catch(() => {});
 
-      // Redirect
+      // Migrate listings from ahe_listings → ads
+      if (data.user?.id && sellerId) {
+        await fetch("/api/listings/migrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seller_id: sellerId, user_id: data.user.id }),
+        }).catch(() => {});
+      }
+
+      // Redirect to my-ads
       router.push(isCar ? "/my-ads?welcome=car" : "/my-ads?welcome=property");
     } catch {
       setError("حصلت مشكلة — جرّب تاني");
