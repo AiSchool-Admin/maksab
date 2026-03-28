@@ -229,6 +229,14 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      console.error(`[Consent] Migration complete: ${migrated} listings migrated for seller ${seller_id}`);
+
+      // Ensure pipeline_status = registered (safety net after migration)
+      await sb.from("ahe_sellers").update({
+        pipeline_status: "registered",
+        updated_at: new Date().toISOString(),
+      }).eq("id", seller_id);
+
       // 7. Queue message 3 (account ready)
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maksab.vercel.app";
       const magicLink = `${baseUrl}/join?phone=${encodeURIComponent(seller.phone)}&seller=${seller_id}&ref=${agentName}`;
