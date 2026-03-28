@@ -1,0 +1,14 @@
+name: Auto-merge claude branches
+on:
+  push:
+    branches: ['claude/**']
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          gh pr create --base main --head ${{ github.ref_name }} --title "Auto-deploy: ${{ github.ref_name }}" --body "Automated PR from Claude Code" || true
+          gh pr merge --squash --auto || true
+        env:
+          GH_TOKEN: ${{ github.token }}

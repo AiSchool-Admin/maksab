@@ -109,18 +109,18 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Get appropriate template
+      // Get message 1 template (funnel first contact)
+      const funnel1Name = asset_type === "cars" ? "funnel_msg1_cars" : "funnel_msg1_props";
       const { data: templates } = await sb
         .from("outreach_templates")
-        .select("id, message_text, target_tier")
+        .select("id, name, message_text, target_tier")
         .eq("agent", agentName)
         .eq("is_active", true)
-        .order("usage_count", { ascending: false })
-        .limit(5);
+        .order("created_at", { ascending: false });
 
-      const defaultTemplate = templates?.[0];
+      const msg1Template = templates?.find(t => t.name === funnel1Name) || templates?.[0];
 
-      // Generate magic links and queue messages
+      // Generate messages and queue
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maksab.vercel.app";
       let queued = 0;
 
@@ -130,24 +130,17 @@ export async function POST(req: NextRequest) {
           .from("acquisition_queue")
           .select("id", { count: "exact", head: true })
           .eq("seller_id", seller.id)
-          .eq("status", "queued");
+          .in("status", ["queued", "sent"]);
 
         if (existing && existing > 0) continue;
 
-        // Pick template by seller type
-        const sellerType = seller.detected_account_type || "individual";
-        const template = templates?.find(t =>
-          t.target_tier === sellerType || t.target_tier === "all"
-        ) || defaultTemplate;
-
         const magicLink = `${baseUrl}/join?phone=${encodeURIComponent(seller.phone)}&seller=${seller.id}&ref=${agentName}`;
 
-        // Build message
-        let messageText = template?.message_text || `السلام عليكم ${seller.name || ""} 👋\nسجّل مجاناً: ${magicLink}`;
+        // Message 1: simple intro — no link needed
+        let messageText = msg1Template?.message_text || `أهلاً ${seller.name || ""} 👋\nشفنا إعلاناتك على دوبيزل\nفريق مكسب يقدر يكتب إعلاناتك ويسجلك في دقايق — مجاناً\nيهمك؟`;
         messageText = messageText
           .replace(/\{\{name\}\}/g, seller.name || "")
-          .replace(/\{\{platform\}\}/g, seller.source_platform || "دوبيزل")
-          + `\n\n${magicLink}`;
+          .replace(/\{\{platform\}\}/g, seller.source_platform || "دوبيزل");
 
         await sb.from("acquisition_queue").insert({
           seller_id: seller.id,
@@ -155,7 +148,7 @@ export async function POST(req: NextRequest) {
           message_number: 1,
           message_text: messageText,
           magic_link: magicLink,
-          template_id: template?.id || null,
+          template_id: msg1Template?.id || null,
           status: "queued",
           mode,
           agent_name: agentName,
@@ -250,28 +243,32 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ followups: 0, message: "لا يوجد متابعة مطلوبة" });
       }
 
-      // Get followup template
-      const { data: followupTemplates } = await sb
+      // Get message 2 template (consent link)
+      const funnel2Name = asset_type === "cars" ? "funnel_msg2_cars" : "funnel_msg2_props";
+      const { data: msg2Templates } = await sb
         .from("outreach_templates")
-        .select("id, message_text")
+        .select("id, name, message_text")
         .eq("agent", agentName)
-        .ilike("name", "%followup%")
-        .limit(1);
+        .eq("is_active", true);
 
+      const msg2Template = msg2Templates?.find(t => t.name === funnel2Name);
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maksab.vercel.app";
       let queued = 0;
 
       for (const seller of needFollowup) {
-        const magicLink = `${baseUrl}/join?phone=${encodeURIComponent(seller.phone)}&seller=${seller.id}&ref=${agentName}`;
-        const msg = followupTemplates?.[0]?.message_text?.replace(/\{\{name\}\}/g, seller.name || "")
-          || `أهلاً ${seller.name || ""} 👋\nبعتلك رسالة عن مكسب — لو عندك أي سؤال أنا هنا!\n${magicLink}`;
+        const consentLink = `${baseUrl}/consent?seller=${seller.id}&ref=${agentName}`;
+        let msg = msg2Template?.message_text
+          || `${seller.name || ""}، فريقنا جاهز يسجلك ويكتب إعلاناتك على مكسب\nاضغط للموافقة:\n👉 ${consentLink}`;
+        msg = msg
+          .replace(/\{\{name\}\}/g, seller.name || "")
+          .replace(/\{\{consent_link\}\}/g, consentLink);
 
         await sb.from("acquisition_queue").insert({
           seller_id: seller.id,
           asset_type,
           message_number: 2,
           message_text: msg,
-          magic_link: magicLink,
+          magic_link: consentLink,
           status: "queued",
           mode,
           agent_name: agentName,
