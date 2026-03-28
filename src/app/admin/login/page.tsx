@@ -370,6 +370,7 @@ export default function AdminLoginPage() {
                   onPaste={i === 0 ? handleOtpPaste : undefined}
                   className={`w-12 h-12 text-center text-xl font-bold bg-gray-50 rounded-xl border-2 focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-red-300 bg-red-50" : digit ? "border-brand-green/30 text-dark" : "border-gray-200 text-gray-400"}`}
                   autoComplete={i === 0 ? "one-time-code" : "off"}
+                  autoFocus={i === 0}
                 />
               ))}
             </div>
