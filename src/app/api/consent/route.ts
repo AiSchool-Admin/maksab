@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       const phone = seller.phone;
       const virtualEmail = `${phone}@maksab.auth`;
 
-      // Check if user already exists
+      // Check if profile already exists (from previous /join or consent attempt)
       const { data: existingProfile } = await sb
         .from("profiles")
         .select("id")
@@ -110,8 +110,25 @@ export async function POST(req: NextRequest) {
 
       if (existingProfile) {
         userId = existingProfile.id;
-      } else {
-        // Create auth user
+        console.error(`[Consent] Found existing profile: ${userId}`);
+      }
+
+      // Check ahe_sellers.user_id (might have been set by /join)
+      if (!userId) {
+        const { data: sellerWithUser } = await sb
+          .from("ahe_sellers")
+          .select("user_id")
+          .eq("id", seller_id)
+          .single();
+        if (sellerWithUser?.user_id) {
+          userId = sellerWithUser.user_id;
+          console.error(`[Consent] Found user_id from ahe_sellers: ${userId}`);
+        }
+      }
+
+      // Create new user if not found
+      if (!userId) {
+        console.error(`[Consent] Creating new user for phone: ${phone}`);
         const { data: authUser, error: authErr } = await sb.auth.admin.createUser({
           email: virtualEmail,
           phone: `+2${phone}`,
@@ -121,28 +138,35 @@ export async function POST(req: NextRequest) {
         });
 
         if (authErr) {
-          // User might already exist in auth.users — try to find them
+          console.error("[Consent] Auth create error:", authErr.message);
+          // Try to find existing auth user
           const { data: { users } } = await sb.auth.admin.listUsers();
           const existing = users?.find(u => u.phone === `+2${phone}` || u.email === virtualEmail);
           if (existing) {
             userId = existing.id;
-          } else {
-            console.error("[Consent] Auth create error:", authErr.message);
+            console.error(`[Consent] Found existing auth user: ${userId}`);
+            // Ensure profile exists
+            await sb.from("profiles").upsert({
+              id: userId,
+              phone,
+              display_name: seller.name || null,
+            }, { onConflict: "id" });
           }
         } else if (authUser?.user) {
           userId = authUser.user.id;
-
-          // Create profile
-          await sb.from("profiles").insert({
+          console.error(`[Consent] Created new user: ${userId}`);
+          await sb.from("profiles").upsert({
             id: userId,
             phone,
             display_name: seller.name || null,
-          }).select().maybeSingle();
+          }, { onConflict: "id" });
         }
       }
     } catch (err) {
       console.error("[Consent] Registration error:", err);
     }
+
+    console.error(`[Consent] Final userId: ${userId}, seller_id: ${seller_id}`);
 
     // 5. Link seller to user
     if (userId) {
@@ -237,10 +261,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Registration failed but consent was recorded
+    console.error(`[Consent] FAILED: userId is null for seller ${seller_id}, phone ${seller.phone}`);
     return NextResponse.json({
       success: true,
       registered: false,
-      message: "Consent recorded but auto-registration failed",
+      message: "Consent recorded but auto-registration failed — userId is null",
     });
   } catch (err) {
     console.error("[Consent] Error:", err);
