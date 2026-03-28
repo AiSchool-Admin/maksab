@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         sb.from("ahe_sellers").select("id", { count: "exact", head: true })
           .in("primary_category", catVariants).in("primary_governorate", ALEX_GOVS)
           .not("phone", "is", null)
-          .not("pipeline_status", "in", '("registered","rejected","exhausted","skipped","contacted")'),
+          .eq("pipeline_status", "phone_found"),
         sb.from("ahe_sellers").select("id", { count: "exact", head: true })
           .in("primary_category", catVariants).in("primary_governorate", ALEX_GOVS)
           .eq("pipeline_status", "contacted"),
@@ -88,15 +88,14 @@ export async function POST(req: NextRequest) {
     if (action === "queue_new") {
       const limit = body.limit || 20;
 
-      // Get sellers with phone, in Alexandria, not yet fully processed
-      // Exclude: registered, rejected, exhausted (these are done)
+      // Get sellers with phone, pipeline_status = 'phone_found' (new, not yet contacted)
       const { data: sellers, error: sellerErr } = await sb
         .from("ahe_sellers")
         .select("id, name, phone, detected_account_type, total_listings_seen, source_platform, pipeline_status")
         .in("primary_category", catVariants)
         .in("primary_governorate", ALEX_GOVS)
         .not("phone", "is", null)
-        .not("pipeline_status", "in", '("registered","rejected","exhausted","skipped")')
+        .eq("pipeline_status", "phone_found")
         .order("whale_score", { ascending: false })
         .limit(limit);
 
