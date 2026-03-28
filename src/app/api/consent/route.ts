@@ -152,13 +152,15 @@ export async function POST(req: NextRequest) {
       }).eq("id", seller_id);
 
       // 6. Migrate listings: ahe_listings → ads
-      const { data: listings } = await sb
+      const { data: listings, error: listErr } = await sb
         .from("ahe_listings")
         .select("*")
         .eq("ahe_seller_id", seller_id)
-        .eq("is_duplicate", false)
-        .in("migration_status", ["harvested", "queued"])
+        .or("is_duplicate.is.null,is_duplicate.eq.false")
+        .or("migration_status.is.null,migration_status.eq.harvested,migration_status.eq.queued")
         .limit(50);
+
+      console.error(`[Consent] Listings found: ${listings?.length || 0}, error: ${listErr?.message || "none"}`);
 
       let migrated = 0;
       for (const listing of (listings || [])) {
@@ -166,10 +168,11 @@ export async function POST(req: NextRequest) {
           const images: string[] = [];
           if (listing.all_image_urls?.length > 0) images.push(...listing.all_image_urls);
           else if (listing.thumbnail_url) images.push(listing.thumbnail_url);
+          else if (listing.main_image_url) images.push(listing.main_image_url);
 
           const categoryId = CATEGORY_MAP[listing.maksab_category] || "cars";
 
-          const { data: newAd } = await sb.from("ads").insert({
+          const { data: newAd, error: adErr } = await sb.from("ads").insert({
             user_id: userId,
             category_id: categoryId,
             title: listing.title || "إعلان",
@@ -177,13 +180,17 @@ export async function POST(req: NextRequest) {
             price: listing.price || null,
             is_negotiable: listing.is_negotiable || false,
             sale_type: "cash",
-            listing_type: listing.listing_type || "sale",
             category_fields: listing.specifications || {},
             governorate: listing.governorate || null,
             city: listing.city || null,
             images,
             status: "active",
           }).select("id").single();
+
+          if (adErr) {
+            console.error(`[Consent] Ad insert error for ${listing.id}: ${adErr.message}`);
+            continue;
+          }
 
           if (newAd) {
             await sb.from("ahe_listings").update({
@@ -193,7 +200,9 @@ export async function POST(req: NextRequest) {
             }).eq("id", listing.id);
             migrated++;
           }
-        } catch { /* skip individual listing errors */ }
+        } catch (migErr) {
+          console.error(`[Consent] Migration error for listing ${listing.id}:`, migErr);
+        }
       }
 
       // 7. Queue message 3 (account ready)
