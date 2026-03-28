@@ -299,17 +299,41 @@ export async function GET(req: NextRequest) {
 
   const sb = getSupabase();
 
-  const { data: items } = await sb
+  // Fetch queue items
+  const { data: queueItems, error: qErr } = await sb
     .from("acquisition_queue")
-    .select(`
-      id, seller_id, asset_type, message_number, message_text, magic_link,
-      scheduled_at, sent_at, status, mode, agent_name,
-      ahe_sellers!inner(name, phone, detected_account_type, total_listings_seen, source_platform, whale_score)
-    `)
+    .select("id, seller_id, asset_type, message_number, message_text, magic_link, scheduled_at, sent_at, status, mode, agent_name")
     .eq("asset_type", assetType)
     .eq("status", status)
     .order("created_at", { ascending: true })
     .limit(limit);
 
-  return NextResponse.json({ items: items || [], count: items?.length || 0 });
+  console.error(`[Acquisition GET] Queue items: ${queueItems?.length || 0}, error: ${qErr?.message || "none"}`);
+
+  if (!queueItems || queueItems.length === 0) {
+    return NextResponse.json({ items: [], count: 0 });
+  }
+
+  // Fetch seller data separately (avoids FK join issues)
+  const sellerIds = [...new Set(queueItems.map(q => q.seller_id))];
+  const { data: sellers } = await sb
+    .from("ahe_sellers")
+    .select("id, name, phone, detected_account_type, total_listings_seen, source_platform, whale_score")
+    .in("id", sellerIds);
+
+  const sellerMap = new Map((sellers || []).map(s => [s.id, s]));
+
+  const items = queueItems.map(q => ({
+    ...q,
+    ahe_sellers: sellerMap.get(q.seller_id) || {
+      name: "بدون اسم",
+      phone: "",
+      detected_account_type: "individual",
+      total_listings_seen: 0,
+      source_platform: "",
+      whale_score: 0,
+    },
+  }));
+
+  return NextResponse.json({ items, count: items.length });
 }
