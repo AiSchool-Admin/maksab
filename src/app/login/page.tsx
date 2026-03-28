@@ -505,6 +505,7 @@ function LoginPageContent() {
                   onPaste={i === 0 ? handleOtpPaste : undefined}
                   className={`w-12 h-14 text-center text-2xl font-bold bg-gray-light rounded-xl border-2 focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : digit ? "text-dark border-brand-green/30" : "border-gray-200 text-gray-text"}`}
                   autoComplete={i === 0 ? "one-time-code" : "off"}
+                  autoFocus={i === 0}
                 />
               ))}
             </div>
