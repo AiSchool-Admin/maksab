@@ -460,7 +460,6 @@ export default function AuthBottomSheet({
                 inputMode="numeric"
                 maxLength={1}
                 value={digit}
-                readOnly={isAutoFilling}
                 onChange={(e) => handleOtpChange(i, e.target.value)}
                 onKeyDown={(e) => handleOtpKeyDown(i, e)}
                 onPaste={i === 0 ? handleOtpPaste : undefined}
