@@ -495,15 +495,15 @@ function LoginPageContent() {
                   ref={(el) => {
                     otpInputsRef.current[i] = el;
                   }}
-                  type="text"
+                  type="tel"
                   inputMode="numeric"
+                  pattern="[0-9]*"
                   maxLength={1}
                   value={digit}
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
                   onPaste={i === 0 ? handleOtpPaste : undefined}
-                  className={`w-12 h-14 text-center text-2xl font-bold bg-gray-light rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : ""} ${digit ? "text-dark border-brand-green/30 scale-105" : "text-gray-text"}`}
-                  style={digit && isAutoFilling ? { transform: "scale(1.08)", transition: "transform 0.2s ease-out" } : undefined}
+                  className={`w-12 h-14 text-center text-2xl font-bold bg-gray-light rounded-xl border-2 focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-error bg-error/5" : digit ? "text-dark border-brand-green/30" : "border-gray-200 text-gray-text"}`}
                   autoComplete={i === 0 ? "one-time-code" : "off"}
                 />
               ))}

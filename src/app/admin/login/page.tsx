@@ -360,15 +360,15 @@ export default function AdminLoginPage() {
                 <input
                   key={i}
                   ref={(el) => { otpInputsRef.current[i] = el; }}
-                  type="text"
+                  type="tel"
                   inputMode="numeric"
+                  pattern="[0-9]*"
                   maxLength={1}
                   value={digit}
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
                   onPaste={i === 0 ? handleOtpPaste : undefined}
-                  className={`w-11 h-13 text-center text-xl font-bold bg-gray-50 rounded-xl border-2 border-transparent focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-red-300 bg-red-50" : ""} ${digit ? "text-dark border-brand-green/30" : "text-gray-400"}`}
-                  style={digit && isAutoFilling ? { transform: "scale(1.08)", transition: "transform 0.2s ease-out" } : undefined}
+                  className={`w-12 h-12 text-center text-xl font-bold bg-gray-50 rounded-xl border-2 focus:border-brand-green focus:bg-white focus:outline-none transition-all ${error ? "border-red-300 bg-red-50" : digit ? "border-brand-green/30 text-dark" : "border-gray-200 text-gray-400"}`}
                   autoComplete={i === 0 ? "one-time-code" : "off"}
                 />
               ))}
