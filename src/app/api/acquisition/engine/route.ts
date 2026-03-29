@@ -108,13 +108,19 @@ export async function POST(req: NextRequest) {
         .order("whale_score", { ascending: false })
         .limit(limit + queuedIds.size); // fetch extra to compensate for skips
 
-      console.error(`[Acquisition] queue_new: ${sellers?.length || 0} sellers found, error: ${sellerErr?.message || "none"}`);
+      console.error(`[Acquisition] queue_new: ${sellers?.length || 0} sellers found (${queuedIds.size} already queued), error: ${sellerErr?.message || "none"}`);
 
       if (!sellers || sellers.length === 0) {
         return NextResponse.json({
           queued: 0,
-          message: sellerErr?.message || "لا يوجد بائعين جدد",
-          debug: { catVariants, govs: ALEX_GOVS, error: sellerErr?.message },
+          message: sellerErr?.message || "لا يوجد بائعين جدد بـ phone_found",
+          debug: {
+            catVariants,
+            govs: ALEX_GOVS,
+            already_queued: queuedIds.size,
+            seller_error: sellerErr?.message || null,
+            alreadyQueued_error: alreadyQueued === null ? "table may not exist" : null,
+          },
         });
       }
 
@@ -163,8 +169,13 @@ export async function POST(req: NextRequest) {
         queued++;
       }
 
-      console.error(`[Acquisition] queue_new done: ${queued} queued from ${sellers.length} sellers`);
-      return NextResponse.json({ queued, total_sellers: sellers.length, mode });
+      console.error(`[Acquisition] queue_new done: ${queued} queued from ${sellers.length} sellers (${queuedIds.size} skipped)`);
+      return NextResponse.json({
+        queued,
+        total_sellers: sellers.length,
+        already_queued: queuedIds.size,
+        mode,
+      });
     }
 
     // ─── Send one (manual mode) ───
