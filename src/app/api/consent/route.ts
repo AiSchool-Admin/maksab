@@ -249,7 +249,6 @@ export async function POST(req: NextRequest) {
         magic_link: magicLink,
         status: "queued",
         mode: "auto",
-        agent_name: agentName,
       });
 
       // Log

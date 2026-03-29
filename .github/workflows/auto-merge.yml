@@ -19,17 +19,31 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          BRANCH="${{ github.ref_name }}"
+          echo "Branch: $BRANCH"
+
+          # Create PR (ignore error if already exists)
           gh pr create \
             --base main \
-            --head "${{ github.ref_name }}" \
-            --title "Auto-deploy: ${{ github.ref_name }}" \
+            --head "$BRANCH" \
+            --title "Auto-deploy: $BRANCH" \
             --body "Automated PR from Claude Code" \
-            || echo "PR already exists"
+            2>/dev/null || echo "PR already exists"
 
-          sleep 30
+          sleep 10
 
-          gh pr merge "${{ github.ref_name }}" \
+          # Get PR number by branch name
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null)
+          echo "PR Number: $PR_NUMBER"
+
+          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
+            echo "No PR found for branch $BRANCH"
+            exit 0
+          fi
+
+          # Merge by PR number
+          gh pr merge "$PR_NUMBER" \
             --squash \
-            --delete-branch \
             --admin \
-            || echo "Merge failed or already merged"
+            --delete-branch \
+            || echo "Merge failed"

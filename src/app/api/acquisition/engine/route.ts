@@ -88,7 +88,16 @@ export async function POST(req: NextRequest) {
     if (action === "queue_new") {
       const limit = body.limit || 20;
 
-      // Get sellers with phone, pipeline_status = 'phone_found' (new, not yet contacted)
+      // Get sellers with phone, pipeline_status = 'phone_found', not already queued
+      // First get IDs already in queue to exclude them
+      const { data: alreadyQueued } = await sb
+        .from("acquisition_queue")
+        .select("seller_id")
+        .eq("asset_type", asset_type)
+        .in("status", ["queued", "sent"]);
+
+      const queuedIds = new Set((alreadyQueued || []).map(q => q.seller_id));
+
       const { data: sellers, error: sellerErr } = await sb
         .from("ahe_sellers")
         .select("id, name, phone, detected_account_type, total_listings_seen, source_platform, pipeline_status")
@@ -97,15 +106,21 @@ export async function POST(req: NextRequest) {
         .not("phone", "is", null)
         .eq("pipeline_status", "phone_found")
         .order("whale_score", { ascending: false })
-        .limit(limit);
+        .limit(limit + queuedIds.size); // fetch extra to compensate for skips
 
-      console.error(`[Acquisition] queue_new: ${sellers?.length || 0} sellers found, error: ${sellerErr?.message || "none"}`);
+      console.error(`[Acquisition] queue_new: ${sellers?.length || 0} sellers found (${queuedIds.size} already queued), error: ${sellerErr?.message || "none"}`);
 
       if (!sellers || sellers.length === 0) {
         return NextResponse.json({
           queued: 0,
-          message: sellerErr?.message || "لا يوجد بائعين جدد",
-          debug: { catVariants, govs: ALEX_GOVS, error: sellerErr?.message },
+          message: sellerErr?.message || "لا يوجد بائعين جدد بـ phone_found",
+          debug: {
+            catVariants,
+            govs: ALEX_GOVS,
+            already_queued: queuedIds.size,
+            seller_error: sellerErr?.message || null,
+            alreadyQueued_error: alreadyQueued === null ? "table may not exist" : null,
+          },
         });
       }
 
@@ -125,17 +140,9 @@ export async function POST(req: NextRequest) {
       let queued = 0;
 
       for (const seller of sellers) {
-        // Check not already queued
-        const { count: existing, error: checkErr } = await sb
-          .from("acquisition_queue")
-          .select("id", { count: "exact", head: true })
-          .eq("seller_id", seller.id)
-          .in("status", ["queued", "sent"]);
-
-        if (checkErr) {
-          console.error(`[Acquisition] Check error: ${checkErr.message}`);
-        }
-        if (existing && existing > 0) continue;
+        // Skip if already queued
+        if (queuedIds.has(seller.id)) continue;
+        if (queued >= limit) break;
 
         // Message 1: simple intro — no link needed
         let messageText = msg1Template?.message_text || `أهلاً ${seller.name || ""} 👋\nشفنا إعلاناتك على دوبيزل\nفريق مكسب يقدر يكتب إعلاناتك ويسجلك في دقايق — مجاناً\nيهمك؟`;
@@ -149,21 +156,33 @@ export async function POST(req: NextRequest) {
           message_number: 1,
           message_text: messageText,
           magic_link: null,
-          template_id: msg1Template?.id || null,
           status: "queued",
           mode,
-          agent_name: agentName,
         });
 
         if (insertErr) {
           console.error(`[Acquisition] Insert error for ${seller.id}: ${insertErr.message}`);
+          // Return the first error so we can debug
+          if (queued === 0) {
+            return NextResponse.json({
+              queued: 0,
+              total_sellers: sellers.length,
+              insert_error: insertErr.message,
+              debug: { seller_id: seller.id },
+            });
+          }
           continue;
         }
         queued++;
       }
 
-      console.error(`[Acquisition] queue_new done: ${queued} queued from ${sellers.length} sellers`);
-      return NextResponse.json({ queued, total_sellers: sellers.length, mode });
+      console.error(`[Acquisition] queue_new done: ${queued} queued from ${sellers.length} sellers (${queuedIds.size} skipped)`);
+      return NextResponse.json({
+        queued,
+        total_sellers: sellers.length,
+        already_queued: queuedIds.size,
+        mode,
+      });
     }
 
     // ─── Send one (manual mode) ───
@@ -174,9 +193,12 @@ export async function POST(req: NextRequest) {
         .eq("seller_id", body.seller_id)
         .eq("status", "queued");
 
-      // Update seller pipeline
+      // Update seller pipeline to contacted_1 (first message sent)
       await sb.from("ahe_sellers")
-        .update({ pipeline_status: "contacted", last_outreach_at: new Date().toISOString() })
+        .update({
+          pipeline_status: "contacted_1",
+          last_outreach_at: new Date().toISOString(),
+        })
         .eq("id", body.seller_id);
 
       // Log
@@ -186,6 +208,7 @@ export async function POST(req: NextRequest) {
         agent_name: agentName,
         mode,
         message_number: 1,
+        notes: "message_1_sent",
       });
 
       return NextResponse.json({ success: true });
@@ -214,7 +237,10 @@ export async function POST(req: NextRequest) {
           .eq("id", item.id);
 
         await sb.from("ahe_sellers")
-          .update({ pipeline_status: "contacted", last_outreach_at: new Date().toISOString() })
+          .update({
+            pipeline_status: "contacted_1",
+            last_outreach_at: new Date().toISOString(),
+          })
           .eq("id", item.seller_id);
 
         await sb.from("outreach_logs").insert({
@@ -223,6 +249,7 @@ export async function POST(req: NextRequest) {
           agent_name: agentName,
           mode,
           message_number: 1,
+          notes: "message_1_sent",
         });
 
         sent++;
@@ -231,15 +258,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ sent, mode });
     }
 
-    // ─── Followup (48h no response) ───
+    // ─── Followup (48h no response) — sends message 2 with consent link ───
     if (action === "followup") {
       const cutoff = new Date(Date.now() - (config?.auto_followup_hours || 48) * 3600000).toISOString();
 
+      // Find sellers who received message 1 (contacted_1) but didn't respond
       const { data: needFollowup } = await sb
         .from("ahe_sellers")
         .select("id, name, phone")
         .in("primary_category", catVariants)
-        .eq("pipeline_status", "contacted")
+        .in("pipeline_status", ["contacted_1", "contacted"])
         .lt("last_outreach_at", cutoff)
         .not("phone", "is", null)
         .order("whale_score", { ascending: false })
@@ -277,7 +305,6 @@ export async function POST(req: NextRequest) {
           magic_link: consentLink,
           status: "queued",
           mode,
-          agent_name: agentName,
         });
 
         queued++;
@@ -305,16 +332,16 @@ export async function GET(req: NextRequest) {
 
   const sb = getSupabase();
 
-  // Fetch queue items
+  // Fetch queue items — only select columns that exist in the table
   const { data: queueItems, error: qErr } = await sb
     .from("acquisition_queue")
-    .select("id, seller_id, asset_type, message_number, message_text, magic_link, scheduled_at, sent_at, status, mode, agent_name")
+    .select("id, seller_id, asset_type, message_number, message_text, magic_link, scheduled_at, sent_at, status, mode, created_at")
     .eq("asset_type", assetType)
     .eq("status", status)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
-  console.error(`[Acquisition GET] Queue items: ${queueItems?.length || 0}, error: ${qErr?.message || "none"}`);
+  console.error(`[Acquisition GET] asset_type=${assetType}, status=${status}, items: ${queueItems?.length || 0}, error: ${qErr?.message || "none"}`);
 
   if (!queueItems || queueItems.length === 0) {
     return NextResponse.json({ items: [], count: 0 });
