@@ -323,16 +323,16 @@ export async function GET(req: NextRequest) {
 
   const sb = getSupabase();
 
-  // Fetch queue items
+  // Fetch queue items — only select columns that exist in the table
   const { data: queueItems, error: qErr } = await sb
     .from("acquisition_queue")
-    .select("id, seller_id, asset_type, message_number, message_text, magic_link, scheduled_at, sent_at, status, mode, agent_name")
+    .select("id, seller_id, asset_type, message_number, message_text, magic_link, scheduled_at, sent_at, status, mode, created_at")
     .eq("asset_type", assetType)
     .eq("status", status)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
-  console.error(`[Acquisition GET] Queue items: ${queueItems?.length || 0}, error: ${qErr?.message || "none"}`);
+  console.error(`[Acquisition GET] asset_type=${assetType}, status=${status}, items: ${queueItems?.length || 0}, error: ${qErr?.message || "none"}`);
 
   if (!queueItems || queueItems.length === 0) {
     return NextResponse.json({ items: [], count: 0 });
