@@ -156,14 +156,21 @@ export async function POST(req: NextRequest) {
           message_number: 1,
           message_text: messageText,
           magic_link: null,
-          template_id: msg1Template?.id || null,
           status: "queued",
           mode,
-          agent_name: agentName,
         });
 
         if (insertErr) {
           console.error(`[Acquisition] Insert error for ${seller.id}: ${insertErr.message}`);
+          // Return the first error so we can debug
+          if (queued === 0) {
+            return NextResponse.json({
+              queued: 0,
+              total_sellers: sellers.length,
+              insert_error: insertErr.message,
+              debug: { seller_id: seller.id },
+            });
+          }
           continue;
         }
         queued++;
@@ -289,7 +296,6 @@ export async function POST(req: NextRequest) {
           magic_link: consentLink,
           status: "queued",
           mode,
-          agent_name: agentName,
         });
 
         queued++;
