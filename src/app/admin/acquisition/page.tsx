@@ -113,6 +113,42 @@ export default function AcquisitionEnginePage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Batch send — sequential WhatsApp opening
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchIndex, setBatchIndex] = useState(0);
+
+  const startBatch = () => {
+    if (queue.length === 0) { showToast("القائمة فاضية"); return; }
+    setBatchMode(true);
+    setBatchIndex(0);
+  };
+
+  const sendCurrentBatch = () => {
+    const item = queue[batchIndex];
+    if (!item) return;
+    const seller = item.ahe_sellers;
+    if (seller?.phone) {
+      openWhatsApp(seller.phone, item.message_text);
+    }
+    runAction("send_one", { seller_id: item.seller_id });
+  };
+
+  const nextInBatch = () => {
+    const next = batchIndex + 1;
+    if (next >= queue.length || next >= 10) {
+      setBatchMode(false);
+      showToast(`✅ تم إرسال ${batchIndex + 1} رسالة`);
+      loadData();
+    } else {
+      setBatchIndex(next);
+    }
+  };
+
+  const stopBatch = () => {
+    setBatchMode(false);
+    showToast(`تم إرسال ${batchIndex} رسالة`);
+    loadData();
+  };
   const agentLabel = assetType === "cars" ? "🚗 وليد — سيارات" : "🏠 أحمد — عقارات";
   const p = stats?.pipeline || { new: 0, contacted: 0, responded: 0, registered: 0 };
   const totalPipeline = p.new + p.contacted + p.responded + p.registered;
@@ -193,11 +229,11 @@ export default function AcquisitionEnginePage() {
               <span className="text-xs font-bold text-dark">جلب جدد</span>
               <span className="text-[10px] text-gray-400">20 بائع</span>
             </button>
-            <button onClick={() => runAction("send_batch", { limit: 10 })} disabled={!!acting || queue.length === 0}
+            <button onClick={startBatch} disabled={!!acting || queue.length === 0}
               className="flex flex-col items-center gap-1 p-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50">
               <Send size={18} className="text-green-600" />
               <span className="text-xs font-bold text-dark">إرسال دفعة</span>
-              <span className="text-[10px] text-gray-400">10 رسائل</span>
+              <span className="text-[10px] text-gray-400">{Math.min(queue.length, 10)} رسائل</span>
             </button>
             <button onClick={() => runAction("followup", { limit: 20 })} disabled={!!acting}
               className="flex flex-col items-center gap-1 p-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50">
@@ -207,6 +243,33 @@ export default function AcquisitionEnginePage() {
             </button>
           </div>
         </>
+      )}
+
+      {/* Batch Mode Overlay */}
+      {batchMode && queue[batchIndex] && (
+        <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-bold text-dark">📱 إرسال دفعة — {batchIndex + 1} / {Math.min(queue.length, 10)}</p>
+            <button onClick={stopBatch} className="text-xs text-red-500 hover:text-red-700 font-bold">إيقاف ✕</button>
+          </div>
+          <div className="bg-white rounded-lg p-3 mb-3">
+            <p className="text-sm font-bold text-dark mb-1">{queue[batchIndex].ahe_sellers?.name || "بدون اسم"}</p>
+            <p className="text-xs text-gray-text font-mono mb-2" dir="ltr">{queue[batchIndex].ahe_sellers?.phone}</p>
+            <pre className="text-[11px] text-gray-600 whitespace-pre-wrap font-[Cairo] leading-relaxed bg-gray-50 rounded p-2 max-h-24 overflow-y-auto" dir="rtl">
+              {queue[batchIndex].message_text}
+            </pre>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => { sendCurrentBatch(); nextInBatch(); }}
+              className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2">
+              📱 افتح واتساب + التالي
+            </button>
+            <button onClick={nextInBatch}
+              className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl text-sm">
+              تخطي ⏭
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Queue */}
