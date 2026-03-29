@@ -193,9 +193,12 @@ export async function POST(req: NextRequest) {
         .eq("seller_id", body.seller_id)
         .eq("status", "queued");
 
-      // Update seller pipeline
+      // Update seller pipeline to contacted_1 (first message sent)
       await sb.from("ahe_sellers")
-        .update({ pipeline_status: "contacted", last_outreach_at: new Date().toISOString() })
+        .update({
+          pipeline_status: "contacted_1",
+          last_outreach_at: new Date().toISOString(),
+        })
         .eq("id", body.seller_id);
 
       // Log
@@ -205,6 +208,7 @@ export async function POST(req: NextRequest) {
         agent_name: agentName,
         mode,
         message_number: 1,
+        notes: "message_1_sent",
       });
 
       return NextResponse.json({ success: true });
@@ -233,7 +237,10 @@ export async function POST(req: NextRequest) {
           .eq("id", item.id);
 
         await sb.from("ahe_sellers")
-          .update({ pipeline_status: "contacted", last_outreach_at: new Date().toISOString() })
+          .update({
+            pipeline_status: "contacted_1",
+            last_outreach_at: new Date().toISOString(),
+          })
           .eq("id", item.seller_id);
 
         await sb.from("outreach_logs").insert({
@@ -242,6 +249,7 @@ export async function POST(req: NextRequest) {
           agent_name: agentName,
           mode,
           message_number: 1,
+          notes: "message_1_sent",
         });
 
         sent++;
@@ -250,15 +258,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ sent, mode });
     }
 
-    // ─── Followup (48h no response) ───
+    // ─── Followup (48h no response) — sends message 2 with consent link ───
     if (action === "followup") {
       const cutoff = new Date(Date.now() - (config?.auto_followup_hours || 48) * 3600000).toISOString();
 
+      // Find sellers who received message 1 (contacted_1) but didn't respond
       const { data: needFollowup } = await sb
         .from("ahe_sellers")
         .select("id, name, phone")
         .in("primary_category", catVariants)
-        .eq("pipeline_status", "contacted")
+        .in("pipeline_status", ["contacted_1", "contacted"])
         .lt("last_outreach_at", cutoff)
         .not("phone", "is", null)
         .order("whale_score", { ascending: false })
