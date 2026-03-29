@@ -300,6 +300,13 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       || scope.governorate;
     const city = location.city || scope.city;
 
+    // Hard check: only insert Alexandria listings
+    const govLower = (governorate || "").toLowerCase();
+    if (!govLower.includes("الإسكندرية") && !govLower.includes("اسكندري") && !govLower.includes("alexandria")) {
+      console.log(`[Filter] REJECT non-Alex at insert: gov="${governorate}" — "${listing.title?.substring(0, 50)}"`);
+      continue;
+    }
+
     // Extract phone from title (no detail fetch)
     const phone = extractPhone(listing.title || "");
     if (phone) phonesExtracted++;
