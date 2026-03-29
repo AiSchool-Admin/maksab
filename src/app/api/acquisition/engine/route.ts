@@ -124,16 +124,17 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Get message 1 template (funnel first contact)
-      const funnel1Name = asset_type === "cars" ? "funnel_msg1_cars" : "funnel_msg1_props";
+      // Get all templates for this agent
       const { data: templates } = await sb
         .from("outreach_templates")
-        .select("id, name, message_text, target_tier")
+        .select("id, name, message_text, target_tier, target_type")
         .eq("agent", agentName)
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 
-      const msg1Template = templates?.find(t => t.name === funnel1Name) || templates?.[0];
+      // Template mapping by seller type
+      const templatePrefix = asset_type === "cars" ? "cars_" : "property_";
+      const fallbackTemplate = templates?.[0];
 
       // Generate messages and queue
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maksab.vercel.app";
@@ -144,8 +145,14 @@ export async function POST(req: NextRequest) {
         if (queuedIds.has(seller.id)) continue;
         if (queued >= limit) break;
 
-        // Message 1: simple intro — no link needed
-        let messageText = msg1Template?.message_text || `أهلاً ${seller.name || ""} 👋\nشفنا إعلاناتك على دوبيزل\nفريق مكسب يقدر يكتب إعلاناتك ويسجلك في دقايق — مجاناً\nيهمك؟`;
+        // Pick template by seller type: individual/broker/agency
+        const sellerType = seller.detected_account_type || "individual";
+        const matchedTemplate = templates?.find(t => t.name === `${templatePrefix}${sellerType}`)
+          || templates?.find(t => t.target_tier === sellerType || t.target_type === sellerType)
+          || fallbackTemplate;
+
+        let messageText = matchedTemplate?.message_text
+          || `أهلاً ${seller.name || ""} 👋\nشفنا إعلاناتك على دوبيزل\nفريق مكسب يقدر يكتب إعلاناتك ويسجلك في دقايق — مجاناً\nيهمك؟`;
         messageText = messageText
           .replace(/\{\{name\}\}/g, seller.name || "")
           .replace(/\{\{platform\}\}/g, seller.source_platform || "دوبيزل");
