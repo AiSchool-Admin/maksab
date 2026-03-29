@@ -126,15 +126,16 @@ export async function POST(req: NextRequest) {
 
       for (const seller of sellers) {
         // Check not already queued
-        const { count: existing } = await sb
+        const { count: existing, error: checkErr } = await sb
           .from("acquisition_queue")
           .select("id", { count: "exact", head: true })
           .eq("seller_id", seller.id)
           .in("status", ["queued", "sent"]);
 
+        if (checkErr) {
+          console.error(`[Acquisition] Check error: ${checkErr.message}`);
+        }
         if (existing && existing > 0) continue;
-
-        const magicLink = `${baseUrl}/join?phone=${encodeURIComponent(seller.phone)}&seller=${seller.id}&ref=${agentName}`;
 
         // Message 1: simple intro — no link needed
         let messageText = msg1Template?.message_text || `أهلاً ${seller.name || ""} 👋\nشفنا إعلاناتك على دوبيزل\nفريق مكسب يقدر يكتب إعلاناتك ويسجلك في دقايق — مجاناً\nيهمك؟`;
@@ -142,21 +143,26 @@ export async function POST(req: NextRequest) {
           .replace(/\{\{name\}\}/g, seller.name || "")
           .replace(/\{\{platform\}\}/g, seller.source_platform || "دوبيزل");
 
-        await sb.from("acquisition_queue").insert({
+        const { error: insertErr } = await sb.from("acquisition_queue").insert({
           seller_id: seller.id,
           asset_type,
           message_number: 1,
           message_text: messageText,
-          magic_link: magicLink,
+          magic_link: null,
           template_id: msg1Template?.id || null,
           status: "queued",
           mode,
           agent_name: agentName,
         });
 
+        if (insertErr) {
+          console.error(`[Acquisition] Insert error for ${seller.id}: ${insertErr.message}`);
+          continue;
+        }
         queued++;
       }
 
+      console.error(`[Acquisition] queue_new done: ${queued} queued from ${sellers.length} sellers`);
       return NextResponse.json({ queued, total_sellers: sellers.length, mode });
     }
 
