@@ -88,7 +88,16 @@ export async function POST(req: NextRequest) {
     if (action === "queue_new") {
       const limit = body.limit || 20;
 
-      // Get sellers with phone, pipeline_status = 'phone_found' (new, not yet contacted)
+      // Get sellers with phone, pipeline_status = 'phone_found', not already queued
+      // First get IDs already in queue to exclude them
+      const { data: alreadyQueued } = await sb
+        .from("acquisition_queue")
+        .select("seller_id")
+        .eq("asset_type", asset_type)
+        .in("status", ["queued", "sent"]);
+
+      const queuedIds = new Set((alreadyQueued || []).map(q => q.seller_id));
+
       const { data: sellers, error: sellerErr } = await sb
         .from("ahe_sellers")
         .select("id, name, phone, detected_account_type, total_listings_seen, source_platform, pipeline_status")
@@ -97,7 +106,7 @@ export async function POST(req: NextRequest) {
         .not("phone", "is", null)
         .eq("pipeline_status", "phone_found")
         .order("whale_score", { ascending: false })
-        .limit(limit);
+        .limit(limit + queuedIds.size); // fetch extra to compensate for skips
 
       console.error(`[Acquisition] queue_new: ${sellers?.length || 0} sellers found, error: ${sellerErr?.message || "none"}`);
 
@@ -125,17 +134,9 @@ export async function POST(req: NextRequest) {
       let queued = 0;
 
       for (const seller of sellers) {
-        // Check not already queued
-        const { count: existing, error: checkErr } = await sb
-          .from("acquisition_queue")
-          .select("id", { count: "exact", head: true })
-          .eq("seller_id", seller.id)
-          .in("status", ["queued", "sent"]);
-
-        if (checkErr) {
-          console.error(`[Acquisition] Check error: ${checkErr.message}`);
-        }
-        if (existing && existing > 0) continue;
+        // Skip if already queued
+        if (queuedIds.has(seller.id)) continue;
+        if (queued >= limit) break;
 
         // Message 1: simple intro — no link needed
         let messageText = msg1Template?.message_text || `أهلاً ${seller.name || ""} 👋\nشفنا إعلاناتك على دوبيزل\nفريق مكسب يقدر يكتب إعلاناتك ويسجلك في دقايق — مجاناً\nيهمك؟`;
