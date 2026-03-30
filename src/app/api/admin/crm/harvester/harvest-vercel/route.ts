@@ -470,8 +470,15 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       });
     }
 
-    // Extract structured data from title
+    // Extract structured data from title + URL
     const titleData = extractFromTitle(listing.title || "", listing.url || "");
+
+    // Also detect listing_type from scope URL (rent scopes → all listings are rent)
+    const scopeUrl = (scope.base_url || "").toLowerCase();
+    let listingType = titleData.listingType;
+    if (scopeUrl.includes("for-rent") || scopeUrl.includes("purpose=rent") || scopeUrl.includes("/rent/") || scopeUrl.includes("c=2")) {
+      listingType = "rent";
+    }
 
     // Insert listing
     const { error: insertErr } = await supabase.from("ahe_listings").insert({
@@ -503,7 +510,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       phone_source: phone ? "title" : null,
       detected_brand: titleData.brand || null,
       detected_model: titleData.model || null,
-      listing_type: titleData.listingType,
+      listing_type: listingType,
     });
 
     if (insertErr) {
