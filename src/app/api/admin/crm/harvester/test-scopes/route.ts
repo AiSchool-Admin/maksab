@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
     const [totalRes, alexRes, phoneRes] = await Promise.all([
       sb.from("ahe_listings").select("id", { count: "exact", head: true }).eq("scope_id", scope.id),
       sb.from("ahe_listings").select("id", { count: "exact", head: true }).eq("scope_id", scope.id)
-        .or("governorate.ilike.%اسكندري%,governorate.ilike.%alexandria%"),
+        .eq("governorate", "الإسكندرية"),
       sb.from("ahe_listings").select("id", { count: "exact", head: true }).eq("scope_id", scope.id)
         .not("extracted_phone", "is", null),
     ]);
