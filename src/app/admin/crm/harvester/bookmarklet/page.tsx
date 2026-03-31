@@ -775,10 +775,10 @@ console.log('Maksab SemsarMasr: Found',cards.length,'ListCont cards');
 for(var i=0;i<cards.length;i++){var card=cards[i];var link=card.querySelector('a[href*="/3akarat/"]');if(!link)continue;var url=link.href;if(!url||seenUrls[url])continue;seenUrls[url]=true;
 var cardText=card.textContent||'';
 var titleEl=card.querySelector('.Intcell,.ListInfo');var title=titleEl?titleEl.textContent.trim():'';title=title.replace(/^\\d+/,'').trim();if(!title||title.length<5)continue;
-var priceMatch=cardText.match/([\\d,]+)\\s*جنيه/);var price=priceMatch?parseInt(priceMatch[1].replace(/,/g,'')):null;
+var priceMatch=cardText.match(/([\\d,]+)\\s*جنيه/);var price=priceMatch?parseInt(priceMatch[1].replace(/,/g,'')):null;
 var img=card.querySelector('img[src*=".jpg"],img[src*=".jpeg"],img[src*=".png"],img[src*=".webp"]');var thumbnail=img?img.src:null;
 var locMatch=cardText.match(/(الإسكندرية|اسكندرية|سموحة|سيدي بشر|المنتزه|العجمي|رشدي|لوران|ستانلي|جليم|محرم بك|كفر عبد|المعمورة|المندرة|ميامي|العصافرة|بحري|طوسون|العطارين|المنشية)/);var location=locMatch?locMatch[1]+' — الإسكندرية':'الإسكندرية';
-var areaMatch=cardText.match/(\\d+)\\s*(?:م |متر|m²)/);
+var areaMatch=cardText.match(/(\\d+)\\s*(?:م |متر|m²)/);
 var isRent=cardText.indexOf('إيجار')>-1||cardText.indexOf('للإيجار')>-1||window.location.href.indexOf('purpose=rent')>-1;
 var isFeatured=cardText.indexOf('مميز')>-1||cardText.indexOf('مُميز')>-1;
 listings.push({url:url,title:title+(areaMatch?' — '+areaMatch[1]+'م²':''),price:price,currency:'EGP',thumbnailUrl:thumbnail,location:location,dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:isFeatured,supportsExchange:false,isNegotiable:cardText.indexOf('تفاوض')>-1,category:'properties'});}
