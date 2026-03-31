@@ -1328,6 +1328,13 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
     const governorate = governorateToArabic(loc.governorate) || scope.governorate;
     const city = loc.city || scope.city;
 
+    // Hard check: only insert Alexandria listings
+    const govCheck = (governorate || '').toLowerCase();
+    if (!govCheck.includes('الإسكندرية') && !govCheck.includes('اسكندري') && !govCheck.includes('alexandria')) {
+      console.log(`[Filter] REJECT non-Alex at insert: gov="${governorate}" — "${listing.title?.substring(0, 50)}"`);
+      continue;
+    }
+
     // Upsert seller — create even without profile URL (use name + governorate as fallback key)
     let aheSellerId: string | null = null;
     let isNewSeller = false;
