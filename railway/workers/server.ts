@@ -26,19 +26,16 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
 const VERCEL_HARVEST_URL = process.env.VERCEL_HARVEST_URL || ""; // e.g. https://maksab.vercel.app/api/admin/crm/harvester/harvest-vercel
 
-// Platforms that should be harvested via Vercel (Railway IPs blocked by WAF,
-// or Railway lacks the proper parser — only Dubizzle is parsed locally)
+// Platforms that should be harvested via Vercel (Railway IPs blocked by WAF)
+// hatla2ee, contactcars, semsarmasr removed — both Vercel AND Railway blocked (403)
+// They will try Railway locally first, then fail gracefully
 const VERCEL_DELEGATED_PLATFORMS = [
   "opensooq",
   "aqarmap",
   "dowwr",
-  "hatla2ee",
-  "contactcars",
-  "carsemsar",
   "propertyfinder",
   "yallamotor",
   "olx",
-  "semsarmasr",
 ];
 
 const BROWSER_HEADERS: Record<string, string> = {
