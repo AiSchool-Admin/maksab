@@ -32,12 +32,13 @@ interface AheScope {
   is_active: boolean;
 }
 
-type BookmarkletPlatform = "dubizzle" | "hatla2ee" | "contactcars";
+type BookmarkletPlatform = "dubizzle" | "hatla2ee" | "contactcars" | "semsarmasr";
 
 const PLATFORM_INFO: Record<BookmarkletPlatform, { name: string; nameAr: string; domain: string; color: string }> = {
   dubizzle: { name: "Dubizzle", nameAr: "دوبيزل", domain: "dubizzle.com.eg", color: "#E53935" },
   hatla2ee: { name: "Hatla2ee", nameAr: "هتلاقي", domain: "eg.hatla2ee.com", color: "#1565C0" },
   contactcars: { name: "ContactCars", nameAr: "كونتاكت كارز", domain: "contactcars.com", color: "#2E7D32" },
+  semsarmasr: { name: "SemsarMasr", nameAr: "سمسار مصر", domain: "semsarmasr.com", color: "#E65100" },
 };
 
 export default function BookmarkletPage() {
@@ -625,6 +626,7 @@ function buildBookmarkletForPlatform(platform: BookmarkletPlatform, appUrl: stri
   switch (platform) {
     case "hatla2ee": return buildHatla2eeBookmarklet(appUrl, token, scopeCode);
     case "contactcars": return buildContactCarsBookmarklet(appUrl, token, scopeCode);
+    case "semsarmasr": return buildSemsarMasrBookmarklet(appUrl, token, scopeCode);
     default: return buildDubizzleBookmarklet(appUrl, token, scopeCode);
   }
 }
@@ -752,6 +754,37 @@ console.log('Maksab ContactCars: Extracted',listings.length,'listings');return l
 var listings=extractListings();
 if(listings.length===0){alert('لم يتم العثور على إعلانات سيارات\\n\\nتأكد إنك على صفحة قوائم سيارات في ContactCars\\ncontactcars.com/en/cars-for-sale');return;}
 var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'contactcars-cards',scope_code:SCOPE||null,platform:'contactcars'});
+${buildSendCode()}
+})();
+`.trim().replace(/\n\s*/g, '');
+  return `javascript:${encodeURIComponent(code)}`;
+}
+
+/**
+ * SemsarMasr Bookmarklet — semsarmasr.com (عقارات)
+ */
+function buildSemsarMasrBookmarklet(appUrl: string, token: string, scopeCode: string): string {
+  const code = `
+(function(){
+var MAKSAB='${appUrl}';var TOKEN='${token}';var SCOPE='${scopeCode}';var PLATFORM='semsarmasr';
+if(!window.location.hostname.includes('semsarmasr')){alert('\\u274C هذا الـ Bookmarklet خاص بموقع سمسار مصر\\n\\nافتح semsarmasr.com وجرب تاني');return;}
+function extractListings(){var listings=[];var seenUrls={};
+var links=document.querySelectorAll('a[href*="/3aqar/"],a[href*="/listing/"],a[href*="/property/"]');
+console.log('Maksab SemsarMasr: Found',links.length,'property links');
+for(var i=0;i<links.length;i++){var a=links[i];var url=a.href;if(!url||seenUrls[url])continue;if(url.includes('/search')||url.includes('/filter'))continue;seenUrls[url]=true;
+var card=a.closest('tr,.card,[class*=listing],[class*=card],[class*=property],[class*=result]')||a.parentElement.parentElement;if(!card)card=a.parentElement;var cardText=card?card.textContent:'';
+var title=a.getAttribute('title')||a.textContent.trim();if(!title||title.length<3){var h=card?card.querySelector('h2,h3,h4,h5,[class*=title]'):null;if(h)title=h.textContent.trim();}if(!title||title.length<3)continue;
+var priceMatch=cardText.match(/([\\d,\\.]+)\\s*(?:EGP|LE|جنيه|ج\\.م|جم)/i);var price=priceMatch?parseInt(priceMatch[1].replace(/[,\\.]/g,'')):null;if(!price){var priceEl=card?card.querySelector('[class*=price],[class*=Price]'):null;if(priceEl){var pt=priceEl.textContent.replace(/[^\\d]/g,'');if(pt)price=parseInt(pt);}}
+var img=card?card.querySelector('img[src*=".jpg"],img[src*=".jpeg"],img[src*=".png"],img[src*=".webp"],img[data-src]'):null;var thumbnail=img?(img.src||img.getAttribute('data-src')):null;
+var locEl=card?card.querySelector('[class*=location],[class*=city],[class*=area],[class*=address]'):null;var location=locEl?locEl.textContent.trim():'';
+var areaMatch=cardText.match(/(\\d+)\\s*(?:م|متر|m²|sqm)/i);
+var isBroker=cardText.indexOf('وسيط')>-1||cardText.indexOf('سمسار')>-1||cardText.indexOf('شركة')>-1;
+listings.push({url:url,title:title+(areaMatch?' — '+areaMatch[1]+'م²':''),price:price,currency:'EGP',thumbnailUrl:thumbnail,location:location,dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:false,isBusiness:isBroker,isFeatured:cardText.indexOf('مميز')>-1,supportsExchange:false,isNegotiable:false,category:'properties'});}
+if(listings.length===0){var rows=document.querySelectorAll('table tr');for(var r=1;r<rows.length;r++){var row=rows[r];var rowLink=row.querySelector('a[href]');if(!rowLink)continue;var rurl=rowLink.href;if(!rurl||seenUrls[rurl])continue;seenUrls[rurl]=true;var rowText=row.textContent;var rtitle=rowLink.textContent.trim();if(!rtitle||rtitle.length<3)continue;var rp=rowText.match(/([\\d,]+)/);listings.push({url:rurl,title:rtitle,price:rp?parseInt(rp[1].replace(/,/g,'')):null,currency:'EGP',thumbnailUrl:null,location:'الإسكندرية',dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:false,supportsExchange:false,isNegotiable:false,category:'properties'});}}
+console.log('Maksab SemsarMasr: Extracted',listings.length,'listings');return listings;}
+var listings=extractListings();
+if(listings.length===0){alert('لم يتم العثور على إعلانات عقارات\\n\\nتأكد إنك على صفحة قوائم عقارات في سمسار مصر');return;}
+var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'semsarmasr-cards',scope_code:SCOPE||null,platform:'semsarmasr'});
 ${buildSendCode()}
 })();
 `.trim().replace(/\n\s*/g, '');
