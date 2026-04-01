@@ -1396,7 +1396,7 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
           .from("ahe_scopes")
           .update({
             server_fetch_blocked: true,
-            server_fetch_blocked_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq("id", scope.id);
         break;
