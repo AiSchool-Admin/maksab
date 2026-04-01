@@ -8,7 +8,6 @@
 UPDATE ahe_scopes
 SET is_paused = false,
     server_fetch_blocked = false,
-    server_fetch_blocked_at = NULL,
     is_active = true,
     consecutive_failures = 0,
     -- Set next_harvest_at to now so they get picked up immediately
