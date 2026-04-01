@@ -279,6 +279,155 @@ function parseDubizzleHtml(html: string): ParsedListing[] {
   return listings;
 }
 
+// ─── Cheerio-based SemsarMasr Parser ────────────────────────
+// Extracts listings from .ListCont cards + phone numbers from inline JSON
+function parseSemsarMasrHtml(html: string): ParsedListing[] {
+  const $ = cheerio.load(html);
+  const listings: ParsedListing[] = [];
+  const seenIds = new Set<string>();
+
+  // Strategy 0: Extract phone numbers + seller names from inline JSON
+  // Format: {'AdID':'3025616','name':'moamen','AdTitle':'...','IntlPhone':'+201212717373','AdPhone':'+201212717373','Image':''}
+  const phoneMap: Record<string, string> = {};
+  const nameMap: Record<string, string> = {};
+  const jsonRe = /'AdID':'(\d+)','name':'([^']*)','AdTitle':'([^']*)','IntlPhone':'([^']*)','AdPhone':'([^']*)'/g;
+  let m: RegExpExecArray | null;
+  while ((m = jsonRe.exec(html)) !== null) {
+    const adId = m[1];
+    const selName = m[2]?.trim();
+    const intlPhone = m[4]?.trim();
+    const adPhone = m[5]?.trim();
+    const phone = (intlPhone || adPhone || "").replace(/[^\d+]/g, "");
+    if (phone && phone.length >= 10) phoneMap[adId] = phone;
+    if (selName) nameMap[adId] = selName;
+  }
+  console.log(`[SemsarMasr Parser] Found ${Object.keys(phoneMap).length} phones from inline JSON`);
+
+  // Strategy 1: .ListCont cards
+  const cards = $(".ListCont, .Prem_ListDesStyle, [class*=ListCont]");
+  console.log(`[SemsarMasr Parser] Found ${cards.length} cards`);
+
+  cards.each(function () {
+    const card = $(this);
+    const link = card.find('a[href*="/3akarat/"]').first();
+    if (!link.length) return;
+
+    const url = link.attr("href") || "";
+    if (!url) return;
+
+    // Extract AdID for dedup and phone lookup
+    const adIdMatch = url.match(/\/3akarat\/(\d+)/);
+    const adId = adIdMatch ? adIdMatch[1] : null;
+    if (adId) {
+      if (seenIds.has(adId)) return;
+      seenIds.add(adId);
+    }
+
+    // Make URL absolute
+    const fullUrl = url.startsWith("http") ? url : `https://www.semsarmasr.com${url}`;
+
+    const cardText = card.text() || "";
+    const titleEl = card.find(".Intcell, .ListInfo").first();
+    let title = titleEl.text()?.trim() || "";
+    title = title.replace(/^\d+/, "").trim();
+    if (!title || title.length < 5) return;
+
+    // Price
+    const priceMatch = cardText.match(/([\d,]+)\s*جنيه/);
+    const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, "")) : null;
+
+    // Thumbnail
+    const img = card.find('img[src*=".jpg"], img[src*=".jpeg"], img[src*=".png"], img[src*=".webp"]').first();
+    const thumbnail = img.attr("src") || null;
+
+    // Location
+    const locMatch = cardText.match(/(الإسكندرية|اسكندرية|سموحة|سيدي بشر|المنتزه|العجمي|رشدي|لوران|ستانلي|جليم|محرم بك|كفر عبد|المعمورة|المندرة|ميامي|العصافرة|بحري|طوسون|العطارين|المنشية)/);
+    const location = locMatch ? `${locMatch[1]} — الإسكندرية` : "الإسكندرية";
+
+    // Area
+    const areaMatch = cardText.match(/(\d+)\s*(?:م |متر|m²)/);
+    const fullTitle = title + (areaMatch ? ` — ${areaMatch[1]}م²` : "");
+
+    // Phone from inline JSON
+    const phone = adId && phoneMap[adId] ? phoneMap[adId] : null;
+    const sellerName = adId && nameMap[adId] ? nameMap[adId] : null;
+
+    listings.push({
+      url: fullUrl,
+      sourceId: adId || fullUrl,
+      title: fullTitle,
+      price,
+      thumbnailUrl: thumbnail,
+      location,
+      dateText: "",
+      sellerName,
+      sellerProfileUrl: null,
+      isVerified: false,
+      isBusiness: false,
+      isFeatured: cardText.includes("مميز") || cardText.includes("مُميز"),
+      supportsExchange: false,
+      isNegotiable: cardText.includes("تفاوض"),
+      extractedPhone: phone,
+      phoneSource: phone ? "inline_json" : null,
+    });
+  });
+
+  // Strategy 2: Fallback — any /3akarat/ links not in cards
+  if (listings.length === 0) {
+    $('a[href*="/3akarat/"]').each(function () {
+      const a = $(this);
+      const aurl = a.attr("href") || "";
+      if (!aurl || !/\/3akarat\/\d/.test(aurl)) return;
+      const aIdM = aurl.match(/\/3akarat\/(\d+)/);
+      const aId = aIdM ? aIdM[1] : null;
+      if (aId && seenIds.has(aId)) return;
+      if (aId) seenIds.add(aId);
+
+      const fullUrl = aurl.startsWith("http") ? aurl : `https://www.semsarmasr.com${aurl}`;
+      const atitle = a.text()?.trim().replace(/^\d+/, "").trim();
+      if (!atitle || atitle.length < 5) return;
+
+      const pText = a.parent()?.text() || "";
+      const ap = pText.match(/([\d,]+)\s*جنيه/);
+      const phone = aId && phoneMap[aId] ? phoneMap[aId] : null;
+
+      listings.push({
+        url: fullUrl,
+        sourceId: aId || fullUrl,
+        title: atitle,
+        price: ap ? parseInt(ap[1].replace(/,/g, "")) : null,
+        thumbnailUrl: null,
+        location: "الإسكندرية",
+        dateText: "",
+        sellerName: aId && nameMap[aId] ? nameMap[aId] : null,
+        sellerProfileUrl: null,
+        isVerified: false,
+        isBusiness: false,
+        isFeatured: false,
+        supportsExchange: false,
+        isNegotiable: false,
+        extractedPhone: phone,
+        phoneSource: phone ? "inline_json" : null,
+      });
+    });
+  }
+
+  const withPhone = listings.filter((l) => l.extractedPhone).length;
+  console.log(`[SemsarMasr Parser] Extracted ${listings.length} unique listings, ${withPhone} with phone numbers`);
+  return listings;
+}
+
+// ─── Platform-based Parser Router ───────────────────────────
+function parseHtmlForPlatform(html: string, platform: string): ParsedListing[] {
+  switch (platform) {
+    case "semsarmasr":
+    case "carsemsar":
+      return parseSemsarMasrHtml(html);
+    default:
+      return parseDubizzleHtml(html);
+  }
+}
+
 // ─── Location Mapper (minimal — matches the src/lib version) ──
 const GOVERNORATE_MAP: Record<string, string> = {
   القاهرة: "cairo",
@@ -489,6 +638,20 @@ const PLATFORM_HEADERS: Record<string, Record<string, string>> = {
     "Sec-Fetch-Dest": "document",
     "Sec-Fetch-Mode": "navigate",
     "Sec-Fetch-Site": "cross-site",
+  },
+  semsarmasr: {
+    ...BROWSER_HEADERS,
+    "Referer": "https://www.google.com.eg/",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "cross-site",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-CH-UA": '"Chromium";v="131", "Not_A Brand";v="24"',
+    "Sec-CH-UA-Mobile": "?0",
+    "Sec-CH-UA-Platform": '"Windows"',
   },
 };
 
@@ -1252,8 +1415,8 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
         break;
       }
 
-      const listings = parseDubizzleHtml(html);
-      console.log(`[Harvest] 📊 Page ${page}: ${listings.length} listings from ${(html.match(/<article/g) || []).length} articles`);
+      const listings = parseHtmlForPlatform(html, scope.source_platform || "dubizzle");
+      console.log(`[Harvest] 📊 Page ${page}: ${listings.length} listings (platform: ${scope.source_platform})`);
 
       if (listings.length === 0) {
         if (page === 1) {
