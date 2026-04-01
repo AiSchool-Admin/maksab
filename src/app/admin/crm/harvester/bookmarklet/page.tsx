@@ -769,10 +769,16 @@ function buildSemsarMasrBookmarklet(appUrl: string, token: string, scopeCode: st
 var MAKSAB='${appUrl}';var TOKEN='${token}';var SCOPE='${scopeCode}';var PLATFORM='semsarmasr';
 if(!window.location.hostname.includes('semsarmasr')){alert('\\u274C هذا الـ Bookmarklet خاص بموقع سمسار مصر\\n\\nافتح semsarmasr.com وجرب تاني');return;}
 function extractListings(){var listings=[];var seenUrls={};
+/* Strategy 0: Extract phone numbers from inline JSON in HTML */
+var phoneMap={};var nameMap={};var html=document.body.innerHTML;
+var jsonRe=/'AdID':'(\\d+)','name':'([^']*)','AdTitle':'([^']*)','IntlPhone':'([^']*)','AdPhone':'([^']*)'/g;
+var m;while((m=jsonRe.exec(html))!==null){var adId=m[1];var selName=m[2].trim();var intlPhone=m[4].trim();var adPhone=m[5].trim();var phone=intlPhone||adPhone;if(phone){phone=phone.replace(/[^\\d+]/g,'');phoneMap[adId]=phone;}if(selName){nameMap[adId]=selName;}}
+console.log('Maksab SemsarMasr: Found',Object.keys(phoneMap).length,'phones from inline JSON');
 /* Strategy 1: ListCont cards (main SemsarMasr layout) */
 var cards=document.querySelectorAll('.ListCont,.Prem_ListDesStyle,[class*=ListCont]');
 console.log('Maksab SemsarMasr: Found',cards.length,'ListCont cards');
 for(var i=0;i<cards.length;i++){var card=cards[i];var link=card.querySelector('a[href*="/3akarat/"]');if(!link)continue;var url=link.href;if(!url||seenUrls[url])continue;seenUrls[url]=true;
+var adIdMatch=url.match(/\\/3akarat\\/(\\d+)/);var adId=adIdMatch?adIdMatch[1]:null;
 var cardText=card.textContent||'';
 var titleEl=card.querySelector('.Intcell,.ListInfo');var title=titleEl?titleEl.textContent.trim():'';title=title.replace(/^\\d+/,'').trim();if(!title||title.length<5)continue;
 var priceMatch=cardText.match(/([\\d,]+)\\s*جنيه/);var price=priceMatch?parseInt(priceMatch[1].replace(/,/g,'')):null;
@@ -781,12 +787,17 @@ var locMatch=cardText.match(/(الإسكندرية|اسكندرية|سموحة|�
 var areaMatch=cardText.match(/(\\d+)\\s*(?:م |متر|m²)/);
 var isRent=cardText.indexOf('إيجار')>-1||cardText.indexOf('للإيجار')>-1||window.location.href.indexOf('purpose=rent')>-1;
 var isFeatured=cardText.indexOf('مميز')>-1||cardText.indexOf('مُميز')>-1;
-listings.push({url:url,title:title+(areaMatch?' — '+areaMatch[1]+'م²':''),price:price,currency:'EGP',thumbnailUrl:thumbnail,location:location,dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:isFeatured,supportsExchange:false,isNegotiable:cardText.indexOf('تفاوض')>-1,category:'properties'});}
+var sellerPhone=adId&&phoneMap[adId]?phoneMap[adId]:null;
+var sellerName=adId&&nameMap[adId]?nameMap[adId]:null;
+listings.push({url:url,title:title+(areaMatch?' — '+areaMatch[1]+'م²':''),price:price,currency:'EGP',thumbnailUrl:thumbnail,location:location,dateText:'',sellerName:sellerName,sellerPhone:sellerPhone,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:isFeatured,supportsExchange:false,isNegotiable:cardText.indexOf('تفاوض')>-1,category:'properties'});}
 /* Strategy 2: any link to /3akarat/DIGITS/ */
-if(listings.length===0){var links=document.querySelectorAll('a[href*="/3akarat/"]');for(var j=0;j<links.length;j++){var a=links[j];var aurl=a.href;if(!aurl||seenUrls[aurl]||!/\\/3akarat\\/\\d/.test(aurl))continue;seenUrls[aurl]=true;var parent=a.parentElement;var pText=parent?parent.textContent:'';var atitle=a.textContent.trim();if(!atitle||atitle.length<5)continue;atitle=atitle.replace(/^\\d+/,'').trim();var ap=pText.match(/([\\d,]+)\\s*جنيه/);listings.push({url:aurl,title:atitle,price:ap?parseInt(ap[1].replace(/,/g,'')):null,currency:'EGP',thumbnailUrl:null,location:'الإسكندرية',dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:false,supportsExchange:false,isNegotiable:false,category:'properties'});}}
-console.log('Maksab SemsarMasr: Extracted',listings.length,'listings');return listings;}
+if(listings.length===0){var links=document.querySelectorAll('a[href*="/3akarat/"]');for(var j=0;j<links.length;j++){var a=links[j];var aurl=a.href;if(!aurl||seenUrls[aurl]||!/\\/3akarat\\/\\d/.test(aurl))continue;seenUrls[aurl]=true;var aIdM=aurl.match(/\\/3akarat\\/(\\d+)/);var aId=aIdM?aIdM[1]:null;var parent=a.parentElement;var pText=parent?parent.textContent:'';var atitle=a.textContent.trim();if(!atitle||atitle.length<5)continue;atitle=atitle.replace(/^\\d+/,'').trim();var ap=pText.match(/([\\d,]+)\\s*جنيه/);listings.push({url:aurl,title:atitle,price:ap?parseInt(ap[1].replace(/,/g,'')):null,currency:'EGP',thumbnailUrl:null,location:'الإسكندرية',dateText:'',sellerName:aId&&nameMap[aId]?nameMap[aId]:null,sellerPhone:aId&&phoneMap[aId]?phoneMap[aId]:null,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:false,supportsExchange:false,isNegotiable:false,category:'properties'});}}
+var withPhone=listings.filter(function(l){return l.sellerPhone;}).length;
+console.log('Maksab SemsarMasr: Extracted',listings.length,'listings,',withPhone,'with phone numbers');return listings;}
 var listings=extractListings();
 if(listings.length===0){alert('لم يتم العثور على إعلانات عقارات\\n\\nتأكد إنك على صفحة قوائم عقارات في سمسار مصر');return;}
+var withPhone=listings.filter(function(l){return l.sellerPhone;}).length;
+alert('\\u2705 تم العثور على '+listings.length+' إعلان\\n\\u260E '+withPhone+' إعلان مع رقم تليفون\\n\\nجاري الإرسال...');
 var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'semsarmasr-listcont',scope_code:SCOPE||null,platform:'semsarmasr'});
 ${buildSendCode()}
 })();
