@@ -186,6 +186,7 @@ interface BookmarkletListing {
   thumbnailUrl: string | null;
   dateText: string;
   sellerName: string | null;
+  sellerPhone?: string | null;
   sellerProfileUrl?: string | null;
   isVerified?: boolean;
   isBusiness?: boolean;
@@ -345,10 +346,14 @@ export async function POST(req: NextRequest) {
         // Map location
         const location = mapLocation(listing.location || "", sourcePlatform);
 
-        // Extract phone from description if available
-        const phone = listing.description
-          ? extractPhone(listing.description)
-          : null;
+        // Extract phone: prefer sellerPhone from bookmarklet, fallback to description extraction
+        const rawPhone = listing.sellerPhone
+          ? listing.sellerPhone.replace(/[^\d+]/g, '')
+          : listing.description
+            ? extractPhone(listing.description)
+            : null;
+        const phone = rawPhone && rawPhone.length >= 10 ? rawPhone : null;
+        const phoneSource = listing.sellerPhone ? "bookmarklet_inline" : phone ? "description" : null;
 
         // Upsert seller if we have info
         let sellerId: string | null = null;
@@ -383,7 +388,7 @@ export async function POST(req: NextRequest) {
                 primary_governorate: location.governorate || null,
                 total_listings_seen: 1,
                 priority_score: phone ? 25 : 0,
-                pipeline_status: "discovered",
+                pipeline_status: phone ? "phone_found" : "discovered",
               })
               .select("id")
               .single();
@@ -417,7 +422,7 @@ export async function POST(req: NextRequest) {
           seller_is_business: listing.isBusiness || false,
           ahe_seller_id: sellerId,
           extracted_phone: phone,
-          phone_source: phone ? "description" : null,
+          phone_source: phoneSource,
         });
 
         newCount++;
