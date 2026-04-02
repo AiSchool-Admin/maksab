@@ -655,11 +655,11 @@ window.addEventListener('message',function handler(e){if(e.origin!==MAKSAB)retur
 function buildAutoHarvestEngine(): string {
   return `
 function sendDirect(listings,pageNum,totalSoFar){
-  return fetch(MAKSAB+'/api/admin/crm/harvester/receive-bookmarklet',{
+  return fetch(MAKSAB+'/api/admin/crm/harvester/receive-bookmarklet?token='+encodeURIComponent(TOKEN),{
     method:'POST',
-    headers:{'Content-Type':'text/plain','x-bookmarklet-token':TOKEN},
+    headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet_auto',strategy:PLATFORM+'-autopaginate',scope_code:SCOPE||null,platform:PLATFORM})
-  }).then(function(r){return r.json();}).then(function(d){
+  }).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(d){
     return {new_count:d.new||0,duplicate:d.duplicate||0,total:totalSoFar+(d.new||0)};
   }).catch(function(e){return {new_count:0,duplicate:0,total:totalSoFar,error:e.message};});
 }
@@ -702,6 +702,7 @@ function runAutoHarvest(maxPages){
   if(listings.length===0){sessionStorage.removeItem('maksab_auto');showProgress('\\u2705 انتهى الحصاد التلقائي — '+totalNew+' إعلان جديد (لا توجد إعلانات في صفحة '+currentPage+')','#1B7A3D');return;}
   showProgress('\\u{1F4E4} صفحة '+currentPage+' — جاري إرسال '+listings.length+' إعلان...','#E65100');
   sendDirect(listings,currentPage,totalNew).then(function(r){
+    if(r.error){showProgress('\\u274C خطأ في الإرسال: '+r.error+' — صفحة '+currentPage+' ('+listings.length+' إعلان)','#DC2626');return;}
     totalNew=r.total;totalDup+=r.duplicate;
     showProgress('\\u2705 صفحة '+currentPage+' — '+r.new_count+' جديد، '+r.duplicate+' مكرر (إجمالي: '+totalNew+' جديد)','#1B7A3D');
     if(currentPage>=maxPages){sessionStorage.removeItem('maksab_auto');showProgress('\\u{1F389} انتهى! '+maxPages+' صفحات — '+totalNew+' إعلان جديد، '+totalDup+' مكرر','#1B7A3D');return;}
