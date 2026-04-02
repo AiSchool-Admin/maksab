@@ -5,7 +5,7 @@
  *
  * Security:
  *   - Auth: كل bookmarklet فيه token فريد للموظف
- *   - No CORS needed: requests come from same-origin popup (/admin/crm/harvester/receive)
+ *   - CORS: allowed for cross-origin bookmarklet requests (auto-harvest sends from external sites)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -15,6 +15,27 @@ import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
 import { detectBuyRequest } from "@/lib/crm/harvester/parsers/dubizzle";
 
 export const maxDuration = 30;
+
+/** CORS headers for cross-origin bookmarklet requests */
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, x-bookmarklet-token",
+  "Access-Control-Max-Age": "86400",
+};
+
+/** Handle CORS preflight */
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: corsHeaders });
+}
+
+/** Wrap NextResponse.json with CORS headers */
+function jsonWithCors(data: unknown, init?: { status?: number }) {
+  return NextResponse.json(data, {
+    ...init,
+    headers: corsHeaders,
+  });
+}
 
 function getServiceClient() {
   return createClient(
@@ -278,7 +299,7 @@ export async function POST(req: NextRequest) {
   // ── Auth: validate bookmarklet token ──
   const employee = await validateToken(req, supabase);
   if (!employee) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: "توكن غير صالح أو مفقود — تأكد إنك بتستخدم آخر نسخة من الـ Bookmarklet" },
       { status: 401 }
     );
@@ -291,7 +312,7 @@ export async function POST(req: NextRequest) {
     const body: BookmarkletPayload = JSON.parse(rawText);
 
     if (!body.listings || !Array.isArray(body.listings) || body.listings.length === 0) {
-      return NextResponse.json(
+      return jsonWithCors(
         { error: "لا توجد إعلانات في الطلب" },
         { status: 400 }
       );
@@ -506,9 +527,9 @@ export async function POST(req: NextRequest) {
       `[AHE Bookmarklet] 📬 ${employee.employee_name}: ${result.received} listings — ${result.new} new, ${result.duplicate} dup, scope: ${scopeId || "none"}`
     );
 
-    return NextResponse.json(result);
+    return jsonWithCors(result);
   } catch (error) {
-    return NextResponse.json(
+    return jsonWithCors(
       {
         error: "خطأ في معالجة البيانات",
         details: error instanceof Error ? error.message : String(error),
