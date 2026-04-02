@@ -649,6 +649,81 @@ window.addEventListener('message',function handler(e){if(e.origin!==MAKSAB)retur
 }
 
 /**
+ * Shared auto-pagination engine for all bookmarklets
+ * Extracts current page, sends via fetch, then navigates to next page automatically
+ */
+function buildAutoHarvestEngine(): string {
+  return `
+function sendDirect(listings,pageNum,totalSoFar){
+  return fetch(MAKSAB+'/api/admin/crm/harvester/receive-bookmarklet',{
+    method:'POST',
+    headers:{'Content-Type':'text/plain','x-bookmarklet-token':TOKEN},
+    body:JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet_auto',strategy:PLATFORM+'-autopaginate',scope_code:SCOPE||null,platform:PLATFORM})
+  }).then(function(r){return r.json();}).then(function(d){
+    return {new_count:d.new||0,duplicate:d.duplicate||0,total:totalSoFar+(d.new||0)};
+  }).catch(function(e){return {new_count:0,duplicate:0,total:totalSoFar,error:e.message};});
+}
+function showProgress(msg,color){
+  var el=document.getElementById('maksab-progress');
+  if(!el){el=document.createElement('div');el.id='maksab-progress';el.style.cssText='position:fixed;top:0;left:0;right:0;background:'+(color||'#1B7A3D')+';color:white;padding:14px 24px;z-index:999999;font-family:Cairo,sans-serif;font-size:15px;direction:rtl;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);transition:background 0.3s;';document.body.appendChild(el);}
+  el.style.background=color||'#1B7A3D';el.innerHTML=msg;
+}
+function getNextPageUrl(){
+  if(PLATFORM==='semsarmasr'){
+    var url=new URL(window.location.href);
+    var p=parseInt(url.searchParams.get('p')||'1');
+    url.searchParams.set('p',p+1);
+    return url.toString();
+  }
+  if(PLATFORM==='hatla2ee'){
+    var url=window.location.href;
+    if(url.indexOf('page=')>-1){return url.replace(/page=\\d+/,'page='+(parseInt(url.match(/page=(\\d+)/)[1])+1));}
+    var pageMatch=url.match(/\\/page\\/(\\d+)/);
+    if(pageMatch){return url.replace(/\\/page\\/\\d+/,'/page/'+(parseInt(pageMatch[1])+1));}
+    return url+(url.indexOf('?')>-1?'&':'?')+'page=2';
+  }
+  if(PLATFORM==='contactcars'){
+    var url=window.location.href;
+    if(url.indexOf('page=')>-1){return url.replace(/page=\\d+/,'page='+(parseInt(url.match(/page=(\\d+)/)[1])+1));}
+    return url+(url.indexOf('?')>-1?'&':'?')+'page=2';
+  }
+  return null;
+}
+function getCurrentPage(){
+  if(PLATFORM==='semsarmasr'){return parseInt(new URL(window.location.href).searchParams.get('p')||'1');}
+  var m=window.location.href.match(/page[=/](\\d+)/);return m?parseInt(m[1]):1;
+}
+function runAutoHarvest(maxPages){
+  maxPages=maxPages||10;var currentPage=getCurrentPage();
+  var state=sessionStorage.getItem('maksab_auto');var totalNew=0;var totalDup=0;
+  if(state){try{var s=JSON.parse(state);totalNew=s.totalNew||0;totalDup=s.totalDup||0;}catch(e){}}
+  showProgress('\\u{1F504} صفحة '+currentPage+'/'+maxPages+' — جاري استخراج الإعلانات...','#1565C0');
+  var listings=extractListings();
+  if(listings.length===0){sessionStorage.removeItem('maksab_auto');showProgress('\\u2705 انتهى الحصاد التلقائي — '+totalNew+' إعلان جديد (لا توجد إعلانات في صفحة '+currentPage+')','#1B7A3D');return;}
+  showProgress('\\u{1F4E4} صفحة '+currentPage+' — جاري إرسال '+listings.length+' إعلان...','#E65100');
+  sendDirect(listings,currentPage,totalNew).then(function(r){
+    totalNew=r.total;totalDup+=r.duplicate;
+    showProgress('\\u2705 صفحة '+currentPage+' — '+r.new_count+' جديد، '+r.duplicate+' مكرر (إجمالي: '+totalNew+' جديد)','#1B7A3D');
+    if(currentPage>=maxPages){sessionStorage.removeItem('maksab_auto');showProgress('\\u{1F389} انتهى! '+maxPages+' صفحات — '+totalNew+' إعلان جديد، '+totalDup+' مكرر','#1B7A3D');return;}
+    if(r.new_count===0&&r.duplicate>3){sessionStorage.removeItem('maksab_auto');showProgress('\\u{1F389} انتهى! كل الإعلانات مكررة — '+totalNew+' جديد إجمالي','#1B7A3D');return;}
+    var nextUrl=getNextPageUrl();
+    if(!nextUrl){sessionStorage.removeItem('maksab_auto');showProgress('\\u2705 انتهى — لا توجد صفحة تالية — '+totalNew+' جديد','#1B7A3D');return;}
+    sessionStorage.setItem('maksab_auto',JSON.stringify({totalNew:totalNew,totalDup:totalDup,maxPages:maxPages,startTime:state?JSON.parse(state).startTime:Date.now()}));
+    showProgress('\\u23F3 الانتقال للصفحة '+(currentPage+1)+' خلال 3 ثواني...','#1565C0');
+    setTimeout(function(){window.location.href=nextUrl;},3000);
+  });
+}
+function checkAutoResume(){
+  var state=sessionStorage.getItem('maksab_auto');
+  if(!state)return false;
+  try{var s=JSON.parse(state);if(Date.now()-s.startTime>600000){sessionStorage.removeItem('maksab_auto');return false;}
+  showProgress('\\u{1F504} استئناف الحصاد التلقائي... ('+s.totalNew+' جديد حتى الآن)','#1565C0');
+  setTimeout(function(){runAutoHarvest(s.maxPages);},2000);return true;}catch(e){sessionStorage.removeItem('maksab_auto');return false;}
+}
+`;
+}
+
+/**
  * Dubizzle Bookmarklet (existing — article-based)
  */
 function buildDubizzleBookmarklet(appUrl: string, token: string, scopeCode: string): string {
@@ -678,28 +753,9 @@ function buildHatla2eeBookmarklet(appUrl: string, token: string, scopeCode: stri
 var MAKSAB='${appUrl}';var TOKEN='${token}';var SCOPE='${scopeCode}';var PLATFORM='hatla2ee';
 if(!window.location.hostname.includes('hatla2ee')){alert('\\u274C هذا الـ Bookmarklet خاص بموقع هتلاقي (hatla2ee.com)\\n\\nافتح eg.hatla2ee.com وجرب تاني');return;}
 ${extractionCode}
-var listings=extractListings();
-if(listings.length===0){alert('لم يتم العثور على إعلانات سيارات في هذه الصفحة\\n\\nتأكد إنك على صفحة قوائم سيارات في هتلاقي\\neg.hatla2ee.com/en/car/used-cars-for-sale');return;}
-/* Auto-harvest panel */
-if(!window._maksabAutoPanel){
-var panel=document.createElement('div');
-panel.id='maksab-auto-panel';
-panel.style.cssText='position:fixed;bottom:20px;left:20px;background:#1B5E20;color:white;padding:12px 18px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:14px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);cursor:pointer;';
-panel.innerHTML='\\u{1F504} حصاد تلقائي كل 5 دقائق <span id="maksab-auto-status" style="display:block;font-size:12px;opacity:0.8;">اضغط لتفعيل</span>';
-panel.onclick=function(){
-if(window._maksabAutoInterval){clearInterval(window._maksabAutoInterval);window._maksabAutoInterval=null;document.getElementById('maksab-auto-status').textContent='متوقف — اضغط لتفعيل';panel.style.background='#1B5E20';return;}
-window._maksabAutoInterval=setInterval(function(){
-document.getElementById('maksab-auto-status').textContent='جاري الحصاد...';
-try{var autoListings=extractListings();if(autoListings.length>0){var autoPayload=JSON.stringify({url:window.location.href,listings:autoListings,timestamp:new Date().toISOString(),source:'bookmarklet_auto',strategy:'hatla2ee-cards',scope_code:SCOPE||null,platform:'hatla2ee'});
-fetch(MAKSAB+'/api/admin/crm/harvester/receive-bookmarklet',{method:'POST',headers:{'Content-Type':'application/json'},body:autoPayload}).then(function(r){return r.json();}).then(function(d){document.getElementById('maksab-auto-status').textContent='آخر حصاد: '+(d.new_count||0)+' جديد — '+new Date().toLocaleTimeString('ar-EG');}).catch(function(e){document.getElementById('maksab-auto-status').textContent='خطأ: '+e.message;});}
-else{location.reload();}
-}catch(e){document.getElementById('maksab-auto-status').textContent='خطأ: '+e.message;}
-},300000);/* 5 minutes */
-document.getElementById('maksab-auto-status').textContent='شغّال — حصاد كل 5 دقائق';panel.style.background='#E65100';
-};
-document.body.appendChild(panel);window._maksabAutoPanel=true;}
-var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'hatla2ee-cards',scope_code:SCOPE||null,platform:'hatla2ee'});
-${buildSendCode()}
+${buildAutoHarvestEngine()}
+if(checkAutoResume())return;
+runAutoHarvest(10);
 })();
 `.trim().replace(/\n\s*/g, '');
   return `javascript:${encodeURIComponent(code)}`;
@@ -737,9 +793,7 @@ function buildContactCarsBookmarklet(appUrl: string, token: string, scopeCode: s
 var MAKSAB='${appUrl}';var TOKEN='${token}';var SCOPE='${scopeCode}';var PLATFORM='contactcars';
 if(!window.location.hostname.includes('contactcars')){alert('\\u274C هذا الـ Bookmarklet خاص بموقع ContactCars\\n\\nافتح contactcars.com وجرب تاني');return;}
 function extractListings(){var listings=[];var seenUrls={};
-/* Strategy 1: car listing cards */
 var links=document.querySelectorAll('a[href*="/car/"],a[href*="/cars/"],a[href*="/listing/"],a[href*="/en/car"]');
-console.log('Maksab ContactCars: Found',links.length,'car links');
 for(var i=0;i<links.length;i++){var a=links[i];var url=a.href;if(!url||seenUrls[url])continue;if(url.includes('/search')||url.includes('/filter')||url.includes('/compare'))continue;if(!/\\d/.test(url.split('/').pop()))continue;seenUrls[url]=true;
 var card=a.closest('.card,.listing-card,.vehicle-card,[class*=listing],[class*=card],[class*=vehicle]')||a.parentElement.parentElement;if(!card)card=a.parentElement;var cardText=card?card.textContent:'';
 var title=a.getAttribute('title')||a.textContent.trim();if(!title||title.length<3){var h=card?card.querySelector('h2,h3,h4,[class*=title]'):null;if(h)title=h.textContent.trim();}if(!title||title.length<3)continue;
@@ -748,13 +802,11 @@ var img=card?card.querySelector('img[src*=".jpg"],img[src*=".jpeg"],img[src*=".p
 var locEl=card?card.querySelector('[class*=location],[class*=city]'):null;var location=locEl?locEl.textContent.trim():'';
 var isDealer=cardText.indexOf('dealer')>-1||cardText.indexOf('معرض')>-1;
 listings.push({url:url,title:title,price:price,currency:'EGP',thumbnailUrl:thumbnail,location:location,dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:isDealer,isBusiness:isDealer,isFeatured:cardText.indexOf('featured')>-1||cardText.indexOf('مميز')>-1,supportsExchange:false,isNegotiable:cardText.indexOf('قابل للتفاوض')>-1});}
-/* Strategy 2: __NEXT_DATA__ (ContactCars may use Next.js) */
 if(listings.length===0){var nd=document.getElementById('__NEXT_DATA__');if(nd){try{var data=JSON.parse(nd.textContent);var props=data.props&&data.props.pageProps;if(props){var items=props.cars||props.listings||props.vehicles||props.data||[];if(Array.isArray(items)){for(var j=0;j<items.length;j++){var item=items[j];var iurl=item.url||item.link||(item.id?'https://contactcars.com/en/car/'+item.id:'');var ititle=item.title||((item.brand||'')+(item.model?' '+item.model:'')+(item.year?' '+item.year:''));if(iurl&&ititle&&!seenUrls[iurl]){seenUrls[iurl]=true;listings.push({url:iurl.startsWith('http')?iurl:'https://contactcars.com'+iurl,title:ititle,price:typeof item.price==='number'?item.price:null,currency:'EGP',thumbnailUrl:item.image||item.thumbnail||null,location:item.location||item.city||'',dateText:'',sellerName:null,sellerProfileUrl:null,isVerified:false,isBusiness:!!item.is_dealer,isFeatured:!!item.is_featured,supportsExchange:false,isNegotiable:false});}}}}}catch(e){}}}
-console.log('Maksab ContactCars: Extracted',listings.length,'listings');return listings;}
-var listings=extractListings();
-if(listings.length===0){alert('لم يتم العثور على إعلانات سيارات\\n\\nتأكد إنك على صفحة قوائم سيارات في ContactCars\\ncontactcars.com/en/cars-for-sale');return;}
-var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'contactcars-cards',scope_code:SCOPE||null,platform:'contactcars'});
-${buildSendCode()}
+return listings;}
+${buildAutoHarvestEngine()}
+if(checkAutoResume())return;
+runAutoHarvest(10);
 })();
 `.trim().replace(/\n\s*/g, '');
   return `javascript:${encodeURIComponent(code)}`;
@@ -794,15 +846,10 @@ var sellerName=adId&&nameMap[adId]?nameMap[adId]:null;
 listings.push({url:url,title:title+(areaMatch?' — '+areaMatch[1]+'م²':''),price:price,currency:'EGP',thumbnailUrl:thumbnail,location:location,dateText:'',sellerName:sellerName,sellerPhone:sellerPhone,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:isFeatured,supportsExchange:false,isNegotiable:cardText.indexOf('تفاوض')>-1,category:'properties'});}
 /* Strategy 2: any link to /3akarat/DIGITS/ */
 if(listings.length===0){var links=document.querySelectorAll('a[href*="/3akarat/"]');for(var j=0;j<links.length;j++){var a=links[j];var aurl=a.href;if(!aurl||!/\\/3akarat\\/\\d/.test(aurl))continue;var aIdM=aurl.match(/\\/3akarat\\/(\\d+)/);var aId=aIdM?aIdM[1]:null;if(aId){if(seenIds[aId])continue;seenIds[aId]=true;}else{if(seenUrls[aurl])continue;}seenUrls[aurl]=true;var parent=a.parentElement;var pText=parent?parent.textContent:'';var atitle=a.textContent.trim();if(!atitle||atitle.length<5)continue;atitle=atitle.replace(/^\\d+/,'').trim();var ap=pText.match(/([\\d,]+)\\s*جنيه/);listings.push({url:aurl,title:atitle,price:ap?parseInt(ap[1].replace(/,/g,'')):null,currency:'EGP',thumbnailUrl:null,location:'الإسكندرية',dateText:'',sellerName:aId&&nameMap[aId]?nameMap[aId]:null,sellerPhone:aId&&phoneMap[aId]?phoneMap[aId]:null,sellerProfileUrl:null,isVerified:false,isBusiness:false,isFeatured:false,supportsExchange:false,isNegotiable:false,category:'properties'});}}
-var withPhone=listings.filter(function(l){return l.sellerPhone;}).length;
-var skipped=cards.length-listings.length;
-console.log('Maksab SemsarMasr: Extracted',listings.length,'unique listings ('+skipped+' duplicates skipped),',withPhone,'with phone numbers');return listings;}
-var listings=extractListings();
-if(listings.length===0){alert('لم يتم العثور على إعلانات عقارات\\n\\nتأكد إنك على صفحة قوائم عقارات في سمسار مصر');return;}
-var withPhone=listings.filter(function(l){return l.sellerPhone;}).length;
-alert('\\u2705 تم العثور على '+listings.length+' إعلان\\n\\u260E '+withPhone+' إعلان مع رقم تليفون\\n\\nجاري الإرسال...');
-var payload=JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet',strategy:'semsarmasr-listcont',scope_code:SCOPE||null,platform:'semsarmasr'});
-${buildSendCode()}
+return listings;}
+${buildAutoHarvestEngine()}
+if(checkAutoResume())return;
+runAutoHarvest(10);
 })();
 `.trim().replace(/\n\s*/g, '');
   return `javascript:${encodeURIComponent(code)}`;
