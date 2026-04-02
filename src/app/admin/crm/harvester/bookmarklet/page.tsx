@@ -655,13 +655,17 @@ window.addEventListener('message',function handler(e){if(e.origin!==MAKSAB)retur
 function buildAutoHarvestEngine(): string {
   return `
 function sendDirect(listings,pageNum,totalSoFar){
-  return fetch(MAKSAB+'/api/admin/crm/harvester/receive-bookmarklet?token='+encodeURIComponent(TOKEN),{
+  var apiUrl=MAKSAB+'/api/admin/crm/harvester/receive-bookmarklet?token='+encodeURIComponent(TOKEN);
+  console.log('Maksab AutoHarvest: sending',listings.length,'listings to',apiUrl);
+  return fetch(apiUrl,{
     method:'POST',
+    mode:'cors',
     headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({url:window.location.href,listings:listings,timestamp:new Date().toISOString(),source:'bookmarklet_auto',strategy:PLATFORM+'-autopaginate',scope_code:SCOPE||null,platform:PLATFORM})
-  }).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(d){
+  }).then(function(r){console.log('Maksab AutoHarvest: response status',r.status);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(d){
+    console.log('Maksab AutoHarvest: result',d);
     return {new_count:d.new||0,duplicate:d.duplicate||0,total:totalSoFar+(d.new||0)};
-  }).catch(function(e){return {new_count:0,duplicate:0,total:totalSoFar,error:e.message};});
+  }).catch(function(e){console.error('Maksab AutoHarvest: error',e);return {new_count:0,duplicate:0,total:totalSoFar,error:e.message};});
 }
 function showProgress(msg,color){
   var el=document.getElementById('maksab-progress');
