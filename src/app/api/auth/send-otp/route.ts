@@ -123,69 +123,37 @@ export async function POST(req: NextRequest) {
 
 /**
  * Send OTP via WhatsApp Cloud API (Meta Business)
+ * Uses the shared WhatsAppProvider for consistency.
  */
 async function sendViaWhatsApp(
   phone: string,
   code: string
 ): Promise<{ success: boolean; error?: string }> {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  const templateName = process.env.WHATSAPP_OTP_TEMPLATE || "otp_code";
+  const { getWhatsAppProvider } = await import("@/lib/crm/channels/whatsapp");
+  const wa = getWhatsAppProvider();
 
-  if (!phoneNumberId || !accessToken) {
+  if (!wa.isConfigured()) {
     return { success: false, error: "Missing WhatsApp credentials" };
   }
 
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+  const templateName = process.env.WHATSAPP_OTP_TEMPLATE || "maksab_otp";
+
+  const result = await wa.sendTemplate({
+    to: phone,
+    templateName,
+    components: [
       {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: `2${phone}`,
-          type: "template",
-          template: {
-            name: templateName,
-            language: { code: "ar" },
-            components: [
-              {
-                type: "body",
-                parameters: [{ type: "text", text: code }],
-              },
-              {
-                type: "button",
-                sub_type: "url",
-                index: "0",
-                parameters: [{ type: "text", text: code }],
-              },
-            ],
-          },
-        }),
-      }
-    );
+        type: "body",
+        parameters: [{ type: "text", text: code }],
+      },
+    ],
+  });
 
-    if (response.ok) {
-      const data = await response.json().catch(() => ({}));
-      console.log("[WhatsApp] OTP sent successfully to", `2${phone}`, data?.messages?.[0]?.id || "");
-      return { success: true };
-    }
-
-    const errorData = await response.json().catch(() => ({}));
-    const errorMsg = errorData?.error?.message || `HTTP ${response.status}`;
-    console.error("[WhatsApp] Send failed:", errorMsg, errorData);
-
-    if (response.status === 401) {
-      console.error("[WhatsApp] Access token expired! Renew at developers.facebook.com");
-    }
-
-    return { success: false, error: errorMsg };
-  } catch (err) {
-    console.error("[WhatsApp] Network error:", err);
-    return { success: false, error: "Network error" };
+  if (result.success) {
+    console.log("[WhatsApp] OTP sent to", phone, "messageId:", result.externalMessageId);
+  } else {
+    console.error("[WhatsApp] OTP send failed:", result.error);
   }
+
+  return { success: result.success, error: result.error };
 }

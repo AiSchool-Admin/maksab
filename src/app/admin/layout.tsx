@@ -41,6 +41,7 @@ import {
   Cpu,
   UserCog,
   Lock,
+  Send,
 } from "lucide-react";
 import type { TeamRole, AdminSection, RoleConfig } from "@/lib/admin/rbac";
 import { ROLE_CONFIGS, hasAccess } from "@/lib/admin/rbac";
@@ -123,6 +124,7 @@ const navSections: NavSection[] = [
       { href: "/admin/crm/harvester/test-scopes", label: "🔍 اختبار النطاقات", icon: Search },
       { href: "/admin/sales/outreach?tab=waleed", label: "وليد 🚗 سيارات", icon: Mail },
       { href: "/admin/sales/outreach?tab=ahmed", label: "أحمد 🏠 عقارات", icon: Mail },
+      { href: "/admin/sales/whatsapp", label: "📱 لوحة واتساب", icon: Send },
       { href: "/admin/sales/templates", label: "📝 قوالب الرسائل", icon: ClipboardCheck },
     ],
   },

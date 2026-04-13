@@ -78,6 +78,12 @@ export async function GET(req: NextRequest) {
       // Table may not exist yet
     }
 
+    // WhatsApp API config status
+    const whatsappConfigured = !!(
+      process.env.WHATSAPP_PHONE_NUMBER_ID &&
+      process.env.WHATSAPP_ACCESS_TOKEN
+    );
+
     return NextResponse.json({
       harvester: {
         running: todayJobs > 0,
@@ -93,6 +99,7 @@ export async function GET(req: NextRequest) {
         active: platforms.filter(p => p.is_active).length,
         list: platforms,
       },
+      whatsapp_configured: whatsappConfigured,
     });
   } catch (error) {
     console.error("Tech status error:", error);
