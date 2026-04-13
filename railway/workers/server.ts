@@ -3284,3 +3284,9 @@ console.log("[Server] Starting auction cron worker...");
 import("./auction-cron").catch((err) => {
   console.error("[Server] Failed to start auction cron:", err.message);
 });
+
+// Start the outreach automation worker (WhatsApp 3-message pipeline)
+console.log("[Server] Starting outreach automation worker...");
+import("./outreach-cron").catch((err) => {
+  console.error("[Server] Failed to start outreach cron:", err.message);
+});
