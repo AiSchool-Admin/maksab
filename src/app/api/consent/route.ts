@@ -282,12 +282,10 @@ export async function POST(req: NextRequest) {
       await sb.from("outreach_logs").insert({
         seller_id,
         action: waResult.success ? "sent" : "registered",
-        channel: "whatsapp_api",
         agent_name: agentName,
         notes: waResult.success
-          ? `auto_registered + welcome sent: ${migrated} listings migrated`
-          : `auto_registered_after_consent: ${migrated} listings migrated (WA: ${waResult.error || "not configured"})`,
-        external_message_id: waResult.messageId,
+          ? `[WA SENT ${waResult.messageId}] auto_registered + welcome sent: ${migrated} listings migrated`
+          : `[WA FAILED: ${waResult.error || "not configured"}] auto_registered_after_consent: ${migrated} listings migrated`,
       });
 
       return NextResponse.json({
