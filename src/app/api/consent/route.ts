@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getWhatsAppProvider } from "@/lib/crm/channels/whatsapp";
 
 function getSupabase() {
   return createClient(
@@ -251,12 +252,42 @@ export async function POST(req: NextRequest) {
         mode: "auto",
       });
 
+      // 8. Send WhatsApp message immediately via Meta Cloud API
+      let waResult = { success: false, messageId: null as string | null, error: null as string | null };
+      try {
+        const wa = getWhatsAppProvider();
+        if (wa.isConfigured()) {
+          const tplResult = await wa.sendTemplate({
+            to: seller.phone,
+            templateName: "maksab_outreach_3",
+            components: [
+              {
+                type: "body",
+                parameters: [{ type: "text", text: magicLink }],
+              },
+            ],
+          });
+          waResult = {
+            success: tplResult.success,
+            messageId: tplResult.externalMessageId || null,
+            error: tplResult.error || null,
+          };
+        }
+      } catch (waErr) {
+        console.error("[Consent] WhatsApp send error:", waErr);
+        waResult.error = waErr instanceof Error ? waErr.message : "Unknown";
+      }
+
       // Log
       await sb.from("outreach_logs").insert({
         seller_id,
-        action: "registered",
+        action: waResult.success ? "sent" : "registered",
+        channel: "whatsapp_api",
         agent_name: agentName,
-        notes: `auto_registered_after_consent: ${migrated} listings migrated`,
+        notes: waResult.success
+          ? `auto_registered + welcome sent: ${migrated} listings migrated`
+          : `auto_registered_after_consent: ${migrated} listings migrated (WA: ${waResult.error || "not configured"})`,
+        external_message_id: waResult.messageId,
       });
 
       return NextResponse.json({
@@ -264,6 +295,8 @@ export async function POST(req: NextRequest) {
         registered: true,
         user_id: userId,
         listings_migrated: migrated,
+        whatsapp_sent: waResult.success,
+        whatsapp_error: waResult.error,
       });
     }
 
