@@ -260,7 +260,7 @@ export async function POST(req: NextRequest) {
           const tplResult = await wa.sendTemplate({
             to: seller.phone,
             templateName: "maksab_welcome",
-            languageCode: "en_US",
+            languageCode: "en",
             components: [
               {
                 type: "body",
