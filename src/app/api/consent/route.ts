@@ -259,7 +259,8 @@ export async function POST(req: NextRequest) {
         if (wa.isConfigured()) {
           const tplResult = await wa.sendTemplate({
             to: seller.phone,
-            templateName: "maksab_outreach_3",
+            templateName: "maksab_welcome",
+            languageCode: "en_US",
             components: [
               {
                 type: "body",
