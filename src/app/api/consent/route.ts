@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getWhatsAppProvider } from "@/lib/crm/channels/whatsapp";
+import { getSmsProvider } from "@/lib/crm/channels/sms";
 
 function getSupabase() {
   return createClient(
@@ -252,36 +253,80 @@ export async function POST(req: NextRequest) {
         mode: "auto",
       });
 
-      // 8. Send WhatsApp message immediately via Meta Cloud API
-      let waResult = { success: false, messageId: null as string | null, error: null as string | null };
+      // 8. Send welcome message — try WhatsApp first, fallback to SMS
+      let notifyResult = {
+        success: false,
+        channel: "none" as "whatsapp" | "sms" | "none",
+        messageId: null as string | null,
+        error: null as string | null,
+      };
+
+      // Try WhatsApp first (if configured)
       try {
         const wa = getWhatsAppProvider();
         if (wa.isConfigured()) {
           const tplResult = await wa.sendTemplate({
             to: seller.phone,
-            templateName: "hello_world",
-            languageCode: "en_US",
-            components: [],
+            templateName: "account_ready",
+            languageCode: "en",
+            components: [
+              {
+                type: "body",
+                parameters: [{ type: "text", text: magicLink }],
+              },
+            ],
           });
-          waResult = {
-            success: tplResult.success,
-            messageId: tplResult.externalMessageId || null,
-            error: tplResult.error || null,
-          };
+          if (tplResult.success) {
+            notifyResult = {
+              success: true,
+              channel: "whatsapp",
+              messageId: tplResult.externalMessageId || null,
+              error: null,
+            };
+          } else {
+            notifyResult.error = `WA: ${tplResult.error}`;
+          }
         }
       } catch (waErr) {
         console.error("[Consent] WhatsApp send error:", waErr);
-        waResult.error = waErr instanceof Error ? waErr.message : "Unknown";
+        notifyResult.error = waErr instanceof Error ? `WA: ${waErr.message}` : "WA: Unknown";
       }
 
-      // Log
+      // Fallback to SMS if WhatsApp failed
+      if (!notifyResult.success) {
+        try {
+          const sms = getSmsProvider();
+          if (sms.getProviderName() !== "none") {
+            const smsContent = `مكسب: حسابك جاهز ✅\nإعلاناتك على:\n${magicLink}`;
+            const smsResult = await sms.send({
+              to: seller.phone,
+              content: smsContent,
+            });
+            if (smsResult.success) {
+              notifyResult = {
+                success: true,
+                channel: "sms",
+                messageId: smsResult.externalMessageId || null,
+                error: null,
+              };
+            } else {
+              notifyResult.error = `${notifyResult.error || ""} | SMS: ${smsResult.error}`;
+            }
+          }
+        } catch (smsErr) {
+          console.error("[Consent] SMS send error:", smsErr);
+          notifyResult.error = `${notifyResult.error || ""} | SMS: ${smsErr instanceof Error ? smsErr.message : "Unknown"}`;
+        }
+      }
+
+      // Log the result
       await sb.from("outreach_logs").insert({
         seller_id,
-        action: waResult.success ? "sent" : "registered",
+        action: notifyResult.success ? "sent" : "registered",
         agent_name: agentName,
-        notes: waResult.success
-          ? `[WA SENT ${waResult.messageId}] auto_registered + welcome sent: ${migrated} listings migrated`
-          : `[WA FAILED: ${waResult.error || "not configured"}] auto_registered_after_consent: ${migrated} listings migrated`,
+        notes: notifyResult.success
+          ? `[${notifyResult.channel.toUpperCase()} SENT ${notifyResult.messageId}] auto_registered + welcome sent: ${migrated} listings migrated`
+          : `[NOTIFY FAILED: ${notifyResult.error || "no channel configured"}] auto_registered_after_consent: ${migrated} listings migrated`,
       });
 
       return NextResponse.json({
@@ -289,8 +334,9 @@ export async function POST(req: NextRequest) {
         registered: true,
         user_id: userId,
         listings_migrated: migrated,
-        whatsapp_sent: waResult.success,
-        whatsapp_error: waResult.error,
+        notify_channel: notifyResult.channel,
+        notify_sent: notifyResult.success,
+        notify_error: notifyResult.error,
       });
     }
 
