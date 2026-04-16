@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getWhatsAppProvider } from "@/lib/crm/channels/whatsapp";
+import { getWahaProvider } from "@/lib/crm/channels/waha";
 import { getSmsProvider } from "@/lib/crm/channels/sms";
 
 function getSupabase() {
@@ -253,15 +254,20 @@ export async function POST(req: NextRequest) {
         mode: "auto",
       });
 
-      // 8. Send welcome message — try WhatsApp first, fallback to SMS
+      // 8. Send welcome message via cascading channels:
+      //    1. Meta WhatsApp Cloud API (best UX, but requires verification for marketing)
+      //    2. WAHA (self-hosted WhatsApp, free + unlimited, some ban risk)
+      //    3. SMS Misr (Egyptian, ~0.12 EGP/SMS, always works)
+      const arabicWelcome = `مكسب 🎉 حسابك جاهز!\nكتبنا إعلاناتك — اكتشفها دلوقتي:\n${magicLink}`;
+
       let notifyResult = {
         success: false,
-        channel: "none" as "whatsapp" | "sms" | "none",
+        channel: "none" as "whatsapp_cloud" | "waha" | "sms" | "none",
         messageId: null as string | null,
         error: null as string | null,
       };
 
-      // Try WhatsApp first (if configured)
+      // 8a. Try Meta WhatsApp Cloud API first (template-based)
       try {
         const wa = getWhatsAppProvider();
         if (wa.isConfigured()) {
@@ -279,25 +285,51 @@ export async function POST(req: NextRequest) {
           if (tplResult.success) {
             notifyResult = {
               success: true,
-              channel: "whatsapp",
+              channel: "whatsapp_cloud",
               messageId: tplResult.externalMessageId || null,
               error: null,
             };
           } else {
-            notifyResult.error = `WA: ${tplResult.error}`;
+            notifyResult.error = `WA Cloud: ${tplResult.error}`;
           }
         }
       } catch (waErr) {
-        console.error("[Consent] WhatsApp send error:", waErr);
-        notifyResult.error = waErr instanceof Error ? `WA: ${waErr.message}` : "WA: Unknown";
+        console.error("[Consent] WA Cloud send error:", waErr);
+        notifyResult.error = waErr instanceof Error ? `WA Cloud: ${waErr.message}` : "WA Cloud: Unknown";
       }
 
-      // Fallback to SMS if WhatsApp failed
+      // 8b. Fallback to WAHA (self-hosted WhatsApp)
+      if (!notifyResult.success) {
+        try {
+          const waha = getWahaProvider();
+          if (waha.isConfigured()) {
+            const wahaResult = await waha.send({
+              to: seller.phone,
+              content: arabicWelcome,
+            });
+            if (wahaResult.success) {
+              notifyResult = {
+                success: true,
+                channel: "waha",
+                messageId: wahaResult.externalMessageId || null,
+                error: null,
+              };
+            } else {
+              notifyResult.error = `${notifyResult.error || ""} | WAHA: ${wahaResult.error}`;
+            }
+          }
+        } catch (wahaErr) {
+          console.error("[Consent] WAHA send error:", wahaErr);
+          notifyResult.error = `${notifyResult.error || ""} | WAHA: ${wahaErr instanceof Error ? wahaErr.message : "Unknown"}`;
+        }
+      }
+
+      // 8c. Final fallback: SMS (always works for Egyptian numbers)
       if (!notifyResult.success) {
         try {
           const sms = getSmsProvider();
           if (sms.getProviderName() !== "none") {
-            const smsContent = `مكسب: حسابك جاهز ✅\nإعلاناتك على:\n${magicLink}`;
+            const smsContent = `مكسب: حسابك جاهز ✅\n${magicLink}`;
             const smsResult = await sms.send({
               to: seller.phone,
               content: smsContent,
@@ -325,7 +357,7 @@ export async function POST(req: NextRequest) {
         action: notifyResult.success ? "sent" : "registered",
         agent_name: agentName,
         notes: notifyResult.success
-          ? `[${notifyResult.channel.toUpperCase()} SENT ${notifyResult.messageId}] auto_registered + welcome sent: ${migrated} listings migrated`
+          ? `[${notifyResult.channel.toUpperCase()} SENT ${notifyResult.messageId}] auto_registered + welcome via ${notifyResult.channel}: ${migrated} listings migrated`
           : `[NOTIFY FAILED: ${notifyResult.error || "no channel configured"}] auto_registered_after_consent: ${migrated} listings migrated`,
       });
 

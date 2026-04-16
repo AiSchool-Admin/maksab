@@ -1,0 +1,45 @@
+# Railway config for WAHA WhatsApp HTTP API
+# Apply via: Railway → New Service → "Empty Service" → Settings → import this file
+# Or set env vars manually via Railway dashboard
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "railway/waha/Dockerfile"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+
+# ─── Required Environment Variables (set in Railway dashboard) ─────────
+#
+# WHATSAPP_API_KEY              = a long random string (e.g. openssl rand -hex 32)
+#                                 This is the key apps will send in X-Api-Key header
+#
+# WHATSAPP_DEFAULT_ENGINE       = WEBJS  (Puppeteer-based, most reliable)
+#                                 OR NOWEB (faster but more detectable)
+#                                 OR GOWS (newest, fastest)
+#
+# WHATSAPP_HOOK_URL             = https://maksab.vercel.app/api/webhooks/waha
+#                                 (where to receive incoming messages)
+#
+# WHATSAPP_HOOK_EVENTS          = message,session.status
+#
+# WHATSAPP_START_SESSION        = default
+#                                 (auto-start the "default" session on boot)
+#
+# WHATSAPP_FILES_FOLDER         = /app/.media (persisted via volume)
+# WHATSAPP_SESSIONS_FOLDER      = /app/.sessions (persisted via volume)
+#
+# ─── Optional / Performance ────────────────────────────────────────────
+#
+# WAHA_DASHBOARD_ENABLED        = true (web UI for QR scan + monitoring)
+# WAHA_DASHBOARD_USERNAME       = admin
+# WAHA_DASHBOARD_PASSWORD       = your_dashboard_password
+#
+# WHATSAPP_RESTART_ALL_SESSIONS = true
+# WAHA_LOG_FORMAT               = JSON
+# WAHA_LOG_LEVEL                = info
+#
+# DEBUG                         = false
