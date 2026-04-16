@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getWhatsAppProvider } from "@/lib/crm/channels/whatsapp";
+import { getWahaProvider } from "@/lib/crm/channels/waha";
+import { getSmsProvider } from "@/lib/crm/channels/sms";
 
 function getSupabase() {
   return createClient(
@@ -252,36 +254,111 @@ export async function POST(req: NextRequest) {
         mode: "auto",
       });
 
-      // 8. Send WhatsApp message immediately via Meta Cloud API
-      let waResult = { success: false, messageId: null as string | null, error: null as string | null };
+      // 8. Send welcome message via cascading channels:
+      //    1. Meta WhatsApp Cloud API (best UX, but requires verification for marketing)
+      //    2. WAHA (self-hosted WhatsApp, free + unlimited, some ban risk)
+      //    3. SMS Misr (Egyptian, ~0.12 EGP/SMS, always works)
+      const arabicWelcome = `مكسب 🎉 حسابك جاهز!\nكتبنا إعلاناتك — اكتشفها دلوقتي:\n${magicLink}`;
+
+      let notifyResult = {
+        success: false,
+        channel: "none" as "whatsapp_cloud" | "waha" | "sms" | "none",
+        messageId: null as string | null,
+        error: null as string | null,
+      };
+
+      // 8a. Try Meta WhatsApp Cloud API first (template-based)
       try {
         const wa = getWhatsAppProvider();
         if (wa.isConfigured()) {
           const tplResult = await wa.sendTemplate({
             to: seller.phone,
-            templateName: "hello_world",
-            languageCode: "en_US",
-            components: [],
+            templateName: "account_ready",
+            languageCode: "en",
+            components: [
+              {
+                type: "body",
+                parameters: [{ type: "text", text: magicLink }],
+              },
+            ],
           });
-          waResult = {
-            success: tplResult.success,
-            messageId: tplResult.externalMessageId || null,
-            error: tplResult.error || null,
-          };
+          if (tplResult.success) {
+            notifyResult = {
+              success: true,
+              channel: "whatsapp_cloud",
+              messageId: tplResult.externalMessageId || null,
+              error: null,
+            };
+          } else {
+            notifyResult.error = `WA Cloud: ${tplResult.error}`;
+          }
         }
       } catch (waErr) {
-        console.error("[Consent] WhatsApp send error:", waErr);
-        waResult.error = waErr instanceof Error ? waErr.message : "Unknown";
+        console.error("[Consent] WA Cloud send error:", waErr);
+        notifyResult.error = waErr instanceof Error ? `WA Cloud: ${waErr.message}` : "WA Cloud: Unknown";
       }
 
-      // Log
+      // 8b. Fallback to WAHA (self-hosted WhatsApp)
+      if (!notifyResult.success) {
+        try {
+          const waha = getWahaProvider();
+          if (waha.isConfigured()) {
+            const wahaResult = await waha.send({
+              to: seller.phone,
+              content: arabicWelcome,
+            });
+            if (wahaResult.success) {
+              notifyResult = {
+                success: true,
+                channel: "waha",
+                messageId: wahaResult.externalMessageId || null,
+                error: null,
+              };
+            } else {
+              notifyResult.error = `${notifyResult.error || ""} | WAHA: ${wahaResult.error}`;
+            }
+          }
+        } catch (wahaErr) {
+          console.error("[Consent] WAHA send error:", wahaErr);
+          notifyResult.error = `${notifyResult.error || ""} | WAHA: ${wahaErr instanceof Error ? wahaErr.message : "Unknown"}`;
+        }
+      }
+
+      // 8c. Final fallback: SMS (always works for Egyptian numbers)
+      if (!notifyResult.success) {
+        try {
+          const sms = getSmsProvider();
+          if (sms.getProviderName() !== "none") {
+            const smsContent = `مكسب: حسابك جاهز ✅\n${magicLink}`;
+            const smsResult = await sms.send({
+              to: seller.phone,
+              content: smsContent,
+            });
+            if (smsResult.success) {
+              notifyResult = {
+                success: true,
+                channel: "sms",
+                messageId: smsResult.externalMessageId || null,
+                error: null,
+              };
+            } else {
+              notifyResult.error = `${notifyResult.error || ""} | SMS: ${smsResult.error}`;
+            }
+          }
+        } catch (smsErr) {
+          console.error("[Consent] SMS send error:", smsErr);
+          notifyResult.error = `${notifyResult.error || ""} | SMS: ${smsErr instanceof Error ? smsErr.message : "Unknown"}`;
+        }
+      }
+
+      // Log the result
       await sb.from("outreach_logs").insert({
         seller_id,
-        action: waResult.success ? "sent" : "registered",
+        action: notifyResult.success ? "sent" : "registered",
         agent_name: agentName,
-        notes: waResult.success
-          ? `[WA SENT ${waResult.messageId}] auto_registered + welcome sent: ${migrated} listings migrated`
-          : `[WA FAILED: ${waResult.error || "not configured"}] auto_registered_after_consent: ${migrated} listings migrated`,
+        notes: notifyResult.success
+          ? `[${notifyResult.channel.toUpperCase()} SENT ${notifyResult.messageId}] auto_registered + welcome via ${notifyResult.channel}: ${migrated} listings migrated`
+          : `[NOTIFY FAILED: ${notifyResult.error || "no channel configured"}] auto_registered_after_consent: ${migrated} listings migrated`,
       });
 
       return NextResponse.json({
@@ -289,8 +366,9 @@ export async function POST(req: NextRequest) {
         registered: true,
         user_id: userId,
         listings_migrated: migrated,
-        whatsapp_sent: waResult.success,
-        whatsapp_error: waResult.error,
+        notify_channel: notifyResult.channel,
+        notify_sent: notifyResult.success,
+        notify_error: notifyResult.error,
       });
     }
 

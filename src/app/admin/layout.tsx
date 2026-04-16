@@ -122,6 +122,7 @@ const navSections: NavSection[] = [
       { href: "/admin/crm/harvester/alexandria", label: "الإسكندرية", icon: MapPin },
       { href: "/admin/crm/harvester/enrich-specs", label: "استخراج المواصفات", icon: Search },
       { href: "/admin/crm/harvester/test-scopes", label: "🔍 اختبار النطاقات", icon: Search },
+      { href: "/admin/sales/crm", label: "🎯 نظام المبيعات (Seller 360)", icon: Target },
       { href: "/admin/sales/outreach?tab=waleed", label: "وليد 🚗 سيارات", icon: Mail },
       { href: "/admin/sales/outreach?tab=ahmed", label: "أحمد 🏠 عقارات", icon: Mail },
       { href: "/admin/sales/whatsapp", label: "📱 لوحة واتساب", icon: Send },
