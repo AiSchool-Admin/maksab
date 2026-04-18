@@ -254,10 +254,10 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       return true; // matches scope
     }
 
-    // Can't determine from URL or location — REJECT
-    // Accepting unknown-location listings caused ~12% data pollution
-    console.log(`[Filter] REJECT unknown-gov listing: "${listing.title?.substring(0, 60)}"`);
-    return false;
+    // Can't determine from URL or location — accept (trust scope URL)
+    // Detail page verification happens in Railway harvester only
+    // (Vercel has 60s timeout, can't afford detail page fetches)
+    return true;
   }) : listings;
 
   console.log(`[Filter] ${listings.length} → ${filteredListings.length} after governorate filter (scope=${scopeGov})`);

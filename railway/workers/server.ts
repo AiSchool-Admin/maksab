@@ -1494,30 +1494,60 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
 
   console.log(`[Harvest] 📊 Fetched total: ${allListings.length} listings`);
 
-  // 3. Filter listings by scope governorate (e.g. Dubizzle returns mixed governorates)
-  const filteredListings = allListings.filter((listing) => {
-    if (!scope.governorate) return true; // No scope governorate — accept all
+  // 3. Filter listings by scope governorate
+  // When location is known from card → compare directly
+  // When location is UNKNOWN → mark for detail page verification (step 3b)
+  const filteredListings: ParsedListing[] = [];
+  const needsDetailVerification: ParsedListing[] = [];
+
+  for (const listing of allListings) {
+    if (!scope.governorate) {
+      filteredListings.push(listing);
+      continue;
+    }
 
     const loc = mapLocationFromText(listing.location);
     const normalizedScope = normalizeGovernorate(scope.governorate);
 
-    // STRICT: If we can't determine the listing's governorate from the card,
-    // REJECT it. Dubizzle mixes promoted listings from other cities and they
-    // often lack proper location tags.
     if (!loc.governorate) {
-      console.log(`[Filter] Rejecting unknown-location listing: "${listing.title?.substring(0, 60)}"`);
-      return false;
+      // Can't determine from card — needs detail page verification
+      needsDetailVerification.push(listing);
+      continue;
     }
 
     const normalizedListing = normalizeGovernorate(loc.governorate);
 
     if (normalizedScope && normalizedListing && normalizedScope !== normalizedListing) {
       console.log(`[Filter] Skipping non-${normalizedScope} listing: ${loc.governorate} — "${listing.title?.substring(0, 50)}"`);
-      return false;
+      continue;
     }
-    return true;
-  });
-  console.log(`[Filter] ${allListings.length} → ${filteredListings.length} after governorate filter`);
+
+    filteredListings.push(listing);
+  }
+
+  // 3b. Verify unknown-location listings by fetching their detail pages
+  if (needsDetailVerification.length > 0) {
+    console.log(`[Filter] ${needsDetailVerification.length} listings need detail page verification`);
+    const normalizedScope = normalizeGovernorate(scope.governorate);
+
+    for (const listing of needsDetailVerification) {
+      const detailLoc = await fetchDetailPageLocation(listing.url);
+
+      if (detailLoc.governorate) {
+        const detailGovNormalized = normalizeGovernorate(detailLoc.governorate);
+        if (detailGovNormalized && normalizedScope && detailGovNormalized !== normalizedScope) {
+          console.log(`[Filter] REJECT (detail page): "${detailLoc.area}, ${detailLoc.governorate}" — "${listing.title?.substring(0, 50)}"`);
+          continue; // Skip — not in target governorate
+        }
+      }
+      // Detail page confirms target governorate OR can't determine → accept (trust scope URL)
+      filteredListings.push(listing);
+      // Rate limit between detail page fetches
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+
+  console.log(`[Filter] ${allListings.length} → ${filteredListings.length} after governorate filter (${needsDetailVerification.length} verified via detail page)`);
 
   // 4. Deduplicate against existing listings
   let newCount = 0;
