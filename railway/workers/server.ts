@@ -557,6 +557,30 @@ function governorateToArabic(gov: string | null | undefined): string | null {
   return gov.trim();
 }
 
+// ─── Non-Alexandria Location Filter ──────────────────────────
+// Dubizzle shows promoted listings from other governorates in Alexandria search results.
+// This filter checks the listing title for non-Alexandria locations and rejects them.
+const NON_ALEX_KEYWORDS = [
+  'المعادي', 'المعادى', 'مدينة نصر', 'مدينه نصر', 'التجمع',
+  'الشيخ زايد', 'أكتوبر', 'اكتوبر', 'الرحاب', 'العاصمة الإدارية',
+  'العاصمه الاداريه', 'المقطم', 'الهرم', 'المهندسين', 'الدقي', 'الدقى',
+  'حلوان', 'العبور', 'الشروق', 'بنها', 'طنطا', 'المنصورة', 'المنصوره',
+  'القاهرة', 'القاهره', 'الجيزة', 'الجيزه', 'العين السخنة', 'السخنه',
+  'مطروح', 'بورسعيد', 'الاسماعيلية', 'السويس', 'دمياط', 'المنيا',
+  'أسيوط', 'سوهاج', 'الفيوم', 'بني سويف', 'قنا', 'الأقصر', 'أسوان',
+  'الغردقة', 'شرم الشيخ', 'دهب', 'مرسى علم', 'راس سدر',
+  'حدائق الأهرام', 'حدائق اكتوبر', 'الحوامدية', 'البدرشين',
+  'العاشر من رمضان', '١٠ رمضان', '10 رمضان',
+  'الزمالك', 'وسط البلد', 'مصر الجديدة', 'عين شمس', 'شبرا',
+  'المطرية', 'الزيتون', 'حلمية', 'السيدة زينب',
+];
+
+function isNonAlexandriaListing(title: string | null): boolean {
+  if (!title) return false;
+  const lower = title.toLowerCase();
+  return NON_ALEX_KEYWORDS.some(kw => lower.includes(kw.toLowerCase()));
+}
+
 // ─── Date Parser ──────────────────────────────────────────────
 function parseRelativeDate(text: string): string | null {
   if (!text) return null;
@@ -1625,7 +1649,14 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       }
     }
 
-    // Insert listing
+    // Insert listing — but first check it's actually in the target governorate
+    // Dubizzle shows promoted listings from OTHER governorates in local search results
+    if (isNonAlexandriaListing(listing.title)) {
+      console.log(`[Harvest] REJECTED non-Alexandria listing: "${listing.title?.substring(0, 60)}"`);
+      errors.push(`Rejected: "${listing.title?.substring(0, 40)}" (non-Alexandria location in title)`);
+      continue;
+    }
+
     const insertData: Record<string, any> = {
       scope_id: scope.id,
       source_platform: scope.source_platform,
