@@ -254,8 +254,9 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
       return true; // matches scope
     }
 
-    // Can't determine from URL or location — accept cautiously
-    // (these are listings where the platform didn't include governorate in URL/location)
+    // Can't determine from URL or location — accept (trust scope URL)
+    // Detail page verification happens in Railway harvester only
+    // (Vercel has 60s timeout, can't afford detail page fetches)
     return true;
   }) : listings;
 

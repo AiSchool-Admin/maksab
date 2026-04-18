@@ -557,28 +557,57 @@ function governorateToArabic(gov: string | null | undefined): string | null {
   return gov.trim();
 }
 
-// ─── Non-Alexandria Location Filter ──────────────────────────
-// Dubizzle shows promoted listings from other governorates in Alexandria search results.
-// This filter checks the listing title for non-Alexandria locations and rejects them.
-const NON_ALEX_KEYWORDS = [
-  'المعادي', 'المعادى', 'مدينة نصر', 'مدينه نصر', 'التجمع',
-  'الشيخ زايد', 'أكتوبر', 'اكتوبر', 'الرحاب', 'العاصمة الإدارية',
-  'العاصمه الاداريه', 'المقطم', 'الهرم', 'المهندسين', 'الدقي', 'الدقى',
-  'حلوان', 'العبور', 'الشروق', 'بنها', 'طنطا', 'المنصورة', 'المنصوره',
-  'القاهرة', 'القاهره', 'الجيزة', 'الجيزه', 'العين السخنة', 'السخنه',
-  'مطروح', 'بورسعيد', 'الاسماعيلية', 'السويس', 'دمياط', 'المنيا',
-  'أسيوط', 'سوهاج', 'الفيوم', 'بني سويف', 'قنا', 'الأقصر', 'أسوان',
-  'الغردقة', 'شرم الشيخ', 'دهب', 'مرسى علم', 'راس سدر',
-  'حدائق الأهرام', 'حدائق اكتوبر', 'الحوامدية', 'البدرشين',
-  'العاشر من رمضان', '١٠ رمضان', '10 رمضان',
-  'الزمالك', 'وسط البلد', 'مصر الجديدة', 'عين شمس', 'شبرا',
-  'المطرية', 'الزيتون', 'حلمية', 'السيدة زينب',
-];
+// ─── Detail Page Location Verifier ────────────────────────────
+// Fetches the listing detail page and extracts the REAL location.
+// Dubizzle search results may show listings from other governorates
+// (seller is in Alexandria but property is elsewhere).
+// The detail page shows the actual property location in this format:
+//   الموقع
+//   [area] ، [governorate]
+//   عرض الخريطة
+async function fetchDetailPageLocation(
+  url: string
+): Promise<{ area: string | null; governorate: string | null }> {
+  try {
+    const res = await fetch(url, {
+      headers: BROWSER_HEADERS,
+      redirect: "follow",
+    });
+    if (!res.ok) return { area: null, governorate: null };
 
-function isNonAlexandriaListing(title: string | null): boolean {
-  if (!title) return false;
-  const lower = title.toLowerCase();
-  return NON_ALEX_KEYWORDS.some(kw => lower.includes(kw.toLowerCase()));
+    const html = await res.text();
+
+    // Pattern 1: Arabic "الموقع\n[area]، [governorate]"
+    const locMatch = html.match(
+      /الموقع\s*<[^>]*>\s*<[^>]*>([\u0600-\u06FF\u0020\-_]+)[،,]\s*([\u0600-\u06FF\u0020]+)/
+    );
+    if (locMatch) {
+      return { area: locMatch[1].trim(), governorate: locMatch[2].trim() };
+    }
+
+    // Pattern 2: Plain text extraction
+    const textMatch = html.match(
+      /الموقع[\s\S]{0,200}?([\u0600-\u06FF][\u0600-\u06FF\u0020\-_]{2,30})\s*[،,]\s*([\u0600-\u06FF][\u0600-\u06FF\u0020]{2,20})/
+    );
+    if (textMatch) {
+      return { area: textMatch[1].trim(), governorate: textMatch[2].trim() };
+    }
+
+    // Pattern 3: JSON-LD or structured data with location
+    const jsonLdMatch = html.match(
+      /"location":\s*\{[^}]*"name":\s*"([^"]+)"/
+    );
+    if (jsonLdMatch) {
+      const parts = jsonLdMatch[1].split(/[،,]/);
+      if (parts.length >= 2) {
+        return { area: parts[0].trim(), governorate: parts[1].trim() };
+      }
+    }
+
+    return { area: null, governorate: null };
+  } catch {
+    return { area: null, governorate: null };
+  }
 }
 
 // ─── Date Parser ──────────────────────────────────────────────
@@ -1465,23 +1494,60 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
 
   console.log(`[Harvest] 📊 Fetched total: ${allListings.length} listings`);
 
-  // 3. Filter listings by scope governorate (e.g. Dubizzle returns mixed governorates)
-  const filteredListings = allListings.filter((listing) => {
-    if (!scope.governorate) return true; // No scope governorate — accept all
+  // 3. Filter listings by scope governorate
+  // When location is known from card → compare directly
+  // When location is UNKNOWN → mark for detail page verification (step 3b)
+  const filteredListings: ParsedListing[] = [];
+  const needsDetailVerification: ParsedListing[] = [];
+
+  for (const listing of allListings) {
+    if (!scope.governorate) {
+      filteredListings.push(listing);
+      continue;
+    }
 
     const loc = mapLocationFromText(listing.location);
-    if (!loc.governorate) return true; // Can't determine governorate — accept and use scope default
-
     const normalizedScope = normalizeGovernorate(scope.governorate);
+
+    if (!loc.governorate) {
+      // Can't determine from card — needs detail page verification
+      needsDetailVerification.push(listing);
+      continue;
+    }
+
     const normalizedListing = normalizeGovernorate(loc.governorate);
 
     if (normalizedScope && normalizedListing && normalizedScope !== normalizedListing) {
       console.log(`[Filter] Skipping non-${normalizedScope} listing: ${loc.governorate} — "${listing.title?.substring(0, 50)}"`);
-      return false;
+      continue;
     }
-    return true;
-  });
-  console.log(`[Filter] ${allListings.length} → ${filteredListings.length} after governorate filter`);
+
+    filteredListings.push(listing);
+  }
+
+  // 3b. Verify unknown-location listings by fetching their detail pages
+  if (needsDetailVerification.length > 0) {
+    console.log(`[Filter] ${needsDetailVerification.length} listings need detail page verification`);
+    const normalizedScope = normalizeGovernorate(scope.governorate);
+
+    for (const listing of needsDetailVerification) {
+      const detailLoc = await fetchDetailPageLocation(listing.url);
+
+      if (detailLoc.governorate) {
+        const detailGovNormalized = normalizeGovernorate(detailLoc.governorate);
+        if (detailGovNormalized && normalizedScope && detailGovNormalized !== normalizedScope) {
+          console.log(`[Filter] REJECT (detail page): "${detailLoc.area}, ${detailLoc.governorate}" — "${listing.title?.substring(0, 50)}"`);
+          continue; // Skip — not in target governorate
+        }
+      }
+      // Detail page confirms target governorate OR can't determine → accept (trust scope URL)
+      filteredListings.push(listing);
+      // Rate limit between detail page fetches
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+
+  console.log(`[Filter] ${allListings.length} → ${filteredListings.length} after governorate filter (${needsDetailVerification.length} verified via detail page)`);
 
   // 4. Deduplicate against existing listings
   let newCount = 0;
@@ -1507,17 +1573,10 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       continue;
     }
 
-    // Map location
+    // Map location from search card
     const loc = mapLocationFromText(listing.location);
     const governorate = governorateToArabic(loc.governorate) || scope.governorate;
     const city = loc.city || scope.city;
-
-    // Hard check: only insert Alexandria listings
-    const govCheck = (governorate || '').toLowerCase();
-    if (!govCheck.includes('الإسكندرية') && !govCheck.includes('اسكندري') && !govCheck.includes('alexandria')) {
-      console.log(`[Filter] REJECT non-Alex at insert: gov="${governorate}" — "${listing.title?.substring(0, 50)}"`);
-      continue;
-    }
 
     // Upsert seller — create even without profile URL (use name + governorate as fallback key)
     let aheSellerId: string | null = null;
@@ -1647,14 +1706,6 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
         isNewSeller = true;
         sellersNew++;
       }
-    }
-
-    // Insert listing — but first check it's actually in the target governorate
-    // Dubizzle shows promoted listings from OTHER governorates in local search results
-    if (isNonAlexandriaListing(listing.title)) {
-      console.log(`[Harvest] REJECTED non-Alexandria listing: "${listing.title?.substring(0, 60)}"`);
-      errors.push(`Rejected: "${listing.title?.substring(0, 40)}" (non-Alexandria location in title)`);
-      continue;
     }
 
     const insertData: Record<string, any> = {
@@ -3201,6 +3252,11 @@ const server = createServer(async (req, res) => {
       await handleReverseBuyers(req, res);
     } else if (path === "/process-job") {
       await handleProcessJob(req, res);
+    } else if (path === "/cleanup-locations") {
+      // One-time cleanup: verify existing listings with null source_location
+      sendJson(res, { status: "started", message: "Cleanup running in background. Check Railway logs for progress." });
+      // Run in background (don't block the response)
+      runLocationCleanup().catch((err) => console.error("[Cleanup] Fatal error:", err));
     } else if (path === "/health") {
       sendJson(res, {
         ok: true,
@@ -3309,6 +3365,74 @@ server.listen(PORT, () => {
     }
   }, 10000); // 10 ثواني بعد البدء
 });
+
+// ─── Location Cleanup (one-time) ──────────────────────────────
+async function runLocationCleanup() {
+  console.log("[Cleanup] Starting location verification for existing listings...");
+  const supabase = getSupabase();
+
+  // Get listings with null source_location from dubizzle (most likely to have issues)
+  const { data: listings, error } = await supabase
+    .from("ahe_listings")
+    .select("id, title, source_listing_url, source_location, city, governorate, source_platform")
+    .eq("is_duplicate", false)
+    .is("source_location", null)
+    .in("source_platform", ["dubizzle"])
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    console.error("[Cleanup] Query error:", error.message);
+    return;
+  }
+
+  console.log(`[Cleanup] Found ${listings?.length || 0} listings with null source_location`);
+
+  let verified = 0, rejected = 0, updated = 0, fetchErrors = 0;
+
+  for (const listing of listings || []) {
+    console.log(`[Cleanup ${verified + rejected + 1}/${listings!.length}] "${listing.title?.substring(0, 50)}"`);
+
+    const detailLoc = await fetchDetailPageLocation(listing.source_listing_url);
+
+    if (detailLoc.governorate) {
+      const normalizedGov = normalizeGovernorate(detailLoc.governorate);
+
+      if (normalizedGov && normalizedGov !== "alexandria") {
+        console.log(`  ❌ REJECT: ${detailLoc.area}, ${detailLoc.governorate}`);
+        await supabase.from("ahe_listings").update({
+          is_duplicate: true,
+          migration_status: "rejected",
+          source_location: `${detailLoc.area || ""}, ${detailLoc.governorate}`,
+        }).eq("id", listing.id);
+        rejected++;
+      } else {
+        // Confirmed Alexandria — update source_location and city
+        const newCity = detailLoc.area ? detailLoc.area.replace(/\s+/g, "_") : listing.city;
+        await supabase.from("ahe_listings").update({
+          source_location: `${detailLoc.area || ""}, ${detailLoc.governorate}`,
+          city: newCity,
+        }).eq("id", listing.id);
+        verified++;
+        if (newCity !== listing.city) updated++;
+        console.log(`  ✅ OK: ${detailLoc.area}, ${detailLoc.governorate}`);
+      }
+    } else {
+      console.log(`  ⚠️ Could not extract location`);
+      fetchErrors++;
+    }
+
+    // Rate limit: 3 seconds between requests
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+
+  console.log(`\n[Cleanup] ===== COMPLETE =====`);
+  console.log(`  ✅ Verified Alexandria: ${verified}`);
+  console.log(`  ❌ Rejected non-Alexandria: ${rejected}`);
+  console.log(`  📝 City updated: ${updated}`);
+  console.log(`  ⚠️ Fetch errors: ${fetchErrors}`);
+  console.log(`  📊 Total: ${verified + rejected + fetchErrors}/${listings?.length || 0}`);
+}
 
 // Also start the auction cron worker
 console.log("[Server] Starting auction cron worker...");
