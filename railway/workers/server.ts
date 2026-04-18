@@ -1545,32 +1545,8 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
 
     // Map location from search card
     const loc = mapLocationFromText(listing.location);
-    let governorate = governorateToArabic(loc.governorate) || scope.governorate;
-    let city = loc.city || scope.city;
-
-    // If location from search card is uncertain (defaults to scope),
-    // verify by fetching the detail page for the REAL property location
-    const cardGovNormalized = normalizeGovernorate(loc.governorate);
-    const scopeGovNormalized = normalizeGovernorate(scope.governorate);
-
-    if (!cardGovNormalized || cardGovNormalized !== scopeGovNormalized) {
-      // Uncertain location — verify from detail page
-      console.log(`[Verify] Checking detail page for: "${listing.title?.substring(0, 50)}"`);
-      const detailLoc = await fetchDetailPageLocation(listing.url);
-
-      if (detailLoc.governorate) {
-        const detailGovNormalized = normalizeGovernorate(detailLoc.governorate);
-        if (detailGovNormalized && detailGovNormalized !== scopeGovNormalized) {
-          console.log(`[Filter] REJECT: detail page says "${detailLoc.area}, ${detailLoc.governorate}" — not ${scope.governorate}`);
-          continue;
-        }
-        // Use the more specific location from detail page
-        governorate = detailLoc.governorate;
-        if (detailLoc.area) city = detailLoc.area.replace(/\s+/g, "_");
-      }
-      // Rate limit: wait between detail page fetches
-      await new Promise((r) => setTimeout(r, 2000));
-    }
+    const governorate = governorateToArabic(loc.governorate) || scope.governorate;
+    const city = loc.city || scope.city;
 
     // Upsert seller — create even without profile URL (use name + governorate as fallback key)
     let aheSellerId: string | null = null;
