@@ -557,6 +557,59 @@ function governorateToArabic(gov: string | null | undefined): string | null {
   return gov.trim();
 }
 
+// ─── Detail Page Location Verifier ────────────────────────────
+// Fetches the listing detail page and extracts the REAL location.
+// Dubizzle search results may show listings from other governorates
+// (seller is in Alexandria but property is elsewhere).
+// The detail page shows the actual property location in this format:
+//   الموقع
+//   [area] ، [governorate]
+//   عرض الخريطة
+async function fetchDetailPageLocation(
+  url: string
+): Promise<{ area: string | null; governorate: string | null }> {
+  try {
+    const res = await fetch(url, {
+      headers: BROWSER_HEADERS,
+      redirect: "follow",
+    });
+    if (!res.ok) return { area: null, governorate: null };
+
+    const html = await res.text();
+
+    // Pattern 1: Arabic "الموقع\n[area]، [governorate]"
+    const locMatch = html.match(
+      /الموقع\s*<[^>]*>\s*<[^>]*>([\u0600-\u06FF\u0020\-_]+)[،,]\s*([\u0600-\u06FF\u0020]+)/
+    );
+    if (locMatch) {
+      return { area: locMatch[1].trim(), governorate: locMatch[2].trim() };
+    }
+
+    // Pattern 2: Plain text extraction
+    const textMatch = html.match(
+      /الموقع[\s\S]{0,200}?([\u0600-\u06FF][\u0600-\u06FF\u0020\-_]{2,30})\s*[،,]\s*([\u0600-\u06FF][\u0600-\u06FF\u0020]{2,20})/
+    );
+    if (textMatch) {
+      return { area: textMatch[1].trim(), governorate: textMatch[2].trim() };
+    }
+
+    // Pattern 3: JSON-LD or structured data with location
+    const jsonLdMatch = html.match(
+      /"location":\s*\{[^}]*"name":\s*"([^"]+)"/
+    );
+    if (jsonLdMatch) {
+      const parts = jsonLdMatch[1].split(/[،,]/);
+      if (parts.length >= 2) {
+        return { area: parts[0].trim(), governorate: parts[1].trim() };
+      }
+    }
+
+    return { area: null, governorate: null };
+  } catch {
+    return { area: null, governorate: null };
+  }
+}
+
 // ─── Date Parser ──────────────────────────────────────────────
 function parseRelativeDate(text: string): string | null {
   if (!text) return null;
@@ -1490,16 +1543,33 @@ async function harvestScope(scopeCode: string): Promise<HarvestResult> {
       continue;
     }
 
-    // Map location
+    // Map location from search card
     const loc = mapLocationFromText(listing.location);
-    const governorate = governorateToArabic(loc.governorate) || scope.governorate;
-    const city = loc.city || scope.city;
+    let governorate = governorateToArabic(loc.governorate) || scope.governorate;
+    let city = loc.city || scope.city;
 
-    // Hard check: only insert Alexandria listings
-    const govCheck = (governorate || '').toLowerCase();
-    if (!govCheck.includes('الإسكندرية') && !govCheck.includes('اسكندري') && !govCheck.includes('alexandria')) {
-      console.log(`[Filter] REJECT non-Alex at insert: gov="${governorate}" — "${listing.title?.substring(0, 50)}"`);
-      continue;
+    // If location from search card is uncertain (defaults to scope),
+    // verify by fetching the detail page for the REAL property location
+    const cardGovNormalized = normalizeGovernorate(loc.governorate);
+    const scopeGovNormalized = normalizeGovernorate(scope.governorate);
+
+    if (!cardGovNormalized || cardGovNormalized !== scopeGovNormalized) {
+      // Uncertain location — verify from detail page
+      console.log(`[Verify] Checking detail page for: "${listing.title?.substring(0, 50)}"`);
+      const detailLoc = await fetchDetailPageLocation(listing.url);
+
+      if (detailLoc.governorate) {
+        const detailGovNormalized = normalizeGovernorate(detailLoc.governorate);
+        if (detailGovNormalized && detailGovNormalized !== scopeGovNormalized) {
+          console.log(`[Filter] REJECT: detail page says "${detailLoc.area}, ${detailLoc.governorate}" — not ${scope.governorate}`);
+          continue;
+        }
+        // Use the more specific location from detail page
+        governorate = detailLoc.governorate;
+        if (detailLoc.area) city = detailLoc.area.replace(/\s+/g, "_");
+      }
+      // Rate limit: wait between detail page fetches
+      await new Promise((r) => setTimeout(r, 2000));
     }
 
     // Upsert seller — create even without profile URL (use name + governorate as fallback key)
