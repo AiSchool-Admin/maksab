@@ -206,9 +206,25 @@ export async function POST(
     }
 
     if (!result.success) {
+      const noChannelConfigured =
+        !getWhatsAppProvider().isConfigured() &&
+        !getWahaProvider().isConfigured() &&
+        getSmsProvider().getProviderName() === "none";
+
       return NextResponse.json(
-        { success: false, error: result.error, channel_tried: channel },
-        { status: 502 }
+        {
+          success: false,
+          error: noChannelConfigured
+            ? "لا يوجد قناة إرسال متاحة. أضف WAHA أو SMS Misr في env vars."
+            : result.error || "فشل الإرسال من كل القنوات",
+          channel_tried: channel,
+          channels_configured: {
+            whatsapp_cloud: getWhatsAppProvider().isConfigured(),
+            waha: getWahaProvider().isConfigured(),
+            sms: getSmsProvider().getProviderName() !== "none",
+          },
+        },
+        { status: 422 }
       );
     }
 

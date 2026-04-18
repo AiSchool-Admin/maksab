@@ -160,17 +160,13 @@ export default function SellerDetailPage({ params }: { params: Promise<{ id: str
       {/* Header */}
       <SellerHeader seller={seller} stats={stats} onRefresh={fetchData} />
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left column — main content */}
-        <div className="lg:col-span-2 space-y-4">
-          <MessageComposer sellerId={id} sellerPhone={seller.phone || ""} onSent={fetchData} />
-          <TimelineCard timeline={timeline} />
-          <ListingsCard listings={listings} />
-        </div>
+      {/* Single-column mobile, two-column desktop */}
+      <div className="flex flex-col gap-4">
+        {/* Message Composer — always first */}
+        <MessageComposer sellerId={id} sellerPhone={seller.phone || ""} onSent={fetchData} />
 
-        {/* Right column — sidebar */}
-        <div className="space-y-4">
+        {/* Pipeline + Notes + Tasks — collapsible on mobile */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <PipelineStageCard
             sellerId={id}
             currentStage={seller.pipeline_status}
@@ -179,6 +175,12 @@ export default function SellerDetailPage({ params }: { params: Promise<{ id: str
           <NotesCard sellerId={id} notes={notes} onChanged={fetchData} />
           <TasksCard sellerId={id} tasks={tasks} onChanged={fetchData} />
         </div>
+
+        {/* Timeline */}
+        <TimelineCard timeline={timeline} />
+
+        {/* Listings */}
+        <ListingsCard listings={listings} />
       </div>
     </div>
   );
