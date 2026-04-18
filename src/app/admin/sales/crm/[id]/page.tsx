@@ -314,11 +314,35 @@ function MessageComposer({ sellerId, sellerPhone, onSent }: {
   onSent: () => void;
 }) {
   const [content, setContent] = useState("");
-  const [channel, setChannel] = useState<"auto" | "waha" | "sms" | "whatsapp_cloud">("auto");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const send = async () => {
+  // Format phone for wa.me link (201xxxxxxxxx)
+  const waPhone = sellerPhone
+    ? (sellerPhone.startsWith("0") ? "2" + sellerPhone : sellerPhone).replace(/\D/g, "")
+    : "";
+
+  const openWhatsApp = () => {
+    if (!content.trim() || !waPhone) return;
+    const url = `https://wa.me/${waPhone}?text=${encodeURIComponent(content)}`;
+    window.open(url, "_blank");
+    logManualSend("whatsapp_manual");
+  };
+
+  const openSms = () => {
+    if (!content.trim() || !sellerPhone) return;
+    const url = `sms:${sellerPhone}?body=${encodeURIComponent(content)}`;
+    window.open(url, "_blank");
+    logManualSend("sms_manual");
+  };
+
+  const callSeller = () => {
+    if (!sellerPhone) return;
+    window.open(`tel:${sellerPhone}`, "_blank");
+    logManualSend("call");
+  };
+
+  const sendViaApi = async () => {
     if (!content.trim()) return;
     setSending(true);
     setResult(null);
@@ -326,7 +350,7 @@ function MessageComposer({ sellerId, sellerPhone, onSent }: {
       const res = await fetch(`/api/admin/sales/crm/${sellerId}/message`, {
         method: "POST",
         headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ content, channel }),
+        body: JSON.stringify({ content, channel: "auto" }),
       });
       const json = await res.json();
       if (res.ok && json.success) {
@@ -341,6 +365,29 @@ function MessageComposer({ sellerId, sellerPhone, onSent }: {
     } finally {
       setSending(false);
     }
+  };
+
+  const logManualSend = async (channel: string) => {
+    setResult({ ok: true, msg: `✅ تم فتح ${channel === "whatsapp_manual" ? "واتساب" : channel === "sms_manual" ? "SMS" : "الاتصال"}` });
+    try {
+      await fetch(`/api/admin/sales/crm/${sellerId}/stage`, {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: "contacted_1",
+          agent_name: "agent",
+          reason: `[${channel}] ${content.substring(0, 100)}`,
+        }),
+      });
+      setTimeout(onSent, 1000);
+    } catch { /* ignore */ }
+  };
+
+  const copyConsent = () => {
+    const ref = "ahmed";
+    const url = `https://maksab.vercel.app/consent?seller=${sellerId}&ref=${ref}`;
+    navigator.clipboard.writeText(url);
+    setResult({ ok: true, msg: "✅ تم نسخ رابط الموافقة" });
   };
 
   if (!sellerPhone) {
@@ -361,33 +408,80 @@ function MessageComposer({ sellerId, sellerPhone, onSent }: {
         إرسال رسالة
       </h2>
 
+      {/* Quick templates — shown first for fast selection */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {QUICK_TEMPLATES.map((tpl, i) => (
+          <button
+            key={i}
+            onClick={() => setContent(tpl.body)}
+            className={`text-xs px-2.5 py-1.5 rounded-full border transition ${
+              content === tpl.body
+                ? "bg-[#1B7A3D] text-white border-[#1B7A3D]"
+                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            {tpl.title}
+          </button>
+        ))}
+      </div>
+
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        placeholder="اكتب رسالتك هنا..."
+        placeholder="اكتب رسالتك هنا أو اختر قالب..."
         rows={4}
-        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B7A3D]"
+        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B7A3D] resize-none"
       />
 
-      <div className="flex items-center gap-2 mt-3">
-        <select
-          value={channel}
-          onChange={(e) => setChannel(e.target.value as typeof channel)}
-          className="px-2 py-1.5 border rounded-lg text-sm"
-        >
-          <option value="auto">🔀 تلقائي (أفضل channel)</option>
-          <option value="waha">💬 واتساب (WAHA)</option>
-          <option value="sms">📨 SMS</option>
-          <option value="whatsapp_cloud">💎 واتساب رسمي (Cloud)</option>
-        </select>
-
+      {/* Action buttons */}
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        {/* Primary: WhatsApp Manual */}
         <button
-          onClick={send}
-          disabled={sending || !content.trim()}
-          className="px-4 py-1.5 bg-[#1B7A3D] text-white rounded-lg text-sm font-bold hover:bg-[#145C2E] disabled:opacity-50 flex items-center gap-2"
+          onClick={openWhatsApp}
+          disabled={!content.trim()}
+          className="px-4 py-2 bg-[#25D366] text-white rounded-lg text-sm font-bold hover:bg-[#1da851] disabled:opacity-40 flex items-center gap-2"
         >
-          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          إرسال
+          <MessageSquare className="w-4 h-4" />
+          واتساب
+        </button>
+
+        {/* SMS Manual */}
+        <button
+          onClick={openSms}
+          disabled={!content.trim()}
+          className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-40 flex items-center gap-2"
+        >
+          <Send className="w-4 h-4" />
+          SMS
+        </button>
+
+        {/* Call */}
+        <button
+          onClick={callSeller}
+          className="px-3 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-800 flex items-center gap-2"
+        >
+          <Phone className="w-4 h-4" />
+          اتصال
+        </button>
+
+        {/* Copy Consent Link */}
+        <button
+          onClick={copyConsent}
+          className="px-3 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600 flex items-center gap-2"
+        >
+          <Copy className="w-4 h-4" />
+          نسخ رابط الموافقة
+        </button>
+
+        {/* Auto API send (when channels are configured) */}
+        <button
+          onClick={sendViaApi}
+          disabled={sending || !content.trim()}
+          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300 disabled:opacity-40 flex items-center gap-2"
+          title="إرسال تلقائي عبر API (يحتاج WAHA أو SMS Misr)"
+        >
+          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          API تلقائي
         </button>
 
         <span className="text-xs text-gray-400 mr-auto">
@@ -396,29 +490,12 @@ function MessageComposer({ sellerId, sellerPhone, onSent }: {
       </div>
 
       {result && (
-        <div className={`mt-2 text-sm ${result.ok ? "text-green-600" : "text-red-600"}`}>
+        <div className={`mt-2 text-sm px-3 py-2 rounded-lg ${
+          result.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+        }`}>
           {result.msg}
         </div>
       )}
-
-      {/* Quick templates */}
-      <details className="mt-3">
-        <summary className="text-xs text-[#1B7A3D] cursor-pointer hover:underline">
-          قوالب جاهزة
-        </summary>
-        <div className="mt-2 space-y-1">
-          {QUICK_TEMPLATES.map((tpl, i) => (
-            <button
-              key={i}
-              onClick={() => setContent(tpl.body)}
-              className="w-full text-right p-2 text-xs bg-gray-50 hover:bg-gray-100 rounded border"
-            >
-              <div className="font-bold text-gray-800">{tpl.title}</div>
-              <div className="text-gray-500 line-clamp-1">{tpl.body.substring(0, 80)}...</div>
-            </button>
-          ))}
-        </div>
-      </details>
     </div>
   );
 }
