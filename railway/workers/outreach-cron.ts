@@ -407,11 +407,13 @@ function sleep(ms: number): Promise<void> {
 
 // ─── Start Worker ────────────────────────────────────────────────
 
-console.log("[Outreach] Worker started. Running every 5 minutes.");
-console.log(`[Outreach] WhatsApp configured: ${!!(WHATSAPP_PHONE_NUMBER_ID && WHATSAPP_ACCESS_TOKEN)}`);
+const OUTREACH_ENABLED = process.env.OUTREACH_ENABLED !== "false";
 
-// Run immediately on start
-runOutreachCycle();
-
-// Then every 5 minutes
-setInterval(runOutreachCycle, RUN_INTERVAL_MS);
+if (!OUTREACH_ENABLED) {
+  console.log("[Outreach] Worker DISABLED (set OUTREACH_ENABLED=true to enable)");
+} else {
+  console.log("[Outreach] Worker started. Running every 5 minutes.");
+  console.log(`[Outreach] WhatsApp configured: ${!!(WHATSAPP_PHONE_NUMBER_ID && WHATSAPP_ACCESS_TOKEN)}`);
+  runOutreachCycle();
+  setInterval(runOutreachCycle, RUN_INTERVAL_MS);
+}
