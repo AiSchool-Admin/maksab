@@ -40,10 +40,10 @@ export async function GET(
       return NextResponse.json({ error: "Seller not found" }, { status: 404 });
     }
 
-    // 2. Listings from harvester
+    // 2. Listings from harvester (full details)
     const { data: listings } = await sb
       .from("ahe_listings")
-      .select("id, title, price, thumbnail_url, city, source_listing_url, source_platform, migration_status, maksab_listing_id, is_duplicate, created_at")
+      .select("id, title, description, price, thumbnail_url, all_image_urls, city, governorate, area, source_listing_url, source_platform, source_location, migration_status, maksab_listing_id, is_duplicate, specifications, property_type, bedrooms, bathrooms, area_sqm, floor_number, furnished, finishing, created_at")
       .eq("ahe_seller_id", id)
       .eq("is_duplicate", false)
       .order("created_at", { ascending: false })

@@ -34,13 +34,27 @@ interface Seller {
 interface Listing {
   id: string;
   title: string | null;
+  description: string | null;
   price: number | null;
   thumbnail_url: string | null;
+  all_image_urls: string[] | null;
   city: string | null;
+  governorate: string | null;
+  area: string | null;
   source_listing_url: string | null;
   source_platform: string | null;
+  source_location: string | null;
   migration_status: string | null;
   maksab_listing_id: string | null;
+  specifications: Record<string, unknown> | null;
+  property_type: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  area_sqm: number | null;
+  floor_number: number | null;
+  furnished: boolean | null;
+  finishing: string | null;
+  created_at: string;
 }
 
 interface Note {
@@ -502,24 +516,32 @@ function MessageComposer({ sellerId, sellerPhone, onSent }: {
 
 const QUICK_TEMPLATES = [
   {
-    title: "تواصل أول (عقارات)",
-    body: "السلام عليكم،\nمعاك أحمد من مكسب — منصة عقارية مصرية جديدة.\nشفنا إعلاناتك على دوبيزل وممكن نساعدك تنقلها لمكسب مجاناً.\nيهمك نتكلم 5 دقايق؟",
+    title: "🟢 توعية — تعريف بمكسب",
+    body: "السلام عليكم يا فندم 🌿\nسمعت عن \"مكسب\"؟\nدي منصة مصرية جديدة لبيع وشراء العقارات والسيارات — مصمّمة للسوق المصري 100%.\n\nليه مكسب مختلفة:\n✅ مجانية تماماً (مفيش رسوم على الإعلانات)\n✅ أداة تقييم بالذكاء الاصطناعي\n✅ تصل لمشتريين جادين في الإسكندرية\n\nلو حابب تعرف أكتر:\nmaksab.vercel.app\n\nشكراً 🌿",
   },
   {
-    title: "تواصل أول (سيارات)",
-    body: "السلام عليكم،\nمعاك وليد من مكسب — منصة سيارات مصرية جديدة.\nشفنا إعلاناتك وممكن نساعدك تبيع أسرع وبدون عمولات.\nيهمك نتكلم 5 دقايق؟",
+    title: "🟢 توعية — مخصصة لوكالة",
+    body: "السلام عليكم يا فندم 🌿\nأنا من فريق مكسب — منصة عقارية مصرية جديدة.\n\nعندنا عرض خاص للوكالات والمكاتب العقارية:\n✅ حساب وكالة مجاني (إعلانات غير محدودة)\n✅ شارة \"وكالة موثّقة\" على إعلاناتك\n✅ لوحة تحكم متقدمة لمتابعة الأداء\n✅ أداة تقييم AI لعملائك\n\nممكن أعرض عليك المنصة في 3 دقايق؟\nmaksab.vercel.app\n\nشكراً 🌿",
   },
   {
-    title: "متابعة بعد 48 ساعة",
-    body: "أهلاً،\nبعدت رسالتي قبل كده عن منصة مكسب. لو يهمك نسجلك مجاناً، الرابط جاهز.\nأو ابعتلي \"مش دلوقتي\" وهسيبك.",
+    title: "📋 طلب نقل إعلانات",
+    body: "السلام عليكم،\nمعاك أحمد من مكسب.\nشفنا إعلاناتك على دوبيزل — شغلك مميز!\n\nنقدر ننقل إعلاناتك لمكسب مجاناً في دقايق — مش محتاج تعمل حاجة.\nبس وافق وهنتولى كل حاجة.\n\nيهمك؟",
   },
   {
-    title: "رد على \"كام الاشتراك؟\"",
-    body: "الاشتراك مجاني تماماً حالياً (فترة الإطلاق).\nبعد 3 شهور هيكون فيه باقات اختيارية تبدأ من 299 جنيه/شهر.\nأنت في فترة الـ early adopter → Gold مجاني سنة كاملة.",
+    title: "📋 طلب نقل (سيارات)",
+    body: "السلام عليكم،\nمعاك وليد من مكسب — منصة سيارات مصرية.\nشفنا إعلاناتك وممكن ننقلها لمكسب مجاناً.\nالمنصة بدون عمولات ومش محتاج تعمل أي حاجة.\n\nيهمك نتكلم 5 دقايق؟",
   },
   {
-    title: "شكر على التسجيل",
-    body: "مبروك التسجيل! 🎉\nأنا جاهز أساعدك في أول 3 إعلانات.\nهل معاد 15 دقيقة تليفون مناسب النهاردة أو بكرة؟",
+    title: "⏰ متابعة بعد 48 ساعة",
+    body: "أهلاً،\nبعتلك رسالة قبل كده عن منصة مكسب.\nلو يهمك نسجلك مجاناً، الرابط جاهز.\nأو ابعتلي \"مش دلوقتي\" وهسيبك في حالك.",
+  },
+  {
+    title: "💰 رد على \"كام الاشتراك؟\"",
+    body: "الاشتراك مجاني تماماً حالياً (فترة الإطلاق).\nبعد 3 شهور هيكون فيه باقات اختيارية تبدأ من 299 جنيه/شهر.\nأنت في فترة الـ early adopter — هتكسب Gold مجاني سنة كاملة.",
+  },
+  {
+    title: "🎉 شكر على التسجيل",
+    body: "مبروك التسجيل!\nأنا جاهز أساعدك في أول 3 إعلانات.\nهل معاد 15 دقيقة تليفون مناسب النهاردة أو بكرة؟",
   },
 ];
 
@@ -594,61 +616,184 @@ function ListingsCard({ listings }: { listings: Listing[] }) {
         <Tag className="w-4 h-4 text-[#1B7A3D]" />
         الإعلانات ({listings.length})
       </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {listings.slice(0, 10).map((l) => (
+      <div className="space-y-3">
+        {listings.map((l) => (
           <ListingItem key={l.id} listing={l} />
         ))}
       </div>
-      {listings.length > 10 && (
-        <div className="text-center text-xs text-gray-400 mt-2">
-          + {listings.length - 10} إعلان آخر
-        </div>
-      )}
     </div>
   );
 }
 
 function ListingItem({ listing }: { listing: Listing }) {
+  const [expanded, setExpanded] = useState(false);
   const migrated = listing.migration_status === "migrated";
+  const images = listing.all_image_urls?.length ? listing.all_image_urls : listing.thumbnail_url ? [listing.thumbnail_url] : [];
+  const specs = listing.specifications as Record<string, string> | null;
+
   return (
-    <div className="p-2 border rounded-lg hover:bg-gray-50 transition">
-      <div className="flex items-start gap-2">
-        {listing.thumbnail_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={listing.thumbnail_url}
-            alt={listing.title || "إعلان"}
-            className="w-14 h-14 object-cover rounded shrink-0"
-          />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-gray-800 line-clamp-1">
-            {listing.title || "بدون عنوان"}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-            {listing.price && <span className="font-bold text-[#1B7A3D]">{listing.price.toLocaleString()} جنيه</span>}
-            {listing.city && <span>• {listing.city}</span>}
-          </div>
-          <div className="flex items-center gap-1 mt-1">
-            {migrated && (
-              <span className="text-xs px-1.5 py-0.5 bg-green-100 text-green-700 rounded">
-                ✅ منقول
+    <div className="border rounded-lg overflow-hidden hover:border-[#1B7A3D]/30 transition">
+      {/* Header — always visible */}
+      <div
+        className="p-3 cursor-pointer hover:bg-gray-50"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-start gap-3">
+          {images[0] && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={images[0]}
+              alt={listing.title || "إعلان"}
+              className="w-20 h-20 object-cover rounded shrink-0"
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-gray-900 line-clamp-2">
+              {listing.title || "بدون عنوان"}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mt-1.5">
+              {listing.price != null && (
+                <span className="font-bold text-[#1B7A3D] text-sm">
+                  {listing.price.toLocaleString()} جنيه
+                </span>
+              )}
+              {listing.city && (
+                <span className="flex items-center gap-0.5">
+                  <MapPin className="w-3 h-3" />
+                  {listing.city.replace(/_/g, " ")}
+                </span>
+              )}
+              {listing.area_sqm && <span>{listing.area_sqm} م²</span>}
+              {listing.bedrooms != null && <span>{listing.bedrooms} غرف</span>}
+              {listing.bathrooms != null && <span>{listing.bathrooms} حمام</span>}
+            </div>
+            <div className="flex items-center gap-2 mt-1.5">
+              {migrated && (
+                <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">
+                  ✅ منقول لمكسب
+                </span>
+              )}
+              {listing.source_platform && (
+                <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+                  {listing.source_platform}
+                </span>
+              )}
+              {listing.source_listing_url && (
+                <a
+                  href={listing.source_listing_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink className="w-2.5 h-2.5" />
+                  الأصلي
+                </a>
+              )}
+              <span className="text-[10px] text-gray-400 mr-auto">
+                {expanded ? "▲ أقل" : "▼ تفاصيل"}
               </span>
-            )}
-            {listing.source_listing_url && (
-              <a
-                href={listing.source_listing_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-blue-600 hover:underline flex items-center gap-0.5"
-              >
-                <ExternalLink className="w-2.5 h-2.5" />
-                الأصلي
-              </a>
-            )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="border-t p-3 bg-gray-50 space-y-3">
+          {/* Images gallery */}
+          {images.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {images.map((img, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={i}
+                  src={img}
+                  alt={`صورة ${i + 1}`}
+                  className="w-24 h-24 object-cover rounded shrink-0 border"
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Description */}
+          {listing.description && (
+            <div>
+              <div className="text-xs font-bold text-gray-600 mb-1">الوصف:</div>
+              <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                {listing.description}
+              </div>
+            </div>
+          )}
+
+          {/* Specs grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+            {listing.property_type && (
+              <div className="bg-white p-2 rounded border">
+                <span className="text-gray-500">النوع:</span>{" "}
+                <span className="font-bold">{listing.property_type}</span>
+              </div>
+            )}
+            {listing.area_sqm && (
+              <div className="bg-white p-2 rounded border">
+                <span className="text-gray-500">المساحة:</span>{" "}
+                <span className="font-bold">{listing.area_sqm} م²</span>
+              </div>
+            )}
+            {listing.bedrooms != null && (
+              <div className="bg-white p-2 rounded border">
+                <span className="text-gray-500">غرف:</span>{" "}
+                <span className="font-bold">{listing.bedrooms}</span>
+              </div>
+            )}
+            {listing.bathrooms != null && (
+              <div className="bg-white p-2 rounded border">
+                <span className="text-gray-500">حمامات:</span>{" "}
+                <span className="font-bold">{listing.bathrooms}</span>
+              </div>
+            )}
+            {listing.floor_number != null && (
+              <div className="bg-white p-2 rounded border">
+                <span className="text-gray-500">الطابق:</span>{" "}
+                <span className="font-bold">{listing.floor_number}</span>
+              </div>
+            )}
+            {listing.finishing && (
+              <div className="bg-white p-2 rounded border">
+                <span className="text-gray-500">التشطيب:</span>{" "}
+                <span className="font-bold">{listing.finishing}</span>
+              </div>
+            )}
+            {listing.furnished != null && (
+              <div className="bg-white p-2 rounded border">
+                <span className="text-gray-500">مفروش:</span>{" "}
+                <span className="font-bold">{listing.furnished ? "نعم" : "لا"}</span>
+              </div>
+            )}
+            {listing.source_location && (
+              <div className="bg-white p-2 rounded border">
+                <span className="text-gray-500">الموقع:</span>{" "}
+                <span className="font-bold">{listing.source_location}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Additional specs from JSON */}
+          {specs && Object.keys(specs).length > 0 && (
+            <div>
+              <div className="text-xs font-bold text-gray-600 mb-1">مواصفات إضافية:</div>
+              <div className="grid grid-cols-2 gap-1 text-xs">
+                {Object.entries(specs).map(([key, val]) => (
+                  <div key={key} className="flex gap-1">
+                    <span className="text-gray-500">{key}:</span>
+                    <span className="text-gray-800">{String(val)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
