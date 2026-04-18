@@ -3252,6 +3252,11 @@ const server = createServer(async (req, res) => {
       await handleReverseBuyers(req, res);
     } else if (path === "/process-job") {
       await handleProcessJob(req, res);
+    } else if (path === "/cleanup-locations") {
+      // One-time cleanup: verify existing listings with null source_location
+      sendJson(res, { status: "started", message: "Cleanup running in background. Check Railway logs for progress." });
+      // Run in background (don't block the response)
+      runLocationCleanup().catch((err) => console.error("[Cleanup] Fatal error:", err));
     } else if (path === "/health") {
       sendJson(res, {
         ok: true,
@@ -3360,6 +3365,74 @@ server.listen(PORT, () => {
     }
   }, 10000); // 10 ثواني بعد البدء
 });
+
+// ─── Location Cleanup (one-time) ──────────────────────────────
+async function runLocationCleanup() {
+  console.log("[Cleanup] Starting location verification for existing listings...");
+  const supabase = getSupabase();
+
+  // Get listings with null source_location from dubizzle (most likely to have issues)
+  const { data: listings, error } = await supabase
+    .from("ahe_listings")
+    .select("id, title, source_listing_url, source_location, city, governorate, source_platform")
+    .eq("is_duplicate", false)
+    .is("source_location", null)
+    .in("source_platform", ["dubizzle"])
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    console.error("[Cleanup] Query error:", error.message);
+    return;
+  }
+
+  console.log(`[Cleanup] Found ${listings?.length || 0} listings with null source_location`);
+
+  let verified = 0, rejected = 0, updated = 0, fetchErrors = 0;
+
+  for (const listing of listings || []) {
+    console.log(`[Cleanup ${verified + rejected + 1}/${listings!.length}] "${listing.title?.substring(0, 50)}"`);
+
+    const detailLoc = await fetchDetailPageLocation(listing.source_listing_url);
+
+    if (detailLoc.governorate) {
+      const normalizedGov = normalizeGovernorate(detailLoc.governorate);
+
+      if (normalizedGov && normalizedGov !== "alexandria") {
+        console.log(`  ❌ REJECT: ${detailLoc.area}, ${detailLoc.governorate}`);
+        await supabase.from("ahe_listings").update({
+          is_duplicate: true,
+          migration_status: "rejected",
+          source_location: `${detailLoc.area || ""}, ${detailLoc.governorate}`,
+        }).eq("id", listing.id);
+        rejected++;
+      } else {
+        // Confirmed Alexandria — update source_location and city
+        const newCity = detailLoc.area ? detailLoc.area.replace(/\s+/g, "_") : listing.city;
+        await supabase.from("ahe_listings").update({
+          source_location: `${detailLoc.area || ""}, ${detailLoc.governorate}`,
+          city: newCity,
+        }).eq("id", listing.id);
+        verified++;
+        if (newCity !== listing.city) updated++;
+        console.log(`  ✅ OK: ${detailLoc.area}, ${detailLoc.governorate}`);
+      }
+    } else {
+      console.log(`  ⚠️ Could not extract location`);
+      fetchErrors++;
+    }
+
+    // Rate limit: 3 seconds between requests
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+
+  console.log(`\n[Cleanup] ===== COMPLETE =====`);
+  console.log(`  ✅ Verified Alexandria: ${verified}`);
+  console.log(`  ❌ Rejected non-Alexandria: ${rejected}`);
+  console.log(`  📝 City updated: ${updated}`);
+  console.log(`  ⚠️ Fetch errors: ${fetchErrors}`);
+  console.log(`  📊 Total: ${verified + rejected + fetchErrors}/${listings?.length || 0}`);
+}
 
 // Also start the auction cron worker
 console.log("[Server] Starting auction cron worker...");
