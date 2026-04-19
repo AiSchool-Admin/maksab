@@ -53,10 +53,10 @@ export default function SooqMsrBookmarkletPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            📋 Bookmarklet — حصاد سوق مصر
+            📋 Bookmarklet — حصاد سمسار مصر
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            استخراج إعلانات مبوبة من sooqmsr.com — محظور من السيرفر (403)
+            استخراج إعلانات مبوبة من semsarmasr.com — محظور من السيرفر (403)
           </p>
         </div>
         <Link
@@ -72,7 +72,7 @@ export default function SooqMsrBookmarkletPage() {
           ليه Bookmarklet مش Server Fetch؟
         </h2>
         <p className="text-sm text-red-600">
-          سوق مصر بيحظر الطلبات من سيرفرات Cloud بكود 403.
+          سمسار مصر بيحظر الطلبات من سيرفرات Cloud بكود 403.
           الـ Bookmarklet بيشتغل من متصفح الموظف.
         </p>
       </div>
@@ -86,7 +86,7 @@ export default function SooqMsrBookmarkletPage() {
           </li>
           <li className="flex gap-2">
             <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-xs">2</span>
-            <span>افتح صفحة إعلانات في <code className="bg-blue-100 px-1 rounded" dir="ltr">sooqmsr.com</code></span>
+            <span>افتح صفحة إعلانات في <code className="bg-blue-100 px-1 rounded" dir="ltr">semsarmasr.com</code></span>
           </li>
           <li className="flex gap-2">
             <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-xs">3</span>
@@ -102,7 +102,7 @@ export default function SooqMsrBookmarkletPage() {
           {appUrl ? (
             <div
               dangerouslySetInnerHTML={{
-                __html: `<a href="${bookmarkletCode}" style="display:inline-block;padding:12px 24px;background:#7B1FA2;color:white;border-radius:12px;text-decoration:none;font-weight:bold;font-size:16px;cursor:grab;user-select:none;box-shadow:0 2px 8px rgba(0,0,0,0.2);" onclick="event.preventDefault();alert('اسحب الزر ده لشريط المفضلة!');">📋 حصاد سوق مصر</a>`,
+                __html: `<a href="${bookmarkletCode}" style="display:inline-block;padding:12px 24px;background:#7B1FA2;color:white;border-radius:12px;text-decoration:none;font-weight:bold;font-size:16px;cursor:grab;user-select:none;box-shadow:0 2px 8px rgba(0,0,0,0.2);" onclick="event.preventDefault();alert('اسحب الزر ده لشريط المفضلة!');">📋 حصاد سمسار مصر</a>`,
               }}
             />
           ) : (
@@ -162,10 +162,10 @@ function buildSooqMsrBookmarklet(appUrl: string): string {
   const code = `
 (function(){
 var MAKSAB='${appUrl}';
-var PLATFORM='sooqmsr';
+var PLATFORM='semsarmasr';
 
-if(!window.location.hostname.includes('sooqmsr')){
-  alert('\\u274C هذا الـ Bookmarklet خاص بموقع سوق مصر (sooqmsr.com)\\n\\nافتح sooqmsr.com وجرب تاني');
+if(!window.location.hostname.includes('sooqmsr') && !window.location.hostname.includes('semsarmasr')){
+  alert('\\u274C هذا الـ Bookmarklet خاص بموقع سمسار مصر (semsarmasr.com)\\n\\nافتح semsarmasr.com وجرب تاني');
   return;
 }
 
@@ -191,7 +191,7 @@ function extractListings(){
     var url=a.href;
     if(!url||seenUrls[url])continue;
     if(url.includes('/search')||url.includes('/filter')||url.includes('/login')||url.includes('/register'))continue;
-    if(!/sooqmsr/.test(url)&&!/^https?:\\/\\//.test(url))continue;
+    if(!/sooqmsr|semsarmasr/.test(url)&&!/^https?:\\/\\//.test(url))continue;
     seenUrls[url]=true;
 
     var card=a.closest('[class*=card],[class*=listing],[class*=item],[class*=ad],[class*=post],article')||a.parentElement.parentElement||a;
@@ -243,7 +243,7 @@ function extractListings(){
       var link=allLinks[j];
       var href=link.href;
       if(!href||seenUrls[href])continue;
-      if(!/sooqmsr/.test(href))continue;
+      if(!/sooqmsr|semsarmasr/.test(href))continue;
       if(href.includes('/category')||href.includes('/search')||href.includes('/page'))continue;
       var path=new URL(href).pathname;
       if(path.split('/').length<3)continue;
@@ -267,7 +267,7 @@ function extractListings(){
 
 var listings=extractListings();
 if(listings.length===0){
-  alert('لم يتم العثور على إعلانات\\n\\nتأكد إنك على صفحة إعلانات في سوق مصر');
+  alert('لم يتم العثور على إعلانات\\n\\nتأكد إنك على صفحة إعلانات في سمسار مصر');
   return;
 }
 
