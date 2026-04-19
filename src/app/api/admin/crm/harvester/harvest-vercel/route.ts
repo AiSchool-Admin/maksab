@@ -78,7 +78,7 @@ interface VercelHarvestResult {
   parserDebug: OpenSooqParseDebug | AqarmapParseDebug | PFParseDebug | OlxParseDebug | null;
 }
 
-async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult> {
+async function harvestFromVercel(scopeCode: string, page: number = 1): Promise<VercelHarvestResult> {
   const startTime = Date.now();
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -140,14 +140,19 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
     `[Vercel Harvest] 🚀 Starting: "${scope.name}" (${scope.code}) — platform: "${platform}" (raw: "${scope.source_platform}")`
   );
 
-  // 3. Fetch list page (max_pages=1 due to 60s timeout)
+  // 3. Fetch list page
   const parser = getParser(platform);
   let listings: ListPageListing[] = [];
   let pagesFetched = 0;
   let parserDebug: OpenSooqParseDebug | AqarmapParseDebug | PFParseDebug | OlxParseDebug | null = null;
 
   try {
-    const pageUrl = scope.base_url;
+    // Build paginated URL
+    let pageUrl = scope.base_url;
+    if (page > 1) {
+      const pattern = scope.pagination_pattern || "?page={page}";
+      pageUrl = scope.base_url + pattern.replace("{page}", String(page));
+    }
     console.log(`[Vercel Harvest] 📄 Fetching: ${pageUrl.substring(0, 100)}`);
 
     const controller = new AbortController();
@@ -600,7 +605,7 @@ async function harvestFromVercel(scopeCode: string): Promise<VercelHarvestResult
 // ═══ POST Handler ═══
 export async function POST(req: NextRequest) {
   try {
-    const { scope_code } = await req.json();
+    const { scope_code, page } = await req.json();
 
     if (!scope_code) {
       return NextResponse.json(
@@ -609,7 +614,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await harvestFromVercel(scope_code);
+    const result = await harvestFromVercel(scope_code, page || 1);
     return NextResponse.json(result, { status: result.success ? 200 : 500 });
   } catch (error) {
     return NextResponse.json(

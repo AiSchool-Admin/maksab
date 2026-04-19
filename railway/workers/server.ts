@@ -27,8 +27,6 @@ const CRON_SECRET = process.env.CRON_SECRET || "";
 const VERCEL_HARVEST_URL = process.env.VERCEL_HARVEST_URL || ""; // e.g. https://maksab.vercel.app/api/admin/crm/harvester/harvest-vercel
 
 // Platforms that should be harvested via Vercel (Railway IPs blocked by WAF)
-// hatla2ee, contactcars, semsarmasr removed — both Vercel AND Railway blocked (403)
-// They will try Railway locally first, then fail gracefully
 const VERCEL_DELEGATED_PLATFORMS = [
   "opensooq",
   "aqarmap",
@@ -36,6 +34,7 @@ const VERCEL_DELEGATED_PLATFORMS = [
   "propertyfinder",
   "yallamotor",
   "olx",
+  "semsarmasr",
 ];
 
 const BROWSER_HEADERS: Record<string, string> = {
@@ -2571,44 +2570,82 @@ async function calculateMarketBalanceWorker(): Promise<Array<{
 async function harvestViaVercel(scopeCode: string): Promise<HarvestResult> {
   const startTime = Date.now();
 
+  // Fetch scope to get max_pages_per_harvest
+  let maxPages = 1;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 70000); // 70s (Vercel has 60s limit)
+    const { data: scopeData } = await getSupabase()
+      .from("ahe_scopes")
+      .select("max_pages_per_harvest, pagination_pattern, base_url")
+      .eq("code", scopeCode)
+      .maybeSingle();
+    if (scopeData?.max_pages_per_harvest) maxPages = Math.min(scopeData.max_pages_per_harvest, 5);
+  } catch { /* use default 1 */ }
 
-    const response = await fetch(VERCEL_HARVEST_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope_code: scopeCode }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+  let totalNew = 0, totalDup = 0, totalSellers = 0, totalFetched = 0, totalPhones = 0;
+  const allErrors: string[] = [];
 
-    const data = await response.json();
+  try {
+    // Call Vercel once per page (each call has 60s to process 1 page)
+    for (let page = 1; page <= maxPages; page++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 70000);
+
+      const response = await fetch(VERCEL_HARVEST_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope_code: scopeCode, page }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      const data = await response.json();
+      const pageNew = data.listings_new || 0;
+      const pageDup = data.listings_duplicate || 0;
+
+      totalNew += pageNew;
+      totalDup += pageDup;
+      totalSellers += data.sellers_new || 0;
+      totalFetched += data.listings_fetched || 0;
+      totalPhones += data.phones_extracted || 0;
+      if (data.errors?.length) allErrors.push(...data.errors);
+
+      console.log(
+        `[Vercel Proxy] ${data.success ? "✅" : "❌"} ${scopeCode} page ${page}/${maxPages}: ` +
+        `${pageNew} new, ${pageDup} dup, ${data.duration_ms || 0}ms`
+      );
+
+      // If page returned 0 listings, no point fetching more pages
+      if ((data.listings_fetched || 0) === 0) {
+        console.log(`[Vercel Proxy] Page ${page} returned 0 listings — stopping`);
+        break;
+      }
+
+      // Small delay between pages to avoid rate limiting
+      if (page < maxPages) await new Promise((r) => setTimeout(r, 3000));
+    }
 
     console.log(
-      `[Vercel Proxy] ${data.success ? "✅" : "❌"} ${scopeCode}: ` +
-      `${data.listings_new || 0} new, ${data.listings_duplicate || 0} dup, ` +
-      `${data.sellers_new || 0} sellers, ${data.duration_ms || 0}ms`
+      `[Vercel Proxy] 📊 ${scopeCode} TOTAL: ${totalNew} new, ${totalDup} dup, ${totalSellers} sellers`
     );
 
     return {
-      success: data.success ?? false,
+      success: true,
       scope_code: scopeCode,
-      pages_fetched: data.pages_fetched || 0,
-      fetched: data.listings_fetched || 0,
-      new: data.listings_new || 0,
-      duplicate: data.listings_duplicate || 0,
-      sellers_new: data.sellers_new || 0,
-      phones_extracted: data.phones_extracted || 0,
+      pages_fetched: maxPages,
+      fetched: totalFetched,
+      new: totalNew,
+      duplicate: totalDup,
+      sellers_new: totalSellers,
+      phones_extracted: totalPhones,
       crm_queued: 0,
-      errors: data.errors || [],
+      errors: allErrors,
       duration_ms: Date.now() - startTime,
       debug: {
         via: "vercel",
         vercel_url: VERCEL_HARVEST_URL,
-        vercel_duration_ms: data.duration_ms,
-        buyers_detected: data.buyers_detected || 0,
-        warnings: data.warnings || [],
+        pages_harvested: maxPages,
+        buyers_detected: 0,
+        warnings: [],
       },
     };
   } catch (err: any) {
