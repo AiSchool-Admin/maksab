@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Search, Users, Filter, ChevronRight, Phone, Home, Car, Tag,
-  TrendingUp, Loader2, RefreshCw, MessageSquare,
+  TrendingUp, Loader2, RefreshCw, MessageSquare, Bell, CheckCircle2,
+  UserPlus, Send as SendIcon, ArrowUpRight,
 } from "lucide-react";
 import { getAdminHeaders } from "@/app/admin/layout";
 
@@ -44,6 +45,14 @@ export default function SalesCrmPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Daily stats
+  const [dailyStats, setDailyStats] = useState<{
+    registeredToday: number;
+    consentedToday: number;
+    contactedToday: number;
+    recentEvents: Array<{ name: string; action: string; time: string; sellerId: string }>;
+  }>({ registeredToday: 0, consentedToday: 0, contactedToday: 0, recentEvents: [] });
+
   // Filters
   const [q, setQ] = useState("");
   const [category, setCategory] = useState<string>("properties");
@@ -53,6 +62,16 @@ export default function SalesCrmPage() {
   const [offset, setOffset] = useState(0);
 
   const limit = 50;
+
+  const fetchDailyStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/sales/crm/daily-stats", { headers: getAdminHeaders() });
+      if (res.ok) {
+        const json = await res.json();
+        setDailyStats(json);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   const fetchSellers = useCallback(async () => {
     setLoading(true);
@@ -82,6 +101,13 @@ export default function SalesCrmPage() {
     return () => clearTimeout(t);
   }, [fetchSellers]);
 
+  // Fetch daily stats on mount + auto-refresh every 30 seconds
+  useEffect(() => {
+    fetchDailyStats();
+    const interval = setInterval(fetchDailyStats, 30000);
+    return () => clearInterval(interval);
+  }, [fetchDailyStats]);
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6" dir="rtl">
       {/* Header */}
@@ -98,6 +124,72 @@ export default function SalesCrmPage() {
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
         </button>
       </div>
+
+      {/* Daily Stats Bar */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="bg-white rounded-xl border p-3 flex items-center gap-3">
+          <div className="p-2 bg-green-50 rounded-lg">
+            <CheckCircle2 className="w-5 h-5 text-green-600" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-green-700">{dailyStats.registeredToday}</div>
+            <div className="text-xs text-gray-500">سجّل النهاردة</div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border p-3 flex items-center gap-3">
+          <div className="p-2 bg-amber-50 rounded-lg">
+            <UserPlus className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-amber-700">{dailyStats.consentedToday}</div>
+            <div className="text-xs text-gray-500">وافق النهاردة</div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border p-3 flex items-center gap-3">
+          <div className="p-2 bg-blue-50 rounded-lg">
+            <SendIcon className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-blue-700">{dailyStats.contactedToday}</div>
+            <div className="text-xs text-gray-500">تواصل النهاردة</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Events (live notifications) */}
+      {dailyStats.recentEvents.length > 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Bell className="w-4 h-4 text-green-700" />
+            <span className="text-sm font-bold text-green-800">آخر الأحداث (تحديث تلقائي كل 30 ثانية)</span>
+          </div>
+          <div className="space-y-1">
+            {dailyStats.recentEvents.map((event, i) => (
+              <Link
+                key={i}
+                href={`/admin/sales/crm/${event.sellerId}`}
+                className="flex items-center justify-between p-2 bg-white rounded-lg hover:bg-green-50 transition text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  {event.action === "registered" && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                  {event.action === "consented" && <UserPlus className="w-4 h-4 text-amber-600" />}
+                  {event.action === "sent" && <SendIcon className="w-4 h-4 text-blue-600" />}
+                  <span className="font-medium text-gray-800">{event.name}</span>
+                  <span className="text-gray-500">
+                    {event.action === "registered" ? "تم التسجيل ✅" :
+                     event.action === "consented" ? "وافق على النقل" :
+                     "تم التواصل"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-gray-400">
+                  <span>{event.time}</span>
+                  <ArrowUpRight className="w-3 h-3" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-xl border p-4 mb-4 space-y-3">
