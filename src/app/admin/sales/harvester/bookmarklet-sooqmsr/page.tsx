@@ -290,7 +290,7 @@ var popup=window.open(MAKSAB+'/admin/crm/harvester/receive','maksab_harvest','wi
 if(!popup){statusDiv.style.background='#DC2626';statusDiv.textContent='\\u274C المتصفح منع النافذة — اسمح بالـ popups';setTimeout(function(){statusDiv.remove();},8000);return;}
 
 var checkReady=setInterval(function(){
-  try{popup.postMessage({type:'harvest_data',payload:payload,token:'bookmarklet-sooqmsr'},MAKSAB);}catch(e){}
+  try{popup.postMessage({type:'harvest_data',payload:payload,token:'8424a27fde826eaf7d6e3ab0e7710804f7f9ff7f3e94fef0dc467e945a8b3f58'},MAKSAB);}catch(e){}
 },500);
 
 var timeout=setTimeout(function(){
