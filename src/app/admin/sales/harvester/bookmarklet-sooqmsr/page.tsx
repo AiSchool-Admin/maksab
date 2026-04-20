@@ -163,38 +163,60 @@ document.body.appendChild(sd);
 function log(msg){sd.innerHTML=msg;}
 
 function extractCards(doc){
-  var cards=doc.querySelectorAll('article.property-card');
+  var cards=doc.querySelectorAll('div.ListDesStyle');
   var results=[];
   for(var i=0;i<cards.length;i++){
     var card=cards[i];
-    var linkEl=card.querySelector('a.card-link');
+    var dataId=card.getAttribute('data-id')||'';
+    var linkEl=card.querySelector('.AdTitleStyle h2 a');
     if(!linkEl)continue;
-    var fullUrl=linkEl.href;
+    var fullUrl=linkEl.href||linkEl.getAttribute('href')||'';
+    if(!fullUrl)continue;
     var url=fullUrl.split('?')[0];
-    var title=(card.querySelector('h3.title')||{}).textContent||'';
-    title=title.trim();
+    var title=(linkEl.textContent||'').trim()||linkEl.getAttribute('title')||'';
     if(!title)continue;
-    var descMeta=card.querySelector('meta[itemprop="description"]');
-    var desc=descMeta?descMeta.getAttribute('content')||'':'';
-    var areaEl=card.querySelector('span[itemprop="addressRegion"]');
-    var cityEl=card.querySelector('span[itemprop="addressLocality"]');
-    var area=areaEl?areaEl.textContent.trim():'';
-    var city=cityEl?cityEl.textContent.trim():'';
-    var imgEl=card.querySelector('img[itemprop="image"]');
-    var img=imgEl?imgEl.src:'';
-    var text=card.textContent||'';
-    var pm=text.match(/([\\d,]+)\\s*جنيه/);
+    var descEl=card.querySelector('.AdDesc');
+    var desc=descEl?(descEl.textContent||'').trim():'';
+    var locEl=card.querySelector('.ListingLocation');
+    var locText=locEl?(locEl.textContent||'').trim():'';
+    var locParts=locText.split('-').map(function(s){return s.trim();});
+    var area=locParts[0]||'';
+    var city=locParts.length>1?locParts[locParts.length-1]:'';
+    var imgEl=card.querySelector('.ThumbCont img');
+    var img='';
+    if(imgEl){
+      img=imgEl.getAttribute('src')||imgEl.src||'';
+      if(img.indexOf('//')===0)img='https:'+img;
+    }
+    var priceEl=card.querySelector('.Price')||card.querySelector('#cellPriceMob');
+    var priceText=priceEl?(priceEl.textContent||''):'';
+    var pm=priceText.match(/([\\d,]+)/);
     var price=pm?parseInt(pm[1].replace(/,/g,'')):null;
-    var ph=text.match(/(?:\\+?201|01)[0-25]\\d{8}/);
+    var specs=card.querySelectorAll('.SpecsCont span');
+    var specArr=[];
+    for(var j=0;j<specs.length;j++){
+      var sp=(specs[j].textContent||'').trim();
+      if(sp)specArr.push(sp);
+    }
     results.push({
-      url:url,title:title,description:desc,
-      price:price,thumbnailUrl:img||null,
-      location:area+(area&&city?', ':'')+city,
-      city:city,area:area,
-      sellerPhone:ph?ph[0].replace(/^\\+?2/,''):null,
-      dateText:'',sellerName:null,sellerProfileUrl:null,
-      isVerified:false,isBusiness:false,isFeatured:text.includes('إعلان مميز'),
-      supportsExchange:false,isNegotiable:text.includes('قابل للتفاوض')
+      url:url,
+      external_id:dataId,
+      title:title,
+      description:desc||specArr.join(' — '),
+      price:price,
+      thumbnailUrl:img||null,
+      location:locText,
+      city:city,
+      area:area,
+      sellerPhone:null,
+      dateText:'',
+      sellerName:null,
+      sellerProfileUrl:null,
+      isVerified:false,
+      isBusiness:false,
+      isFeatured:false,
+      supportsExchange:false,
+      isNegotiable:false
     });
   }
   return results;
@@ -253,8 +275,8 @@ function sendToMaksab(items,pages){
     url:location.href,
     listings:items,
     timestamp:new Date().toISOString(),
-    source:'bookmarklet-v3',
-    strategy:'semsarmasr-schema-org',
+    source:'bookmarklet-v4',
+    strategy:'semsarmasr-listdesstyle',
     scope_code:null,
     platform:'semsarmasr'
   });
