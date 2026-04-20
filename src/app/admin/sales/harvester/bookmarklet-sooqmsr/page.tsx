@@ -144,7 +144,6 @@ export default function SemsarMasrBookmarkletPage() {
 function buildBookmarklet(appUrl: string): string {
   const TOKEN = "8424a27fde826eaf7d6e3ab0e7710804f7f9ff7f3e94fef0dc467e945a8b3f58";
 
-  // The bookmarklet code — minified but readable
   const code = `(function(){
 var MAKSAB='${appUrl}';
 var TOKEN='${TOKEN}';

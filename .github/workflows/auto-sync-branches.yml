@@ -1,12 +1,10 @@
 name: Auto-sync feature branch with main
 
-# Automatically merges main into the feature branch after any push to main.
-# Prevents recurring merge conflicts in auto-deploy PRs.
-
 on:
   push:
     branches:
       - main
+      - 'claude/*'
 
 permissions:
   contents: write
@@ -26,13 +24,20 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Find all claude/* branches
+      - name: Determine branches to sync
         id: branches
         run: |
           git fetch --all
-          BRANCHES=$(git branch -r | grep 'origin/claude/' | sed 's|origin/||' | tr '\n' ' ')
+          PUSHED_BRANCH="${GITHUB_REF#refs/heads/}"
+
+          if [ "$PUSHED_BRANCH" = "main" ]; then
+            BRANCHES=$(git branch -r | grep 'origin/claude/' | sed 's|origin/||' | tr -s ' ' | tr '\n' ' ')
+          else
+            BRANCHES="$PUSHED_BRANCH"
+          fi
+
           echo "branches=$BRANCHES" >> $GITHUB_OUTPUT
-          echo "Found branches: $BRANCHES"
+          echo "Syncing branches: $BRANCHES"
 
       - name: Sync each branch with main
         run: |
@@ -40,22 +45,23 @@ jobs:
             echo "=== Syncing $branch with main ==="
             git checkout "$branch" || continue
 
-            # Try fast-forward merge first (no conflicts possible)
+            if git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
+              echo "✅ $branch already up to date with main"
+              continue
+            fi
+
             if git merge origin/main --ff-only 2>/dev/null; then
-              echo "✅ Fast-forward merge successful for $branch"
+              echo "✅ Fast-forward merge for $branch"
               git push origin "$branch"
               continue
             fi
 
-            # Try regular merge preferring OUR version (feature branch is newer)
-            # This keeps all our WIP changes intact while recording the merge
             if git merge origin/main --no-edit --strategy-option=ours 2>/dev/null; then
               echo "✅ Auto-merged $branch with main (preferring branch)"
               git push origin "$branch"
               continue
             fi
 
-            # If merge failed, abort and log — don't force anything destructive
             git merge --abort 2>/dev/null || true
-            echo "⚠️ Could not auto-sync $branch — skipping (will need manual resolution)"
+            echo "⚠️ Could not auto-sync $branch — skipping"
           done
