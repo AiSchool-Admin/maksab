@@ -40,6 +40,7 @@ import {
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { detectSellerTypeSlug } from "@/lib/crm/harvester/seller-classifier";
 import { parseRelativeDate } from "@/lib/crm/harvester/parsers/date-parser";
+import { checkListingAge, DEFAULT_MAX_AGE_DAYS } from "@/lib/crm/harvester/parsers/age-filter";
 import { mapLocation, normalizeGovernorate, governorateToArabic, extractGovernorateFromUrl } from "@/lib/crm/harvester/parsers/location-mapper";
 import { extractFromTitle } from "@/lib/crm/harvester/title-extractor";
 import { createBuyerFromSeller, updateSellerBuyProbability } from "@/lib/crm/harvester/seller-to-buyer";
@@ -267,6 +268,18 @@ async function harvestFromVercel(scopeCode: string, page: number = 1): Promise<V
 
   console.log(`[Filter] ${listings.length} → ${filteredListings.length} after governorate filter (scope=${scopeGov})`);
 
+  // 4b. Age filter — skip listings older than 30 days
+  const maxAgeDays = scope.listing_max_age_days || DEFAULT_MAX_AGE_DAYS;
+  const freshListings = filteredListings.filter((l) => {
+    const { isFresh, ageInDays } = checkListingAge(l.dateText, maxAgeDays);
+    if (!isFresh) {
+      console.log(`[Age Filter] Skipping old listing (${ageInDays?.toFixed(1)} days): ${l.title?.slice(0, 50)}`);
+    }
+    return isFresh;
+  });
+  const staleCount = filteredListings.length - freshListings.length;
+  console.log(`[Age Filter] ${filteredListings.length} → ${freshListings.length} fresh (${staleCount} stale >${maxAgeDays}d)`);
+
   // 5. Deduplicate + Store
   let newCount = 0;
   let dupCount = 0;
@@ -274,10 +287,10 @@ async function harvestFromVercel(scopeCode: string, page: number = 1): Promise<V
   let phonesExtracted = 0;
   let buyersDetected = 0;
 
-  for (const listing of filteredListings) {
+  for (const listing of freshListings) {
     // Time guard — stop if approaching timeout
     if (Date.now() - startTime > 50000) {
-      warnings.push(`Stopped at ${newCount + dupCount}/${filteredListings.length} — approaching 60s timeout`);
+      warnings.push(`Stopped at ${newCount + dupCount}/${freshListings.length} — approaching 60s timeout`);
       break;
     }
 

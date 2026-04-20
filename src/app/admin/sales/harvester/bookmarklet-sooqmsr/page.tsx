@@ -210,6 +210,8 @@ function extractCards(doc){
       var sp=(specs[j].textContent||'').trim();
       if(sp)specArr.push(sp);
     }
+    var dateEl=card.querySelector('.ListingDate,[class*="date"]');
+    var dateText=dateEl?(dateEl.textContent||'').trim():'';
     results.push({
       url:url,
       external_id:dataId,
@@ -221,7 +223,7 @@ function extractCards(doc){
       city:city,
       area:area,
       sellerPhone:null,
-      dateText:'',
+      dateText:dateText,
       sellerName:null,
       sellerProfileUrl:null,
       isVerified:false,
@@ -240,6 +242,23 @@ function isAlexandria(item){
   var alexAreas=['سموحة','سيدي بشر','المنتزه','لوران','ستانلي','كليوباترا','جناكليس','محرم بك','سيدي جابر','المعمورة','العصافرة','الإبراهيمية','رشدي','ميامي','المندرة','العامرية','كينج مريوط','أبيس','جليم','كفر عبدو','النخيل','كامب شيزار','سبورتنج','الشاطبي','بولكلي','فلمنج','العجمي','البيطاش','برج العرب','السيوف','صواري','مروج','بالم هيلز','المنشية','محطة الرمل','القباري','الدخيلة','الهانوفيل','أبو تلات','زيزينيا','سان ستيفانو','وابور المياة','باكوس','الحضرة','المكس','بحري'];
   for(var i=0;i<alexAreas.length;i++){if(loc.includes(alexAreas[i]))return true;}
   return false;
+}
+
+// Parse Arabic relative date → age in days (null if unknown)
+function parseAgeDays(text){
+  if(!text)return null;
+  var t=text.trim();
+  if(/الآن|لسه|just now/i.test(t))return 0;
+  var m=t.match(/(\\d+)/);
+  var n=m?parseInt(m[1]):1;
+  if(/دقيق|minute/i.test(t))return n/(60*24);
+  if(/ساع|hour/i.test(t))return n/24;
+  if(/أمس|امبارح|yesterday/i.test(t))return 1;
+  if(/يوم|day/i.test(t))return n;
+  if(/أسبوع|week/i.test(t))return n*7;
+  if(/شهر|month/i.test(t))return n*30;
+  if(/سنة|year/i.test(t))return n*365;
+  return null;
 }
 
 function fetchPhone(url){
@@ -314,10 +333,12 @@ function sendToMaksab(items,fromPg,toPg){
 var allItems=[];
 var lastPageProcessed=0;
 var noNewPages=0;
+var reachedArchive=false;
 var MAX_PAGE=200;
+var MAX_AGE_DAYS=30;
 
 function harvestPage(pg){
-  if(pg>MAX_PAGE||noNewPages>=3){finish();return;}
+  if(pg>MAX_PAGE||noNewPages>=3||reachedArchive){finish();return;}
   log('🔄 صفحة '+pg+'...<br>جديد: '+allItems.length+' | سابق: '+prevCount);
   if(pg===1){
     processPage(document,pg);
@@ -349,16 +370,29 @@ function harvestPage(pg){
 function processPage(doc,pg){
   var cards=extractCards(doc);
   var alexCards=cards.filter(isAlexandria);
+  // Age filter: skip listings older than MAX_AGE_DAYS
+  var fresh=0,stale=0,unknown=0;
+  var freshCards=[];
+  for(var k=0;k<alexCards.length;k++){
+    var age=parseAgeDays(alexCards[k].dateText);
+    if(age===null){unknown++;freshCards.push(alexCards[k]);}
+    else if(age<=MAX_AGE_DAYS){fresh++;freshCards.push(alexCards[k]);}
+    else{stale++;}
+  }
+  var totalKnown=fresh+stale;
+  if(totalKnown>=5&&stale/totalKnown>=0.5){
+    reachedArchive=true;
+  }
   var newCount=0;
-  for(var i=0;i<alexCards.length;i++){
-    var u=alexCards[i].url;
+  for(var i=0;i<freshCards.length;i++){
+    var u=freshCards[i].url;
     if(!harvestedUrls[u]){
       harvestedUrls[u]=1;
-      allItems.push(alexCards[i]);
+      allItems.push(freshCards[i]);
       newCount++;
     }
   }
-  log('📄 صفحة '+pg+': '+cards.length+' إعلان ('+alexCards.length+' إسكندرية, '+newCount+' جديد)<br>إجمالي الدفعة: '+allItems.length+' | إجمالي كلي: '+Object.keys(harvestedUrls).length);
+  log('📄 صفحة '+pg+': '+cards.length+' ('+alexCards.length+' إسكندرية, '+fresh+' حديث, '+stale+' قديم >30يوم, '+newCount+' جديد)<br>إجمالي: '+allItems.length+(reachedArchive?'<br>🛑 وصلنا للأرشيف (>50% قديم)':''));
 }
 
 function finish(){

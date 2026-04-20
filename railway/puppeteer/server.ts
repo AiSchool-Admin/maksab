@@ -24,9 +24,27 @@ const CRON_SECRET = process.env.CRON_SECRET || "";
 
 const BLOCKED_PLATFORMS = ["semsarmasr", "carsemsar", "hatla2ee", "contactcars"];
 
-const MAX_PAGES_PER_SCOPE = 5;
+const MAX_PAGES_PER_SCOPE = 20; // will stop early when old listings found
+const MAX_AGE_DAYS = 30;
 const DELAY_BETWEEN_PAGES = 3000;
 const DELAY_BETWEEN_SCOPES = 5000;
+
+// Parse relative Arabic dates: "منذ 3 ساعات" → days ago
+function parseAgeInDays(text: string | null | undefined): number | null {
+  if (!text) return null;
+  const t = text.trim();
+  if (/الآن|لسه|just now/i.test(t)) return 0;
+  const numMatch = t.match(/(\d+)/);
+  const num = numMatch ? parseInt(numMatch[1]) : 1;
+  if (/دقيق|minute/i.test(t)) return num / (60 * 24);
+  if (/ساع|hour/i.test(t)) return num / 24;
+  if (/أمس|امبارح|yesterday/i.test(t)) return 1;
+  if (/يوم|day/i.test(t)) return num;
+  if (/أسبوع|week/i.test(t)) return num * 7;
+  if (/شهر|month/i.test(t)) return num * 30;
+  if (/سنة|year/i.test(t)) return num * 365;
+  return null;
+}
 
 function getSupabase(): SupabaseClient {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -52,6 +70,7 @@ interface ExtractedListing {
   sellerPhone: string | null;
   sellerName: string | null;
   externalId: string | null;
+  dateText: string | null;
 }
 
 async function extractSemsarMasr(page: Page): Promise<ExtractedListing[]> {
@@ -112,6 +131,10 @@ async function extractSemsarMasr(page: Page): Promise<ExtractedListing[]> {
         if (!phone.startsWith("0")) phone = "0" + phone;
       }
 
+      // Extract date text: semsarmasr shows dates like "منذ 3 أيام"
+      const dateEl = card.querySelector(".ListingDate, [class*='date']");
+      const dateText = dateEl ? (dateEl.textContent || "").trim() : "";
+
       results.push({
         url,
         title,
@@ -124,6 +147,7 @@ async function extractSemsarMasr(page: Page): Promise<ExtractedListing[]> {
         sellerPhone: phone,
         sellerName: nameMap[adIdKey] || null,
         externalId: adIdKey,
+        dateText: dateText || null,
       });
     });
 
@@ -156,6 +180,9 @@ async function extractHatla2ee(page: Page): Promise<ExtractedListing[]> {
       const text = card.textContent || "";
       const ph = text.match(/(?:\+?201|01)[0-25]\d{8}/);
 
+      const dateEl = card.querySelector("[class*='date'], [class*='time']");
+      const dateText = dateEl ? (dateEl.textContent || "").trim() : "";
+
       results.push({
         url,
         title,
@@ -168,6 +195,7 @@ async function extractHatla2ee(page: Page): Promise<ExtractedListing[]> {
         sellerPhone: ph ? ph[0].replace(/^\+?2/, "") : null,
         sellerName: null,
         externalId: null,
+        dateText: dateText || null,
       });
     });
     return results;
@@ -196,6 +224,9 @@ async function extractContactCars(page: Page): Promise<ExtractedListing[]> {
       const imgEl = card.querySelector("img") as HTMLImageElement;
       const img = imgEl ? imgEl.src || imgEl.getAttribute("data-src") || "" : "";
 
+      const dateEl = card.querySelector("[class*='date'], [class*='time']");
+      const dateText = dateEl ? (dateEl.textContent || "").trim() : "";
+
       results.push({
         url,
         title,
@@ -208,6 +239,7 @@ async function extractContactCars(page: Page): Promise<ExtractedListing[]> {
         sellerPhone: null,
         sellerName: null,
         externalId: null,
+        dateText: dateText || null,
       });
     });
     return results;
@@ -358,8 +390,20 @@ async function harvestScope(supabase: SupabaseClient, scopeId: string, scopeCode
           break;
         }
 
-        let newOnPage = 0;
+        // Age check: stop when >50% of listings are older than MAX_AGE_DAYS
+        let fresh = 0, stale = 0, unknown = 0;
+        const freshListings: ExtractedListing[] = [];
         for (const l of listings) {
+          const ageDays = parseAgeInDays(l.dateText);
+          if (ageDays === null) { unknown++; freshListings.push(l); }
+          else if (ageDays <= MAX_AGE_DAYS) { fresh++; freshListings.push(l); }
+          else { stale++; }
+        }
+        const totalKnown = fresh + stale;
+        const reachedArchive = totalKnown >= 5 && stale / totalKnown >= 0.5;
+
+        let newOnPage = 0;
+        for (const l of freshListings) {
           if (!seenUrls.has(l.url)) {
             seenUrls.add(l.url);
             allListings.push(l);
@@ -368,7 +412,12 @@ async function harvestScope(supabase: SupabaseClient, scopeId: string, scopeCode
         }
 
         result.pages_fetched++;
-        console.log(`[${scopeCode}] Page ${pg}: ${listings.length} extracted, ${newOnPage} new`);
+        console.log(`[${scopeCode}] Page ${pg}: ${listings.length} total, ${fresh} fresh, ${stale} stale >${MAX_AGE_DAYS}d, ${newOnPage} new`);
+
+        if (reachedArchive) {
+          console.log(`[${scopeCode}] Page ${pg}: majority stale (${stale}/${totalKnown}) — reached archive, stopping`);
+          break;
+        }
 
         if (pg < MAX_PAGES_PER_SCOPE) await delay(DELAY_BETWEEN_PAGES);
       } catch (err: any) {
