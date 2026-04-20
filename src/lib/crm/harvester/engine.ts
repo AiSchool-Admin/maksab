@@ -435,7 +435,10 @@ export async function runHarvestJob(jobId: string): Promise<HarvestResult> {
           newListings[i].enrichedSpecifications = details.specifications;
           newListings[i].enrichedCondition = details.condition;
 
-          const phone = extractPhone(details.description || "");
+          let phone = details.specifications?.["phone"]
+            ? extractPhone(details.specifications["phone"])
+            : null;
+          if (!phone) phone = extractPhone(details.description || "");
           if (phone) newListings[i].extractedPhone = phone;
           if (details.sellerName) newListings[i].sellerNameFromDetail = details.sellerName;
           if (details.sellerProfileUrl)

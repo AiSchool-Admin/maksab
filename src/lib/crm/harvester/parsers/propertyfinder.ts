@@ -418,7 +418,16 @@ export function parsePropertyFinderDetail(html: string): ListingDetails {
         }
 
         const agent = listing.agent || listing.agency || listing.broker || listing.seller;
-        if (agent) result.sellerName = cleanSellerName(String(agent.name || ""));
+        if (agent && typeof agent === "object") {
+          const a = agent as Record<string, unknown>;
+          result.sellerName = cleanSellerName(String(a.name || ""));
+          const agentPhone = a.phone || a.mobile || a.phoneNumber || a.contact_phone || a.contact || null;
+          if (agentPhone && typeof agentPhone === "string") {
+            result.specifications["phone"] = agentPhone;
+          }
+        } else if (agent) {
+          result.sellerName = cleanSellerName(String(agent.name || ""));
+        }
 
         console.error(`[PF Detail] __NEXT_DATA__: ${Object.keys(result.specifications).length} specs, listing keys: ${Object.keys(listing).slice(0, 15).join(",")}`);
         if (Object.keys(result.specifications).length > 0 || result.description) {
@@ -485,6 +494,14 @@ export function parsePropertyFinderDetail(html: string): ListingDetails {
 
   const sellerMatch = html.match(/class="[^"]*(?:agent-name|broker|agency)[^"]*"[^>]*>([^<]+)/i);
   if (sellerMatch) result.sellerName = cleanSellerName(sellerMatch[1].trim());
+
+  // Phone extraction from HTML fallback
+  if (!result.specifications["phone"]) {
+    const phoneMatches = html.match(/01[0-25]\d{8}/g);
+    if (phoneMatches && phoneMatches.length > 0) {
+      result.specifications["phone"] = phoneMatches[0];
+    }
+  }
 
   return result;
 }

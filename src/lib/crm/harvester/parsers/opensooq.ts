@@ -915,6 +915,23 @@ export function parseOpenSooqDetail(html: string): ListingDetails {
     }
   }
 
+  // ═══ Phone extraction from description + full HTML ═══
+  if (result.description) {
+    const descPhones = result.description.match(/01[0-25]\d{8}/g);
+    if (descPhones && descPhones.length > 0) {
+      result.specifications["phone"] = descPhones[0];
+    }
+  }
+  if (!result.specifications["phone"]) {
+    const htmlPhones = html.match(/01[0-25][\s.\-]?\d{3,4}[\s.\-]?\d{4,5}/g);
+    if (htmlPhones) {
+      for (const p of htmlPhones) {
+        const clean = p.replace(/[\s.\-]/g, "");
+        if (clean.length === 11) { result.specifications["phone"] = clean; break; }
+      }
+    }
+  }
+
   // ═══ Price: div.priceColor.bold.font-30.width-fit ═══
   const priceMatch = html.match(/class="[^"]*priceColor[^"]*bold[^"]*font-30[^"]*"[^>]*>([^<]+)/i)
     || html.match(/class="[^"]*bold[^"]*priceColor[^"]*font-30[^"]*"[^>]*>([^<]+)/i)
