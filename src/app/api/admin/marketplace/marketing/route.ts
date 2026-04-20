@@ -9,6 +9,19 @@ function getServiceClient() {
   );
 }
 
+const GOV_SLUG_MAP: Record<string, string> = {
+  "القاهرة": "cairo", "الجيزة": "giza", "الإسكندرية": "alexandria",
+  "القليوبية": "qalyubia", "الشرقية": "sharqia", "الدقهلية": "dakahlia",
+  "البحيرة": "beheira", "الغربية": "gharbia", "المنوفية": "menoufia",
+  "كفر الشيخ": "kafr_el_sheikh", "دمياط": "damietta", "بورسعيد": "port_said",
+  "الإسماعيلية": "ismailia", "السويس": "suez", "شمال سيناء": "north_sinai",
+  "جنوب سيناء": "south_sinai", "الفيوم": "fayoum", "بني سويف": "beni_suef",
+  "المنيا": "minya", "أسيوط": "assiut", "سوهاج": "sohag",
+  "قنا": "qena", "الأقصر": "luxor", "أسوان": "aswan",
+  "البحر الأحمر": "red_sea", "الوادي الجديد": "new_valley", "مطروح": "matrouh",
+};
+function toGovSlug(gov: string): string { return GOV_SLUG_MAP[gov] || gov.toLowerCase(); }
+
 const AWARENESS_TEMPLATES = {
   properties: {
     agent: "أحمد",
@@ -30,12 +43,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = getServiceClient();
 
-  const govSlugMap: Record<string, string> = {
-    "الإسكندرية": "alexandria",
-    "القاهرة": "cairo",
-    "الجيزة": "giza",
-  };
-  const govSlug = govSlugMap[governorate] || governorate.toLowerCase();
+  const govSlug = toGovSlug(governorate);
 
   // Get sellers with phones who haven't been contacted yet
   const { data: sellers } = await supabase

@@ -54,9 +54,33 @@ interface SimulationResult {
 }
 
 const GOVERNORATES = [
-  { value: "الإسكندرية", label: "الإسكندرية" },
   { value: "القاهرة", label: "القاهرة" },
   { value: "الجيزة", label: "الجيزة" },
+  { value: "الإسكندرية", label: "الإسكندرية" },
+  { value: "القليوبية", label: "القليوبية" },
+  { value: "الشرقية", label: "الشرقية" },
+  { value: "الدقهلية", label: "الدقهلية" },
+  { value: "البحيرة", label: "البحيرة" },
+  { value: "الغربية", label: "الغربية" },
+  { value: "المنوفية", label: "المنوفية" },
+  { value: "كفر الشيخ", label: "كفر الشيخ" },
+  { value: "دمياط", label: "دمياط" },
+  { value: "بورسعيد", label: "بورسعيد" },
+  { value: "الإسماعيلية", label: "الإسماعيلية" },
+  { value: "السويس", label: "السويس" },
+  { value: "شمال سيناء", label: "شمال سيناء" },
+  { value: "جنوب سيناء", label: "جنوب سيناء" },
+  { value: "الفيوم", label: "الفيوم" },
+  { value: "بني سويف", label: "بني سويف" },
+  { value: "المنيا", label: "المنيا" },
+  { value: "أسيوط", label: "أسيوط" },
+  { value: "سوهاج", label: "سوهاج" },
+  { value: "قنا", label: "قنا" },
+  { value: "الأقصر", label: "الأقصر" },
+  { value: "أسوان", label: "أسوان" },
+  { value: "البحر الأحمر", label: "البحر الأحمر" },
+  { value: "الوادي الجديد", label: "الوادي الجديد" },
+  { value: "مطروح", label: "مطروح" },
 ];
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
