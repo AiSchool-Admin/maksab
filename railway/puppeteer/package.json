@@ -1,0 +1,15 @@
+{
+  "name": "maksab-puppeteer-harvester",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Puppeteer-based harvester for WAF-blocked platforms (semsarmasr, hatla2ee, contactcars, carsemsar)",
+  "scripts": {
+    "start": "npx tsx server.ts",
+    "dev": "npx tsx --watch server.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
+    "puppeteer": "^23.0.0",
+    "tsx": "^4.7.0"
+  }
+}
