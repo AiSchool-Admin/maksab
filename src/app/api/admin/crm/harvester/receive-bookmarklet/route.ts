@@ -357,18 +357,24 @@ export async function POST(req: NextRequest) {
         } catch { /* keep original */ }
 
         // Check duplicate — match by URL path (without query params)
-        const { data: existing } = await supabase
+        // Use .limit(1) instead of .maybeSingle() to avoid errors when duplicates already exist
+        const { data: existingRows } = await supabase
           .from("ahe_listings")
           .select("id")
           .eq("source_listing_url", cleanUrl)
-          .maybeSingle();
+          .limit(1);
+        const existing = existingRows && existingRows.length > 0 ? existingRows[0] : null;
 
         // Also check with original URL (backward compat)
-        const { data: existingFull } = !existing ? await supabase
-          .from("ahe_listings")
-          .select("id")
-          .eq("source_listing_url", listing.url)
-          .maybeSingle() : { data: existing };
+        let existingFull = existing;
+        if (!existing && listing.url !== cleanUrl) {
+          const { data: fullRows } = await supabase
+            .from("ahe_listings")
+            .select("id")
+            .eq("source_listing_url", listing.url)
+            .limit(1);
+          existingFull = fullRows && fullRows.length > 0 ? fullRows[0] : null;
+        }
 
         if (existing || existingFull) {
           const existId = existing?.id || existingFull?.id;
