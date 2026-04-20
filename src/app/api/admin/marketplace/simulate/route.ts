@@ -210,11 +210,7 @@ export async function GET(req: NextRequest) {
       const simulated: SimulatedListing[] = [];
       for (const listing of listings) {
         const loc = mapLocation(listing.location || "", scope.source_platform);
-        const phone = listing.sellerPhone
-          ? listing.sellerPhone.replace(/[^\d+]/g, "")
-          : listing.title
-            ? extractPhone(listing.title)
-            : null;
+        const phone = listing.title ? extractPhone(listing.title) : null;
         const normalizedPhone = phone && phone.length >= 10
           ? (phone.startsWith("0") ? phone : phone.startsWith("+2") ? phone.slice(2) : "0" + phone)
           : null;
@@ -233,7 +229,7 @@ export async function GET(req: NextRequest) {
 
         simulated.push({
           title: listing.title || "",
-          description: listing.description || null,
+          description: null,
           price: listing.price || null,
           url: listing.url || "",
           location: listing.location || null,
