@@ -915,11 +915,50 @@ export function parseOpenSooqDetail(html: string): ListingDetails {
     }
   }
 
-  // ═══ Phone extraction from description + full HTML ═══
+  // ═══ Phone extraction from description + full HTML + __NEXT_DATA__ JSON ═══
   if (result.description) {
     const descPhones = result.description.match(/01[0-25]\d{8}/g);
     if (descPhones && descPhones.length > 0) {
       result.specifications["phone"] = descPhones[0];
+    }
+  }
+  if (!result.specifications["phone"]) {
+    // Search __NEXT_DATA__ JSON for phone fields (mobileNumber, phone, phones[])
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+    if (nextDataMatch) {
+      try {
+        const nextData = JSON.parse(nextDataMatch[1]);
+        const findPhoneDeep = (obj: unknown, depth: number): string | null => {
+          if (depth <= 0 || !obj || typeof obj !== "object") return null;
+          const o = obj as Record<string, unknown>;
+          for (const [k, v] of Object.entries(o)) {
+            const keyLower = k.toLowerCase();
+            if (
+              (keyLower === "mobile" || keyLower === "phone" || keyLower === "mobilenumber" ||
+               keyLower === "phonenumber" || keyLower === "contactnumber" || keyLower === "whatsapp")
+              && typeof v === "string" && /\d{9,}/.test(v)
+            ) {
+              const m = v.match(/01[0-25]\d{8}/) || v.match(/\+?20\s?1[0-25]\d{8}/);
+              if (m) return m[0].replace(/[\s+]/g, "").replace(/^2/, "");
+            }
+            if (keyLower === "phones" && Array.isArray(v)) {
+              for (const p of v) {
+                if (typeof p === "string") {
+                  const m = p.match(/01[0-25]\d{8}/);
+                  if (m) return m[0];
+                }
+              }
+            }
+            if (v && typeof v === "object") {
+              const found = findPhoneDeep(v, depth - 1);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const jsonPhone = findPhoneDeep(nextData, 8);
+        if (jsonPhone) result.specifications["phone"] = jsonPhone;
+      } catch { /* ignore JSON parse errors */ }
     }
   }
   if (!result.specifications["phone"]) {

@@ -495,7 +495,47 @@ export function parsePropertyFinderDetail(html: string): ListingDetails {
   const sellerMatch = html.match(/class="[^"]*(?:agent-name|broker|agency)[^"]*"[^>]*>([^<]+)/i);
   if (sellerMatch) result.sellerName = cleanSellerName(sellerMatch[1].trim());
 
-  // Phone extraction from HTML fallback
+  // Phone extraction from __NEXT_DATA__ deep JSON search
+  if (!result.specifications["phone"]) {
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+    if (nextDataMatch) {
+      try {
+        const nextData = JSON.parse(nextDataMatch[1]);
+        const findPhoneDeep = (obj: unknown, depth: number): string | null => {
+          if (depth <= 0 || !obj || typeof obj !== "object") return null;
+          const o = obj as Record<string, unknown>;
+          for (const [k, v] of Object.entries(o)) {
+            const keyLower = k.toLowerCase();
+            if (
+              (keyLower === "phone" || keyLower === "mobile" || keyLower === "phonenumber" ||
+               keyLower === "mobilenumber" || keyLower === "contactnumber" || keyLower === "whatsapp")
+              && typeof v === "string" && /\d{9,}/.test(v)
+            ) {
+              const m = v.match(/01[0-25]\d{8}/) || v.match(/\+?20\s?1[0-25]\d{8}/);
+              if (m) return m[0].replace(/[\s+]/g, "").replace(/^2/, "");
+            }
+            if (keyLower === "phones" && Array.isArray(v)) {
+              for (const p of v) {
+                if (typeof p === "string") {
+                  const m = p.match(/01[0-25]\d{8}/);
+                  if (m) return m[0];
+                }
+              }
+            }
+            if (v && typeof v === "object") {
+              const found = findPhoneDeep(v, depth - 1);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const jsonPhone = findPhoneDeep(nextData, 8);
+        if (jsonPhone) result.specifications["phone"] = jsonPhone;
+      } catch { /* ignore */ }
+    }
+  }
+
+  // Phone extraction from HTML regex fallback
   if (!result.specifications["phone"]) {
     const phoneMatches = html.match(/01[0-25]\d{8}/g);
     if (phoneMatches && phoneMatches.length > 0) {
