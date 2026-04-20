@@ -156,9 +156,8 @@ if(!location.hostname.includes('semsarmasr')&&!location.hostname.includes('sooqm
 
 var STORE_KEY='maksab_harvest_'+location.pathname.replace(/[^a-z0-9]/gi,'_');
 var saved=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');
-var startPage=saved.lastPage?saved.lastPage+1:1;
-var endPage=startPage+PAGES_PER_RUN-1;
 var harvestedUrls=saved.urls||{};
+var prevCount=Object.keys(harvestedUrls).length;
 
 var sd=document.createElement('div');
 sd.style.cssText='position:fixed;top:20px;right:20px;background:#7B1FA2;color:white;padding:16px 24px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:16px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);min-width:340px;line-height:1.8;';
@@ -166,14 +165,10 @@ document.body.appendChild(sd);
 
 function log(msg){sd.innerHTML=msg;}
 
-if(startPage>1){
-  log('🔄 استكمال من صفحة '+startPage+' ('+Object.keys(harvestedUrls).length+' إعلان سابق)<br>الهدف: صفحة '+startPage+' → '+endPage);
-}else{
-  log('🚀 بدء حصاد جديد — صفحة 1 → '+endPage);
-}
+log('🚀 حصاد من صفحة 1'+(prevCount>0?' ('+prevCount+' إعلان سابق — يتجاهلهم)':''));
 
-function saveProgress(pg){
-  saved.lastPage=pg;
+function saveProgress(){
+  saved.urls=harvestedUrls;
   saved.urls=harvestedUrls;
   saved.updatedAt=new Date().toISOString();
   localStorage.setItem(STORE_KEY,JSON.stringify(saved));
@@ -317,42 +312,38 @@ function sendToMaksab(items,fromPg,toPg){
 }
 
 var allItems=[];
-var lastPageProcessed=startPage-1;
-var emptyPages=0;
+var lastPageProcessed=0;
+var noNewPages=0;
+var MAX_PAGE=200;
 
 function harvestPage(pg){
-  if(pg>endPage||emptyPages>=2){finish();return;}
-  log('🔄 صفحة '+pg+'/'+endPage+' (من أصل '+PAGES_PER_RUN+' صفحة)...<br>إعلانات جديدة: '+allItems.length);
-  if(pg===1&&startPage===1){
+  if(pg>MAX_PAGE||noNewPages>=3){finish();return;}
+  log('🔄 صفحة '+pg+'...<br>جديد: '+allItems.length+' | سابق: '+prevCount);
+  if(pg===1){
     processPage(document,pg);
     lastPageProcessed=pg;
-    saveProgress(pg);
+    saveProgress();
     setTimeout(function(){harvestPage(2);},300);
     return;
   }
   fetch(getPageUrl(pg)).then(function(r){return r.text();}).then(function(html){
     var doc=new DOMParser().parseFromString(html,'text/html');
+    var cards=doc.querySelectorAll('div.ListDesStyle');
+    if(!cards||cards.length===0){
+      log('📄 صفحة '+pg+' فارغة — انتهت النتائج');
+      finish();return;
+    }
     var before=allItems.length;
     processPage(doc,pg);
     lastPageProcessed=pg;
-    saveProgress(pg);
+    saveProgress();
     if(allItems.length===before){
-      emptyPages++;
-      if(emptyPages>=2){
-        log('📄 صفحتين فارغتين متتاليتين — انتهت النتائج<br>إجمالي: '+allItems.length+' إعلان');
-        saved.finished=true;
-        localStorage.setItem(STORE_KEY,JSON.stringify(saved));
-        finish();return;
-      }
+      noNewPages++;
     }else{
-      emptyPages=0;
+      noNewPages=0;
     }
     setTimeout(function(){harvestPage(pg+1);},800);
-  }).catch(function(){
-    lastPageProcessed=pg-1;
-    saveProgress(pg-1);
-    finish();
-  });
+  }).catch(function(){finish();});
 }
 
 function processPage(doc,pg){
@@ -372,32 +363,23 @@ function processPage(doc,pg){
 
 function finish(){
   if(allItems.length===0){
-    if(saved.finished){
-      sd.style.background='#F59E0B';sd.innerHTML='⚠️ تم حصاد كل الصفحات سابقاً!<br>إجمالي: '+Object.keys(harvestedUrls).length+' إعلان<br><br>🔄 لإعادة الحصاد من البداية:<br><code style="font-size:12px;">localStorage.removeItem("'+STORE_KEY+'")</code>';
-    }else{
-      sd.style.background='#F59E0B';sd.innerHTML='⚠️ لا توجد إعلانات جديدة في صفحات '+startPage+' → '+lastPageProcessed+'<br>📊 إجمالي سابق: '+Object.keys(harvestedUrls).length+'<br><br>▶️ اضغط الـ bookmarklet تاني للصفحات التالية';
-    }
-    setTimeout(function(){sd.remove();},20000);return;
+    sd.style.background='#F59E0B';sd.innerHTML='⚠️ لا توجد إعلانات جديدة<br>📊 إجمالي محصود سابقاً: '+prevCount+' إعلان<br>فحصت '+lastPageProcessed+' صفحة';
+    setTimeout(function(){sd.remove();},15000);return;
   }
   var needPhone=allItems.filter(function(it){return !it.sellerPhone;}).length;
   if(needPhone>0){
     log('📞 استخراج الأرقام من '+needPhone+' إعلان...');
     fetchPhonesBatch(allItems,CONCURRENT).then(function(){
       log('📤 إرسال '+allItems.length+' إعلان...');
-      sendToMaksab(allItems,startPage,lastPageProcessed);
+      sendToMaksab(allItems,1,lastPageProcessed);
     });
   }else{
     log('📤 إرسال '+allItems.length+' إعلان...');
-    sendToMaksab(allItems,startPage,lastPageProcessed);
+    sendToMaksab(allItems,1,lastPageProcessed);
   }
 }
 
-if(saved.finished){
-  sd.style.background='#F59E0B';sd.innerHTML='⚠️ تم حصاد كل الصفحات!<br>إجمالي: '+Object.keys(harvestedUrls).length+' إعلان<br><br>🔄 لإعادة الحصاد من البداية، شغّل في Console:<br><code style="font-size:12px;">localStorage.removeItem("'+STORE_KEY+'")</code><br>ثم اضغط الـ bookmarklet تاني';
-  setTimeout(function(){sd.remove();},20000);
-}else{
-  harvestPage(startPage);
-}
+harvestPage(1);
 })();`;
 
   return `javascript:${encodeURIComponent(code.replace(/\n/g, ''))}`;
