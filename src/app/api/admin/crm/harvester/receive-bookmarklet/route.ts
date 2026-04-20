@@ -348,18 +348,34 @@ export async function POST(req: NextRequest) {
 
     for (const listing of uniqueListings) {
       try {
-        // Check duplicate — any existing listing with same URL
+        // Normalize URL — strip query parameters for deduplication
+        // semsarmasr URLs have same path but different query params per scope
+        let cleanUrl = listing.url;
+        try {
+          const parsed = new URL(listing.url);
+          cleanUrl = parsed.origin + parsed.pathname;
+        } catch { /* keep original */ }
+
+        // Check duplicate — match by URL path (without query params)
         const { data: existing } = await supabase
           .from("ahe_listings")
           .select("id")
-          .eq("source_listing_url", listing.url)
+          .eq("source_listing_url", cleanUrl)
           .maybeSingle();
 
-        if (existing) {
+        // Also check with original URL (backward compat)
+        const { data: existingFull } = !existing ? await supabase
+          .from("ahe_listings")
+          .select("id")
+          .eq("source_listing_url", listing.url)
+          .maybeSingle() : { data: existing };
+
+        if (existing || existingFull) {
+          const existId = existing?.id || existingFull?.id;
           await supabase
             .from("ahe_listings")
             .update({ last_seen_at: new Date().toISOString() })
-            .eq("id", existing.id);
+            .eq("id", existId!);
           dupCount++;
           continue;
         }
@@ -421,7 +437,7 @@ export async function POST(req: NextRequest) {
         await supabase.from("ahe_listings").insert({
           scope_id: scopeId,
           source_platform: sourcePlatform,
-          source_listing_url: listing.url,
+          source_listing_url: cleanUrl,
           title: listing.title,
           description: listing.description || null,
           price: listing.price,
