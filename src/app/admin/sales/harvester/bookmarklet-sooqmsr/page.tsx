@@ -147,19 +147,37 @@ function buildBookmarklet(appUrl: string): string {
   const code = `(function(){
 var MAKSAB='${appUrl}';
 var TOKEN='${TOKEN}';
-var MAX_PAGES=50;
+var PAGES_PER_RUN=10;
 var CONCURRENT=5;
 
 if(!location.hostname.includes('semsarmasr')&&!location.hostname.includes('sooqmsr')){
   alert('افتح semsarmasr.com الأول');return;
 }
 
+var STORE_KEY='maksab_harvest_'+location.pathname.replace(/[^a-z0-9]/gi,'_');
+var saved=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');
+var startPage=saved.lastPage?saved.lastPage+1:1;
+var endPage=startPage+PAGES_PER_RUN-1;
+var harvestedUrls=saved.urls||{};
+
 var sd=document.createElement('div');
-sd.style.cssText='position:fixed;top:20px;right:20px;background:#7B1FA2;color:white;padding:16px 24px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:16px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);min-width:320px;line-height:1.6;';
-sd.textContent='جاري حصاد الصفحات...';
+sd.style.cssText='position:fixed;top:20px;right:20px;background:#7B1FA2;color:white;padding:16px 24px;border-radius:12px;z-index:99999;font-family:sans-serif;font-size:16px;direction:rtl;box-shadow:0 4px 20px rgba(0,0,0,0.3);min-width:340px;line-height:1.8;';
 document.body.appendChild(sd);
 
 function log(msg){sd.innerHTML=msg;}
+
+if(startPage>1){
+  log('🔄 استكمال من صفحة '+startPage+' ('+Object.keys(harvestedUrls).length+' إعلان سابق)<br>الهدف: صفحة '+startPage+' → '+endPage);
+}else{
+  log('🚀 بدء حصاد جديد — صفحة 1 → '+endPage);
+}
+
+function saveProgress(pg){
+  saved.lastPage=pg;
+  saved.urls=harvestedUrls;
+  saved.updatedAt=new Date().toISOString();
+  localStorage.setItem(STORE_KEY,JSON.stringify(saved));
+}
 
 function extractCards(doc){
   var cards=doc.querySelectorAll('div.ListDesStyle');
@@ -269,12 +287,12 @@ function getPageUrl(pg){
   return u.toString();
 }
 
-function sendToMaksab(items,pages){
+function sendToMaksab(items,fromPg,toPg){
   var payload=JSON.stringify({
     url:location.href,
     listings:items,
     timestamp:new Date().toISOString(),
-    source:'bookmarklet-v4',
+    source:'bookmarklet-v5',
     strategy:'semsarmasr-listdesstyle',
     scope_code:null,
     platform:'semsarmasr'
@@ -290,35 +308,51 @@ function sendToMaksab(items,pages){
     if(e.data&&e.data.type==='harvest_result'){
       clearInterval(ci);clearTimeout(to);window.removeEventListener('message',h);
       var withPhone=items.filter(function(it){return it.sellerPhone;}).length;
+      var totalHarvested=Object.keys(harvestedUrls).length;
       sd.style.background='#1B7A3D';
-      sd.innerHTML='✅ تم!<br>'+pages+' صفحة — '+items.length+' إعلان إسكندرية<br>'+e.data.new_count+' جديد — '+e.data.duplicate+' مكرر<br>📞 '+withPhone+' بأرقام';
-      setTimeout(function(){sd.remove();},15000);
+      sd.innerHTML='✅ تم!<br>صفحة '+fromPg+' → '+toPg+'<br>'+items.length+' إعلان جديد إسكندرية<br>'+e.data.new_count+' حُفظ — '+e.data.duplicate+' مكرر<br>📞 '+withPhone+' بأرقام<br>📊 إجمالي محصود: '+totalHarvested+'<br><br>▶️ <b>اضغط الـ bookmarklet تاني للصفحات التالية</b>';
       setTimeout(function(){try{pop.close();}catch(e){}},3000);
     }
   });
 }
 
 var allItems=[];
-var seenUrls={};
+var lastPageProcessed=startPage-1;
+var emptyPages=0;
 
 function harvestPage(pg){
-  if(pg>MAX_PAGES){finish();return;}
-  if(pg===1){
+  if(pg>endPage||emptyPages>=2){finish();return;}
+  log('🔄 صفحة '+pg+'/'+endPage+' (من أصل '+PAGES_PER_RUN+' صفحة)...<br>إعلانات جديدة: '+allItems.length);
+  if(pg===1&&startPage===1){
     processPage(document,pg);
+    lastPageProcessed=pg;
+    saveProgress(pg);
     setTimeout(function(){harvestPage(2);},300);
     return;
   }
-  log('🔄 صفحة '+pg+'...');
   fetch(getPageUrl(pg)).then(function(r){return r.text();}).then(function(html){
     var doc=new DOMParser().parseFromString(html,'text/html');
     var before=allItems.length;
     processPage(doc,pg);
+    lastPageProcessed=pg;
+    saveProgress(pg);
     if(allItems.length===before){
-      log('📄 صفحة '+pg+' فارغة — '+allItems.length+' إعلان إسكندرية');
-      finish();return;
+      emptyPages++;
+      if(emptyPages>=2){
+        log('📄 صفحتين فارغتين متتاليتين — انتهت النتائج<br>إجمالي: '+allItems.length+' إعلان');
+        saved.finished=true;
+        localStorage.setItem(STORE_KEY,JSON.stringify(saved));
+        finish();return;
+      }
+    }else{
+      emptyPages=0;
     }
     setTimeout(function(){harvestPage(pg+1);},800);
-  }).catch(function(){finish();});
+  }).catch(function(){
+    lastPageProcessed=pg-1;
+    saveProgress(pg-1);
+    finish();
+  });
 }
 
 function processPage(doc,pg){
@@ -326,35 +360,44 @@ function processPage(doc,pg){
   var alexCards=cards.filter(isAlexandria);
   var newCount=0;
   for(var i=0;i<alexCards.length;i++){
-    if(!seenUrls[alexCards[i].url]){
-      seenUrls[alexCards[i].url]=true;
+    var u=alexCards[i].url;
+    if(!harvestedUrls[u]){
+      harvestedUrls[u]=1;
       allItems.push(alexCards[i]);
       newCount++;
     }
   }
-  log('📄 صفحة '+pg+': '+cards.length+' إعلان ('+alexCards.length+' إسكندرية, '+newCount+' جديد)<br>إجمالي: '+allItems.length);
+  log('📄 صفحة '+pg+': '+cards.length+' إعلان ('+alexCards.length+' إسكندرية, '+newCount+' جديد)<br>إجمالي الدفعة: '+allItems.length+' | إجمالي كلي: '+Object.keys(harvestedUrls).length);
 }
 
 function finish(){
   if(allItems.length===0){
-    sd.style.background='#DC2626';sd.textContent='لم يتم العثور على إعلانات إسكندرية';
-    setTimeout(function(){sd.remove();},5000);return;
+    if(saved.finished){
+      sd.style.background='#F59E0B';sd.innerHTML='⚠️ تم حصاد كل الصفحات سابقاً!<br>إجمالي: '+Object.keys(harvestedUrls).length+' إعلان<br><br>🔄 لإعادة الحصاد من البداية:<br><code style="font-size:12px;">localStorage.removeItem("'+STORE_KEY+'")</code>';
+    }else{
+      sd.style.background='#F59E0B';sd.innerHTML='⚠️ لا توجد إعلانات جديدة في صفحات '+startPage+' → '+lastPageProcessed+'<br>📊 إجمالي سابق: '+Object.keys(harvestedUrls).length+'<br><br>▶️ اضغط الـ bookmarklet تاني للصفحات التالية';
+    }
+    setTimeout(function(){sd.remove();},20000);return;
   }
   var needPhone=allItems.filter(function(it){return !it.sellerPhone;}).length;
   if(needPhone>0){
     log('📞 استخراج الأرقام من '+needPhone+' إعلان...');
     fetchPhonesBatch(allItems,CONCURRENT).then(function(){
-      var pages=Object.keys(seenUrls).length>0?Math.ceil(allItems.length/10):1;
       log('📤 إرسال '+allItems.length+' إعلان...');
-      sendToMaksab(allItems,pages);
+      sendToMaksab(allItems,startPage,lastPageProcessed);
     });
   }else{
     log('📤 إرسال '+allItems.length+' إعلان...');
-    sendToMaksab(allItems,Math.ceil(allItems.length/10));
+    sendToMaksab(allItems,startPage,lastPageProcessed);
   }
 }
 
-harvestPage(1);
+if(saved.finished){
+  sd.style.background='#F59E0B';sd.innerHTML='⚠️ تم حصاد كل الصفحات!<br>إجمالي: '+Object.keys(harvestedUrls).length+' إعلان<br><br>🔄 لإعادة الحصاد من البداية، شغّل في Console:<br><code style="font-size:12px;">localStorage.removeItem("'+STORE_KEY+'")</code><br>ثم اضغط الـ bookmarklet تاني';
+  setTimeout(function(){sd.remove();},20000);
+}else{
+  harvestPage(startPage);
+}
 })();`;
 
   return `javascript:${encodeURIComponent(code.replace(/\n/g, ''))}`;
