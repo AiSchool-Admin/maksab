@@ -147,7 +147,7 @@ function fetchPhonesBatch(items,batchSize){
 
 function getPageUrl(pg){
   var u=new URL(location.href);
-  u.searchParams.set('s',pg);
+  u.searchParams.set('p',pg);
   return u.toString();
 }
 
