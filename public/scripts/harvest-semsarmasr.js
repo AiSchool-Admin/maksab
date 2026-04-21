@@ -180,17 +180,18 @@ function sendToMaksab(items,fromPg,toPg){
 
 var allItems=[];
 var lastPageProcessed=0;
-var noNewPages=0;
 var reachedArchive=false;
 var MAX_PAGE=200;
 var MAX_AGE_DAYS=30;
+var TARGET=100;
 
 function harvestPage(pg){
-  if(pg>MAX_PAGE||noNewPages>=10||reachedArchive){finish();return;}
-  log('🔄 صفحة '+pg+'<br>جديد: '+allItems.length);
+  if(pg>MAX_PAGE||allItems.length>=TARGET||reachedArchive){finish();return;}
+  log('🔄 صفحة '+pg+' — '+allItems.length+'/'+TARGET+' إعلان');
   if(pg===1){
     processPage(document,pg);
     lastPageProcessed=pg;saveProgress();
+    if(allItems.length>=TARGET){finish();return;}
     setTimeout(function(){harvestPage(2);},300);
     return;
   }
@@ -198,10 +199,9 @@ function harvestPage(pg){
     var doc=new DOMParser().parseFromString(html,'text/html');
     var cards=doc.querySelectorAll('div.ListCont, div.ListDesStyle');
     if(!cards||cards.length===0){finish();return;}
-    var before=allItems.length;
     processPage(doc,pg);
     lastPageProcessed=pg;saveProgress();
-    if(allItems.length===before){noNewPages++;}else{noNewPages=0;}
+    if(allItems.length>=TARGET){finish();return;}
     setTimeout(function(){harvestPage(pg+1);},800);
   }).catch(function(){finish();});
 }
@@ -225,7 +225,7 @@ function processPage(doc,pg){
       newCount++;
     }
   }
-  log('📄 ص'+pg+': '+newCount+' جديد من '+cards.length+' كرت<br>إجمالي: '+allItems.length+' | فارغ: '+noNewPages+'/10'+(reachedArchive?'<br>🛑 أرشيف (>50% قديم >30 يوم)':''));
+  log('📄 ص'+pg+': +'+newCount+' جديد<br>📊 '+allItems.length+'/'+TARGET+(reachedArchive?' 🛑 أرشيف':''));
 }
 
 function finish(){
