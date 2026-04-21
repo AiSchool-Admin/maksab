@@ -244,30 +244,32 @@ export default async function BrowseListingPage({ params }: Props) {
               <p className="font-bold text-gray-800 text-base">
                 👤 {sellerName || "معلن"}
               </p>
-              {seller?.source_platform && (
-                <p className="text-xs text-gray-500 mt-1">
-                  منصة: {seller.source_platform}
-                </p>
+              {area && (
+                <p className="text-xs text-gray-500 mt-1">📍 {area}</p>
               )}
             </div>
-            {sellerPhone && (
-              <div className="text-left" dir="ltr">
-                <a
-                  href={`tel:+2${sellerPhone}`}
-                  className="inline-block px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-sm"
-                >
-                  📞 {sellerPhone}
-                </a>
-                <a
-                  href={`https://wa.me/2${sellerPhone}?text=${encodeURIComponent(`مرحباً، أنا مهتم بإعلانك: ${listing.title}`)}`}
-                  target="_blank"
-                  rel="noopener"
-                  className="inline-block px-4 py-2 bg-green-500 text-white rounded-xl font-bold text-sm mt-2"
-                >
-                  💬 واتساب
-                </a>
-              </div>
-            )}
+            <div className="text-left" dir="ltr">
+              {sellerPhone ? (
+                <>
+                  <a
+                    href={`tel:+2${sellerPhone}`}
+                    className="inline-block px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-sm"
+                  >
+                    📞 {sellerPhone}
+                  </a>
+                  <a
+                    href={`https://wa.me/2${sellerPhone}?text=${encodeURIComponent(`مرحباً، أنا مهتم بإعلانك: ${listing.title}`)}`}
+                    target="_blank"
+                    rel="noopener"
+                    className="block px-4 py-2 bg-green-500 text-white rounded-xl font-bold text-sm mt-2 text-center"
+                  >
+                    💬 واتساب
+                  </a>
+                </>
+              ) : (
+                <span className="text-xs text-gray-400">الرقم غير متاح حالياً</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -293,20 +295,6 @@ export default async function BrowseListingPage({ params }: Props) {
             <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">
               {description}
             </p>
-          </div>
-        )}
-
-        {/* Source link */}
-        {listing.source_listing_url && (
-          <div className="text-center mb-6">
-            <a
-              href={listing.source_listing_url}
-              target="_blank"
-              rel="noopener"
-              className="text-xs text-gray-400 hover:text-gray-600"
-            >
-              المصدر الأصلي ←
-            </a>
           </div>
         )}
 
