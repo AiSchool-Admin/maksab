@@ -186,7 +186,7 @@ var lastPageProcessed=0;
 var reachedArchive=false;
 var MAX_PAGE=200;
 var MAX_AGE_DAYS=30;
-var TARGET=100;
+var TARGET=500;
 
 function harvestPage(pg){
   if(pg>MAX_PAGE||allItems.length>=TARGET||reachedArchive){finish();return;}
