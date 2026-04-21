@@ -49,20 +49,26 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
   const govName = GOV_NAMES[governorate] || governorate;
   const supabase = getSupabase();
 
-  // Fetch listings with seller info via JOIN
+  // Fetch listings
   const { data: listings } = await supabase
     .from("ahe_listings")
-    .select(`
-      id, title, price, governorate, city, source_location,
-      thumbnail_url, main_image_url, extracted_phone,
-      created_at, ahe_seller_id, description,
-      ahe_sellers(name, phone, source_platform)
-    `)
+    .select("id, title, price, governorate, city, source_location, thumbnail_url, main_image_url, extracted_phone, created_at, ahe_seller_id, description")
     .eq("is_duplicate", false)
     .eq("maksab_category", catName)
     .or(`governorate.eq.${govName},governorate.eq.${governorate}`)
     .order("created_at", { ascending: false })
     .limit(50);
+
+  // Fetch sellers in one batch
+  const sellerIds = Array.from(new Set((listings || []).map((l: any) => l.ahe_seller_id).filter(Boolean)));
+  const sellersMap: Record<string, any> = {};
+  if (sellerIds.length > 0) {
+    const { data: sellers } = await supabase
+      .from("ahe_sellers")
+      .select("id, name, phone, source_platform")
+      .in("id", sellerIds);
+    for (const s of sellers || []) sellersMap[s.id] = s;
+  }
 
   const { count: totalCount } = await supabase
     .from("ahe_listings")
@@ -135,9 +141,8 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {listings.map((listing: any) => {
-              const seller = listing.ahe_sellers;
+              const seller = listing.ahe_seller_id ? sellersMap[listing.ahe_seller_id] : null;
               const sellerName = seller?.name || null;
-              const sellerPhone = seller?.phone || listing.extracted_phone || null;
               const imgUrl = listing.thumbnail_url || listing.main_image_url;
 
               // Area from source_location: "سبورتنج - الإسكندرية" → "سبورتنج"
