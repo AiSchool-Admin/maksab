@@ -3,50 +3,29 @@ import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 
-/** Active categories — Alexandria MVP */
 const ACTIVE_CATEGORIES = ["cars", "vehicles", "properties", "real-estate", "real_estate", "سيارات", "عقارات"];
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
 function getSupabase() {
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+    process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
 }
 
 const CATEGORY_NAMES: Record<string, string> = {
-  phones: "موبايلات",
-  vehicles: "سيارات",
-  properties: "عقارات",
-  electronics: "إلكترونيات",
-  furniture: "أثاث وديكور",
-  gold: "ذهب وفضة",
-  appliances: "أجهزة منزلية",
-  fashion: "موضة",
-  general: "إعلانات",
+  phones: "موبايلات", vehicles: "سيارات", properties: "عقارات",
+  electronics: "إلكترونيات", furniture: "أثاث وديكور", gold: "ذهب وفضة",
+  appliances: "أجهزة منزلية", fashion: "موضة", general: "إعلانات",
 };
 
 const GOV_NAMES: Record<string, string> = {
-  cairo: "القاهرة",
-  giza: "الجيزة",
-  alexandria: "الإسكندرية",
-  dakahlia: "الدقهلية",
-  sharqia: "الشرقية",
-  qalyubia: "القليوبية",
-  gharbia: "الغربية",
-  monufia: "المنوفية",
-  beheira: "البحيرة",
-  minya: "المنيا",
-  asyut: "أسيوط",
-  sohag: "سوهاج",
-  fayoum: "الفيوم",
-  "port-said": "بورسعيد",
-  ismailia: "الإسماعيلية",
-  suez: "السويس",
-  damietta: "دمياط",
-  luxor: "الأقصر",
-  aswan: "أسوان",
+  cairo: "القاهرة", giza: "الجيزة", alexandria: "الإسكندرية",
+  dakahlia: "الدقهلية", sharqia: "الشرقية", qalyubia: "القليوبية",
+  gharbia: "الغربية", monufia: "المنوفية", beheira: "البحيرة",
+  minya: "المنيا", asyut: "أسيوط", sohag: "سوهاج", fayoum: "الفيوم",
+  "port-said": "بورسعيد", ismailia: "الإسماعيلية", suez: "السويس",
+  damietta: "دمياط", luxor: "الأقصر", aswan: "أسوان",
 };
 
 interface Props {
@@ -59,36 +38,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const govName = GOV_NAMES[governorate] || governorate;
   const title = `${catName} للبيع في ${govName} | مكسب`;
   const description = `تصفح أحدث إعلانات ${catName} للبيع في ${govName}. أسعار مناسبة، بائعين موثوقين. سجّل مجاناً على مكسب.`;
-
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      type: "website",
-      siteName: "مكسب",
-    },
-  };
+  return { title, description, openGraph: { title, description, type: "website", siteName: "مكسب" } };
 }
 
 export default async function BrowseCategoryGovernoratePage({ params }: Props) {
   const { category, governorate } = await params;
-
-  // Guard: only allow active categories
-  if (!ACTIVE_CATEGORIES.includes(category)) {
-    redirect("/");
-  }
+  if (!ACTIVE_CATEGORIES.includes(category)) redirect("/");
 
   const catName = CATEGORY_NAMES[category] || category;
   const govName = GOV_NAMES[governorate] || governorate;
-
   const supabase = getSupabase();
 
-  // Fetch listings
+  // Fetch listings with seller info via JOIN
   const { data: listings } = await supabase
     .from("ahe_listings")
-    .select("id, title, price, governorate, thumbnail_url, source_listing_url, created_at, maksab_category, seller_name")
+    .select(`
+      id, title, price, governorate, city, source_location,
+      thumbnail_url, main_image_url, extracted_phone,
+      created_at, ahe_seller_id, description,
+      ahe_sellers(name, phone, source_platform)
+    `)
     .eq("is_duplicate", false)
     .eq("maksab_category", catName)
     .or(`governorate.eq.${govName},governorate.eq.${governorate}`)
@@ -104,7 +73,6 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-white" dir="rtl">
-      {/* Schema.org ItemList */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -119,13 +87,8 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
               item: {
                 "@type": "Product",
                 name: listing.title,
-                url: `https://maksab.com/browse/${category}/${governorate}/${encodeURIComponent(listing.title?.replace(/\s+/g, "-") || "ad")}-${listing.id}`,
                 offers: listing.price
-                  ? {
-                      "@type": "Offer",
-                      price: listing.price,
-                      priceCurrency: "EGP",
-                    }
+                  ? { "@type": "Offer", price: listing.price, priceCurrency: "EGP" }
                   : undefined,
               },
             })),
@@ -133,7 +96,6 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
         }}
       />
 
-      {/* Header */}
       <header className="bg-[#1B7A3D] text-white py-4 px-4">
         <div className="max-w-5xl mx-auto">
           <Link href="/" className="text-lg font-bold">مكسب 💚</Link>
@@ -141,7 +103,6 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
         </div>
       </header>
 
-      {/* Breadcrumb */}
       <div className="max-w-5xl mx-auto px-4 py-3 text-sm text-gray-500">
         <Link href="/" className="hover:text-[#1B7A3D]">الرئيسية</Link>
         {" > "}
@@ -150,7 +111,6 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
         <span className="text-dark font-bold">{govName}</span>
       </div>
 
-      {/* Title */}
       <div className="max-w-5xl mx-auto px-4 mb-6">
         <h1 className="text-2xl font-bold text-[#1A1A2E]">
           {catName} للبيع في {govName}
@@ -160,46 +120,57 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
         </p>
       </div>
 
-      {/* Listings Grid */}
       <div className="max-w-5xl mx-auto px-4 pb-12">
         {!listings || listings.length === 0 ? (
           <div className="text-center py-16">
             <span className="text-5xl mb-4 block">🔍</span>
-            <h2 className="text-lg font-bold text-[#1A1A2E] mb-2">
-              لا توجد إعلانات حالياً
-            </h2>
+            <h2 className="text-lg font-bold text-[#1A1A2E] mb-2">لا توجد إعلانات حالياً</h2>
             <p className="text-sm text-gray-500 mb-6">
               سجّل على مكسب وكن أول من ينشر إعلان {catName} في {govName}
             </p>
-            <Link
-              href="/"
-              className="inline-block px-6 py-3 bg-[#1B7A3D] text-white rounded-xl font-bold text-sm hover:bg-[#145C2E] transition-colors"
-            >
+            <Link href="/" className="inline-block px-6 py-3 bg-[#1B7A3D] text-white rounded-xl font-bold text-sm">
               سجّل مجاناً
             </Link>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {listings.map((listing: any) => {
+              const seller = listing.ahe_sellers;
+              const sellerName = seller?.name || null;
+              const sellerPhone = seller?.phone || listing.extracted_phone || null;
+              const imgUrl = listing.thumbnail_url || listing.main_image_url;
+
+              // Area from source_location: "سبورتنج - الإسكندرية" → "سبورتنج"
+              let area = listing.source_location
+                ? String(listing.source_location).split("-")[0].trim()
+                : listing.city;
+              if (!area || area === govName) area = null;
+
               const slug = `${(listing.title || "ad").replace(/\s+/g, "-").substring(0, 50)}-${listing.id}`;
+
               return (
                 <Link
                   key={listing.id}
                   href={`/browse/${category}/${governorate}/${slug}`}
                   className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
                 >
-                  {listing.thumbnail_url ? (
+                  {imgUrl ? (
                     <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
                       <img
-                        src={listing.thumbnail_url}
+                        src={imgUrl}
                         alt={listing.title}
                         className="w-full h-full object-cover"
                         loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(e: any) => {
+                          e.target.style.display = "none";
+                          e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-3xl bg-gray-100">🏠</div>';
+                        }}
                       />
                     </div>
                   ) : (
                     <div className="aspect-[4/3] bg-gray-100 flex items-center justify-center text-3xl">
-                      📷
+                      {catName === "سيارات" ? "🚗" : "🏠"}
                     </div>
                   )}
                   <div className="p-3">
@@ -211,9 +182,16 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
                         {listing.price.toLocaleString()} جنيه
                       </p>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      📍 {listing.governorate || govName}
-                    </p>
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-[10px] text-gray-400">
+                        📍 {area ? `${area} — ${govName}` : govName}
+                      </p>
+                    </div>
+                    {sellerName && (
+                      <p className="text-[10px] text-gray-500 mt-1 truncate">
+                        👤 {sellerName}
+                      </p>
+                    )}
                   </div>
                 </Link>
               );
@@ -221,7 +199,6 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
           </div>
         )}
 
-        {/* CTA */}
         <div className="mt-12 bg-[#E8F5E9] rounded-2xl p-8 text-center">
           <h2 className="text-xl font-bold text-[#1B7A3D] mb-2">
             سجّل مجاناً وشوف أرقام البائعين
