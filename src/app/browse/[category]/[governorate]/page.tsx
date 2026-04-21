@@ -88,10 +88,10 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
   // Fetch listings
   const { data: listings } = await supabase
     .from("ahe_listings")
-    .select("id, title, price, governorate, thumbnail_url, source_listing_url, created_at, category, seller_name")
+    .select("id, title, price, governorate, thumbnail_url, source_listing_url, created_at, maksab_category, seller_name")
     .eq("is_duplicate", false)
-    .eq("category", category)
-    .eq("governorate", govName)
+    .eq("maksab_category", catName)
+    .or(`governorate.eq.${govName},governorate.eq.${governorate}`)
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -99,8 +99,8 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
     .from("ahe_listings")
     .select("*", { count: "exact", head: true })
     .eq("is_duplicate", false)
-    .eq("category", category)
-    .eq("governorate", govName);
+    .eq("maksab_category", catName)
+    .or(`governorate.eq.${govName},governorate.eq.${governorate}`);
 
   return (
     <div className="min-h-screen bg-white" dir="rtl">
