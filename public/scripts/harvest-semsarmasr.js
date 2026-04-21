@@ -33,12 +33,20 @@ function extractCards(doc){
   for(var i=0;i<cards.length;i++){
     var card=cards[i];
     var dataId=card.getAttribute('data-id')||'';
-    var linkEl=card.querySelector('.AdTitleStyle h2 a');
+    var linkEl=card.querySelector('.AdTitleStyle h2 a') || card.querySelector('a[href*="/3akarat/"]');
     if(!linkEl)continue;
     var fullUrl=linkEl.href||linkEl.getAttribute('href')||'';
     if(!fullUrl)continue;
     var url=fullUrl.split('?')[0];
-    var title=(linkEl.textContent||'').trim()||linkEl.getAttribute('title')||'';
+    var title=(linkEl.getAttribute('title')||(linkEl.textContent||'')).trim();
+    if(!title){
+      var h2=card.querySelector('h2');
+      if(h2)title=h2.textContent.trim();
+    }
+    if(!title){
+      var adTitle=card.querySelector('.AdTitleStyle, .AdTitle');
+      if(adTitle)title=adTitle.textContent.trim();
+    }
     if(!title)continue;
     var descEl=card.querySelector('.AdDesc');
     var desc=descEl?(descEl.textContent||'').trim():'';
