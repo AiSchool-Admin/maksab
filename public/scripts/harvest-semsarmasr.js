@@ -184,7 +184,7 @@ function sendToMaksab(items,fromPg,toPg){
 var allItems=[];
 var lastPageProcessed=0;
 var reachedArchive=false;
-var MAX_PAGE=3;
+var MAX_PAGE=200;
 var MAX_AGE_DAYS=30;
 var TARGET=100;
 
