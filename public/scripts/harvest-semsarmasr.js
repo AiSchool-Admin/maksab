@@ -112,7 +112,8 @@ function parseAgeDays(text){
 }
 
 function fetchPhone(url){
-  return fetch(url).then(function(r){return r.text();}).then(function(html){
+  return fetch(url).then(function(r){return r.arrayBuffer();}).then(function(buf){
+    var html=new TextDecoder('windows-1256').decode(buf);
     var phones=html.match(/(?:\+?201|01)[0-25]\d{8}/g);
     if(phones&&phones.length>0){
       var p=phones[0].replace(/^\+?2/,'');
@@ -191,7 +192,8 @@ function harvestPage(pg){
   if(pg>MAX_PAGE||allItems.length>=TARGET||reachedArchive){finish();return;}
   log('🔄 صفحة '+pg+' — '+allItems.length+'/'+TARGET+' إعلان');
   var pageUrl=getPageUrl(pg);
-  fetch(pageUrl).then(function(r){return r.text();}).then(function(html){
+  fetch(pageUrl).then(function(r){return r.arrayBuffer();}).then(function(buf){
+    var html=new TextDecoder('windows-1256').decode(buf);
     var doc=new DOMParser().parseFromString(html,'text/html');
     var cards=doc.querySelectorAll('div.ListCont, div.ListDesStyle');
     if(!cards||cards.length===0){
