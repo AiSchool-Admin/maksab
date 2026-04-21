@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
+import { isDubizzleTextDump, parseDubizzleTextDump } from "@/lib/crm/harvester/parsers/dubizzle-text-dump";
 
 const ACTIVE_CATEGORIES = ["cars", "vehicles", "properties", "real-estate", "real_estate", "سيارات", "عقارات"];
 
@@ -72,14 +73,27 @@ function extractIdFromSlug(slug: string): string | null {
 
 /**
  * Clean scraped description from page-dump artifacts (footer text, nav, ads).
- * Strategy: cut at first "stop phrase" (site nav / footer / related-ads heading).
- * Also strip extraneous whitespace and obviously garbled runs.
+ * Strategy:
+ *   1. Strip leading breadcrumb if it starts with "الصفحة الرئيسية/..."
+ *   2. Cut at first "stop phrase" (site nav / footer / related-ads heading)
+ *   3. Collapse whitespace
+ *   4. Drop the whole thing if it's just garbled page dump
  */
 function cleanDescription(desc: string | null): string | null {
   if (!desc) return null;
 
+  let clean = desc.trim();
+
+  // Strip leading breadcrumb: "الصفحة الرئيسية/..." up to first newline or ~150 chars
+  if (clean.startsWith("الصفحة الرئيسية")) {
+    const firstBreak = clean.search(/[\n\r]|(?:ج\.م|جنيه)/); // break at newline or price marker
+    if (firstBreak > 0 && firstBreak < 300) {
+      clean = clean.substring(firstBreak).trim();
+    }
+  }
+
   const stopPhrases = [
-    "الصفحة الرئيسية", "dubizzle", "Dubizzle", "Free Classifieds",
+    "dubizzle", "Dubizzle", "Free Classifieds",
     "سياسة الخصوصية", "شروط الاستخدام", "خريطة الموقع",
     "الإبلاغ عن هذا الإعلان", "عرض الموقع", "تحميل التطبيق",
     "خد حد معاك وانت رايح", "متدفعش او تحول فلوس",
@@ -88,8 +102,6 @@ function cleanDescription(desc: string | null): string | null {
     "سمسار مصر", "عقارات مصر", "أعلن مجاناً",
     "نصائح السلامة", "تنبيهات", "تابعنا على",
   ];
-
-  let clean = desc.trim();
 
   // Cut at first stop phrase (but only if it appears after some real content)
   for (const phrase of stopPhrases) {
@@ -256,13 +268,22 @@ export default async function BrowseListingPage({ params }: Props) {
     : listing.city;
   if (!area || area === govName || area === listing.governorate) area = null;
 
-  // Clean description
-  const description = cleanDescription(listing.description);
+  // Clean description — handle Dubizzle page-dump pattern first, then generic cleanup
+  let description: string | null = null;
+  let inlineSpecs: Record<string, string> = {};
+  if (isDubizzleTextDump(listing.description)) {
+    const dump = parseDubizzleTextDump(listing.description);
+    description = dump.cleanDescription;
+    inlineSpecs = dump.inlineSpecs;
+  } else {
+    description = cleanDescription(listing.description);
+  }
 
-  // Specs: ordered by category with Arabic labels
-  const rawSpecs = (listing.specifications && typeof listing.specifications === "object" && !Array.isArray(listing.specifications))
+  // Specs: merge DB specs + inline specs extracted from description (DB wins)
+  const dbSpecs = (listing.specifications && typeof listing.specifications === "object" && !Array.isArray(listing.specifications))
     ? listing.specifications as Record<string, string>
     : {};
+  const rawSpecs: Record<string, string> = { ...inlineSpecs, ...dbSpecs };
 
   const specOrder = catName === "سيارات" ? CAR_SPEC_ORDER : PROPERTY_SPEC_ORDER;
   const orderedSpecs: Array<{ key: string; label: string; icon: string; value: string }> = [];

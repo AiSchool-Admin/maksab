@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
+import { extractPhone, normalizeEgyptianPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
 import { detectBuyRequest } from "@/lib/crm/harvester/parsers/dubizzle";
 
@@ -348,40 +348,47 @@ export async function POST(req: NextRequest) {
 
     for (const listing of uniqueListings) {
       try {
-        // Normalize URL — strip query parameters for deduplication
+        // Normalize URL — strip query parameters + trailing slash for deduplication
         // semsarmasr URLs have same path but different query params per scope
         let cleanUrl = listing.url;
         try {
           const parsed = new URL(listing.url);
-          cleanUrl = parsed.origin + parsed.pathname;
-        } catch { /* keep original */ }
+          cleanUrl = parsed.origin + parsed.pathname.replace(/\/+$/, "");
+        } catch {
+          // Fallback: manual strip
+          cleanUrl = listing.url.split("?")[0].split("#")[0].replace(/\/+$/, "");
+        }
 
-        // Check duplicate — match by URL path (without query params)
-        // Use .limit(1) instead of .maybeSingle() to avoid errors when duplicates already exist
+        // Extract stable numeric listing ID from URL path.
+        // Patterns: semsarmasr /3akarat/<id>/..., dubizzle /.../<id>, aqarmap /.../<id>, etc.
+        // This is a stronger dedup key than the full URL (immune to slug / encoding drift).
+        const idMatch = cleanUrl.match(/\/(\d{5,})(?:\/|$)/);
+        const listingIdFromUrl = idMatch ? idMatch[1] : null;
+
+        // Check duplicate — try: URL exact → URL path → source_listing_id
         const { data: existingRows } = await supabase
           .from("ahe_listings")
           .select("id")
-          .eq("source_listing_url", cleanUrl)
+          .or(`source_listing_url.eq.${cleanUrl},source_listing_url.eq.${listing.url}`)
           .limit(1);
-        const existing = existingRows && existingRows.length > 0 ? existingRows[0] : null;
+        let existing = existingRows && existingRows.length > 0 ? existingRows[0] : null;
 
-        // Also check with original URL (backward compat)
-        let existingFull = existing;
-        if (!existing && listing.url !== cleanUrl) {
-          const { data: fullRows } = await supabase
+        // Also check by numeric listing_id (catches encoding-drift duplicates)
+        if (!existing && listingIdFromUrl) {
+          const { data: byIdRows } = await supabase
             .from("ahe_listings")
             .select("id")
-            .eq("source_listing_url", listing.url)
+            .eq("source_platform", sourcePlatform)
+            .eq("source_listing_id", listingIdFromUrl)
             .limit(1);
-          existingFull = fullRows && fullRows.length > 0 ? fullRows[0] : null;
+          if (byIdRows && byIdRows.length > 0) existing = byIdRows[0];
         }
 
-        if (existing || existingFull) {
-          const existId = existing?.id || existingFull?.id;
+        if (existing) {
           await supabase
             .from("ahe_listings")
             .update({ last_seen_at: new Date().toISOString() })
-            .eq("id", existId!);
+            .eq("id", existing.id);
           dupCount++;
           continue;
         }
@@ -389,14 +396,14 @@ export async function POST(req: NextRequest) {
         // Map location
         const location = mapLocation(listing.location || "", sourcePlatform);
 
-        // Extract phone: prefer sellerPhone from bookmarklet, fallback to description extraction
-        const rawPhone = listing.sellerPhone
-          ? listing.sellerPhone.replace(/[^\d+]/g, '')
+        // Extract phone: prefer sellerPhone from bookmarklet, fallback to description extraction.
+        // ALWAYS normalize: `+201012345678` → `01012345678`.
+        const phone = listing.sellerPhone
+          ? normalizeEgyptianPhone(listing.sellerPhone)
           : listing.description
             ? extractPhone(listing.description)
             : null;
-        const phone = rawPhone && rawPhone.length >= 10 ? rawPhone : null;
-        const phoneSource = listing.sellerPhone ? "bookmarklet_inline" : phone ? "description" : null;
+        const phoneSource = listing.sellerPhone && phone ? "bookmarklet_inline" : phone ? "description" : null;
 
         // Upsert seller if we have info
         let sellerId: string | null = null;
@@ -452,6 +459,7 @@ export async function POST(req: NextRequest) {
           scope_id: scopeId,
           source_platform: sourcePlatform,
           source_listing_url: cleanUrl,
+          source_listing_id: listingIdFromUrl,
           title: listing.title,
           description: listing.description || null,
           price: listing.price,
