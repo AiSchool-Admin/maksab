@@ -170,7 +170,9 @@ function sendToMaksab(items,fromPg,toPg){
       clearInterval(ci);clearTimeout(to);window.removeEventListener('message',h);
       var withPhone=items.filter(function(it){return it.sellerPhone;}).length;
       sd.style.background='#1B7A3D';
-      sd.innerHTML='✅ تم!<br>صفحة '+fromPg+' → '+toPg+'<br>'+items.length+' إعلان جديد<br>'+e.data.new_count+' حُفظ — '+e.data.duplicate+' مكرر<br>📞 '+withPhone+' بأرقام';
+      var nc=e.data.new_count||e.data.new||e.data.received||0;
+      var dp=e.data.duplicate||e.data.duplicates||e.data.dup||0;
+      sd.innerHTML='✅ تم!<br>صفحة '+fromPg+' → '+toPg+'<br>'+items.length+' إعلان جديد<br>'+nc+' حُفظ — '+dp+' مكرر<br>📞 '+withPhone+' بأرقام';
       setTimeout(function(){try{pop.close();}catch(e){}},3000);
     }
   });
