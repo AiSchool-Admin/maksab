@@ -1,4 +1,4 @@
-// SemsarMasr Harvester v8 — Full auto: all scopes, all pages, one click
+// SemsarMasr Harvester v9 — v8 + seller name extraction during phone fetch
 (function(){
 var MAKSAB=window.__MAKSAB_URL||'https://maksab.vercel.app';
 var TOKEN=window.__MAKSAB_TOKEN||'';
@@ -19,7 +19,7 @@ var SCOPES=[
   {name:'تجاري للإيجار',cid:954,purpose:'rent'},
 ];
 
-var STORE_KEY='maksab_harvest_semsarmasr_v8';
+var STORE_KEY='maksab_harvest_semsarmasr_v9';
 var saved=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');
 var harvestedUrls=saved.urls||{};
 var prevCount=Object.keys(harvestedUrls).length;
@@ -105,16 +105,37 @@ function parseAgeDays(text){
   return null;
 }
 
-function fetchPhone(url){
+function extractSellerName(html){
+  // SemsarMasr: owner name often appears in these patterns
+  var patterns=[
+    /class="[^"]*(?:OwnerName|ownerName|AdvertName|sellerName)[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
+    /<span[^>]*class="[^"]*(?:owner|seller|advert|user)[\w-]*"[^>]*>\s*([^<]{2,60})\s*<\/span>/i,
+    /(?:صاحب الإعلان|المعلن|اسم المعلن|بواسطة)[:：]?\s*([^\n<>\r]{2,60})/,
+    /itemprop=["']name["'][^>]*>\s*([^<]{2,60})\s*</i
+  ];
+  for(var i=0;i<patterns.length;i++){
+    var m=html.match(patterns[i]);
+    if(m&&m[1]){
+      var n=m[1].trim().replace(/\s+/g,' ');
+      // Strip common noise
+      n=n.replace(/User\s*photo/gi,'').replace(/صورة المستخدم/g,'').replace(/مستخدم خاص/g,'').trim();
+      if(n.length>=2&&n.length<=60&&!/^\d+$/.test(n))return n;
+    }
+  }
+  return null;
+}
+
+function fetchDetail(url){
   return fetch(url).then(function(r){return r.arrayBuffer();}).then(function(buf){
     var html=new TextDecoder('windows-1256').decode(buf);
     var phones=html.match(/(?:\+?201|01)[0-25]\d{8}/g);
+    var phone=null;
     if(phones&&phones.length>0){
       var p=phones[0].replace(/^\+?2/,'');
-      if(p.startsWith('0'))return p;return '0'+p;
+      phone=p.startsWith('0')?p:'0'+p;
     }
-    return null;
-  }).catch(function(){return null;});
+    return {phone:phone,sellerName:extractSellerName(html)};
+  }).catch(function(){return {phone:null,sellerName:null};});
 }
 
 function fetchPhonesBatch(items,batchSize,onProgress){
@@ -124,8 +145,10 @@ function fetchPhonesBatch(items,batchSize,onProgress){
     while(batch.length<batchSize&&idx<items.length){if(!items[idx].sellerPhone)batch.push(idx);idx++;}
     if(batch.length===0)return Promise.resolve();
     return Promise.all(batch.map(function(i){
-      return fetchPhone(items[i].url+'?'+Date.now()).then(function(ph){
-        if(ph)items[i].sellerPhone=ph;done++;if(onProgress)onProgress(done,total);
+      return fetchDetail(items[i].url+'?'+Date.now()).then(function(d){
+        if(d.phone)items[i].sellerPhone=d.phone;
+        if(d.sellerName&&!items[i].sellerName)items[i].sellerName=d.sellerName;
+        done++;if(onProgress)onProgress(done,total);
       });
     })).then(next);
   }
@@ -195,7 +218,7 @@ function sendAll(){
   log('📤 إرسال '+allItems.length+' إعلان ('+phones+' بأرقام)...');
   var payload=JSON.stringify({
     url:'https://www.semsarmasr.com/3akarat',listings:allItems,
-    timestamp:new Date().toISOString(),source:'bookmarklet-v8-full-auto',
+    timestamp:new Date().toISOString(),source:'bookmarklet-v9-with-names',
     strategy:'semsarmasr-listdesstyle',scope_code:null,platform:'semsarmasr'
   });
   var pop=window.open(MAKSAB+'/admin/crm/harvester/receive','mh','width=600,height=500');

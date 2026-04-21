@@ -9,9 +9,33 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getParser } from "@/lib/crm/harvester/parsers/platform-router";
-import { BROWSER_HEADERS } from "@/lib/crm/harvester/parsers/dubizzle";
+import { getParser, getPlatformHeaders } from "@/lib/crm/harvester/parsers/platform-router";
+import { cleanSellerName } from "@/lib/crm/harvester/parsers/dubizzle";
 import { extractPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
+
+/**
+ * Fallback seller-name extraction from raw HTML — covers patterns parsers may miss.
+ * Shared with backfill-seller-names endpoint; kept local to avoid extra import surface.
+ */
+function extractSellerFallback(html: string): string | null {
+  const patterns: RegExp[] = [
+    /id=["']PostViewOwnerCard["'][\s\S]{0,2000}?<h3[^>]*>([^<]{2,60})<\/h3>/i,
+    /class="[^"]*(?:seller|member|owner|advertiser|user)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
+    /class="[^"]*(?:seller|member|owner)[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
+    /itemprop=["']name["'][^>]*>\s*([^<]{2,60})\s*</i,
+    /(?:أعلن(?:ها|ه)?|نشر(?:ها|ه)?|بواسطة|صاحب الإعلان)[:：]?\s*([^\n<>\r]{2,60})/,
+    /"seller"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]{2,60})"/i,
+    /"author"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]{2,60})"/i,
+  ];
+  for (const pattern of patterns) {
+    const m = html.match(pattern);
+    if (m && m[1]) {
+      const cleaned = cleanSellerName(m[1].trim());
+      if (cleaned && cleaned.length >= 2 && cleaned.length <= 60) return cleaned;
+    }
+  }
+  return null;
+}
 
 export const maxDuration = 60;
 
@@ -154,7 +178,7 @@ export async function GET(req: NextRequest) {
 
       const response = await fetch(listing.source_listing_url, {
         signal: controller.signal,
-        headers: BROWSER_HEADERS,
+        headers: getPlatformHeaders(platform),
         redirect: "follow",
       });
       clearTimeout(timeout);
@@ -170,7 +194,11 @@ export async function GET(req: NextRequest) {
 
       result.description_length = details.description?.length || 0;
       result.specs_count = Object.keys(details.specifications || {}).length;
-      result.seller_name = details.sellerName;
+
+      // Seller name: parser-first, then fallback patterns
+      const parserSellerName = cleanSellerName(details.sellerName);
+      const fallbackSellerName = parserSellerName || extractSellerFallback(html);
+      result.seller_name = fallbackSellerName;
 
       // Try to extract phone from description + specs
       const allText = [
@@ -213,8 +241,8 @@ export async function GET(req: NextRequest) {
         updates.phone_source = "detail_enrichment";
       }
 
-      if (details.sellerName) {
-        updates.seller_name = details.sellerName;
+      if (fallbackSellerName) {
+        updates.seller_name = fallbackSellerName;
       }
 
       await supabase
@@ -222,17 +250,30 @@ export async function GET(req: NextRequest) {
         .update(updates)
         .eq("id", listing.id);
 
-      // Update seller phone if found
-      if (phone && listing.ahe_seller_id) {
-        await supabase
-          .from("ahe_sellers")
-          .update({
-            phone,
-            pipeline_status: "phone_found",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", listing.ahe_seller_id)
-          .is("phone", null); // Only update if no phone yet
+      // Update seller table — phone and name when missing
+      if (listing.ahe_seller_id) {
+        if (phone) {
+          await supabase
+            .from("ahe_sellers")
+            .update({
+              phone,
+              pipeline_status: "phone_found",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", listing.ahe_seller_id)
+            .is("phone", null); // Only update if no phone yet
+        }
+
+        if (fallbackSellerName) {
+          await supabase
+            .from("ahe_sellers")
+            .update({
+              name: fallbackSellerName,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", listing.ahe_seller_id)
+            .is("name", null); // Only update if no name yet
+        }
       }
 
       results.push(result);

@@ -417,6 +417,14 @@ export async function POST(req: NextRequest) {
 
           if (existingSeller) {
             sellerId = existingSeller.id;
+            // Backfill name on existing seller if we have one now and they don't
+            if (listing.sellerName) {
+              await supabase
+                .from("ahe_sellers")
+                .update({ name: listing.sellerName, updated_at: new Date().toISOString() })
+                .eq("id", existingSeller.id)
+                .is("name", null);
+            }
           } else {
             const { data: newSeller } = await supabase
               .from("ahe_sellers")
