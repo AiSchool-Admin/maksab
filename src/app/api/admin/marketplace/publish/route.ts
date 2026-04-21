@@ -148,7 +148,6 @@ export async function POST(req: NextRequest) {
                 price: listing.price || null,
                 is_negotiable: listing.is_negotiable || false,
                 sale_type: "cash",
-                listing_type: listing.listing_type || "sale",
                 category_fields: listing.specifications || {},
                 governorate: govAr,
                 city: listing.city || null,
