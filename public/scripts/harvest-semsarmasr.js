@@ -183,29 +183,29 @@ function sendToMaksab(items,fromPg,toPg){
 var allItems=[];
 var lastPageProcessed=0;
 var reachedArchive=false;
-var MAX_PAGE=200;
+var MAX_PAGE=3;
 var MAX_AGE_DAYS=30;
 var TARGET=100;
 
 function harvestPage(pg){
   if(pg>MAX_PAGE||allItems.length>=TARGET||reachedArchive){finish();return;}
   log('🔄 صفحة '+pg+' — '+allItems.length+'/'+TARGET+' إعلان');
-  if(pg===1){
-    processPage(document,pg);
-    lastPageProcessed=pg;saveProgress();
-    if(allItems.length>=TARGET){finish();return;}
-    setTimeout(function(){harvestPage(2);},300);
-    return;
-  }
-  fetch(getPageUrl(pg)).then(function(r){return r.text();}).then(function(html){
+  var pageUrl=getPageUrl(pg);
+  fetch(pageUrl).then(function(r){return r.text();}).then(function(html){
     var doc=new DOMParser().parseFromString(html,'text/html');
     var cards=doc.querySelectorAll('div.ListCont, div.ListDesStyle');
-    if(!cards||cards.length===0){finish();return;}
+    if(!cards||cards.length===0){
+      log('📄 صفحة '+pg+' فارغة');
+      finish();return;
+    }
     processPage(doc,pg);
     lastPageProcessed=pg;saveProgress();
     if(allItems.length>=TARGET){finish();return;}
     setTimeout(function(){harvestPage(pg+1);},800);
-  }).catch(function(){finish();});
+  }).catch(function(err){
+    log('❌ خطأ ص'+pg+': '+err.message);
+    finish();
+  });
 }
 
 function processPage(doc,pg){
