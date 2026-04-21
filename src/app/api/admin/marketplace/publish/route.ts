@@ -103,15 +103,21 @@ export async function POST(req: NextRequest) {
 
         userId = authUser.user.id;
 
-        // Create profile
-        await sb.from("profiles").upsert({
+        // Create profile (with proper required columns)
+        const { error: profErr } = await sb.from("profiles").upsert({
           id: userId,
           phone: seller.phone,
           display_name: seller.name || "معلن",
           governorate: govAr,
-          is_verified: true,
+          seller_type: "individual",
+          is_admin: false,
           created_at: new Date().toISOString(),
         });
+
+        if (profErr) {
+          errors.push(`Profile ${seller.id}: ${profErr.message}`);
+          continue;
+        }
 
         usersCreated++;
       }
