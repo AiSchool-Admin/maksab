@@ -161,16 +161,13 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
                 >
                   {imgUrl ? (
                     <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={imgUrl}
                         alt={listing.title}
                         className="w-full h-full object-cover"
                         loading="lazy"
                         referrerPolicy="no-referrer"
-                        onError={(e: any) => {
-                          e.target.style.display = "none";
-                          e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-3xl bg-gray-100">🏠</div>';
-                        }}
                       />
                     </div>
                   ) : (
