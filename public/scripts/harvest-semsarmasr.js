@@ -160,14 +160,16 @@ function sendToMaksab(items,fromPg,toPg){
   });
   var pop=window.open(MAKSAB+'/admin/crm/harvester/receive','mh','width=500,height=400');
   if(!pop){sd.style.background='#DC2626';sd.textContent='اسمح بالـ popups';return;}
+  var delivered=false;
   var ci=setInterval(function(){
+    if(delivered)return;
     try{pop.postMessage({type:'harvest_data',payload:payload,token:TOKEN},MAKSAB);}catch(e){}
-  },500);
+  },800);
   var to=setTimeout(function(){clearInterval(ci);sd.style.background='#DC2626';sd.textContent='انتهت المهلة';},120000);
   window.addEventListener('message',function h(e){
     if(e.origin!==MAKSAB)return;
     if(e.data&&e.data.type==='harvest_result'){
-      clearInterval(ci);clearTimeout(to);window.removeEventListener('message',h);
+      delivered=true;clearInterval(ci);clearTimeout(to);window.removeEventListener('message',h);
       var withPhone=items.filter(function(it){return it.sellerPhone;}).length;
       sd.style.background='#1B7A3D';
       var nc=e.data.new_count||e.data.new||e.data.received||0;

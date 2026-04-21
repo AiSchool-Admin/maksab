@@ -10,8 +10,11 @@ export default function HarvesterReceivePage() {
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
   useEffect(() => {
+    let processing = false;
     function handleMessage(e: MessageEvent) {
       if (e.data?.type !== "harvest_data") return;
+      if (processing) return;
+      processing = true;
 
       setStatus("جاري المعالجة...");
       setIcon("🔄");
