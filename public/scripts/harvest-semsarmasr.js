@@ -186,7 +186,7 @@ var MAX_PAGE=200;
 var MAX_AGE_DAYS=30;
 
 function harvestPage(pg){
-  if(pg>MAX_PAGE||noNewPages>=3||reachedArchive){finish();return;}
+  if(pg>MAX_PAGE||noNewPages>=5||reachedArchive){finish();return;}
   log('🔄 صفحة '+pg+'<br>جديد: '+allItems.length);
   if(pg===1){
     processPage(document,pg);
@@ -225,7 +225,7 @@ function processPage(doc,pg){
       newCount++;
     }
   }
-  log('📄 ص'+pg+': '+cards.length+' ('+alexCards.length+' إسكندرية, '+fresh+' حديث, '+stale+' قديم, '+newCount+' جديد)'+(reachedArchive?'<br>🛑 أرشيف':''));
+  log('📄 ص'+pg+': '+cards.length+' كرت ('+alexCards.length+' إسكندرية, '+fresh+' حديث, '+stale+' قديم, '+newCount+' جديد)<br>إجمالي: '+allItems.length+' | فارغ: '+noNewPages+'/5'+(reachedArchive?'<br>🛑 أرشيف':''));
 }
 
 function finish(){
