@@ -52,7 +52,7 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
   // Fetch listings
   const { data: listings } = await supabase
     .from("ahe_listings")
-    .select("id, title, price, governorate, city, source_location, thumbnail_url, main_image_url, extracted_phone, created_at, ahe_seller_id, description")
+    .select("id, title, price, governorate, city, source_location, thumbnail_url, main_image_url, extracted_phone, created_at, ahe_seller_id, description, seller_name")
     .eq("is_duplicate", false)
     .eq("maksab_category", catName)
     .or(`governorate.eq.${govName},governorate.eq.${governorate}`)
@@ -142,15 +142,17 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {listings.map((listing: any) => {
               const seller = listing.ahe_seller_id ? sellersMap[listing.ahe_seller_id] : null;
-              const sellerName = seller?.name || null;
-              const imgUrl = listing.thumbnail_url || listing.main_image_url;
+              const sellerName = seller?.name || listing.seller_name || null;
+              const sellerPhone = seller?.phone || listing.extracted_phone || null;
+              const rawImgUrl = listing.thumbnail_url || listing.main_image_url;
+              const imgUrl = rawImgUrl ? `/api/img?url=${encodeURIComponent(rawImgUrl)}` : null;
 
-              // Area from source_location: "سبورتنج - الإسكندرية" → "سبورتنج"
               let area = listing.source_location
                 ? String(listing.source_location).split("-")[0].trim()
                 : listing.city;
               if (!area || area === govName) area = null;
 
+              const desc = listing.description || "";
               const slug = `${(listing.title || "ad").replace(/\s+/g, "-").substring(0, 50)}-${listing.id}`;
 
               return (
@@ -167,7 +169,6 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
                         alt={listing.title}
                         className="w-full h-full object-cover"
                         loading="lazy"
-                        referrerPolicy="no-referrer"
                       />
                     </div>
                   ) : (
@@ -184,16 +185,20 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
                         {listing.price.toLocaleString()} جنيه
                       </p>
                     )}
-                    <div className="flex items-center justify-between mt-2">
+                    {desc && (
+                      <p className="text-[10px] text-gray-500 line-clamp-2 mt-1">{desc}</p>
+                    )}
+                    <div className="mt-2 space-y-1">
                       <p className="text-[10px] text-gray-400">
                         📍 {area ? `${area} — ${govName}` : govName}
                       </p>
+                      {sellerName && (
+                        <p className="text-[10px] text-blue-600 truncate">👤 {sellerName}</p>
+                      )}
+                      {sellerPhone && (
+                        <p className="text-[10px] text-green-600 font-mono" dir="ltr">📞 {sellerPhone}</p>
+                      )}
                     </div>
-                    {sellerName && (
-                      <p className="text-[10px] text-gray-500 mt-1 truncate">
-                        👤 {sellerName}
-                      </p>
-                    )}
                   </div>
                 </Link>
               );
