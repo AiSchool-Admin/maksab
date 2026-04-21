@@ -13,22 +13,16 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256],
     minimumCacheTTL: 60 * 60 * 24 * 30, // 30 days
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**.supabase.co",
-      },
-      {
-        protocol: "https",
-        hostname: "**.supabase.in",
-      },
-      {
-        protocol: "https",
-        hostname: "lh3.googleusercontent.com",
-      },
-      {
-        protocol: "https",
-        hostname: "ui-avatars.com",
-      },
+      { protocol: "https", hostname: "**.supabase.co" },
+      { protocol: "https", hostname: "**.supabase.in" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "ui-avatars.com" },
+      { protocol: "https", hostname: "**.semsarmasr.com" },
+      { protocol: "https", hostname: "**.dubizzle.com.eg" },
+      { protocol: "https", hostname: "**.opensooq.com" },
+      { protocol: "https", hostname: "**.aqarmap.com" },
+      { protocol: "https", hostname: "**.olx.com.eg" },
+      { protocol: "https", hostname: "**.propertyfinder.eg" },
     ],
   },
 

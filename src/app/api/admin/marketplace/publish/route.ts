@@ -103,11 +103,19 @@ export async function POST(req: NextRequest) {
 
         userId = authUser.user.id;
 
-        // Create profile (with proper required columns)
+        // Better display name: use seller.name, or derive from category + governorate
+        let displayName = seller.name;
+        if (!displayName) {
+          const catLabel = seller.primary_category === "vehicles" ? "معلن سيارات"
+            : seller.primary_category === "properties" ? "معلن عقارات"
+            : "معلن";
+          displayName = `${catLabel} ${govAr}`;
+        }
+
         const { error: profErr } = await sb.from("profiles").upsert({
           id: userId,
           phone: seller.phone,
-          display_name: seller.name || "معلن",
+          display_name: displayName,
           governorate: govAr,
           seller_type: "individual",
           is_admin: false,
@@ -125,7 +133,7 @@ export async function POST(req: NextRequest) {
       // Fetch unmigrated listings for this seller
       const { data: listings } = await sb
         .from("ahe_listings")
-        .select("id, title, description, price, is_negotiable, listing_type, specifications, governorate, city, thumbnail_url, all_image_urls, main_image_url, maksab_category, migration_status")
+        .select("id, title, description, price, is_negotiable, specifications, governorate, city, area, source_location, thumbnail_url, all_image_urls, main_image_url, maksab_category, migration_status")
         .eq("ahe_seller_id", seller.id)
         .eq("is_duplicate", false)
         .in("migration_status", ["harvested", "queued"])
@@ -142,6 +150,28 @@ export async function POST(req: NextRequest) {
             if (images.length === 0 && listing.thumbnail_url) images.push(listing.thumbnail_url);
             if (images.length === 0 && listing.main_image_url) images.push(listing.main_image_url);
 
+            // Use Arabic area from source_location if available
+            // source_location format: "سبورتنج - الإسكندرية"
+            let arCity = listing.city;
+            if (listing.source_location) {
+              const parts = String(listing.source_location).split('-').map((s: string) => s.trim());
+              if (parts[0] && !/^[a-z]+$/i.test(parts[0])) arCity = parts[0];
+            }
+            if (!arCity && listing.area) arCity = listing.area;
+
+            // Build richer description
+            let desc = listing.description || "";
+            const specs = (listing.specifications || {}) as Record<string, string>;
+            const specParts: string[] = [];
+            if (specs["area"] || specs["المساحة"]) specParts.push(`المساحة: ${specs["area"] || specs["المساحة"]}`);
+            if (specs["rooms"] || specs["عدد الغرف"]) specParts.push(`الغرف: ${specs["rooms"] || specs["عدد الغرف"]}`);
+            if (specs["finishing"] || specs["التشطيب"]) specParts.push(`التشطيب: ${specs["finishing"] || specs["التشطيب"]}`);
+            if (specs["floor"] || specs["الدور"]) specParts.push(`الدور: ${specs["floor"] || specs["الدور"]}`);
+            if (specParts.length > 0 && desc.length < 50) {
+              desc = (desc ? desc + "\n\n" : "") + specParts.join(" — ");
+            }
+            if (!desc && listing.title) desc = listing.title;
+
             const categoryId = CATEGORY_MAP[listing.maksab_category] || "real_estate";
 
             const { data: newAd, error: adErr } = await sb
@@ -150,13 +180,13 @@ export async function POST(req: NextRequest) {
                 user_id: userId,
                 category_id: categoryId,
                 title: listing.title || "إعلان",
-                description: listing.description || null,
+                description: desc || null,
                 price: listing.price || null,
                 is_negotiable: listing.is_negotiable || false,
                 sale_type: "cash",
                 category_fields: listing.specifications || {},
                 governorate: govAr,
-                city: listing.city || null,
+                city: arCity || null,
                 images,
                 status: "active",
               })
