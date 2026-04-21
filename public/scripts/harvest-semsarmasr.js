@@ -28,7 +28,7 @@ function saveProgress(){
 }
 
 function extractCards(doc){
-  var cards=doc.querySelectorAll('div.ListDesStyle');
+  var cards=doc.querySelectorAll('div.ListCont, div.ListDesStyle');
   var results=[];
   for(var i=0;i<cards.length;i++){
     var card=cards[i];
@@ -186,7 +186,7 @@ function harvestPage(pg){
   }
   fetch(getPageUrl(pg)).then(function(r){return r.text();}).then(function(html){
     var doc=new DOMParser().parseFromString(html,'text/html');
-    var cards=doc.querySelectorAll('div.ListDesStyle');
+    var cards=doc.querySelectorAll('div.ListCont, div.ListDesStyle');
     if(!cards||cards.length===0){finish();return;}
     var before=allItems.length;
     processPage(doc,pg);
