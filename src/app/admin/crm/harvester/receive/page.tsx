@@ -91,7 +91,7 @@ export default function HarvesterReceivePage() {
     }
 
     async function processBatches(
-      payload: { url: string; timestamp: string; source: string; strategy?: string; scope_code?: string },
+      payload: { url: string; timestamp: string; source: string; strategy?: string; scope_code?: string; platform?: string },
       token: string,
       allListings: unknown[],
       total: number
@@ -121,6 +121,7 @@ export default function HarvesterReceivePage() {
           source: payload.source,
           strategy: payload.strategy,
           scope_code: payload.scope_code,
+          platform: payload.platform,
         });
 
         try {
