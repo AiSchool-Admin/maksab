@@ -142,7 +142,7 @@ export default function SemsarMasrBookmarkletPage() {
 }
 
 function buildBookmarklet(appUrl: string): string {
-  const TOKEN = "8424a27fde826eaf7d6e3ab0e7710804f7f9ff7f3e94fef0dc467e945a8b3f58";
+  const TOKEN = "be4ab01e89c611d4966d7508ecd1002330d664647d79dc2ca98a55987d199f13";
 
   const code = `void(function(){window.__MAKSAB_URL='${appUrl}';window.__MAKSAB_TOKEN='${TOKEN}';var s=document.createElement('script');s.src='${appUrl}/scripts/harvest-semsarmasr.js?v='+Date.now();document.body.appendChild(s);}())`;
 
