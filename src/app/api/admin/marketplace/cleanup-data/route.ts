@@ -49,6 +49,8 @@ export async function GET(req: NextRequest) {
       return await status(supabase);
     case "source-breakdown":
       return await sourceBreakdown(supabase);
+    case "railway-check":
+      return await railwayCheck(supabase);
     default:
       return NextResponse.json({
         error: "Missing or invalid `task` parameter",
@@ -324,6 +326,70 @@ async function unifyGovernorate(supabase: SupabaseClient, limit: number) {
     listings_renamed: (fixed1 || []).length,
     listings_filled_from_location: fixed2,
     sellers_renamed: (fixedSellers || []).length,
+  });
+}
+
+// ═══ Task: railway-check — simulates Railway worker queries ═══
+//
+// Mirrors the filters used in railway/workers/cars-harvester.ts and
+// properties-harvester.ts so we can see INSTANTLY whether Railway would
+// harvest anything right now — without waiting for the next cron tick
+// and without needing the Railway service URL.
+
+async function railwayCheck(supabase: SupabaseClient) {
+  const now = new Date().toISOString();
+
+  // Exact same filter Railway's cars-harvester uses
+  const { data: carsScopes } = await supabase
+    .from("ahe_scopes")
+    .select("code, maksab_category, governorate, is_active, is_paused, next_harvest_at")
+    .eq("maksab_category", "سيارات")
+    .eq("governorate", "الإسكندرية")
+    .eq("is_active", true);
+
+  // Exact same filter Railway's properties-harvester uses
+  const { data: propsScopes } = await supabase
+    .from("ahe_scopes")
+    .select("code, maksab_category, governorate, is_active, is_paused, next_harvest_at")
+    .eq("maksab_category", "عقارات")
+    .eq("governorate", "الإسكندرية")
+    .eq("is_active", true);
+
+  // Scopes Railway would ACTUALLY process right now (is_active + ready)
+  function readyFilter(s: { next_harvest_at: string | null }) {
+    return !s.next_harvest_at || new Date(s.next_harvest_at) <= new Date(now);
+  }
+
+  const carsReady = (carsScopes || []).filter(readyFilter);
+  const propsReady = (propsScopes || []).filter(readyFilter);
+
+  // Scheduler view: additionally filters by is_paused=false
+  const { data: schedulerReady } = await supabase
+    .from("ahe_scopes")
+    .select("code")
+    .eq("is_active", true)
+    .eq("is_paused", false)
+    .or(`next_harvest_at.is.null,next_harvest_at.lte.${now}`);
+
+  const totalRailwayWillProcess = carsReady.length + propsReady.length;
+
+  return NextResponse.json({
+    now: now,
+    verdict: totalRailwayWillProcess === 0
+      ? "✅ Railway آمن — مفيش scopes هيشتغل عليها"
+      : `⚠️ Railway هيحصد ${totalRailwayWillProcess} scope لو شغّل دلوقتي`,
+    cars_harvester_will_pick: carsReady.map((s) => s.code),
+    properties_harvester_will_pick: propsReady.map((s) => s.code),
+    scheduler_endpoint_will_pick: (schedulerReady || []).map((s) => s.code),
+    details: {
+      all_alexandria_scopes: {
+        cars_total: (carsScopes || []).length,
+        cars_ready_now: carsReady.length,
+        properties_total: (propsScopes || []).length,
+        properties_ready_now: propsReady.length,
+      },
+      note: "Railway workers فلترتهم فقط `is_active=true AND next_harvest_at<=now`. لو الاتنين 0 معناه Railway مش هيحصد حاجة.",
+    },
   });
 }
 
