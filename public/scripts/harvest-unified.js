@@ -1375,17 +1375,49 @@
           var data = JSON.parse(m[1]);
           var pageProps = (data && data.props && data.props.pageProps) || {};
 
-          // Ad object — Dubizzle wraps under various keys. IMPORTANT: do NOT
-          // include `pageProps` itself as a fallback — it contains the
-          // logged-in user data which would then leak into seller extraction.
+          // Known top-level ad wrappers on Dubizzle / OLX (post-merger)
           var ad = pageProps.ad || pageProps.listing || pageProps.item ||
                    pageProps.property || pageProps.product ||
-                   (pageProps.adModel && pageProps.adModel.ad) || null;
+                   pageProps.adDetail || pageProps.itemDetail ||
+                   pageProps.detail ||
+                   (pageProps.adModel && pageProps.adModel.ad) ||
+                   (pageProps.data && (pageProps.data.ad || pageProps.data.item || pageProps.data.listing)) ||
+                   (pageProps.result && (pageProps.result.ad || pageProps.result.item)) ||
+                   null;
+
+          // Recursive deep-search: if known paths failed, scan pageProps for
+          // any object that looks like an ad (has title + user/seller/price).
+          if (!ad) {
+            ad = (function findAdLike(obj, depth) {
+              if (depth > 6 || !obj || typeof obj !== 'object') return null;
+              if (Array.isArray(obj)) {
+                for (var ai = 0; ai < Math.min(obj.length, 10); ai++) {
+                  var r = findAdLike(obj[ai], depth + 1);
+                  if (r) return r;
+                }
+                return null;
+              }
+              // Looks like an ad? has title AND some seller/phone/price field
+              if ((obj.title || obj.name || obj.subject) &&
+                  (obj.user || obj.seller || obj.owner || obj.agent ||
+                   obj.phone || obj.description || obj.parameters || obj.amenities ||
+                   obj.images || obj.photos)) {
+                return obj;
+              }
+              for (var k in obj) {
+                if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+                var r2 = findAdLike(obj[k], depth + 1);
+                if (r2) return r2;
+              }
+              return null;
+            })(pageProps, 0);
+          }
 
           if (ad && typeof ad === 'object') {
             // Seller name — only from ad.user (the LISTING's seller, not the page user)
-            var user = ad.user || ad.seller || ad.owner || ad.agent || {};
-            var candidateName = (user.name || user.display_name || '').trim() || null;
+            var user = ad.user || ad.seller || ad.owner || ad.agent || ad.advertiser || {};
+            var candidateName = (user.name || user.display_name || user.full_name ||
+                                 user.first_name || ad.user_name || '').trim() || null;
             if (candidateName && !isBlocked(candidateName, null)) {
               result.sellerName = candidateName;
             }
