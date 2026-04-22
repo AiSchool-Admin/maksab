@@ -194,6 +194,8 @@
   function renderReady(ui, ctx, platform, onStart, onCancel) {
     var countdown = COUNTDOWN_SECS;
     var cancelled = false;
+    var prevStore = loadStore(platform.id);
+    var prevCount = prevStore.urls ? Object.keys(prevStore.urls).length : 0;
 
     function html() {
       return ''
@@ -204,6 +206,12 @@
         + '  <div>🏷️ <b>القسم:</b> ' + (ctx.categoryLabel || '—') + '</div>'
         + '  <div>🏦 <b>نوع البيع:</b> ' + (ctx.purposeLabel || '—') + '</div>'
         + '</div>'
+        + (prevCount > 0
+            ? ('<div style="margin-top:8px;font-size:11px;background:rgba(0,0,0,0.1);padding:6px 10px;border-radius:8px;">'
+               + 'لاحظ: ' + prevCount + ' URL محفوظ من جلسات سابقة. '
+               + '<a href="#" id="mk-clear" style="color:#FFE082;text-decoration:underline;">مسح cache</a>'
+               + '</div>')
+            : '')
         + '<div style="margin-top:12px;font-size:13px;">'
         + (ctx.valid
             ? ('سيبدأ الحصاد خلال <b>' + countdown + '</b> ثانية...')
@@ -221,6 +229,7 @@
 
     var startBtn = document.getElementById('mk-start');
     var cancelBtn = document.getElementById('mk-cancel');
+    var clearBtn = document.getElementById('mk-clear');
     if (startBtn) startBtn.addEventListener('click', function(){
       if (cancelled) return;
       cancelled = true; onStart();
@@ -228,6 +237,17 @@
     if (cancelBtn) cancelBtn.addEventListener('click', function(){
       if (cancelled) return;
       cancelled = true; onCancel();
+    });
+    if (clearBtn) clearBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      try { localStorage.removeItem(storeKey(platform.id)); } catch(_) {}
+      prevCount = 0;
+      ui.set(html()); // re-render without the cache hint
+      // re-attach handlers after re-render
+      var sb = document.getElementById('mk-start');
+      var cb = document.getElementById('mk-cancel');
+      if (sb) sb.addEventListener('click', function(){ if (!cancelled) { cancelled = true; onStart(); } });
+      if (cb) cb.addEventListener('click', function(){ if (!cancelled) { cancelled = true; onCancel(); } });
     });
 
     if (!ctx.valid) return;
@@ -289,8 +309,18 @@
   // ═════════════════════════════════════════════════════════
 
   function harvestAllPages(platform, ctx, ui, onDone) {
+    // localStorage cache used to filter URLs across runs — but if the DB is
+    // wiped server-side, the client cache becomes wrong (filters out items
+    // that need to be re-saved). Server handles dedup via source_listing_url
+    // match; client just collects.
+    //
+    // We still load `store.urls` so we can show "X previously seen" in the
+    // UI, but we DON'T use it to filter what gets sent.
     var store = loadStore(platform.id);
-    var seenUrls = store.urls || {};
+    var prevSeenUrls = store.urls || {};
+    var prevCount = Object.keys(prevSeenUrls).length;
+    var seenInThisRun = {}; // dedup WITHIN one run only
+
     var allItems = [];
     var page = 1;
     var emptyStreak = 0;
@@ -298,10 +328,17 @@
 
     function next() {
       if (page > MAX_PAGES || emptyStreak >= 3 || archiveReached) {
-        return onDone(allItems, seenUrls);
+        // Update store with everything we collected this run
+        var mergedUrls = {};
+        for (var u in prevSeenUrls) mergedUrls[u] = prevSeenUrls[u];
+        for (var u2 in seenInThisRun) mergedUrls[u2] = 1;
+        saveStore(platform.id, { urls: mergedUrls });
+        return onDone(allItems, mergedUrls);
       }
 
-      renderProgress(ui, '🔍 <b>' + platform.displayName + '</b> — صفحة ' + page + '<br>وُجد حتى الآن: <b>' + allItems.length + '</b>');
+      renderProgress(ui, '🔍 <b>' + platform.displayName + '</b> — صفحة ' + page
+        + '<br>وُجد حتى الآن: <b>' + allItems.length + '</b>'
+        + (prevCount > 0 ? '<br><span style="opacity:0.7;font-size:11px;">(جلسات سابقة: ' + prevCount + ')</span>' : ''));
 
       var url = platform.buildPageUrl(ctx, page);
       platform.fetchPage(url).then(function(res) {
@@ -313,17 +350,19 @@
           var age = parseAgeDays(it.dateText);
           if (age !== null && age > MAX_AGE_DAYS) { stale++; continue; }
           fresh++;
-          if (!seenUrls[it.url]) {
-            seenUrls[it.url] = 1;
+          // Only filter intra-run duplicates (same URL appears on 2 list pages).
+          // Cross-run filtering is the SERVER's job (source_listing_url match).
+          if (!seenInThisRun[it.url]) {
+            seenInThisRun[it.url] = 1;
             allItems.push(it);
             newOnPage++;
           }
         }
-        saveStore(platform.id, {urls: seenUrls});
 
         // More than half are archive-age → stop walking further
         if ((fresh + stale) >= 5 && stale / (fresh + stale) >= 0.5) archiveReached = true;
-        if (items.length === 0 || newOnPage === 0) emptyStreak++;
+        // No items at all on the page = real empty page (end of pagination)
+        if (items.length === 0) emptyStreak++;
         else emptyStreak = 0;
 
         page++;
