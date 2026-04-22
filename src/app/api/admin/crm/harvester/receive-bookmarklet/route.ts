@@ -100,7 +100,13 @@ async function validateToken(
 async function matchScopeFromUrl(
   pageUrl: string,
   explicitScopeCode: string | null,
-  supabase: ReturnType<typeof getServiceClient>
+  supabase: ReturnType<typeof getServiceClient>,
+  meta?: {
+    platform?: string;
+    governorate_label?: string;
+    maksab_category?: string;
+    purpose?: string;
+  }
 ): Promise<string | null> {
   // 1. If explicit scope_code provided, use it directly
   if (explicitScopeCode) {
@@ -113,7 +119,32 @@ async function matchScopeFromUrl(
     if (data) return data.id;
   }
 
-  // 2. Auto-detect from URL
+  // 2. NEW: Fallback via meta (platform + governorate + category).
+  // Unified bookmarklet v11 sends these reliably — much stronger than URL guessing.
+  if (meta && meta.platform && meta.governorate_label && meta.maksab_category) {
+    // Normalize platform: "dubizzle_bookmarklet" → "dubizzle" for scope lookup
+    const basePlatform = meta.platform.replace(/_bookmarklet$/, "");
+    // Try both the bookmarklet-suffixed and base variants since scopes may exist under either.
+    const platformVariants = Array.from(new Set([meta.platform, basePlatform]));
+
+    const { data: metaScopes } = await supabase
+      .from("ahe_scopes")
+      .select("id, code, is_paused, is_active")
+      .in("source_platform", platformVariants)
+      .eq("governorate", meta.governorate_label)
+      .eq("maksab_category", meta.maksab_category)
+      .limit(10);
+    if (metaScopes && metaScopes.length > 0) {
+      // Prefer active + non-paused, then any active, then anything
+      const bestMatch =
+        metaScopes.find((s) => s.is_active && !s.is_paused) ||
+        metaScopes.find((s) => s.is_active) ||
+        metaScopes[0];
+      return bestMatch.id;
+    }
+  }
+
+  // 3. Auto-detect from URL (legacy behavior)
   if (!pageUrl) return null;
 
   try {
@@ -339,9 +370,15 @@ export async function POST(req: NextRequest) {
       ? (body.platform === "dubizzle" ? "dubizzle_bookmarklet" : body.platform)
       : "dubizzle_bookmarklet";
 
-    // ── Scope matching: explicit scope_code > employee default > auto-detect from URL ──
+    // ── Scope matching: explicit scope_code > meta (from unified bookmarklet)
+    //                   > employee default > URL auto-detect ──
     const effectiveScopeCode = body.scope_code || employee.scope_code || null;
-    const scopeId = await matchScopeFromUrl(body.url || "", effectiveScopeCode, supabase);
+    const scopeId = await matchScopeFromUrl(
+      body.url || "",
+      effectiveScopeCode,
+      supabase,
+      body.meta ? { ...body.meta, platform: sourcePlatform } : undefined
+    );
 
     // Deduplicate within the batch itself first
     const seenUrls = new Set<string>();
@@ -464,8 +501,8 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Insert listing
-        await supabase.from("ahe_listings").insert({
+        // Insert listing — capture errors so we know why saves fail.
+        const { error: insertErr } = await supabase.from("ahe_listings").insert({
           scope_id: scopeId,
           source_platform: sourcePlatform,
           source_listing_url: cleanUrl,
@@ -480,8 +517,6 @@ export async function POST(req: NextRequest) {
           main_image_url: listing.thumbnailUrl,
           all_image_urls: listing.thumbnailUrl ? [listing.thumbnailUrl] : [],
           source_category: listing.category || null,
-          // Prefer meta.maksab_category (from unified harvester) — it knows the
-          // site structure better than slug-based detection.
           maksab_category: body.meta?.maksab_category || null,
           source_location: listing.location,
           governorate: body.meta?.governorate_label || location.governorate || null,
@@ -496,6 +531,14 @@ export async function POST(req: NextRequest) {
           extracted_phone: phone,
           phone_source: phoneSource,
         });
+
+        if (insertErr) {
+          // Keep only the first 5 error details so the response stays small.
+          if (errors.length < 5) {
+            errors.push(`Insert failed: ${insertErr.message} (code=${insertErr.code}) listing=${listing.title?.substring(0, 40)}`);
+          }
+          continue; // don't count as new, don't run BHE buyer detection
+        }
 
         newCount++;
 

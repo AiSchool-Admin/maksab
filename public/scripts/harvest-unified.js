@@ -252,15 +252,28 @@
   }
 
   function renderDone(ui, stats) {
-    ui.bg('#1B7A3D');
+    // If extracted 50+ but saved 0 → something's wrong on server. Warn user.
+    var savedAny = (stats.newCount + stats.dupCount) > 0;
+    var extractedMany = stats.total >= 20;
+    var failed = extractedMany && !savedAny;
+
+    ui.bg(failed ? '#DC2626' : '#1B7A3D');
     var html = ''
-      + '<div style="font-size:16px;font-weight:700;margin-bottom:10px;">✅ انتهى الحصاد</div>'
+      + '<div style="font-size:16px;font-weight:700;margin-bottom:10px;">'
+      + (failed ? '⚠️ حصاد تم لكن لم يُحفظ!' : '✅ انتهى الحصاد')
+      + '</div>'
       + '<div style="background:rgba(0,0,0,0.15);padding:10px;border-radius:10px;font-size:13px;">'
       + '  <div>📊 إجمالي: <b>' + stats.total + '</b></div>'
       + '  <div>📞 بأرقام: <b>' + stats.withPhone + '</b></div>'
       + '  <div>👤 بأسماء: <b>' + stats.withName + '</b></div>'
       + '  <div>💾 جديد: <b>' + stats.newCount + '</b> | مكرر: ' + stats.dupCount + '</div>'
+      + (stats.scopeMatched === false ? '<div style="color:#FFE082;">⚠️ scope غير مطابق</div>' : '')
       + '</div>'
+      + (stats.firstError
+          ? ('<div style="background:rgba(0,0,0,0.25);margin-top:10px;padding:8px;border-radius:8px;font-size:11px;font-family:monospace;direction:ltr;text-align:left;word-break:break-all;">'
+             + 'Error: ' + String(stats.firstError).substring(0, 250)
+             + '</div>')
+          : '')
       + '<button onclick="this.parentNode.remove()" style="margin-top:12px;width:100%;background:rgba(255,255,255,0.2);color:#fff;border:0;padding:8px;border-radius:8px;cursor:pointer;">إغلاق</button>';
     ui.set(html);
   }
@@ -447,6 +460,8 @@
               withName: withName,
               newCount: res.new_count || 0,
               dupCount: res.duplicate || res.duplicates || 0,
+              scopeMatched: res.scope_matched,
+              firstError: res.first_insert_error || res.error,
             });
           });
         });

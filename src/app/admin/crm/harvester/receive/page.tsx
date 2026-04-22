@@ -91,7 +91,15 @@ export default function HarvesterReceivePage() {
     }
 
     async function processBatches(
-      payload: { url: string; timestamp: string; source: string; strategy?: string; scope_code?: string; platform?: string },
+      payload: {
+        url: string;
+        timestamp: string;
+        source: string;
+        strategy?: string;
+        scope_code?: string;
+        platform?: string;
+        meta?: Record<string, unknown>;
+      },
       token: string,
       allListings: unknown[],
       total: number
@@ -101,6 +109,7 @@ export default function HarvesterReceivePage() {
       let totalReceived = 0;
       let lastEmployee = "";
       let lastScopeMatched = false;
+      let firstInsertError: string | null = null;
       let hadError = false;
 
       const batches = [];
@@ -122,6 +131,7 @@ export default function HarvesterReceivePage() {
           strategy: payload.strategy,
           scope_code: payload.scope_code,
           platform: payload.platform,
+          meta: payload.meta, // forward meta so server has governorate/category hints
         });
 
         try {
@@ -145,6 +155,10 @@ export default function HarvesterReceivePage() {
           totalReceived += result.received || 0;
           lastEmployee = result.employee || "";
           lastScopeMatched = result.scope_matched || false;
+          // Capture the first insert error across batches for debugging.
+          if (!firstInsertError && Array.isArray(result.errors) && result.errors.length > 0) {
+            firstInsertError = String(result.errors[0]);
+          }
           setProgress({ current: processed, total });
           setStatus(`جارِ المعالجة... ${processed}/${total}`);
         } catch (err) {
@@ -171,6 +185,7 @@ export default function HarvesterReceivePage() {
             duplicate: totalDup,
             employee: lastEmployee,
             scope_matched: lastScopeMatched,
+            first_insert_error: firstInsertError,
           },
           "*"
         );
