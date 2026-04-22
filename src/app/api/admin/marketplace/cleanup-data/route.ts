@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
       return await railwayCheck(supabase);
     case "infer-governorate":
       return await inferGovernorate(supabase, limit);
+    case "extract-names":
+      return await extractNamesFromDescriptions(supabase, limit);
     default:
       return NextResponse.json({
         error: "Missing or invalid `task` parameter",
@@ -328,6 +330,87 @@ async function unifyGovernorate(supabase: SupabaseClient, limit: number) {
     listings_renamed: (fixed1 || []).length,
     listings_filled_from_location: fixed2,
     sellers_renamed: (fixedSellers || []).length,
+  });
+}
+
+// ═══ Task: extract-names — pull seller names out of stored descriptions ═══
+
+const NAME_PATTERNS: RegExp[] = [
+  /الوكيل\s*[\/:\-]\s*([^\n،,\d\+]{3,35})/,
+  /للتواصل\s*(?:مع)?\s*[\/:\-]?\s*([^\n،,\d\+]{3,35})/,
+  /(?:الأستاذ|الأستاذة|م\/|أ\/|د\/|المهندس|المهندسة|الدكتور)\s+([^\n،,\d\+]{3,30})/,
+  /(?:اتصل|كلمني|تواصل معي)\s*(?:بـ|مع)?\s*([^\n،,\d\+01]{3,30})/,
+];
+
+const BAD_NAMES_RE = /^(سمسار|عقارات|مكتب|شركة|وكيل|مالك|معلن|agent|broker|owner|البائع|المعلن|تفاصيل|بيانات)$/i;
+
+function extractNameFromText(text: string): string | null {
+  if (!text) return null;
+  for (const pattern of NAME_PATTERNS) {
+    const m = text.match(pattern);
+    if (!m || !m[1]) continue;
+    const cand = m[1]
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/^[•\-\.:]+|[•\-\.:]+$/g, "")
+      .trim();
+    if (cand.length < 3 || cand.length > 40) continue;
+    if (/^\d+$/.test(cand)) continue;
+    if (BAD_NAMES_RE.test(cand)) continue;
+    if (cand.split(/\s+/).length > 4) continue;
+    return cand;
+  }
+  return null;
+}
+
+async function extractNamesFromDescriptions(supabase: SupabaseClient, limit: number) {
+  const startTime = Date.now();
+  const { data: listings } = await supabase
+    .from("ahe_listings")
+    .select("id, title, description, seller_name, extracted_phone, ahe_seller_id")
+    .is("seller_name", null)
+    .not("description", "is", null)
+    .limit(limit);
+
+  if (!listings || listings.length === 0) {
+    return NextResponse.json({
+      task: "extract-names",
+      duration_ms: Date.now() - startTime,
+      message: "No listings needing name extraction",
+      updated: 0,
+    });
+  }
+
+  let updated = 0;
+  let skipped = 0;
+  const samples: Array<{ title: string; name: string }> = [];
+
+  for (const l of listings) {
+    const name = extractNameFromText(l.description || "");
+    if (!name) {
+      skipped++;
+      continue;
+    }
+    await supabase.from("ahe_listings").update({ seller_name: name }).eq("id", l.id);
+    // Also update the seller record if one exists and has no name
+    if (l.ahe_seller_id) {
+      await supabase
+        .from("ahe_sellers")
+        .update({ name })
+        .eq("id", l.ahe_seller_id)
+        .is("name", null);
+    }
+    updated++;
+    if (samples.length < 10) samples.push({ title: (l.title || "").substring(0, 50), name });
+  }
+
+  return NextResponse.json({
+    task: "extract-names",
+    duration_ms: Date.now() - startTime,
+    processed: listings.length,
+    updated,
+    skipped_no_pattern_match: skipped,
+    samples,
   });
 }
 

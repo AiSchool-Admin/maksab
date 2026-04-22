@@ -1417,9 +1417,41 @@
             // Seller name — only from ad.user (the LISTING's seller, not the page user)
             var user = ad.user || ad.seller || ad.owner || ad.agent || ad.advertiser || {};
             var candidateName = (user.name || user.display_name || user.full_name ||
-                                 user.first_name || ad.user_name || '').trim() || null;
+                                 user.first_name || ad.user_name ||
+                                 ad.advertiser_name || ad.seller_name ||
+                                 ad.company_name || ad.listing_office_name ||
+                                 ad.contact_name || ad.owner_name || '').trim() || null;
             if (candidateName && !isBlocked(candidateName, null)) {
               result.sellerName = candidateName;
+            }
+
+            // Fallback: try to extract name from description text.
+            // Egyptian sellers often write: "للتواصل / <name>", "الوكيل <name>",
+            // "المهندس <name>", "أ/ <name>", "م/ <name>", "اتصل بـ <name>".
+            if (!result.sellerName && ad.description) {
+              var descForName = String(ad.description);
+              var namePatterns = [
+                /الوكيل\s*[\/:\-]\s*([^\n،,\d\+]{3,35})/,
+                /للتواصل\s*(?:مع)?\s*[\/:\-]?\s*([^\n،,\d\+]{3,35})/,
+                /(?:الأستاذ|الأستاذة|م\/|أ\/|د\/|المهندس|المهندسة|الدكتور)\s+([^\n،,\d\+]{3,30})/,
+                /(?:اتصل|كلمني|تواصل معي)\s*(?:بـ|مع)?\s*([^\n،,\d\+01]{3,30})/,
+              ];
+              for (var npi = 0; npi < namePatterns.length; npi++) {
+                var nm = descForName.match(namePatterns[npi]);
+                if (nm && nm[1]) {
+                  var candidate = nm[1].trim()
+                    .replace(/\s+/g, ' ')
+                    .replace(/^[•\-\.:]+|[•\-\.:]+$/g, '')
+                    .trim();
+                  if (candidate.length >= 3 && candidate.length <= 40 &&
+                      !/^\d+$/.test(candidate) &&
+                      !isBlocked(candidate, null) &&
+                      candidate.split(/\s+/).length <= 4) {
+                    result.sellerName = candidate;
+                    break;
+                  }
+                }
+              }
             }
 
             // Phone — only from ad-specific fields, never the session user
