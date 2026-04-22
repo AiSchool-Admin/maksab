@@ -9,18 +9,50 @@ import Link from "next/link";
  */
 export default function BookmarkletInstallPage() {
   const [appUrl, setAppUrl] = useState("");
+  const [token, setToken] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    // Origin of the current app — used to build absolute URL to the script
     setAppUrl(window.location.origin);
+
+    async function ensureToken() {
+      try {
+        // Try to get an existing active token first
+        const listRes = await fetch("/api/admin/crm/harvester/bookmarklet-tokens");
+        const listData = await listRes.json();
+        const active = listData?.tokens?.find((t: { is_active: boolean; token: string }) => t.is_active);
+        if (active?.token) {
+          setToken(active.token);
+          return;
+        }
+
+        // None found — auto-create one so the install page "just works"
+        const createRes = await fetch("/api/admin/crm/harvester/bookmarklet-tokens", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employee_name: "Admin (auto)", scope_code: null }),
+        });
+        const createData = await createRes.json();
+        if (createData?.token?.token) {
+          setToken(createData.token.token);
+        } else {
+          setTokenError(createData?.error || "فشل إنشاء token");
+        }
+      } catch (e) {
+        setTokenError(e instanceof Error ? e.message : String(e));
+      }
+    }
+
+    ensureToken();
   }, []);
 
-  // The bookmarklet loads the unified harvester script dynamically with a
-  // cache-buster so users always get the latest version.
   const scriptUrl = appUrl ? `${appUrl}/scripts/harvest-unified.js` : "";
-  const bookmarkletCode = appUrl
-    ? `javascript:(function(){var s=document.createElement('script');s.src='${scriptUrl}?v='+Date.now();document.body.appendChild(s);})();`
+  // Embed the token in a window-global BEFORE loading the harvester script,
+  // so the harvester picks it up from window.__MAKSAB_TOKEN and includes it
+  // on every POST to /api/admin/crm/harvester/receive-bookmarklet.
+  const bookmarkletCode = appUrl && token
+    ? `javascript:(function(){window.__MAKSAB_URL='${appUrl}';window.__MAKSAB_TOKEN='${token}';var s=document.createElement('script');s.src='${scriptUrl}?v='+Date.now();document.body.appendChild(s);})();`
     : "";
 
   const buttonHtml = bookmarkletCode
@@ -71,6 +103,13 @@ export default function BookmarkletInstallPage() {
             <div className="flex items-center justify-center mb-3">
               {buttonHtml ? (
                 <div dangerouslySetInnerHTML={{ __html: buttonHtml }} />
+              ) : tokenError ? (
+                <div className="text-center">
+                  <p className="text-red-700 font-bold text-sm mb-1">❌ {tokenError}</p>
+                  <Link href="/admin/crm/harvester" className="text-xs text-blue-600 underline">
+                    افتح إدارة التوكنات
+                  </Link>
+                </div>
               ) : (
                 <span className="text-gray-400">جاري التحميل...</span>
               )}
@@ -78,6 +117,11 @@ export default function BookmarkletInstallPage() {
             <p className="text-xs text-center text-gray-500">
               ☝️ <b>اسحب الزر الأخضر بالماوس</b> إلى شريط المفضلة (Bookmarks Bar) في أعلى المتصفح
             </p>
+            {token && (
+              <p className="text-[10px] text-center text-gray-400 mt-2" dir="ltr">
+                Token: {token.substring(0, 8)}... ✓
+              </p>
+            )}
           </div>
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-xs text-yellow-900">
