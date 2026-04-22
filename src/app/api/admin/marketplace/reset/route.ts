@@ -135,11 +135,12 @@ export async function GET(req: NextRequest) {
     const { data: resumed } = await supabase
       .from("ahe_scopes")
       .update({
+        is_active: true,         // undo the strong pause from wipe mode
         is_paused: false,
         pause_reason: null,
         next_harvest_at: new Date().toISOString(),
       })
-      .eq("is_paused", true)
+      .or("is_active.eq.false,is_paused.eq.true")
       .select("id, code");
     return NextResponse.json({
       mode: "resume-harvesting",
@@ -263,9 +264,16 @@ export async function GET(req: NextRequest) {
     };
 
     if (pauseScopes) {
+      // STRONG pause: set BOTH is_active=false AND is_paused=true.
+      // Reason: Railway workers (cars-harvester.ts, properties-harvester.ts) only
+      // filter by `is_active = true` and IGNORE `is_paused`. So is_paused alone
+      // doesn't actually stop them. And Railway's harvest loop updates
+      // `next_harvest_at` after every run, which silently undoes any "future date"
+      // we wrote here. Only is_active=false reliably stops Railway.
+      resetPayload.is_active = false;
       resetPayload.is_paused = true;
       resetPayload.pause_reason = "Paused for bookmarklet testing (auto-reset)";
-      // Push next run far into the future too, just in case
+      // Still push next_harvest_at far out as a second-line defense
       resetPayload.next_harvest_at = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
     } else {
       resetPayload.next_harvest_at = new Date().toISOString();
