@@ -699,9 +699,11 @@
         var srcMatch = imgMatches[ii].match(/src=["']([^"']+)["']/i);
         if (!srcMatch) continue;
         var src = srcMatch[1];
-        // Filter to images that look like property photos (skip icons, avatars, logos)
         if (!/\.(jpg|jpeg|png|webp)(\?|$)/i.test(src)) continue;
+        // Skip non-listing images: icons, logos, avatars, and CTA/banner ads
+        // that semsarmasr injects ("هل أعجبك هذا العقار؟ اتصل الآن" banner).
         if (/icon|logo|avatar|flag|emoji|thumb_sm|small/i.test(src)) continue;
+        if (/banner|cta|call[-_]?now|contact[-_]?now|promo|ad_banner|advertisment|\/ads?\/|sponsor/i.test(src)) continue;
         if (src.indexOf('//') === 0) src = 'https:' + src;
         else if (src.charAt(0) === '/') src = 'https://www.semsarmasr.com' + src;
         if (!seenImgs[src]) {
@@ -709,8 +711,8 @@
           result.allImages.push(src);
         }
       }
-      // Cap at 10 images
-      result.allImages = result.allImages.slice(0, 10);
+      // Cap at 12 images (a typical listing has 5-10)
+      result.allImages = result.allImages.slice(0, 12);
 
       return result;
     },

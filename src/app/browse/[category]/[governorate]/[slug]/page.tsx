@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { isDubizzleTextDump, parseDubizzleTextDump } from "@/lib/crm/harvester/parsers/dubizzle-text-dump";
+import ImageGallery from "@/components/browse/ImageGallery";
 
 // Always render at request time — never serve stale DB snapshots from the CDN.
 export const dynamic = "force-dynamic";
@@ -250,20 +251,26 @@ export default async function BrowseListingPage({ params }: Props) {
   const sellerIsBusiness = seller?.is_business || listing.seller_is_business || false;
   const sellerMemberYear = seller?.first_seen_at ? new Date(seller.first_seen_at).getFullYear() : null;
 
-  // Images: gallery from all_image_urls, fallback to thumbnail/main
+  // Images: gallery from all_image_urls, fallback to thumbnail/main.
+  // Filter out promotional/CTA banners that semsarmasr injects into the detail page.
+  function isNoiseImage(url: string): boolean {
+    const u = url.toLowerCase();
+    return /banner|cta|call[-_]?now|contact[-_]?now|promo|ad_banner|advertisment|\/ads?\/|sponsor/i.test(u);
+  }
+
   const rawImages: string[] = [];
   if (Array.isArray(listing.all_image_urls)) {
     for (const u of listing.all_image_urls) {
-      if (typeof u === "string" && u && !rawImages.includes(u)) rawImages.push(u);
+      if (typeof u === "string" && u && !rawImages.includes(u) && !isNoiseImage(u)) rawImages.push(u);
     }
   }
-  if (listing.main_image_url && !rawImages.includes(listing.main_image_url)) {
+  if (listing.main_image_url && !rawImages.includes(listing.main_image_url) && !isNoiseImage(listing.main_image_url)) {
     rawImages.unshift(listing.main_image_url);
   }
-  if (listing.thumbnail_url && !rawImages.includes(listing.thumbnail_url)) {
+  if (listing.thumbnail_url && !rawImages.includes(listing.thumbnail_url) && !isNoiseImage(listing.thumbnail_url)) {
     if (rawImages.length === 0) rawImages.push(listing.thumbnail_url);
   }
-  const gallery = rawImages.slice(0, 8).map((u) => `/api/img?url=${encodeURIComponent(u)}`);
+  const gallery = rawImages.slice(0, 12).map((u) => `/api/img?url=${encodeURIComponent(u)}`);
   const mainImg = gallery[0] || null;
 
   // Area from source_location
@@ -370,29 +377,12 @@ export default async function BrowseListingPage({ params }: Props) {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 pb-12">
-        {/* Image Gallery */}
-        {mainImg ? (
-          <div className="space-y-2 mb-4">
-            <div className="aspect-[4/3] bg-gray-100 rounded-2xl overflow-hidden shadow-sm">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={mainImg} alt={listing.title} className="w-full h-full object-cover" />
-            </div>
-            {gallery.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                {gallery.slice(1).map((img, i) => (
-                  <div key={i} className="flex-shrink-0 w-20 h-20 bg-gray-100 rounded-lg overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img} alt={`${listing.title} ${i + 2}`} className="w-full h-full object-cover" loading="lazy" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="aspect-[4/3] bg-gray-100 rounded-2xl flex items-center justify-center text-6xl mb-4">
-            {catName === "سيارات" ? "🚗" : "🏠"}
-          </div>
-        )}
+        {/* Image Gallery — interactive: click thumbs to swap, click main for lightbox */}
+        <ImageGallery
+          images={gallery}
+          title={listing.title}
+          fallbackIcon={catName === "سيارات" ? "🚗" : "🏠"}
+        />
 
         {/* Main card */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
