@@ -329,23 +329,63 @@ async function unifyGovernorate(supabase: SupabaseClient, limit: number) {
 
 async function status(supabase: SupabaseClient) {
   const [
-    { count: totalListings },
+    { count: aheListingsAlex },
+    { count: aheListingsTotal },
+    { count: aheSellersTotal },
+    { count: aheSellersWithPhone },
+    { count: adsTotalAlex },
+    { count: adsTotalAll },
+    { count: adsCars },
+    { count: adsProps },
     { count: badPhones },
     { count: dupCandidates },
     { count: alexEnglish },
     { count: nullGov },
     { count: dubizzleNoSpecs },
+    { count: scopesTotal },
+    { count: scopesActive },
+    { count: scopesPaused },
   ] = await Promise.all([
     supabase.from("ahe_listings").select("id", { count: "exact", head: true }).in("governorate", ALEX_GOVS),
+    supabase.from("ahe_listings").select("id", { count: "exact", head: true }),
+    supabase.from("ahe_sellers").select("id", { count: "exact", head: true }),
+    supabase.from("ahe_sellers").select("id", { count: "exact", head: true }).not("phone", "is", null),
+    supabase.from("ads").select("id", { count: "exact", head: true }).eq("governorate", "الإسكندرية"),
+    supabase.from("ads").select("id", { count: "exact", head: true }),
+    supabase.from("ads").select("id", { count: "exact", head: true }).eq("governorate", "الإسكندرية").eq("category_id", "cars"),
+    supabase.from("ads").select("id", { count: "exact", head: true }).eq("governorate", "الإسكندرية").eq("category_id", "real_estate"),
     supabase.from("ahe_listings").select("id", { count: "exact", head: true }).not("extracted_phone", "is", null).not("extracted_phone", "like", "01%"),
     supabase.from("ahe_listings").select("id", { count: "exact", head: true }).eq("is_duplicate", true),
     supabase.from("ahe_listings").select("id", { count: "exact", head: true }).in("governorate", ["alexandria", "Alexandria", "الاسكندرية"]),
     supabase.from("ahe_listings").select("id", { count: "exact", head: true }).is("governorate", null),
     supabase.from("ahe_listings").select("id", { count: "exact", head: true }).eq("source_platform", "dubizzle").or("specifications.is.null,specifications.eq.{}").in("governorate", ALEX_GOVS),
+    supabase.from("ahe_scopes").select("id", { count: "exact", head: true }),
+    supabase.from("ahe_scopes").select("id", { count: "exact", head: true }).eq("is_active", true).eq("is_paused", false),
+    supabase.from("ahe_scopes").select("id", { count: "exact", head: true }).eq("is_paused", true),
   ]);
 
   return NextResponse.json({
-    total_alexandria_listings: totalListings,
+    ahe_listings: {
+      alexandria: aheListingsAlex,
+      total_all_govs: aheListingsTotal,
+      note: "ده اللي بتبنيه الـ bookmarklet. browse page بتقراه منه.",
+    },
+    ads: {
+      alexandria_total: adsTotalAlex,
+      alexandria_cars: adsCars,
+      alexandria_properties: adsProps,
+      total_all_govs: adsTotalAll,
+      note: "ده table المنشور في التطبيق. publish endpoint بيحط فيه.",
+    },
+    ahe_sellers: {
+      total: aheSellersTotal,
+      with_phone: aheSellersWithPhone,
+    },
+    scopes: {
+      total: scopesTotal,
+      active_and_running: scopesActive,
+      paused: scopesPaused,
+    },
     issues_remaining: {
       malformed_phones: badPhones,
       english_alexandria: alexEnglish,

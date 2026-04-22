@@ -3,6 +3,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 
+// Always render at request time — never serve stale DB snapshots from the CDN.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const ACTIVE_CATEGORIES = ["cars", "vehicles", "properties", "real-estate", "real_estate", "سيارات", "عقارات"];
 
 function getSupabase() {
