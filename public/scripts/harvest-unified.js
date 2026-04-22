@@ -1247,47 +1247,187 @@
     },
 
     parseDetail: function(html) {
-      var result = { phone: null, sellerName: null };
+      var result = { phone: null, sellerName: null, allImages: [], specs: {}, amenities: [] };
 
-      // Try __NEXT_DATA__
+      // ═══ Strategy 1: __NEXT_DATA__ JSON (primary) ═══
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
         try {
           var data = JSON.parse(m[1]);
           var pageProps = (data && data.props && data.props.pageProps) || {};
-          var ad = pageProps.ad || pageProps.listing || pageProps.item || pageProps.data || {};
-          var user = ad.user || ad.seller || {};
+
+          // Ad object — Dubizzle wraps under various keys
+          var ad = pageProps.ad || pageProps.listing || pageProps.item ||
+                   pageProps.data || pageProps.property || pageProps.product ||
+                   (pageProps.adModel && pageProps.adModel.ad) || {};
+
+          // Seller name
+          var user = ad.user || ad.seller || ad.owner || ad.agent || {};
           if (user.name || user.display_name) {
-            result.sellerName = String(user.name || user.display_name).trim().replace(/User\s*photo/gi, '').trim() || null;
+            result.sellerName = String(user.name || user.display_name).trim() || null;
           }
-          // Phone sometimes appears in hidden fields
-          var candidates = [ad.phone, ad.phone_number, ad.contact_phone, user.phone, user.mobile];
-          for (var k = 0; k < candidates.length; k++) {
-            if (candidates[k]) {
-              var p = normalizeEgPhone(candidates[k]);
-              if (p) { result.phone = p; break; }
+
+          // Phone — Dubizzle hides this behind an API call usually, but sometimes exposes it
+          var phoneCandidates = [ad.phone, ad.phone_number, ad.contact_phone,
+                                 user.phone, user.mobile, ad.mobile];
+          for (var pi = 0; pi < phoneCandidates.length; pi++) {
+            if (phoneCandidates[pi]) {
+              var pn = normalizeEgPhone(phoneCandidates[pi]);
+              if (pn) { result.phone = pn; break; }
             }
           }
-        } catch (e) {}
+
+          // Images — ad.images is usually an array of URLs or objects with .url
+          var imgs = ad.images || ad.photos || ad.gallery || ad.media || [];
+          if (Array.isArray(imgs)) {
+            for (var ii = 0; ii < imgs.length; ii++) {
+              var img = imgs[ii];
+              var url = typeof img === 'string' ? img :
+                        (img && (img.url || img.src || img.main || img.uri || img.href)) || null;
+              if (url && result.allImages.indexOf(url) < 0 &&
+                  /\.(jpg|jpeg|png|webp)(\?|$)/i.test(url)) {
+                result.allImages.push(url);
+              }
+            }
+          }
+
+          // Specs — Dubizzle uses `parameters` array: [{ label, value_label, value }, ...]
+          var params = ad.parameters || ad.specifications || ad.details ||
+                       ad.attributes || ad.props || [];
+          if (Array.isArray(params)) {
+            for (var pj = 0; pj < params.length; pj++) {
+              var p = params[pj];
+              var key = String(p.label || p.name || p.key || p.title || '').trim();
+              var val = String(p.value_label || p.value || p.display_value || p.text || '').trim();
+              if (key && val && key !== val && key.length < 40 && val.length < 100) {
+                result.specs[key] = val;
+              }
+            }
+          } else if (params && typeof params === 'object') {
+            // Specs as flat object
+            for (var pk in params) {
+              if (Object.prototype.hasOwnProperty.call(params, pk)) {
+                var pv = params[pk];
+                if ((typeof pv === 'string' || typeof pv === 'number') && String(pv).length < 100) {
+                  result.specs[pk] = String(pv);
+                }
+              }
+            }
+          }
+
+          // Amenities — Dubizzle's "الكماليات" section usually lives in `amenities` / `features`
+          var feats = ad.amenities || ad.features || ad.facilities || ad.extras || [];
+          if (Array.isArray(feats)) {
+            for (var fi = 0; fi < feats.length; fi++) {
+              var f = feats[fi];
+              var featName = typeof f === 'string' ? f :
+                             (f && (f.label || f.name || f.title || f.text)) || null;
+              if (featName && String(featName).length > 0 && String(featName).length < 60
+                  && result.amenities.indexOf(featName) < 0
+                  && featName !== '[object Object]') {
+                result.amenities.push(String(featName).trim());
+              }
+            }
+          }
+        } catch (e) { /* fall through to HTML regex */ }
       }
 
-      // Fallback: regex scan
+      // ═══ Strategy 2: HTML regex fallbacks for missing pieces ═══
+
+      // Phone from full HTML text (when API hides it)
       if (!result.phone) result.phone = findPhoneInText(html);
+
+      // Seller name — class-based fallback
       if (!result.sellerName) {
-        var pats = [
-          /class="[^"]*(?:seller|member|advertiser|user)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
+        var sellerPats = [
+          /class="[^"]*(?:seller|agent|user|advertiser)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
           /itemprop=["']name["'][^>]*>\s*([^<]{2,60})\s*</i,
           /"seller"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]{2,60})"/i,
           /"user"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]{2,60})"/i,
         ];
-        for (var i = 0; i < pats.length; i++) {
-          var mm = html.match(pats[i]);
-          if (mm && mm[1]) {
-            var n = mm[1].trim().replace(/\s+/g, ' ').replace(/User\s*photo/gi, '').trim();
-            if (n.length >= 2 && n.length <= 60 && !/^\d+$/.test(n)) { result.sellerName = n; break; }
+        for (var sp = 0; sp < sellerPats.length; sp++) {
+          var sm = html.match(sellerPats[sp]);
+          if (sm && sm[1]) {
+            var sn = sm[1].trim().replace(/\s+/g, ' ').replace(/User\s*photo/gi, '').trim();
+            if (sn.length >= 2 && sn.length <= 60 && !/^\d+$/.test(sn)) {
+              result.sellerName = sn;
+              break;
+            }
           }
         }
       }
+
+      // Images — scrape <img src> from CDN if NEXT_DATA yielded nothing
+      if (result.allImages.length === 0) {
+        var imgMatches = html.match(/<img[^>]+src=["']([^"']+(?:images\.dubizzle|cdn\.dubizzle|classistatic)[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/gi) || [];
+        var seenImg = {};
+        for (var im = 0; im < imgMatches.length; im++) {
+          var srcMatch = imgMatches[im].match(/src=["']([^"']+)["']/i);
+          if (!srcMatch) continue;
+          var src = srcMatch[1];
+          if (/icon|logo|avatar|flag|emoji/i.test(src)) continue;
+          if (!seenImg[src]) { seenImg[src] = 1; result.allImages.push(src); }
+        }
+      }
+      result.allImages = result.allImages.slice(0, 12);
+
+      // Specs — plain text scan for known Arabic labels (fallback when NEXT_DATA is partial)
+      var plainText = html
+        .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<(?:li|tr|td|th|div|p|br|h[1-6])\b[^>]*>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/[ \t]+/g, ' ');
+
+      var DUBIZZLE_SPEC_LABELS = [
+        'غرض العقار', 'الطابق', 'غرف نوم', 'عدد الغرف', 'الحمامات', 'عدد الحمامات',
+        'المساحة', 'مساحة البناء', 'مساحة الأرض', 'النوع', 'ملكية',
+        'مفروش', 'طريقة الدفع', 'حالة العقار', 'تاريخ التسليم', 'شروط التسليم',
+        'التشطيب', 'الإطلالة', 'الماركة', 'الموديل', 'سنة الصنع',
+        'الكيلومترات', 'ناقل الحركة', 'نوع الوقود', 'حجم المحرك', 'اللون',
+      ];
+      for (var di = 0; di < DUBIZZLE_SPEC_LABELS.length; di++) {
+        var dLabel = DUBIZZLE_SPEC_LABELS[di];
+        if (result.specs[dLabel]) continue;
+        var dLabelEsc = dLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var dRe = new RegExp('(?:^|[\\n\\r>])\\s*' + dLabelEsc + '\\s*[:：]?\\s*\\n?\\s*([^\\n\\r<]{1,80})', 'i');
+        var dm = plainText.match(dRe);
+        if (dm && dm[1]) {
+          var dv = dm[1].trim().replace(/\s+/g, ' ');
+          if (dv && dv.length < 80 && dv !== dLabel) {
+            result.specs[dLabel] = dv;
+          }
+        }
+      }
+
+      // Amenities — plain-text scan for known features near "الكماليات" section
+      if (result.amenities.length === 0) {
+        var amenityMarkers = ['الكماليات', 'المميزات', 'الخدمات', 'المرافق'];
+        var amenityText = '';
+        for (var amMark = 0; amMark < amenityMarkers.length; amMark++) {
+          var amIdx = plainText.indexOf(amenityMarkers[amMark]);
+          if (amIdx >= 0) amenityText += ' ' + plainText.substring(amIdx, amIdx + 2500);
+        }
+        if (amenityText) {
+          var DUBIZZLE_AMENITIES = [
+            'شرفة', 'حديقة خاصة', 'حديقة', 'أمن', 'أمن وحراسة', 'غرفة خدم',
+            'أجهزة المطبخ', 'تدفئة وتكييف مركزي', 'تكييف', 'تدفئة',
+            'موقف سيارات مغطى', 'موقف سيارات', 'جراج', 'عداد كهرباء',
+            'غاز طبيعي', 'غاز طبيعى', 'تليفون أرضي', 'تليفون أرضى',
+            'أساسير', 'أسانسير', 'مصعد', 'حمام سباحة',
+            'نادي رياضي', 'مناطق أطفال', 'كاميرات مراقبة', 'بلكونة',
+            'إنترنت', 'مفروش', 'مكيف',
+          ];
+          for (var ami = 0; ami < DUBIZZLE_AMENITIES.length; ami++) {
+            var amFeat = DUBIZZLE_AMENITIES[ami];
+            if (amenityText.indexOf(amFeat) >= 0 && result.amenities.indexOf(amFeat) < 0) {
+              result.amenities.push(amFeat);
+            }
+          }
+        }
+      }
+
       return result;
     },
 
