@@ -1706,6 +1706,31 @@
         }
       }
 
+      // Extract "الإعلانات النشطة" (active ads count) and "عضو منذ" (member-since year)
+      // from the seller card. These tell us whether the seller is a professional
+      // broker (10+ active ads = definitely a company even when the name doesn't
+      // obviously look like one).
+      var activeAdsMatch = html.match(/الإعلانات\s*النشطة[\s\S]{0,250}?>\s*(\d{1,4})\s*</i);
+      if (activeAdsMatch && activeAdsMatch[1]) {
+        var activeAds = parseInt(activeAdsMatch[1], 10);
+        if (activeAds > 0 && activeAds < 10000) {
+          result.specs = result.specs || {};
+          result.specs['الإعلانات النشطة'] = String(activeAds);
+          // Heuristic: 5+ active ads → broker/company, overrides name-based badge
+          if (activeAds >= 5 && !result.sellerBadge) {
+            result.sellerBadge = 'سمسار';
+          }
+        }
+      }
+      var memberSinceMatch = html.match(/عضو\s*منذ[\s\S]{0,200}?>\s*(\d{4})\s*</i);
+      if (memberSinceMatch && memberSinceMatch[1]) {
+        var memberYear = parseInt(memberSinceMatch[1], 10);
+        if (memberYear > 2000 && memberYear <= new Date().getFullYear()) {
+          result.specs = result.specs || {};
+          result.specs['عضو منذ'] = String(memberYear);
+        }
+      }
+
       // Final step: infer seller badge from the extracted name if we don't
       // have an explicit one yet. This gives us "سمسار / مطور عقاري / شركة"
       // for Dubizzle listings that are posted by real estate businesses.
