@@ -99,6 +99,76 @@
   };
 
   // ═════════════════════════════════════════════════════════
+  //  Logged-in user detection (to block their info from seller extraction)
+  //  Runs ONCE at harvest start against the CURRENT document, captures any
+  //  name/phone that belongs to the user running the bookmarklet. All
+  //  platform parseDetail() calls then reject these values.
+  // ═════════════════════════════════════════════════════════
+
+  var BLOCKED_USER = { name: null, phone: null };
+
+  function detectLoggedInUser() {
+    var captured = { name: null, phone: null };
+
+    // 1. Try __NEXT_DATA__ in the CURRENT page (list page DOM)
+    try {
+      var nd = document.querySelector('script#__NEXT_DATA__');
+      if (nd && nd.textContent) {
+        var data = JSON.parse(nd.textContent);
+        var props = (data && data.props && data.props.pageProps) || {};
+        var candidates = [props.user, props.currentUser, props.loggedInUser,
+                         props.session && props.session.user,
+                         props.auth && props.auth.user,
+                         props.userProfile];
+        for (var i = 0; i < candidates.length; i++) {
+          var c = candidates[i];
+          if (c && typeof c === 'object') {
+            if (!captured.name) captured.name = (c.name || c.display_name || c.full_name || '').trim() || null;
+            if (!captured.phone) {
+              var raw = c.phone || c.mobile || c.phone_number;
+              if (raw) captured.phone = normalizeEgPhone(raw);
+            }
+          }
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    // 2. Scan header / nav / account DOM nodes for any phone pattern
+    try {
+      var scanSelectors = [
+        'header', 'nav',
+        '[class*="user-menu"]', '[class*="UserMenu"]',
+        '[class*="profile"]', '[class*="Profile"]',
+        '[class*="account"]', '[class*="Account"]',
+        '[class*="header-user"]', '[class*="my-account"]',
+        '[data-testid*="user"]', '[data-testid*="profile"]',
+      ];
+      var nodes = document.querySelectorAll(scanSelectors.join(','));
+      for (var ni = 0; ni < nodes.length; ni++) {
+        var text = nodes[ni].textContent || '';
+        if (!captured.phone) {
+          var pm = text.match(/01[0-25]\d{8}/);
+          if (pm) captured.phone = normalizeEgPhone(pm[0]);
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    // 3. Meta tags
+    try {
+      var metaTags = document.querySelectorAll('meta[name*="user"], meta[property*="user"]');
+      for (var mi = 0; mi < metaTags.length; mi++) {
+        var content = metaTags[mi].getAttribute('content') || '';
+        if (!captured.phone) {
+          var mpm = content.match(/01[0-25]\d{8}/);
+          if (mpm) captured.phone = normalizeEgPhone(mpm[0]);
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    return captured;
+  }
+
+  // ═════════════════════════════════════════════════════════
   //  Governorate inference from listing locations
   //  (used when the source URL doesn't specify a single governorate,
   //   e.g. SemsarMasr with g=0 = "all Egypt")
@@ -366,6 +436,15 @@
       return '<b>' + text + '</b>' + marker;
     }
 
+    var blockedInfo = '';
+    if (BLOCKED_USER.name || BLOCKED_USER.phone) {
+      blockedInfo = '<div style="margin-top:8px;padding:6px 10px;background:rgba(255,193,7,0.15);border:1px solid rgba(255,193,7,0.35);border-radius:8px;font-size:11px;line-height:1.6;">'
+        + '🛡️ <b>حسابك تم اكتشافه وهيتم استبعاده:</b><br>'
+        + (BLOCKED_USER.name ? 'الاسم: ' + BLOCKED_USER.name + '<br>' : '')
+        + (BLOCKED_USER.phone ? 'الموبايل: ' + BLOCKED_USER.phone : '')
+        + '</div>';
+    }
+
     function html() {
       return ''
         + '<div style="font-size:16px;font-weight:700;margin-bottom:12px;">🏗️ مكسب — الحصاد الموحّد</div>'
@@ -378,6 +457,7 @@
         + '    💡 الكشف بيحاول من URL أول. لو المحافظة/القسم غلط، اخرج واختار الفلتر الصحيح من السيت.'
         + '  </div>'
         + '</div>'
+        + blockedInfo
         + (prevCount > 0
             ? ('<div style="margin-top:8px;font-size:11px;background:rgba(0,0,0,0.1);padding:6px 10px;border-radius:8px;">'
                + 'ملاحظة: ' + prevCount + ' URL محفوظ من جلسات سابقة. '
@@ -673,6 +753,14 @@
     if (!platform) {
       renderError(ui, 'السيت دي مش مدعومة. المدعومة حالياً: dubizzle — semsarmasr — opensooq — aqarmap');
       return;
+    }
+
+    // Detect the logged-in user ONCE from the current tab, so we can exclude
+    // them from seller extraction on every subsequent fetched detail page.
+    BLOCKED_USER = detectLoggedInUser();
+    if (BLOCKED_USER.name || BLOCKED_USER.phone) {
+      console.info('[maksab] logged-in user detected (will be excluded):',
+        BLOCKED_USER.name, BLOCKED_USER.phone);
     }
 
     var ctx = platform.detectContext(location.href, document);
@@ -1249,26 +1337,27 @@
     parseDetail: function(html) {
       var result = { phone: null, sellerName: null, allImages: [], specs: {}, amenities: [] };
 
-      // Detect the LOGGED-IN user first so we can exclude their info from
-      // seller extraction. Without this, when the harvester is run by an
-      // employee logged into dubizzle, every saved listing ends up showing
-      // the EMPLOYEE'S name + phone (taken from the page header / "my account"
-      // sections) instead of the actual ad seller.
-      var blockedName = null;
-      var blockedPhone = null;
+      // Blocked list = logged-in user from current tab (detected once at run start)
+      // + optional extras from this fetched page's __NEXT_DATA__.
+      var blockedName = BLOCKED_USER.name || null;
+      var blockedPhone = BLOCKED_USER.phone || null;
+
       var loggedInData = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (loggedInData) {
         try {
           var rootData = JSON.parse(loggedInData[1]);
           var rootProps = (rootData && rootData.props && rootData.props.pageProps) || {};
-          // Various places Dubizzle stores the logged-in user
           var sessionUser = rootProps.user || rootProps.currentUser || rootProps.loggedInUser ||
                             (rootProps.session && rootProps.session.user) ||
                             (rootProps.auth && rootProps.auth.user) || null;
           if (sessionUser && typeof sessionUser === 'object') {
-            blockedName = (sessionUser.name || sessionUser.display_name || sessionUser.full_name || '').trim() || null;
-            var phoneRaw = sessionUser.phone || sessionUser.mobile || sessionUser.phone_number;
-            if (phoneRaw) blockedPhone = normalizeEgPhone(phoneRaw);
+            var extraName = (sessionUser.name || sessionUser.display_name || sessionUser.full_name || '').trim() || null;
+            if (extraName && !blockedName) blockedName = extraName;
+            var extraPhone = sessionUser.phone || sessionUser.mobile || sessionUser.phone_number;
+            if (extraPhone) {
+              var extraPN = normalizeEgPhone(extraPhone);
+              if (extraPN && !blockedPhone) blockedPhone = extraPN;
+            }
           }
         } catch (e) { /* ignore */ }
       }
@@ -1367,17 +1456,18 @@
       }
 
       // ═══ Strategy 2: HTML regex fallbacks for missing pieces ═══
+      // IMPORTANT for Dubizzle: we do NOT fall back to findPhoneInText(html)
+      // for phone, because the logged-in user's phone is almost always visible
+      // somewhere in the page header / footer / "my account" panels, and it
+      // would get captured instead of the real seller's phone. Dubizzle hides
+      // phones behind an API call (click "Show phone") — if __NEXT_DATA__ doesn't
+      // expose it and the user hasn't revealed it, we leave phone null rather
+      // than guess wrong. Server-side enrichment can try later.
 
-      // Phone from full HTML text — but skip if it matches the logged-in user.
-      if (!result.phone) {
-        var foundPhone = findPhoneInText(html);
-        if (foundPhone && !isBlocked(null, foundPhone)) result.phone = foundPhone;
-      }
-
-      // Seller name — class-based fallback. Also skip blocked names.
+      // Seller name — class-based fallback, still checks blocked list
       if (!result.sellerName) {
         var sellerPats = [
-          /class="[^"]*(?:seller|agent|user|advertiser)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
+          /class="[^"]*(?:seller|agent|advertiser)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
           /itemprop=["']name["'][^>]*>\s*([^<]{2,60})\s*</i,
           /"seller"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]{2,60})"/i,
         ];
