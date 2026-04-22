@@ -16,6 +16,9 @@
   var PAGE_DELAY_MS = 800;      // delay between list pages
   var COUNTDOWN_SECS = 8;       // auto-start countdown on ready panel
   var STORE_KEY_PREFIX = 'maksab_harvest_v10_';
+  // Optional cap — when set, harvest stops after collecting this many items.
+  // Used by the install page's "test mode" to limit runs to e.g. 10 listings.
+  var MAX_ITEMS = window.__MAKSAB_LIMIT ? parseInt(window.__MAKSAB_LIMIT, 10) : 0;
 
   // ═════════════════════════════════════════════════════════
   //  Governorate slug → Arabic name (shared across platforms)
@@ -327,17 +330,21 @@
     var archiveReached = false;
 
     function next() {
-      if (page > MAX_PAGES || emptyStreak >= 3 || archiveReached) {
+      var limitReached = MAX_ITEMS > 0 && allItems.length >= MAX_ITEMS;
+      if (page > MAX_PAGES || emptyStreak >= 3 || archiveReached || limitReached) {
         // Update store with everything we collected this run
         var mergedUrls = {};
         for (var u in prevSeenUrls) mergedUrls[u] = prevSeenUrls[u];
         for (var u2 in seenInThisRun) mergedUrls[u2] = 1;
         saveStore(platform.id, { urls: mergedUrls });
+        // If we hit the test limit, trim to exactly MAX_ITEMS
+        if (limitReached && allItems.length > MAX_ITEMS) allItems = allItems.slice(0, MAX_ITEMS);
         return onDone(allItems, mergedUrls);
       }
 
       renderProgress(ui, '🔍 <b>' + platform.displayName + '</b> — صفحة ' + page
         + '<br>وُجد حتى الآن: <b>' + allItems.length + '</b>'
+        + (MAX_ITEMS > 0 ? ' / ' + MAX_ITEMS + ' (وضع اختبار)' : '')
         + (prevCount > 0 ? '<br><span style="opacity:0.7;font-size:11px;">(جلسات سابقة: ' + prevCount + ')</span>' : ''));
 
       var url = platform.buildPageUrl(ctx, page);
@@ -346,6 +353,8 @@
         var fresh = 0, stale = 0, newOnPage = 0;
 
         for (var i = 0; i < items.length; i++) {
+          // Respect test-mode cap
+          if (MAX_ITEMS > 0 && allItems.length >= MAX_ITEMS) break;
           var it = items[i];
           var age = parseAgeDays(it.dateText);
           if (age !== null && age > MAX_AGE_DAYS) { stale++; continue; }

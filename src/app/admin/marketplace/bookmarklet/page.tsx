@@ -12,6 +12,8 @@ export default function BookmarkletInstallPage() {
   const [token, setToken] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Test-mode limit: 0 = unlimited, 10/50/100 = cap at N for quick tests
+  const [limit, setLimit] = useState<number>(10);
 
   useEffect(() => {
     setAppUrl(window.location.origin);
@@ -48,15 +50,20 @@ export default function BookmarkletInstallPage() {
   }, []);
 
   const scriptUrl = appUrl ? `${appUrl}/scripts/harvest-unified.js` : "";
-  // Embed the token in a window-global BEFORE loading the harvester script,
-  // so the harvester picks it up from window.__MAKSAB_TOKEN and includes it
-  // on every POST to /api/admin/crm/harvester/receive-bookmarklet.
+  // Embed token + optional limit in window globals BEFORE loading the harvester.
+  const limitLine = limit > 0 ? `window.__MAKSAB_LIMIT=${limit};` : "";
   const bookmarkletCode = appUrl && token
-    ? `javascript:(function(){window.__MAKSAB_URL='${appUrl}';window.__MAKSAB_TOKEN='${token}';var s=document.createElement('script');s.src='${scriptUrl}?v='+Date.now();document.body.appendChild(s);})();`
+    ? `javascript:(function(){window.__MAKSAB_URL='${appUrl}';window.__MAKSAB_TOKEN='${token}';${limitLine}var s=document.createElement('script');s.src='${scriptUrl}?v='+Date.now();document.body.appendChild(s);})();`
     : "";
 
+  const buttonLabel = limit > 0
+    ? `🧪 مكسب — وضع الاختبار (${limit} إعلانات)`
+    : `🌾 مكسب — حصاد موحّد v11`;
+  const buttonBg = limit > 0
+    ? "linear-gradient(135deg,#D4A843,#B8860B)"
+    : "linear-gradient(135deg,#1B7A3D,#145C2E)";
   const buttonHtml = bookmarkletCode
-    ? `<a href="${bookmarkletCode.replace(/"/g, "&quot;")}" style="display:inline-flex;align-items:center;gap:10px;padding:14px 28px;background:linear-gradient(135deg,#1B7A3D,#145C2E);color:white;border-radius:14px;text-decoration:none;font-weight:700;font-size:17px;cursor:grab;user-select:none;box-shadow:0 4px 14px rgba(27,122,61,0.35);font-family:inherit;" onclick="event.preventDefault();alert('اسحب الزر ده بالماوس لشريط المفضلة — متضغطش عليه هنا!');">🌾 مكسب — حصاد موحّد v11</a>`
+    ? `<a href="${bookmarkletCode.replace(/"/g, "&quot;")}" style="display:inline-flex;align-items:center;gap:10px;padding:14px 28px;background:${buttonBg};color:white;border-radius:14px;text-decoration:none;font-weight:700;font-size:17px;cursor:grab;user-select:none;box-shadow:0 4px 14px rgba(0,0,0,0.25);font-family:inherit;" onclick="event.preventDefault();alert('اسحب الزر ده بالماوس لشريط المفضلة — متضغطش عليه هنا!');">${buttonLabel}</a>`
     : "";
 
   const platforms = [
@@ -94,6 +101,32 @@ export default function BookmarkletInstallPage() {
           <div className="flex items-center gap-3 mb-4">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#1B7A3D] text-white font-bold text-sm">1</span>
             <h2 className="text-lg font-bold text-[#1A1A2E]">اسحب الزر لشريط المفضلة</h2>
+          </div>
+
+          {/* Limit selector */}
+          <div className="mb-4 bg-gray-50 rounded-xl p-3">
+            <label className="block text-xs font-bold text-gray-700 mb-2">
+              🔢 اختار عدد الإعلانات
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {[10, 50, 100, 0].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setLimit(n)}
+                  className={`px-2 py-2 rounded-lg text-xs font-bold transition-colors ${
+                    limit === n
+                      ? "bg-[#1B7A3D] text-white"
+                      : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-100"
+                  }`}
+                >
+                  {n === 0 ? "الكل" : `${n} فقط`}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2">
+              💡 ابدأ بـ <b>10 إعلانات</b> لاختبار سريع. لما تطمئن، اختار &ldquo;الكل&rdquo; للحصاد الفعلي.
+            </p>
           </div>
 
           {/* The drag button — plain HTML anchor rendered via dangerouslySetInnerHTML
