@@ -1,14 +1,18 @@
 /**
- * Marketplace Reset — مسح آمن للبيانات المحصودة
+ * Marketplace Reset — مسح آمن للبيانات المحصودة + إيقاف Railway
  *
- * يمسح الحصاد والإعلانات المنشورة بس محافظ على الإعدادات (scopes, categories, tokens, etc.).
+ * يمسح الحصاد والإعلانات المنشورة بس محافظ على الإعدادات (scopes, categories, tokens).
+ * افتراضياً بيوقّف حصاد Railway أثناء الاختبار (scopes.is_paused = true).
  *
  * الاستخدام:
- *   GET /api/admin/marketplace/reset?mode=preview        → يطلع تقرير بس (مش هيمسح)
+ *   GET /api/admin/marketplace/reset?mode=preview
+ *       → يطلع تقرير بس (مش هيمسح)
  *   GET /api/admin/marketplace/reset?mode=wipe&confirm=YES_RESET_ALL_DATA
- *                                                        → يمسح فعلاً
+ *       → يمسح فعلاً + يوقّف Railway harvester
  *   GET /api/admin/marketplace/reset?mode=wipe&confirm=YES_RESET_ALL_DATA&include_users=true
- *                                                        → يمسح كمان حسابات auth المعتمدة من publish
+ *       → نفس الحاجة + يمسح auth users المعتمدة من publish
+ *   GET /api/admin/marketplace/reset?mode=wipe&confirm=YES_RESET_ALL_DATA&pause_scopes=false
+ *       → يمسح من غير ما يوقّف Railway (مش مستحسن)
  *
  * Safety: `confirm` لازم يطابق النص بالظبط، ومفيش default.
  */
@@ -112,8 +116,29 @@ export async function GET(req: NextRequest) {
   const mode = searchParams.get("mode") || "preview";
   const confirm = searchParams.get("confirm") || "";
   const includeUsers = searchParams.get("include_users") === "true";
+  const pauseScopes = searchParams.get("pause_scopes") !== "false"; // default true
 
   const supabase = getSupabase();
+
+  // ─── Resume-harvesting mode: un-pause all scopes (handled before wipe branch) ───
+  if (mode === "resume-harvesting") {
+    const { data: resumed } = await supabase
+      .from("ahe_scopes")
+      .update({
+        is_paused: false,
+        pause_reason: null,
+        next_harvest_at: new Date().toISOString(),
+      })
+      .eq("is_paused", true)
+      .select("id, code");
+    return NextResponse.json({
+      mode: "resume-harvesting",
+      duration_ms: Date.now() - startTime,
+      scopes_resumed: (resumed || []).length,
+      scope_codes: (resumed || []).map((s) => s.code),
+      note: "Railway هيبدأ يحصد تاني من ~دقيقة",
+    });
+  }
 
   // ─── Preview mode: count everything, delete nothing ───
   if (mode !== "wipe") {
@@ -121,6 +146,22 @@ export async function GET(req: NextRequest) {
     for (const table of [...TABLES_DEFAULT, ...TABLES_PRESERVED]) {
       counts[table] = await countTable(supabase, table);
     }
+
+    // Count active scopes (these are what Railway picks up)
+    let activeScopes = 0, pausedScopes = 0;
+    try {
+      const { count: active } = await supabase
+        .from("ahe_scopes")
+        .select("id", { count: "exact", head: true })
+        .eq("is_active", true)
+        .eq("is_paused", false);
+      const { count: paused } = await supabase
+        .from("ahe_scopes")
+        .select("id", { count: "exact", head: true })
+        .eq("is_paused", true);
+      activeScopes = active ?? 0;
+      pausedScopes = paused ?? 0;
+    } catch { /* ignore */ }
 
     // Count auto-created auth users (best effort)
     let autoUsers = 0;
@@ -138,9 +179,18 @@ export async function GET(req: NextRequest) {
       will_delete: Object.fromEntries(TABLES_DEFAULT.map((t) => [t, counts[t] ?? 0])),
       will_preserve: Object.fromEntries(TABLES_PRESERVED.map((t) => [t, counts[t] ?? 0])),
       auto_created_auth_users: autoUsers,
+      railway_harvester_scopes: {
+        currently_active: activeScopes,
+        currently_paused: pausedScopes,
+        note: activeScopes > 0
+          ? "⚠️ Railway بيحصد على " + activeScopes + " scope دلوقتي. wipe mode هيوقفهم تلقائياً."
+          : "✓ Railway موقوف حالياً.",
+      },
       how_to_execute: {
-        wipe_data_only: `/api/admin/marketplace/reset?mode=wipe&confirm=${CONFIRM_PHRASE}`,
+        wipe_data_and_pause_railway: `/api/admin/marketplace/reset?mode=wipe&confirm=${CONFIRM_PHRASE}`,
         wipe_data_and_users: `/api/admin/marketplace/reset?mode=wipe&confirm=${CONFIRM_PHRASE}&include_users=true`,
+        wipe_data_but_keep_railway_running: `/api/admin/marketplace/reset?mode=wipe&confirm=${CONFIRM_PHRASE}&pause_scopes=false`,
+        resume_railway_later: `/api/admin/marketplace/reset?mode=resume-harvesting`,
       },
     });
   }
@@ -182,19 +232,41 @@ export async function GET(req: NextRequest) {
     results[table] = await wipeTable(supabase, table);
   }
 
-  // Reset scope counters (preserve scopes but zero out their stats)
+  // Reset scope counters + optionally pause Railway harvester.
+  // Column names match ahe_scopes schema in migration 00039.
+  let scopesReset = 0;
+  let scopesPaused = 0;
   try {
-    await supabase
+    const resetPayload: Record<string, unknown> = {
+      total_harvests: 0,
+      total_listings_found: 0,
+      total_sellers_found: 0,
+      total_phones_extracted: 0,
+      last_harvest_at: null,
+      last_harvest_job_id: null,
+      last_harvest_new_listings: 0,
+      last_harvest_new_sellers: 0,
+      consecutive_failures: 0,
+      avg_new_listings_per_harvest: 0,
+    };
+
+    if (pauseScopes) {
+      resetPayload.is_paused = true;
+      resetPayload.pause_reason = "Paused for bookmarklet testing (auto-reset)";
+      // Push next run far into the future too, just in case
+      resetPayload.next_harvest_at = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    } else {
+      resetPayload.next_harvest_at = new Date().toISOString();
+    }
+
+    const { data: updated } = await supabase
       .from("ahe_scopes")
-      .update({
-        total_listings_fetched: 0,
-        total_listings_new: 0,
-        total_phones_extracted: 0,
-        last_harvested_at: null,
-        next_harvest_at: new Date().toISOString(),
-      })
-      .not("id", "is", null);
-  } catch { /* ignore — columns may not exist */ }
+      .update(resetPayload)
+      .not("id", "is", null)
+      .select("id, is_paused");
+    scopesReset = (updated || []).length;
+    scopesPaused = (updated || []).filter((s) => s.is_paused).length;
+  } catch { /* ignore — schema may differ */ }
 
   // Optionally wipe auto-created auth users
   let usersResult: { deleted: number; error?: string } | null = null;
@@ -206,8 +278,13 @@ export async function GET(req: NextRequest) {
     mode: "wipe",
     duration_ms: Date.now() - startTime,
     tables_wiped: results,
+    scopes_reset: scopesReset,
+    scopes_paused: scopesPaused,
+    railway_status: pauseScopes
+      ? "⏸️ Railway موقوف. شغّل reset?mode=resume-harvesting لما تخلص الاختبار."
+      : "▶️ Railway لسه شغّال. هيحصد تلقائياً.",
     auto_users_deleted: usersResult,
     preserved_tables: TABLES_PRESERVED,
-    next_step: "تقدر تشغل الـ bookmarklet الموحّد لبداية حصاد جديد",
+    next_step: "افتح سيت مدعوم (dubizzle/semsarmasr/opensooq) واضغط bookmarklet v10",
   });
 }
