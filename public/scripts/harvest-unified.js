@@ -1589,6 +1589,10 @@
       // Seller name — class-based fallback, still checks blocked list
       if (!result.sellerName) {
         var sellerPats = [
+          // Dubizzle's primary seller attribution: "تم النشر بواسطة <Name>"
+          // Walk past any HTML tags between the label and the name.
+          /تم\s*النشر\s*بواسطة[\s\S]{0,300}?<(?:h1|h2|h3|h4|strong|b|span|div)[^>]*>\s*([^<]{2,60})\s*</i,
+          /تم\s*النشر\s*بواسطة[\s\S]{0,300}?>\s*([^<\n]{2,60})\s*</i,
           /class="[^"]*(?:seller|agent|advertiser)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
           /itemprop=["']name["'][^>]*>\s*([^<]{2,60})\s*</i,
           /"seller"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]{2,60})"/i,
