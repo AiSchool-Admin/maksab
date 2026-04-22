@@ -1249,6 +1249,36 @@
     parseDetail: function(html) {
       var result = { phone: null, sellerName: null, allImages: [], specs: {}, amenities: [] };
 
+      // Detect the LOGGED-IN user first so we can exclude their info from
+      // seller extraction. Without this, when the harvester is run by an
+      // employee logged into dubizzle, every saved listing ends up showing
+      // the EMPLOYEE'S name + phone (taken from the page header / "my account"
+      // sections) instead of the actual ad seller.
+      var blockedName = null;
+      var blockedPhone = null;
+      var loggedInData = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+      if (loggedInData) {
+        try {
+          var rootData = JSON.parse(loggedInData[1]);
+          var rootProps = (rootData && rootData.props && rootData.props.pageProps) || {};
+          // Various places Dubizzle stores the logged-in user
+          var sessionUser = rootProps.user || rootProps.currentUser || rootProps.loggedInUser ||
+                            (rootProps.session && rootProps.session.user) ||
+                            (rootProps.auth && rootProps.auth.user) || null;
+          if (sessionUser && typeof sessionUser === 'object') {
+            blockedName = (sessionUser.name || sessionUser.display_name || sessionUser.full_name || '').trim() || null;
+            var phoneRaw = sessionUser.phone || sessionUser.mobile || sessionUser.phone_number;
+            if (phoneRaw) blockedPhone = normalizeEgPhone(phoneRaw);
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      function isBlocked(name, phone) {
+        if (name && blockedName && name.trim().toLowerCase() === blockedName.toLowerCase()) return true;
+        if (phone && blockedPhone && phone === blockedPhone) return true;
+        return false;
+      }
+
       // ═══ Strategy 1: __NEXT_DATA__ JSON (primary) ═══
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
@@ -1256,76 +1286,80 @@
           var data = JSON.parse(m[1]);
           var pageProps = (data && data.props && data.props.pageProps) || {};
 
-          // Ad object — Dubizzle wraps under various keys
+          // Ad object — Dubizzle wraps under various keys. IMPORTANT: do NOT
+          // include `pageProps` itself as a fallback — it contains the
+          // logged-in user data which would then leak into seller extraction.
           var ad = pageProps.ad || pageProps.listing || pageProps.item ||
-                   pageProps.data || pageProps.property || pageProps.product ||
-                   (pageProps.adModel && pageProps.adModel.ad) || {};
+                   pageProps.property || pageProps.product ||
+                   (pageProps.adModel && pageProps.adModel.ad) || null;
 
-          // Seller name
-          var user = ad.user || ad.seller || ad.owner || ad.agent || {};
-          if (user.name || user.display_name) {
-            result.sellerName = String(user.name || user.display_name).trim() || null;
-          }
-
-          // Phone — Dubizzle hides this behind an API call usually, but sometimes exposes it
-          var phoneCandidates = [ad.phone, ad.phone_number, ad.contact_phone,
-                                 user.phone, user.mobile, ad.mobile];
-          for (var pi = 0; pi < phoneCandidates.length; pi++) {
-            if (phoneCandidates[pi]) {
-              var pn = normalizeEgPhone(phoneCandidates[pi]);
-              if (pn) { result.phone = pn; break; }
+          if (ad && typeof ad === 'object') {
+            // Seller name — only from ad.user (the LISTING's seller, not the page user)
+            var user = ad.user || ad.seller || ad.owner || ad.agent || {};
+            var candidateName = (user.name || user.display_name || '').trim() || null;
+            if (candidateName && !isBlocked(candidateName, null)) {
+              result.sellerName = candidateName;
             }
-          }
 
-          // Images — ad.images is usually an array of URLs or objects with .url
-          var imgs = ad.images || ad.photos || ad.gallery || ad.media || [];
-          if (Array.isArray(imgs)) {
-            for (var ii = 0; ii < imgs.length; ii++) {
-              var img = imgs[ii];
-              var url = typeof img === 'string' ? img :
-                        (img && (img.url || img.src || img.main || img.uri || img.href)) || null;
-              if (url && result.allImages.indexOf(url) < 0 &&
-                  /\.(jpg|jpeg|png|webp)(\?|$)/i.test(url)) {
-                result.allImages.push(url);
+            // Phone — only from ad-specific fields, never the session user
+            var phoneCandidates = [ad.phone, ad.phone_number, ad.contact_phone,
+                                   user.phone, user.mobile, ad.mobile];
+            for (var pi = 0; pi < phoneCandidates.length; pi++) {
+              if (phoneCandidates[pi]) {
+                var pn = normalizeEgPhone(phoneCandidates[pi]);
+                if (pn && !isBlocked(null, pn)) { result.phone = pn; break; }
               }
             }
-          }
 
-          // Specs — Dubizzle uses `parameters` array: [{ label, value_label, value }, ...]
-          var params = ad.parameters || ad.specifications || ad.details ||
-                       ad.attributes || ad.props || [];
-          if (Array.isArray(params)) {
-            for (var pj = 0; pj < params.length; pj++) {
-              var p = params[pj];
-              var key = String(p.label || p.name || p.key || p.title || '').trim();
-              var val = String(p.value_label || p.value || p.display_value || p.text || '').trim();
-              if (key && val && key !== val && key.length < 40 && val.length < 100) {
-                result.specs[key] = val;
-              }
-            }
-          } else if (params && typeof params === 'object') {
-            // Specs as flat object
-            for (var pk in params) {
-              if (Object.prototype.hasOwnProperty.call(params, pk)) {
-                var pv = params[pk];
-                if ((typeof pv === 'string' || typeof pv === 'number') && String(pv).length < 100) {
-                  result.specs[pk] = String(pv);
+            // Images — ad.images is usually an array of URLs or objects with .url
+            var imgs = ad.images || ad.photos || ad.gallery || ad.media || [];
+            if (Array.isArray(imgs)) {
+              for (var ii = 0; ii < imgs.length; ii++) {
+                var img = imgs[ii];
+                var url = typeof img === 'string' ? img :
+                          (img && (img.url || img.src || img.main || img.uri || img.href)) || null;
+                if (url && result.allImages.indexOf(url) < 0 &&
+                    /\.(jpg|jpeg|png|webp)(\?|$)/i.test(url)) {
+                  result.allImages.push(url);
                 }
               }
             }
-          }
 
-          // Amenities — Dubizzle's "الكماليات" section usually lives in `amenities` / `features`
-          var feats = ad.amenities || ad.features || ad.facilities || ad.extras || [];
-          if (Array.isArray(feats)) {
-            for (var fi = 0; fi < feats.length; fi++) {
-              var f = feats[fi];
-              var featName = typeof f === 'string' ? f :
-                             (f && (f.label || f.name || f.title || f.text)) || null;
-              if (featName && String(featName).length > 0 && String(featName).length < 60
-                  && result.amenities.indexOf(featName) < 0
-                  && featName !== '[object Object]') {
-                result.amenities.push(String(featName).trim());
+            // Specs — Dubizzle uses `parameters` array: [{ label, value_label, value }, ...]
+            var params = ad.parameters || ad.specifications || ad.details ||
+                         ad.attributes || ad.props || [];
+            if (Array.isArray(params)) {
+              for (var pj = 0; pj < params.length; pj++) {
+                var p = params[pj];
+                var key = String(p.label || p.name || p.key || p.title || '').trim();
+                var val = String(p.value_label || p.value || p.display_value || p.text || '').trim();
+                if (key && val && key !== val && key.length < 40 && val.length < 100) {
+                  result.specs[key] = val;
+                }
+              }
+            } else if (params && typeof params === 'object') {
+              for (var pk in params) {
+                if (Object.prototype.hasOwnProperty.call(params, pk)) {
+                  var pv = params[pk];
+                  if ((typeof pv === 'string' || typeof pv === 'number') && String(pv).length < 100) {
+                    result.specs[pk] = String(pv);
+                  }
+                }
+              }
+            }
+
+            // Amenities — Dubizzle's "الكماليات" usually lives in `amenities` / `features`
+            var feats = ad.amenities || ad.features || ad.facilities || ad.extras || [];
+            if (Array.isArray(feats)) {
+              for (var fi = 0; fi < feats.length; fi++) {
+                var f = feats[fi];
+                var featName = typeof f === 'string' ? f :
+                               (f && (f.label || f.name || f.title || f.text)) || null;
+                if (featName && String(featName).length > 0 && String(featName).length < 60
+                    && result.amenities.indexOf(featName) < 0
+                    && featName !== '[object Object]') {
+                  result.amenities.push(String(featName).trim());
+                }
               }
             }
           }
@@ -1334,22 +1368,24 @@
 
       // ═══ Strategy 2: HTML regex fallbacks for missing pieces ═══
 
-      // Phone from full HTML text (when API hides it)
-      if (!result.phone) result.phone = findPhoneInText(html);
+      // Phone from full HTML text — but skip if it matches the logged-in user.
+      if (!result.phone) {
+        var foundPhone = findPhoneInText(html);
+        if (foundPhone && !isBlocked(null, foundPhone)) result.phone = foundPhone;
+      }
 
-      // Seller name — class-based fallback
+      // Seller name — class-based fallback. Also skip blocked names.
       if (!result.sellerName) {
         var sellerPats = [
           /class="[^"]*(?:seller|agent|user|advertiser)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
           /itemprop=["']name["'][^>]*>\s*([^<]{2,60})\s*</i,
           /"seller"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]{2,60})"/i,
-          /"user"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]{2,60})"/i,
         ];
         for (var sp = 0; sp < sellerPats.length; sp++) {
           var sm = html.match(sellerPats[sp]);
           if (sm && sm[1]) {
             var sn = sm[1].trim().replace(/\s+/g, ' ').replace(/User\s*photo/gi, '').trim();
-            if (sn.length >= 2 && sn.length <= 60 && !/^\d+$/.test(sn)) {
+            if (sn.length >= 2 && sn.length <= 60 && !/^\d+$/.test(sn) && !isBlocked(sn, null)) {
               result.sellerName = sn;
               break;
             }
