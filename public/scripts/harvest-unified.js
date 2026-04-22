@@ -1400,6 +1400,19 @@
               }
             }
 
+            // Fallback #1: phones embedded in the ad DESCRIPTION.
+            // Most Egyptian sellers on Dubizzle paste their phone directly into
+            // the description to bypass Dubizzle's "Show phone" gate. This is
+            // how Railway was achieving 70-80% phone extraction.
+            if (!result.phone && ad.description) {
+              var descText = String(ad.description);
+              var descPhones = descText.match(/(?:\+?20\s?1[0-25]\d{8}|01[0-25][\s.\-]?\d{3,4}[\s.\-]?\d{4,5}|01[0-25]\d{8})/g) || [];
+              for (var dp = 0; dp < descPhones.length; dp++) {
+                var dpNorm = normalizeEgPhone(descPhones[dp]);
+                if (dpNorm && !isBlocked(null, dpNorm)) { result.phone = dpNorm; break; }
+              }
+            }
+
             // Images — ad.images is usually an array of URLs or objects with .url
             var imgs = ad.images || ad.photos || ad.gallery || ad.media || [];
             if (Array.isArray(imgs)) {
@@ -1463,6 +1476,51 @@
       // phones behind an API call (click "Show phone") — if __NEXT_DATA__ doesn't
       // expose it and the user hasn't revealed it, we leave phone null rather
       // than guess wrong. Server-side enrichment can try later.
+
+      // Fallback #2: WhatsApp links (wa.me / whatsapp.com). Many Dubizzle
+      // sellers add these directly so buyers can contact without phone reveal.
+      if (!result.phone) {
+        var waMatches = html.match(/(?:wa\.me|whatsapp\.com\/send[^"']*phone=)\/?(?:\+?2)?(01[0-25]\d{8})/gi) || [];
+        for (var wi = 0; wi < waMatches.length; wi++) {
+          var waPhoneMatch = waMatches[wi].match(/01[0-25]\d{8}/);
+          if (waPhoneMatch) {
+            var waNorm = normalizeEgPhone(waPhoneMatch[0]);
+            if (waNorm && !isBlocked(null, waNorm)) { result.phone = waNorm; break; }
+          }
+        }
+      }
+
+      // Fallback #3: tel: links (rare on Dubizzle but some sellers use them)
+      if (!result.phone) {
+        var telMatches = html.match(/href=["']tel:(\+?[\d\s\-]+)["']/gi) || [];
+        for (var ti = 0; ti < telMatches.length; ti++) {
+          var telDigits = telMatches[ti].match(/[\d]+/g);
+          if (telDigits) {
+            var telNorm = normalizeEgPhone(telDigits.join(''));
+            if (telNorm && !isBlocked(null, telNorm)) { result.phone = telNorm; break; }
+          }
+        }
+      }
+
+      // Fallback #4: description-only full-text scan from __NEXT_DATA__ failed
+      // — try plain-text description section in the rendered HTML. We anchor on
+      // "الوصف" (description) label and scan the next 3000 chars.
+      if (!result.phone) {
+        var descPlain = html.replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+          .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/[ \t\n\r]+/g, ' ');
+        var descIdx = descPlain.indexOf('الوصف');
+        if (descIdx < 0) descIdx = descPlain.indexOf('description');
+        if (descIdx >= 0) {
+          var descWindow = descPlain.substring(descIdx, descIdx + 3000);
+          var descMatches = descWindow.match(/(?:\+?20\s?1[0-25]\d{8}|01[0-25][\s.\-]?\d{3,4}[\s.\-]?\d{4,5}|01[0-25]\d{8})/g) || [];
+          for (var di = 0; di < descMatches.length; di++) {
+            var dpNorm2 = normalizeEgPhone(descMatches[di]);
+            if (dpNorm2 && !isBlocked(null, dpNorm2)) { result.phone = dpNorm2; break; }
+          }
+        }
+      }
 
       // Seller name — class-based fallback, still checks blocked list
       if (!result.sellerName) {
