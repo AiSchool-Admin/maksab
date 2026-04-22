@@ -1,4 +1,4 @@
-// Maksab Unified Harvester v10 — dubizzle + semsarmasr + opensooq
+// Maksab Unified Harvester v11 — dubizzle + semsarmasr + opensooq + aqarmap
 // Run from any supported listing page. Detects platform, category, governorate,
 // paginates through results, fetches phones from detail pages, delivers to Maksab.
 (function(){
@@ -371,7 +371,7 @@
       url: ctx.startUrl,
       listings: items,
       timestamp: new Date().toISOString(),
-      source: 'bookmarklet-v10-unified',
+      source: 'bookmarklet-v11-unified',
       platform: platform.id,
       scope_code: ctx.scopeCode || null,
       meta: {
@@ -423,7 +423,7 @@
     var ui = buildUI();
 
     if (!platform) {
-      renderError(ui, 'السيت دي مش مدعومة. المدعومة حالياً: dubizzle — semsarmasr — opensooq');
+      renderError(ui, 'السيت دي مش مدعومة. المدعومة حالياً: dubizzle — semsarmasr — opensooq — aqarmap');
       return;
     }
 
@@ -1094,6 +1094,306 @@
     maksabCategory: function(ctx) { return ctx.maksabCat || null; },
   };
 
-  // Run after all stages are defined (see end of file)
+  // ═════════════════════════════════════════════════════════
+  //  STAGE 5: Aqarmap (عقارماب)
+  //  - Next.js SPA — data in __NEXT_DATA__ (pageProps + dehydratedState)
+  //  - URL: aqarmap.com.eg/ar/<for-sale|for-rent>/<property-type>/<governorate>[/<city>]
+  //  - Pagination: ?page=N
+  //  - Real estate only
+  // ═════════════════════════════════════════════════════════
+
+  // Aqarmap URL slugs for purpose
+  var AQARMAP_PURPOSE = {
+    'for-sale': 'sale',
+    'for-rent': 'rent',
+  };
+
+  // Aqarmap property-type slugs (partial)
+  var AQARMAP_PROP_TYPES = {
+    'property-type': 'عقارات',
+    'apartment': 'شقق',
+    'apartments': 'شقق',
+    'villa': 'فيلات',
+    'villas': 'فيلات',
+    'duplex': 'دوبلكس',
+    'penthouse': 'بنتهاوس',
+    'studio': 'استوديو',
+    'townhouse': 'تاون هاوس',
+    'twin-house': 'توين هاوس',
+    'chalet': 'شاليهات',
+    'commercial': 'تجاري',
+    'shop': 'محلات',
+    'office': 'مكاتب',
+    'land': 'أراضي',
+    'whole-building': 'عمارة كاملة',
+  };
+
+  PLATFORMS.aqarmap = {
+    id: 'aqarmap',
+    displayName: 'أقارماب',
+
+    match: function(host) { return /aqarmap\.com/i.test(host); },
+
+    detectContext: function(href) {
+      var ctx = { valid: false, platform: 'aqarmap' };
+      // URL: aqarmap.com.eg/ar/<purpose>/<property-type>/<governorate>[/<city>]
+      var m = href.match(/aqarmap\.com\.eg\/ar\/([^\/?#]+)(?:\/([^\/?#]+))?(?:\/([^\/?#]+))?(?:\/([^\/?#]+))?/i);
+      if (!m) { ctx.valid = false; return ctx; }
+
+      var seg1 = m[1]; // for-sale | for-rent
+      var seg2 = m[2]; // property-type | apartment | villa
+      var seg3 = m[3]; // governorate (alexandria | cairo)
+      var seg4 = m[4]; // city (optional)
+
+      ctx.purpose = AQARMAP_PURPOSE[seg1] || null;
+      ctx.purposeLabel = ctx.purpose === 'sale' ? 'بيع' : ctx.purpose === 'rent' ? 'إيجار' : '—';
+
+      ctx.categoryKey = seg2 || null;
+      ctx.categoryLabel = AQARMAP_PROP_TYPES[seg2 || ''] || 'عقارات';
+
+      // Governorate could be in seg3
+      var govKey = seg3 || null;
+      ctx.governorate = govKey && GOV_AR[govKey] ? GOV_AR[govKey] : null;
+      ctx.governorateLabel = ctx.governorate || (govKey || 'كل المحافظات');
+      ctx.cityKey = seg4 || null;
+
+      // Must at least have purpose to be valid
+      ctx.valid = !!(ctx.purpose);
+      ctx.scopeCode = ctx.valid ? ('aqarmap:' + (govKey || 'eg') + ':' + (seg2 || '') + ':' + (ctx.purpose || '')) : null;
+      return ctx;
+    },
+
+    buildPageUrl: function(ctx, page) {
+      var base = ctx.startUrl.split('?')[0].split('#')[0];
+      // Ensure trailing slash (aqarmap is picky about it)
+      if (base.charAt(base.length - 1) !== '/') base += '/';
+      if (page <= 1) return base;
+      return base + '?page=' + page;
+    },
+
+    fetchPage: function(url) {
+      return fetch(url, {credentials: 'include'})
+        .then(function(r){ return r.text(); })
+        .then(function(html){
+          var doc = new DOMParser().parseFromString(html, 'text/html');
+          return { html: html, doc: doc };
+        });
+    },
+
+    // Recursively find listings array in a deeply-nested JSON structure.
+    // Aqarmap puts data under pageProps.listings OR pageProps.dehydratedState.queries[N].state.data
+    _findListings: function(obj, depth) {
+      if (depth > 8 || !obj || typeof obj !== 'object') return null;
+      if (Array.isArray(obj)) {
+        if (obj.length >= 3 && obj[0] && typeof obj[0] === 'object'
+            && (obj[0].title || obj[0].name || obj[0].id || obj[0].slug || obj[0].url)) {
+          return obj;
+        }
+        for (var i = 0; i < Math.min(obj.length, 20); i++) {
+          var r = PLATFORMS.aqarmap._findListings(obj[i], depth + 1);
+          if (r) return r;
+        }
+        return null;
+      }
+      // Known keys first (fast path)
+      var knownKeys = ['listings', 'properties', 'units', 'results', 'items', 'data'];
+      for (var ki = 0; ki < knownKeys.length; ki++) {
+        var k = knownKeys[ki];
+        if (obj[k]) {
+          var r2 = PLATFORMS.aqarmap._findListings(obj[k], depth + 1);
+          if (r2) return r2;
+        }
+      }
+      // Fall back to all keys
+      for (var key in obj) {
+        if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+        if (knownKeys.indexOf(key) >= 0) continue;
+        var val = obj[key];
+        if (val && typeof val === 'object') {
+          var r3 = PLATFORMS.aqarmap._findListings(val, depth + 1);
+          if (r3) return r3;
+        }
+      }
+      return null;
+    },
+
+    parseList: function(html, doc, ctx) {
+      var items = [];
+      var BASE = 'https://aqarmap.com.eg';
+
+      // Strategy 1: __NEXT_DATA__
+      var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+      if (m) {
+        try {
+          var data = JSON.parse(m[1]);
+          var listings = PLATFORMS.aqarmap._findListings(data, 0);
+          if (listings && listings.length > 0) {
+            var seenUrls = {};
+            for (var i = 0; i < listings.length; i++) {
+              var it = listings[i];
+              var title = String(it.title || it.name || '').trim();
+              var id = it.id || it.listing_id;
+              if (!title && !id) continue;
+
+              var url = '';
+              if (it.url) url = String(it.url);
+              else if (it.link) url = String(it.link);
+              else if (it.slug) url = BASE + '/ar/' + it.slug;
+              else if (id) url = BASE + '/ar/listing/' + id;
+              if (!url) continue;
+              if (url.charAt(0) === '/') url = BASE + url;
+              var clean = url.split('?')[0];
+              if (seenUrls[clean]) continue;
+              seenUrls[clean] = 1;
+
+              // Price (number, string, or nested { value, currency })
+              var price = null;
+              var rawPrice = it.price != null ? it.price : (it.salePrice != null ? it.salePrice : it.rentPrice);
+              if (rawPrice != null) {
+                if (typeof rawPrice === 'number') price = rawPrice;
+                else if (typeof rawPrice === 'object') price = parseInt(String(rawPrice.value != null ? rawPrice.value : (rawPrice.amount != null ? rawPrice.amount : '')).replace(/[^\d]/g, ''), 10) || null;
+                else price = parseInt(String(rawPrice).replace(/[^\d]/g, ''), 10) || null;
+              }
+
+              // Location (city + area, possibly nested)
+              var cityName = (it.city && it.city.name) || it.cityName || (it.location && it.location.city) || '';
+              var areaName = (it.area && it.area.name) || it.neighborhood || it.district || it.areaName || '';
+              var location = [areaName, cityName].filter(function(x){ return x; }).join(', ');
+
+              // Thumbnail
+              var img = null;
+              if (it.photos && it.photos.length > 0) img = typeof it.photos[0] === 'string' ? it.photos[0] : (it.photos[0].url || it.photos[0].file);
+              if (!img && it.mainPhoto) img = typeof it.mainPhoto === 'string' ? it.mainPhoto : (it.mainPhoto.url || it.mainPhoto.file);
+              if (!img) img = it.image || it.thumbnail || it.coverPhoto || null;
+
+              // Enrich title with space/rooms
+              var enriched = title || ('عقار #' + id);
+              var space = it.space || it.area_sqm || it.size;
+              var rooms = it.rooms || it.bedrooms;
+              if (space && enriched.indexOf('م²') < 0) enriched += ' — ' + space + ' م²';
+              if (rooms && enriched.indexOf('غرف') < 0) enriched += ' — ' + rooms + ' غرف';
+
+              // Seller
+              var sellerName = (it.user && it.user.name) || (it.owner && it.owner.name) || (it.agent && it.agent.name) || null;
+              var isAgent = (it.user && (it.user.type === 'broker' || it.user.type === 'agent'))
+                || (it.owner && it.owner.type === 'broker')
+                || !!it.agent;
+
+              items.push({
+                url: clean,
+                external_id: String(id || ''),
+                title: enriched,
+                description: it.description || '',
+                price: price,
+                thumbnailUrl: img ? String(img) : null,
+                location: location || ctx.governorateLabel || '',
+                city: cityName || ctx.governorateLabel || '',
+                area: areaName || '',
+                sellerPhone: null,
+                sellerName: sellerName ? String(sellerName).trim() : null,
+                sellerProfileUrl: null,
+                dateText: String(it.created_at || it.createdAt || it.publishedAt || it.date || ''),
+                isVerified: !!(it.isVerified || it.is_verified || it.verified || (it.user && it.user.isVerified)),
+                isBusiness: isAgent || !!(it.is_broker || it.isBroker || it.is_company),
+                isFeatured: !!(it.isFeatured || it.is_featured || it.featured || it.isPremium),
+                supportsExchange: false,
+                isNegotiable: !!(it.isNegotiable || it.is_negotiable || it.negotiable),
+                category: ctx.categoryLabel,
+              });
+            }
+            if (items.length > 0) return items;
+          }
+        } catch (e) { /* fall through */ }
+      }
+
+      // Strategy 2: JSON-LD ItemList
+      var ldMatches = html.match(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+      for (var li = 0; li < ldMatches.length; li++) {
+        var innerMatch = ldMatches[li].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+        if (!innerMatch) continue;
+        try {
+          var ld = JSON.parse(innerMatch[1]);
+          if (ld && ld['@type'] === 'ItemList' && Array.isArray(ld.itemListElement)) {
+            for (var lj = 0; lj < ld.itemListElement.length; lj++) {
+              var el = ld.itemListElement[lj];
+              var item = el.item || el;
+              if (!item || !item.url) continue;
+              items.push({
+                url: String(item.url).split('?')[0],
+                title: String(item.name || ''),
+                description: item.description || '',
+                price: item.offers && item.offers.price ? parseInt(String(item.offers.price).replace(/[^\d]/g, ''), 10) : null,
+                thumbnailUrl: item.image || null,
+                location: ctx.governorateLabel || '',
+                city: ctx.governorateLabel || '',
+                area: '',
+                sellerPhone: null,
+                sellerName: null,
+                sellerProfileUrl: null,
+                dateText: '',
+                isVerified: false,
+                isBusiness: false,
+                isFeatured: false,
+                supportsExchange: false,
+                isNegotiable: false,
+                category: ctx.categoryLabel,
+              });
+            }
+            if (items.length > 0) return items;
+          }
+        } catch (e) { /* skip */ }
+      }
+
+      return items;
+    },
+
+    parseDetail: function(html) {
+      var result = { phone: null, sellerName: null };
+
+      // __NEXT_DATA__
+      var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+      if (m) {
+        try {
+          var data = JSON.parse(m[1]);
+          var pp = (data && data.props && data.props.pageProps) || {};
+          var listing = pp.listing || pp.property || pp.unit || pp;
+          var user = listing.user || listing.owner || listing.agent || listing.seller || {};
+          if (user.name || user.display_name) {
+            result.sellerName = String(user.name || user.display_name).trim() || null;
+          }
+          // Phone candidates (aqarmap sometimes has in user object)
+          var cand = [listing.phone, listing.mobile, user.phone, user.mobile, user.contact_phone];
+          for (var ci = 0; ci < cand.length; ci++) {
+            if (cand[ci]) {
+              var p = normalizeEgPhone(cand[ci]);
+              if (p) { result.phone = p; break; }
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Fallback: regex scan
+      if (!result.phone) result.phone = findPhoneInText(html);
+      if (!result.sellerName) {
+        var pats = [
+          /class="[^"]*(?:owner|seller|agent|broker|user)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
+          /itemprop=["']name["'][^>]*>\s*([^<]{2,60})\s*</i,
+          /"name"\s*:\s*"([^"]{2,60})"/i,
+        ];
+        for (var i = 0; i < pats.length; i++) {
+          var mm = html.match(pats[i]);
+          if (mm && mm[1]) {
+            var n = mm[1].trim().replace(/\s+/g, ' ');
+            if (n.length >= 2 && n.length <= 60 && !/^\d+$/.test(n)) { result.sellerName = n; break; }
+          }
+        }
+      }
+      return result;
+    },
+
+    maksabCategory: function() { return 'عقارات'; },
+  };
+
+  // Run after all stages are defined
   run();
 })();
