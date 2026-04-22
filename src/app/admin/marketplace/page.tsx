@@ -177,12 +177,20 @@ export default function MarketplacePage() {
           <h1 className="text-2xl font-bold text-gray-900">🏗️ بناء السوق</h1>
           <p className="text-sm text-gray-500 mt-1">اختار محافظة → ابني السوق → سوّق → بيع</p>
         </div>
-        <a
-          href="/admin/marketplace/simulate"
-          className="px-4 py-2 bg-purple-100 text-purple-700 rounded-xl text-sm font-bold hover:bg-purple-200 transition"
-        >
-          🧪 محاكاة السوق
-        </a>
+        <div className="flex gap-2">
+          <a
+            href="/admin/marketplace/bookmarklet"
+            className="px-4 py-2 bg-green-100 text-green-800 rounded-xl text-sm font-bold hover:bg-green-200 transition"
+          >
+            🌾 ثبّت الحصّاد
+          </a>
+          <a
+            href="/admin/marketplace/simulate"
+            className="px-4 py-2 bg-purple-100 text-purple-700 rounded-xl text-sm font-bold hover:bg-purple-200 transition"
+          >
+            🧪 محاكاة السوق
+          </a>
+        </div>
       </div>
 
       {/* Step 1: Governorate Selector */}
