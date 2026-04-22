@@ -237,6 +237,10 @@ interface BookmarkletListing {
   location: string;
   thumbnailUrl: string | null;
   allImages?: string[] | null;
+  // Arabic-keyed specs table (السعر, المساحة, الدور, ...)
+  specs?: Record<string, string> | null;
+  // Amenities / features list (مصعد, تكييف, بلكونة, ...)
+  amenities?: string[] | null;
   dateText: string;
   sellerName: string | null;
   sellerPhone?: string | null;
@@ -526,6 +530,15 @@ export async function POST(req: NextRequest) {
           city: location.city || null,
           area: location.area || null,
           source_date_text: listing.dateText || null,
+          // Property catalog: merge specs (Arabic keyed) + amenities array
+          specifications: listing.specs || listing.amenities
+            ? {
+                ...(listing.specs || {}),
+                ...(listing.amenities && listing.amenities.length > 0
+                  ? { _amenities: listing.amenities }
+                  : {}),
+              }
+            : {},
           seller_name: listing.sellerName || null,
           seller_profile_url: listing.sellerProfileUrl || null,
           seller_is_verified: listing.isVerified || false,

@@ -291,9 +291,18 @@ export default async function BrowseListingPage({ params }: Props) {
   }
 
   // Specs: merge DB specs + inline specs extracted from description (DB wins)
-  const dbSpecs = (listing.specifications && typeof listing.specifications === "object" && !Array.isArray(listing.specifications))
-    ? listing.specifications as Record<string, string>
+  const dbSpecsRaw = (listing.specifications && typeof listing.specifications === "object" && !Array.isArray(listing.specifications))
+    ? listing.specifications as Record<string, unknown>
     : {};
+  // Separate amenities array (stored under _amenities key) from regular specs
+  const amenities: string[] = Array.isArray(dbSpecsRaw._amenities)
+    ? (dbSpecsRaw._amenities as string[]).filter((x) => typeof x === "string")
+    : [];
+  const dbSpecs: Record<string, string> = {};
+  for (const [k, v] of Object.entries(dbSpecsRaw)) {
+    if (k === "_amenities") continue;
+    if (typeof v === "string" || typeof v === "number") dbSpecs[k] = String(v);
+  }
   const rawSpecs: Record<string, string> = { ...inlineSpecs, ...dbSpecs };
 
   const specOrder = catName === "سيارات" ? CAR_SPEC_ORDER : PROPERTY_SPEC_ORDER;
@@ -489,6 +498,27 @@ export default async function BrowseListingPage({ params }: Props) {
                     <span>{s.label}</span>
                   </span>
                   <span className="font-bold text-gray-900 text-left" dir="auto">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Amenities / Features */}
+        {amenities.length > 0 && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
+            <h2 className="text-sm font-bold text-[#1A1A2E] mb-4 flex items-center gap-2">
+              <span>✨</span>
+              <span>المميزات والخدمات</span>
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {amenities.map((a) => (
+                <div
+                  key={a}
+                  className="flex items-center gap-2 py-2 px-3 bg-green-50 border border-green-100 rounded-lg text-sm"
+                >
+                  <span className="text-green-600 font-bold flex-shrink-0">✓</span>
+                  <span className="text-gray-800">{a}</span>
                 </div>
               ))}
             </div>

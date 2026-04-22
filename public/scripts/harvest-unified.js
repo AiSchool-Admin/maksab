@@ -415,6 +415,9 @@
               it.allImages = detail.allImages;
               if (!it.thumbnailUrl) it.thumbnailUrl = detail.allImages[0];
             }
+            // Merge specs + amenities (bookmarklet-extracted property catalog)
+            if (detail.specs && Object.keys(detail.specs).length > 0) it.specs = detail.specs;
+            if (detail.amenities && detail.amenities.length > 0) it.amenities = detail.amenities;
             done++; update();
           })
           .catch(function(){ done++; update(); });
@@ -649,25 +652,21 @@
     },
 
     parseDetail: function(html) {
-      var result = { phone: null, sellerName: null, allImages: [] };
+      var result = { phone: null, sellerName: null, allImages: [], specs: {}, amenities: [] };
       // Phone
       var phoneMatch = html.match(/(?:\+?201|01)[0-25]\d{8}/);
       if (phoneMatch) result.phone = normalizeEgPhone(phoneMatch[0]);
 
       // Seller name — priority 1: "الوكيل: Name" / "الوكيل / Name" in description text
-      // SemsarMasr descriptions frequently include agent name like "الوكيل / احمد جمال"
       var agentPatterns = [
         /الوكيل\s*[\/:\-]\s*([^\n<>\r،,]{2,40})/,
         /لمزيد من التفاصيل[^>]*?(?:الوكيل|بالوكيل)\s*[\/:\-]?\s*([^\n<>\r،,]{2,40})/,
         /(?:صاحب الإعلان|المعلن|اسم المعلن|بواسطة|الناشر)\s*[:：\/\-]?\s*([^\n<>\r،,<>]{2,40})/,
       ];
-      // Priority 2: HTML classes (but rejected if it's a generic label)
       var classPatterns = [
         /class="[^"]*(?:OwnerName|ownerName|AdvertName)[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
         /<h3[^>]*class="[^"]*owner[^"]*"[^>]*>\s*([^<]{2,60})\s*<\/h3>/i,
       ];
-
-      // Words/phrases that look like labels, not real names — reject these
       var BAD_NAMES = /^(سمسار|عقارات|مكتب|شركة|وكيل|مالك|معلن|seller|agent|broker|owner|admin|user|سمسار\s*مصر)$/i;
 
       function tryPatterns(patterns, src) {
@@ -680,7 +679,6 @@
               .replace(/صورة المستخدم/g, '')
               .replace(/[•\-\.]+$/g, '')
               .trim();
-            // Strip trailing ".", numbers, prices, "جنيه", etc.
             n = n.split(/\s*[\.•،,]\s*(?:السعر|شقة|للبيع|جنيه|\d)/)[0].trim();
             if (n.length >= 2 && n.length <= 50 && !/^\d+$/.test(n) && !BAD_NAMES.test(n)) {
               return n;
@@ -692,6 +690,90 @@
 
       result.sellerName = tryPatterns(agentPatterns, html) || tryPatterns(classPatterns, html);
 
+      // ═══ Property specs (تفاصيل العقار) ═══
+      // SemsarMasr renders specs as label/value pairs in a table or list.
+      // Known Arabic labels — extract the value that follows each label.
+      var KNOWN_SPEC_LABELS = [
+        'السعر', 'سعر المتر', 'القسم', 'الغرض', 'المساحة', 'رقم الدور', 'الدور',
+        'عدد الغرف', 'عدد الحمامات', 'نوع التشطيب', 'الفرش', 'طبيعة المعلن',
+        'تاريخ البناء', 'تاريخ الإعلان', 'رقم الإعلان', 'نوع العقار',
+        'نوع الواجهة', 'الإطلالة', 'حالة العقار', 'طريقة الدفع', 'المقدم',
+      ];
+
+      // Pattern: "LABEL: VALUE" or "LABEL VALUE" in separate elements
+      for (var si = 0; si < KNOWN_SPEC_LABELS.length; si++) {
+        var label = KNOWN_SPEC_LABELS[si];
+        // Escape special regex chars in label (none expected but safe)
+        var labelEsc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Try pattern: <something>LABEL</something><something>VALUE</something>
+        var patterns = [
+          // Label and value in adjacent tags: <dt>الدور</dt><dd>10</dd> or similar
+          new RegExp('>\\s*' + labelEsc + '\\s*[:：]?\\s*<\\/[^>]+>\\s*<[^>]+>\\s*([^<]{1,80})\\s*<', 'i'),
+          // Label followed by colon + value in same tag: <span>الدور: 10</span>
+          new RegExp('>\\s*' + labelEsc + '\\s*[:：]\\s*([^<\\n]{1,80})\\s*<', 'i'),
+          // Standalone line: "الدور: 10\n"
+          new RegExp('(?:^|[\\n\\r>])\\s*' + labelEsc + '\\s*[:：]\\s*([^\\n\\r<]{1,80})', 'i'),
+        ];
+        for (var pi = 0; pi < patterns.length; pi++) {
+          var sm = html.match(patterns[pi]);
+          if (sm && sm[1]) {
+            var v = sm[1].trim().replace(/\s+/g, ' ').replace(/<[^>]+>/g, '').trim();
+            // Reject matches that include the label itself (runaway captures)
+            if (v && v.length < 80 && v !== label && !v.startsWith(label)) {
+              result.specs[label] = v;
+              break;
+            }
+          }
+        }
+      }
+
+      // ═══ Amenities (مميزات المشروع + مميزات داخلية) ═══
+      // Items rendered as check-marked list items. We look for the section
+      // headings and walk forward capturing feature names.
+      var KNOWN_AMENITIES = [
+        // مميزات المشروع/البناء
+        'مصعد', 'جراج/موقف سيارات', 'جراج', 'موقف سيارات',
+        'حراسة/أمن', 'حراسة', 'أمن', 'كاميرات مراقبة',
+        'إنذار حريق', 'بوابة', 'مركز تجاري', 'كافيهات/مطاعم',
+        'دش مركزي', 'حمام سباحة', 'نادي صحي', 'ملعب', 'حديقة',
+        // مميزات داخلية
+        'تكييف', 'تدفئة', 'غاز طبيعي', 'بلكونة', 'تراس',
+        'خزائن ملابس', 'خزائن مطبخ', 'إنترنت', 'هاتف', 'إنتركم',
+        'باب مصفح', 'سخان ماء', 'موقد غاز/بلت إن', 'موقد غاز',
+        'بلت إن', 'غسالة ملابس', 'غسالة', 'مايكروويف', 'ثلاجة',
+        'تلفزيون', 'مفروش', 'مفروشة', 'شرفة', 'مدفأة',
+      ];
+
+      // Strip HTML tags once for text scanning, preserving line breaks
+      var plainText = html
+        .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<(?:li|tr|div|p|br|h[1-6])\b[^>]*>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/[ \t]+/g, ' ');
+
+      var seenAmen = {};
+      for (var ai = 0; ai < KNOWN_AMENITIES.length; ai++) {
+        var feat = KNOWN_AMENITIES[ai];
+        // Look for ✔/✓/✅ next to the feature word, OR "LABEL: نعم" pattern
+        var featEsc = feat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var checkRegex = new RegExp('[✔✓✅]\\s*' + featEsc + '(?![\\u0600-\\u06FF])');
+        var yesRegex = new RegExp(featEsc + '\\s*[:：]\\s*(?:نعم|yes|true)');
+        if (checkRegex.test(plainText) || yesRegex.test(plainText)) {
+          // Use the canonical (first-listed) form when we have variants
+          var canonical = feat
+            .replace('جراج', 'جراج/موقف سيارات')
+            .replace('حراسة', 'حراسة/أمن')
+            .replace('موقد غاز', 'موقد غاز/بلت إن')
+            .replace('غسالة', 'غسالة ملابس');
+          if (!seenAmen[feat]) {
+            seenAmen[feat] = 1;
+            result.amenities.push(feat);
+          }
+        }
+      }
+
       // Images — grab ALL gallery images from the detail page
       var imgMatches = html.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi) || [];
       var seenImgs = {};
@@ -700,8 +782,6 @@
         if (!srcMatch) continue;
         var src = srcMatch[1];
         if (!/\.(jpg|jpeg|png|webp)(\?|$)/i.test(src)) continue;
-        // Skip non-listing images: icons, logos, avatars, and CTA/banner ads
-        // that semsarmasr injects ("هل أعجبك هذا العقار؟ اتصل الآن" banner).
         if (/icon|logo|avatar|flag|emoji|thumb_sm|small/i.test(src)) continue;
         if (/banner|cta|call[-_]?now|contact[-_]?now|promo|ad_banner|advertisment|\/ads?\/|sponsor/i.test(src)) continue;
         if (src.indexOf('//') === 0) src = 'https:' + src;
@@ -711,7 +791,6 @@
           result.allImages.push(src);
         }
       }
-      // Cap at 12 images (a typical listing has 5-10)
       result.allImages = result.allImages.slice(0, 12);
 
       return result;
