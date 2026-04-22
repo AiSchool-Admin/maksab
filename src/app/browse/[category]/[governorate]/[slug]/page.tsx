@@ -266,7 +266,19 @@ export default async function BrowseListingPage({ params }: Props) {
   const sellerPhone = seller?.phone || listing.extracted_phone || null;
   const sellerIsVerified = seller?.is_verified || listing.seller_is_verified || false;
   const sellerIsBusiness = seller?.is_business || listing.seller_is_business || false;
+  const sellerBadge: string | null = listing.seller_badge || null;
   const sellerMemberYear = seller?.first_seen_at ? new Date(seller.first_seen_at).getFullYear() : null;
+
+  // Map raw "طبيعة المعلن" value to a colored badge config
+  function sellerBadgeStyle(raw: string | null): { label: string; icon: string; classes: string } | null {
+    if (!raw) return null;
+    const v = raw.toLowerCase();
+    if (/مطور|شركة|مكتب عقار/.test(v)) return { label: raw, icon: "🏢", classes: "bg-purple-100 text-purple-700" };
+    if (/سمسار|وسيط|broker|agent/.test(v)) return { label: raw, icon: "🤝", classes: "bg-amber-100 text-amber-700" };
+    if (/مالك|owner/.test(v)) return { label: raw, icon: "🏠", classes: "bg-emerald-100 text-emerald-700" };
+    return { label: raw, icon: "👤", classes: "bg-gray-100 text-gray-700" };
+  }
+  const sellerBadgeDisplay = sellerBadgeStyle(sellerBadge);
 
   // Images: gallery from all_image_urls, fallback to thumbnail/main.
   // Filter out promotional/CTA banners that semsarmasr injects into the detail page.
@@ -465,10 +477,16 @@ export default async function BrowseListingPage({ params }: Props) {
                     👤 {sellerName || "معلن"}
                   </p>
                 )}
+                {sellerBadgeDisplay && (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${sellerBadgeDisplay.classes}`}>
+                    <span>{sellerBadgeDisplay.icon}</span>
+                    <span>{sellerBadgeDisplay.label}</span>
+                  </span>
+                )}
                 {sellerIsVerified && (
                   <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-bold">✓ موثّق</span>
                 )}
-                {sellerIsBusiness && (
+                {!sellerBadgeDisplay && sellerIsBusiness && (
                   <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">🏢 تاجر</span>
                 )}
               </div>

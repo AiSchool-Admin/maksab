@@ -657,17 +657,35 @@
       var phoneMatch = html.match(/(?:\+?201|01)[0-25]\d{8}/);
       if (phoneMatch) result.phone = normalizeEgPhone(phoneMatch[0]);
 
-      // Seller name — priority 1: "الوكيل: Name" / "الوكيل / Name" in description text
+      // Seller name — strategy:
+      //   Priority 1: seller card (account owner, the "المعلن" — same person as the phone)
+      //   Priority 2: HTML classes tagged with Owner/Advert/Seller
+      //   Priority 3: الوكيل in description (specific sales agent, can differ from المعلن)
+      //
+      // Real fix for the user's "محمد عصام vs نورهان" mismatch: prefer the name
+      // from the seller card (same source as the phone) over a name mentioned
+      // inside the listing description.
+
+      var sellerCardPatterns = [
+        // Near the "طبيعة المعلن" label there's usually a heading with the account name.
+        // Walk back ~500 chars from the label and grab the closest h2/h3/strong.
+        /<h3[^>]*>\s*([^<]{2,50})\s*<\/h3>[\s\S]{0,1500}طبيعة\s*المعلن/i,
+        /<h2[^>]*>\s*([^<]{2,50})\s*<\/h2>[\s\S]{0,1500}طبيعة\s*المعلن/i,
+        // Near the phone number there's usually an h3 with the name (reverse direction).
+        /<h3[^>]*>\s*([^<]{2,50})\s*<\/h3>[\s\S]{0,800}(?:\+?20?1|01)[0-25]\d{8}/i,
+        // SemsarMasr AgentDetails / AdvertiserName classes
+        /class="[^"]*(?:AgentDetails|AdvertiserName|AgentName|OwnerDetails)[^"]*"[^>]*>[\s\S]{0,300}?<(?:h2|h3|strong|span)[^>]*>\s*([^<]{2,50})\s*</i,
+      ];
+
       var agentPatterns = [
         /الوكيل\s*[\/:\-]\s*([^\n<>\r،,]{2,40})/,
         /لمزيد من التفاصيل[^>]*?(?:الوكيل|بالوكيل)\s*[\/:\-]?\s*([^\n<>\r،,]{2,40})/,
-        /(?:صاحب الإعلان|المعلن|اسم المعلن|بواسطة|الناشر)\s*[:：\/\-]?\s*([^\n<>\r،,<>]{2,40})/,
+        /(?:صاحب الإعلان|اسم المعلن|بواسطة|الناشر)\s*[:：\/\-]?\s*([^\n<>\r،,<>]{2,40})/,
       ];
       var classPatterns = [
         /class="[^"]*(?:OwnerName|ownerName|AdvertName)[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
-        /<h3[^>]*class="[^"]*owner[^"]*"[^>]*>\s*([^<]{2,60})\s*<\/h3>/i,
       ];
-      var BAD_NAMES = /^(سمسار|عقارات|مكتب|شركة|وكيل|مالك|معلن|seller|agent|broker|owner|admin|user|سمسار\s*مصر)$/i;
+      var BAD_NAMES = /^(سمسار|عقارات|مكتب|شركة|وكيل|مالك|معلن|seller|agent|broker|owner|admin|user|سمسار\s*مصر|البائع|المعلن|تفاصيل)$/i;
 
       function tryPatterns(patterns, src) {
         for (var i = 0; i < patterns.length; i++) {
@@ -688,7 +706,11 @@
         return null;
       }
 
-      result.sellerName = tryPatterns(agentPatterns, html) || tryPatterns(classPatterns, html);
+      // Order matters: seller card > HTML classes > description's الوكيل
+      result.sellerName =
+        tryPatterns(sellerCardPatterns, html) ||
+        tryPatterns(classPatterns, html) ||
+        tryPatterns(agentPatterns, html);
 
       // ═══ Property specs (تفاصيل العقار) ═══
       // Strip HTML to plain text once (preserving line breaks) — used by both

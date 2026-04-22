@@ -11,6 +11,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractPhone, normalizeEgyptianPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
+
+/**
+ * Map Arabic "طبيعة المعلن" values to our canonical seller type.
+ *   سمسار / وسيط → broker
+ *   مالك / من المالك → owner
+ *   مطور / شركة / مكتب → developer
+ */
+function mapSellerType(rawValue: string | null | undefined): string {
+  if (!rawValue) return "individual";
+  const v = String(rawValue).toLowerCase();
+  if (/مطور|شركة|مكتب عقار/.test(v)) return "developer";
+  if (/سمسار|وسيط|broker|agent/.test(v)) return "broker";
+  if (/مالك|owner/.test(v)) return "owner";
+  return "individual";
+}
 import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
 import { detectBuyRequest } from "@/lib/crm/harvester/parsers/dubizzle";
 
@@ -493,7 +508,8 @@ export async function POST(req: NextRequest) {
                 name: listing.sellerName || null,
                 source_platform: sourcePlatform,
                 is_verified: listing.isVerified || false,
-                is_business: listing.isBusiness || false,
+                is_business: listing.isBusiness || /مطور|شركة|مكتب/.test(listing.specs?.["طبيعة المعلن"] || ""),
+                detected_account_type: mapSellerType(listing.specs?.["طبيعة المعلن"]),
                 primary_category: null,
                 primary_governorate: location.governorate || null,
                 total_listings_seen: 1,
@@ -539,6 +555,8 @@ export async function POST(req: NextRequest) {
                   : {}),
               }
             : {},
+          // Seller type label from "طبيعة المعلن" spec (سمسار / مالك / مطور عقاري)
+          seller_badge: listing.specs?.["طبيعة المعلن"] || null,
           seller_name: listing.sellerName || null,
           seller_profile_url: listing.sellerProfileUrl || null,
           seller_is_verified: listing.isVerified || false,
