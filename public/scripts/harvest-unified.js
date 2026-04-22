@@ -393,12 +393,19 @@
 
       function launchOne(i) {
         var it = items[i];
-        if (it.sellerPhone && it.sellerName) { done++; update(); return Promise.resolve(); }
+        // Always fetch detail page (even if phone/name already known) to grab
+        // additional images from the gallery. Skip only if we have everything.
+        var needsFetch = !it.sellerPhone || !it.sellerName || !(it.allImages && it.allImages.length > 1);
+        if (!needsFetch) { done++; update(); return Promise.resolve(); }
         return platform.fetchPage(it.url + (it.url.indexOf('?') >= 0 ? '&' : '?') + '_t=' + Date.now())
           .then(function(res){
             var detail = platform.parseDetail(res.html, res.doc) || {};
             if (detail.phone && !it.sellerPhone) it.sellerPhone = detail.phone;
             if (detail.sellerName && !it.sellerName) it.sellerName = detail.sellerName;
+            if (detail.allImages && detail.allImages.length > 0) {
+              it.allImages = detail.allImages;
+              if (!it.thumbnailUrl) it.thumbnailUrl = detail.allImages[0];
+            }
             done++; update();
           })
           .catch(function(){ done++; update(); });
@@ -633,30 +640,69 @@
     },
 
     parseDetail: function(html) {
-      var result = { phone: null, sellerName: null };
+      var result = { phone: null, sellerName: null, allImages: [] };
       // Phone
       var phoneMatch = html.match(/(?:\+?201|01)[0-25]\d{8}/);
       if (phoneMatch) result.phone = normalizeEgPhone(phoneMatch[0]);
-      // Seller name — a few common patterns
-      var patterns = [
-        /class="[^"]*(?:OwnerName|ownerName|AdvertName|sellerName)[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
-        /<span[^>]*class="[^"]*(?:owner|seller|advert|user)[\w-]*"[^>]*>\s*([^<]{2,60})\s*<\/span>/i,
-        /(?:صاحب الإعلان|المعلن|اسم المعلن|بواسطة)[:：]?\s*([^\n<>\r]{2,60})/,
+
+      // Seller name — priority 1: "الوكيل: Name" / "الوكيل / Name" in description text
+      // SemsarMasr descriptions frequently include agent name like "الوكيل / احمد جمال"
+      var agentPatterns = [
+        /الوكيل\s*[\/:\-]\s*([^\n<>\r،,]{2,40})/,
+        /لمزيد من التفاصيل[^>]*?(?:الوكيل|بالوكيل)\s*[\/:\-]?\s*([^\n<>\r،,]{2,40})/,
+        /(?:صاحب الإعلان|المعلن|اسم المعلن|بواسطة|الناشر)\s*[:：\/\-]?\s*([^\n<>\r،,<>]{2,40})/,
       ];
-      for (var i = 0; i < patterns.length; i++) {
-        var m = html.match(patterns[i]);
-        if (m && m[1]) {
-          var n = m[1].trim().replace(/\s+/g, ' ')
-            .replace(/User\s*photo/gi, '')
-            .replace(/صورة المستخدم/g, '')
-            .replace(/مستخدم خاص/g, '')
-            .trim();
-          if (n.length >= 2 && n.length <= 60 && !/^\d+$/.test(n)) {
-            result.sellerName = n;
-            break;
+      // Priority 2: HTML classes (but rejected if it's a generic label)
+      var classPatterns = [
+        /class="[^"]*(?:OwnerName|ownerName|AdvertName)[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
+        /<h3[^>]*class="[^"]*owner[^"]*"[^>]*>\s*([^<]{2,60})\s*<\/h3>/i,
+      ];
+
+      // Words/phrases that look like labels, not real names — reject these
+      var BAD_NAMES = /^(سمسار|عقارات|مكتب|شركة|وكيل|مالك|معلن|seller|agent|broker|owner|admin|user|سمسار\s*مصر)$/i;
+
+      function tryPatterns(patterns, src) {
+        for (var i = 0; i < patterns.length; i++) {
+          var m = src.match(patterns[i]);
+          if (m && m[1]) {
+            var n = m[1].trim()
+              .replace(/\s+/g, ' ')
+              .replace(/User\s*photo/gi, '')
+              .replace(/صورة المستخدم/g, '')
+              .replace(/[•\-\.]+$/g, '')
+              .trim();
+            // Strip trailing ".", numbers, prices, "جنيه", etc.
+            n = n.split(/\s*[\.•،,]\s*(?:السعر|شقة|للبيع|جنيه|\d)/)[0].trim();
+            if (n.length >= 2 && n.length <= 50 && !/^\d+$/.test(n) && !BAD_NAMES.test(n)) {
+              return n;
+            }
           }
         }
+        return null;
       }
+
+      result.sellerName = tryPatterns(agentPatterns, html) || tryPatterns(classPatterns, html);
+
+      // Images — grab ALL gallery images from the detail page
+      var imgMatches = html.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi) || [];
+      var seenImgs = {};
+      for (var ii = 0; ii < imgMatches.length; ii++) {
+        var srcMatch = imgMatches[ii].match(/src=["']([^"']+)["']/i);
+        if (!srcMatch) continue;
+        var src = srcMatch[1];
+        // Filter to images that look like property photos (skip icons, avatars, logos)
+        if (!/\.(jpg|jpeg|png|webp)(\?|$)/i.test(src)) continue;
+        if (/icon|logo|avatar|flag|emoji|thumb_sm|small/i.test(src)) continue;
+        if (src.indexOf('//') === 0) src = 'https:' + src;
+        else if (src.charAt(0) === '/') src = 'https://www.semsarmasr.com' + src;
+        if (!seenImgs[src]) {
+          seenImgs[src] = 1;
+          result.allImages.push(src);
+        }
+      }
+      // Cap at 10 images
+      result.allImages = result.allImages.slice(0, 10);
+
       return result;
     },
 

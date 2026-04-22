@@ -428,9 +428,18 @@ export default async function BrowseListingPage({ params }: Props) {
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <p className="font-bold text-gray-900 text-base truncate">
-                  👤 {sellerName || "معلن"}
-                </p>
+                {sellerPhone ? (
+                  <Link
+                    href={`/seller/${sellerPhone}`}
+                    className="font-bold text-blue-700 hover:underline text-base truncate"
+                  >
+                    👤 {sellerName || "معلن"} ←
+                  </Link>
+                ) : (
+                  <p className="font-bold text-gray-900 text-base truncate">
+                    👤 {sellerName || "معلن"}
+                  </p>
+                )}
                 {sellerIsVerified && (
                   <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-bold">✓ موثّق</span>
                 )}

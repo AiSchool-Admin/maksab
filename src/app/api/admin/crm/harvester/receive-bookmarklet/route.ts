@@ -236,6 +236,7 @@ interface BookmarkletListing {
   price: number | null;
   location: string;
   thumbnailUrl: string | null;
+  allImages?: string[] | null;
   dateText: string;
   sellerName: string | null;
   sellerPhone?: string | null;
@@ -514,8 +515,10 @@ export async function POST(req: NextRequest) {
           supports_exchange: listing.supportsExchange || false,
           is_featured: listing.isFeatured || false,
           thumbnail_url: listing.thumbnailUrl,
-          main_image_url: listing.thumbnailUrl,
-          all_image_urls: listing.thumbnailUrl ? [listing.thumbnailUrl] : [],
+          main_image_url: (listing.allImages && listing.allImages.length > 0 ? listing.allImages[0] : listing.thumbnailUrl),
+          all_image_urls: listing.allImages && listing.allImages.length > 0
+            ? listing.allImages.slice(0, 10)
+            : (listing.thumbnailUrl ? [listing.thumbnailUrl] : []),
           source_category: listing.category || null,
           maksab_category: body.meta?.maksab_category || null,
           source_location: listing.location,
