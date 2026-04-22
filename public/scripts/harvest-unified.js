@@ -81,6 +81,38 @@
   };
 
   // ═════════════════════════════════════════════════════════
+  //  Governorate inference from listing locations
+  //  (used when the source URL doesn't specify a single governorate,
+  //   e.g. SemsarMasr with g=0 = "all Egypt")
+  // ═════════════════════════════════════════════════════════
+
+  var GOV_AR_VALUES = [
+    'الإسكندرية', 'الاسكندرية',
+    'القاهرة', 'الجيزة', 'الدقهلية', 'الشرقية', 'القليوبية',
+    'الغربية', 'المنوفية', 'البحيرة', 'كفر الشيخ', 'دمياط',
+    'بورسعيد', 'الإسماعيلية', 'السويس', 'مطروح',
+    'شمال سيناء', 'جنوب سيناء', 'البحر الأحمر', 'الوادي الجديد',
+    'أسيوط', 'أسوان', 'الأقصر', 'سوهاج', 'قنا',
+    'بني سويف', 'الفيوم', 'المنيا',
+  ];
+
+  function inferGovernorateFromItems(items) {
+    var counts = {};
+    for (var i = 0; i < items.length; i++) {
+      var haystack = (items[i].location || '') + ' ' + (items[i].city || '') + ' ' + (items[i].area || '');
+      for (var g = 0; g < GOV_AR_VALUES.length; g++) {
+        if (haystack.indexOf(GOV_AR_VALUES[g]) >= 0) {
+          var canonical = GOV_AR_VALUES[g] === 'الاسكندرية' ? 'الإسكندرية' : GOV_AR_VALUES[g];
+          counts[canonical] = (counts[canonical] || 0) + 1;
+        }
+      }
+    }
+    var best = null, bestCount = 0;
+    for (var k in counts) if (counts[k] > bestCount) { best = k; bestCount = counts[k]; }
+    return best;
+  }
+
+  // ═════════════════════════════════════════════════════════
   //  Platform registry — each platform implements:
   //    id, displayName, match(hostname) -> boolean
   //    detectContext(href, doc) -> ctx {valid, governorate, category, purpose, summary, startUrl}
@@ -438,6 +470,14 @@
 
   function sendToMaksab(platform, ctx, items, ui) {
     renderProgress(ui, '📤 إرسال ' + items.length + ' إعلان لمكسب...');
+    // When the URL doesn't specify a single governorate (g=0 / all-Egypt),
+    // infer it from the majority of the listing locations.
+    var inferredGov = ctx.governorate ||
+      (items.length > 0 ? inferGovernorateFromItems(items) : null);
+    var inferredGovLabel = (ctx.governorateLabel && ctx.governorateLabel !== 'كل المحافظات')
+      ? ctx.governorateLabel
+      : inferredGov;
+
     var payload = {
       url: ctx.startUrl,
       listings: items,
@@ -446,8 +486,8 @@
       platform: platform.id,
       scope_code: ctx.scopeCode || null,
       meta: {
-        governorate: ctx.governorate,
-        governorate_label: ctx.governorateLabel,
+        governorate: inferredGov,
+        governorate_label: inferredGovLabel,
         category: ctx.category,
         category_label: ctx.categoryLabel,
         purpose: ctx.purpose,
