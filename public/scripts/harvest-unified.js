@@ -114,14 +114,62 @@
     'بني سويف', 'الفيوم', 'المنيا',
   ];
 
+  // Slug-based governorate hints (English or transliterated Arabic) that should
+  // map to the canonical Arabic name when found inside listing text or URL.
+  var GOV_EN_TO_AR = {
+    alexandria: 'الإسكندرية',
+    cairo: 'القاهرة',
+    giza: 'الجيزة',
+    dakahlia: 'الدقهلية',
+    sharqia: 'الشرقية',
+    qalyubia: 'القليوبية',
+    gharbia: 'الغربية',
+    monufia: 'المنوفية',
+    beheira: 'البحيرة',
+    'kafr-el-sheikh': 'كفر الشيخ',
+    damietta: 'دمياط',
+    'port-said': 'بورسعيد',
+    ismailia: 'الإسماعيلية',
+    suez: 'السويس',
+    matrouh: 'مطروح',
+    'north-sinai': 'شمال سيناء',
+    'south-sinai': 'جنوب سيناء',
+    'red-sea': 'البحر الأحمر',
+    'new-valley': 'الوادي الجديد',
+    asyut: 'أسيوط',
+    aswan: 'أسوان',
+    luxor: 'الأقصر',
+    sohag: 'سوهاج',
+    qena: 'قنا',
+    'bani-suef': 'بني سويف',
+    fayoum: 'الفيوم',
+    minya: 'المنيا',
+  };
+
   function inferGovernorateFromItems(items) {
     var counts = {};
     for (var i = 0; i < items.length; i++) {
-      var haystack = (items[i].location || '') + ' ' + (items[i].city || '') + ' ' + (items[i].area || '');
+      var haystack = (
+        (items[i].location || '') + ' ' +
+        (items[i].city || '') + ' ' +
+        (items[i].area || '') + ' ' +
+        (items[i].url || '') + ' ' +
+        (items[i].title || '')
+      );
+      var lower = haystack.toLowerCase();
+
+      // Pass 1: Arabic names
       for (var g = 0; g < GOV_AR_VALUES.length; g++) {
         if (haystack.indexOf(GOV_AR_VALUES[g]) >= 0) {
           var canonical = GOV_AR_VALUES[g] === 'الاسكندرية' ? 'الإسكندرية' : GOV_AR_VALUES[g];
           counts[canonical] = (counts[canonical] || 0) + 1;
+        }
+      }
+      // Pass 2: English slugs (Dubizzle uses these)
+      for (var en in GOV_EN_TO_AR) {
+        if (Object.prototype.hasOwnProperty.call(GOV_EN_TO_AR, en) && lower.indexOf(en) >= 0) {
+          var canon = GOV_EN_TO_AR[en];
+          counts[canon] = (counts[canon] || 0) + 1;
         }
       }
     }

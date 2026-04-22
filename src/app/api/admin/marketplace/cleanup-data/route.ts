@@ -51,6 +51,8 @@ export async function GET(req: NextRequest) {
       return await sourceBreakdown(supabase);
     case "railway-check":
       return await railwayCheck(supabase);
+    case "infer-governorate":
+      return await inferGovernorate(supabase, limit);
     default:
       return NextResponse.json({
         error: "Missing or invalid `task` parameter",
@@ -326,6 +328,87 @@ async function unifyGovernorate(supabase: SupabaseClient, limit: number) {
     listings_renamed: (fixed1 || []).length,
     listings_filled_from_location: fixed2,
     sellers_renamed: (fixedSellers || []).length,
+  });
+}
+
+// ═══ Task: infer-governorate — backfill null-governorate listings ═══
+//
+// Scans listings with `governorate IS NULL` and tries to infer the
+// governorate from title + source_location + city + URL text, in both
+// Arabic and English slug forms. Updates the row if a match is found.
+
+const GOV_AR_VALUES_SERVER = [
+  "الإسكندرية", "الاسكندرية", "القاهرة", "الجيزة", "الدقهلية", "الشرقية",
+  "القليوبية", "الغربية", "المنوفية", "البحيرة", "كفر الشيخ", "دمياط",
+  "بورسعيد", "الإسماعيلية", "السويس", "مطروح", "شمال سيناء", "جنوب سيناء",
+  "البحر الأحمر", "الوادي الجديد", "أسيوط", "أسوان", "الأقصر", "سوهاج",
+  "قنا", "بني سويف", "الفيوم", "المنيا",
+];
+
+const GOV_EN_TO_AR_SERVER: Record<string, string> = {
+  alexandria: "الإسكندرية", cairo: "القاهرة", giza: "الجيزة",
+  dakahlia: "الدقهلية", sharqia: "الشرقية", qalyubia: "القليوبية",
+  gharbia: "الغربية", monufia: "المنوفية", beheira: "البحيرة",
+  "kafr-el-sheikh": "كفر الشيخ", damietta: "دمياط", "port-said": "بورسعيد",
+  ismailia: "الإسماعيلية", suez: "السويس", matrouh: "مطروح",
+  asyut: "أسيوط", aswan: "أسوان", luxor: "الأقصر", sohag: "سوهاج",
+  qena: "قنا", fayoum: "الفيوم", minya: "المنيا",
+};
+
+function inferGovFromText(text: string): string | null {
+  if (!text) return null;
+  for (const ar of GOV_AR_VALUES_SERVER) {
+    if (text.includes(ar)) return ar === "الاسكندرية" ? "الإسكندرية" : ar;
+  }
+  const lower = text.toLowerCase();
+  for (const [en, ar] of Object.entries(GOV_EN_TO_AR_SERVER)) {
+    if (lower.includes(en)) return ar;
+  }
+  return null;
+}
+
+async function inferGovernorate(supabase: SupabaseClient, limit: number) {
+  const startTime = Date.now();
+  const { data: listings } = await supabase
+    .from("ahe_listings")
+    .select("id, title, source_location, city, area, source_listing_url")
+    .is("governorate", null)
+    .limit(limit);
+
+  if (!listings || listings.length === 0) {
+    return NextResponse.json({
+      task: "infer-governorate",
+      duration_ms: Date.now() - startTime,
+      message: "No null-governorate listings",
+      updated: 0,
+    });
+  }
+
+  let updated = 0;
+  let unresolved = 0;
+  const byGov: Record<string, number> = {};
+
+  for (const l of listings) {
+    const text = [l.title, l.source_location, l.city, l.area, l.source_listing_url]
+      .filter(Boolean)
+      .join(" ");
+    const gov = inferGovFromText(text);
+    if (gov) {
+      await supabase.from("ahe_listings").update({ governorate: gov }).eq("id", l.id);
+      updated++;
+      byGov[gov] = (byGov[gov] || 0) + 1;
+    } else {
+      unresolved++;
+    }
+  }
+
+  return NextResponse.json({
+    task: "infer-governorate",
+    duration_ms: Date.now() - startTime,
+    processed: listings.length,
+    updated,
+    unresolved,
+    by_governorate: byGov,
   });
 }
 
