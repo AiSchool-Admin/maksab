@@ -56,17 +56,35 @@
 
   // SemsarMasr uses numeric IDs for governorate
   var SEMSAR_GOV_IDS = {
+    '0':  null, // "all Egypt" — no specific governorate
     '979': 'الإسكندرية',
     '981': 'القاهرة',
     '980': 'الجيزة',
     '1002': 'الساحل الشمالي',
+    '982': 'الدقهلية',
     '984': 'الشرقية',
-    '985': 'الدقهلية',
-    '983': 'القليوبية',
-    '988': 'الغربية',
-    '989': 'المنوفية',
-    '986': 'البحيرة',
-    '992': 'الفيوم',
+    '985': 'القليوبية',
+    '983': 'الغربية',
+    '988': 'المنوفية',
+    '989': 'البحيرة',
+    '986': 'كفر الشيخ',
+    '987': 'دمياط',
+    '990': 'بورسعيد',
+    '991': 'الإسماعيلية',
+    '992': 'السويس',
+    '993': 'مطروح',
+    '994': 'شمال سيناء',
+    '995': 'جنوب سيناء',
+    '996': 'البحر الأحمر',
+    '997': 'الوادي الجديد',
+    '998': 'أسيوط',
+    '999': 'أسوان',
+    '1000': 'الأقصر',
+    '1001': 'سوهاج',
+    '1003': 'قنا',
+    '1004': 'بني سويف',
+    '1005': 'الفيوم',
+    '1006': 'المنيا',
   };
 
   // SemsarMasr numeric category IDs (partial — learned from existing scopes)
@@ -110,6 +128,68 @@
     var best = null, bestCount = 0;
     for (var k in counts) if (counts[k] > bestCount) { best = k; bestCount = counts[k]; }
     return best;
+  }
+
+  // ═════════════════════════════════════════════════════════
+  //  Smart page-content detection (universal fallback)
+  //  Used when URL params don't tell us what's on the page.
+  //  Reads <h1>, <title>, and breadcrumbs to infer:
+  //    - Category (عقارات / سيارات)
+  //    - Governorate (one of 27 Egyptian governorates)
+  // ═════════════════════════════════════════════════════════
+
+  // Keywords that strongly indicate category. Order matters — more specific first.
+  var CATEGORY_KEYWORDS_AR = {
+    'عقارات': ['شقق', 'شقة', 'فيلا', 'فلل', 'دوبلكس', 'بنتهاوس', 'شاليه',
+               'عقار', 'أراضي', 'أرض', 'محل', 'محلات', 'مكتب', 'مكاتب',
+               'مبانى', 'مباني', 'عمارة', 'عمارات', 'كمبوند', 'وحدة سكنية',
+               'إيجار', 'تمليك', 'للبيع', 'للإيجار', 'apartment', 'villa', 'property'],
+    'سيارات': ['سيارة', 'سيارات', 'موتوسيكل', 'موتوسيكلات', 'دراجة نارية',
+               'نقل', 'ميكروباص', 'ماركة', 'موديل', 'كيلومترات',
+               'car', 'vehicle', 'motorcycle', 'toyota', 'hyundai'],
+  };
+
+  function getPageText(doc) {
+    var h1 = doc && doc.querySelector ? doc.querySelector('h1') : null;
+    var h2 = doc && doc.querySelector ? doc.querySelector('h2') : null;
+    var title = (doc && doc.title) || document.title || '';
+    var breadcrumb = doc && doc.querySelector ? (doc.querySelector('.breadcrumb, .breadcrumbs, [class*="bread"]') || null) : null;
+    return [
+      h1 ? (h1.textContent || '') : '',
+      h2 ? (h2.textContent || '') : '',
+      title,
+      breadcrumb ? (breadcrumb.textContent || '') : '',
+    ].join(' ').toLowerCase();
+  }
+
+  function detectCategoryFromPage(doc) {
+    var text = getPageText(doc);
+    for (var cat in CATEGORY_KEYWORDS_AR) {
+      if (!Object.prototype.hasOwnProperty.call(CATEGORY_KEYWORDS_AR, cat)) continue;
+      var kws = CATEGORY_KEYWORDS_AR[cat];
+      for (var i = 0; i < kws.length; i++) {
+        if (text.indexOf(kws[i].toLowerCase()) >= 0) return cat;
+      }
+    }
+    return null;
+  }
+
+  function detectGovernorateFromPage(doc) {
+    var text = getPageText(doc);
+    for (var i = 0; i < GOV_AR_VALUES.length; i++) {
+      if (text.indexOf(GOV_AR_VALUES[i]) >= 0) {
+        return GOV_AR_VALUES[i] === 'الاسكندرية' ? 'الإسكندرية' : GOV_AR_VALUES[i];
+      }
+    }
+    // English slugs on URL page title
+    var englishMap = {
+      'alexandria': 'الإسكندرية', 'cairo': 'القاهرة', 'giza': 'الجيزة',
+      'dakahlia': 'الدقهلية', 'sharqia': 'الشرقية', 'monufia': 'المنوفية',
+    };
+    for (var slug in englishMap) {
+      if (text.indexOf(slug) >= 0) return englishMap[slug];
+    }
+    return null;
   }
 
   // ═════════════════════════════════════════════════════════
@@ -232,25 +312,34 @@
     var prevStore = loadStore(platform.id);
     var prevCount = prevStore.urls ? Object.keys(prevStore.urls).length : 0;
 
+    function badge(text, fromPage) {
+      if (!text || text === '—') return '<span style="opacity:0.6;">—</span>';
+      var marker = fromPage ? ' <span style="color:#A5D6A7;font-size:10px;">• من الصفحة</span>' : '';
+      return '<b>' + text + '</b>' + marker;
+    }
+
     function html() {
       return ''
         + '<div style="font-size:16px;font-weight:700;margin-bottom:12px;">🏗️ مكسب — الحصاد الموحّد</div>'
-        + '<div style="background:rgba(0,0,0,0.15);padding:10px 12px;border-radius:10px;font-size:13px;">'
+        + '<div style="background:rgba(0,0,0,0.15);padding:10px 12px;border-radius:10px;font-size:13px;line-height:1.9;">'
         + '  <div>🌐 <b>المنصة:</b> ' + platform.displayName + '</div>'
-        + '  <div>📍 <b>المحافظة:</b> ' + (ctx.governorateLabel || '—') + '</div>'
-        + '  <div>🏷️ <b>القسم:</b> ' + (ctx.categoryLabel || '—') + '</div>'
+        + '  <div>📍 <b>المحافظة:</b> ' + badge(ctx.governorateLabel, ctx._govFromPage) + '</div>'
+        + '  <div>🏷️ <b>القسم:</b> ' + badge(ctx.categoryLabel, ctx._catFromPage) + '</div>'
         + '  <div>🏦 <b>نوع البيع:</b> ' + (ctx.purposeLabel || '—') + '</div>'
+        + '  <div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.15);font-size:11px;opacity:0.85;">'
+        + '    💡 الكشف بيحاول من URL أول. لو المحافظة/القسم غلط، اخرج واختار الفلتر الصحيح من السيت.'
+        + '  </div>'
         + '</div>'
         + (prevCount > 0
             ? ('<div style="margin-top:8px;font-size:11px;background:rgba(0,0,0,0.1);padding:6px 10px;border-radius:8px;">'
-               + 'لاحظ: ' + prevCount + ' URL محفوظ من جلسات سابقة. '
+               + 'ملاحظة: ' + prevCount + ' URL محفوظ من جلسات سابقة. '
                + '<a href="#" id="mk-clear" style="color:#FFE082;text-decoration:underline;">مسح cache</a>'
                + '</div>')
             : '')
         + '<div style="margin-top:12px;font-size:13px;">'
         + (ctx.valid
             ? ('سيبدأ الحصاد خلال <b>' + countdown + '</b> ثانية...')
-            : '<span style="color:#FFE082;">⚠️ مش قادر أكتشف القسم. افتح صفحة قسم معيّن الأول.</span>')
+            : '<span style="color:#FFE082;">⚠️ مش قادر أكتشف القسم من الصفحة. افتح صفحة فيها قائمة إعلانات.</span>')
         + '</div>'
         + '<div style="margin-top:14px;display:flex;gap:8px;">'
         + (ctx.valid
@@ -540,6 +629,30 @@
 
     var ctx = platform.detectContext(location.href, document);
     ctx.startUrl = location.href;
+
+    // Smart enhancement: fill detection blanks from actual page content.
+    // This makes the bookmarklet work on any URL shape — URL params are just
+    // hints; the page content is the source of truth.
+    if (!ctx.governorate || !ctx.governorateLabel || ctx.governorateLabel === '—' || ctx.governorateLabel === 'كل المحافظات') {
+      var pageGov = detectGovernorateFromPage(document);
+      if (pageGov) {
+        ctx.governorate = pageGov;
+        ctx.governorateLabel = pageGov;
+        ctx._govFromPage = true;
+      }
+    }
+    if (!ctx.maksabCat || (platform.id !== 'semsarmasr' && platform.id !== 'aqarmap' && !ctx.categoryLabel)) {
+      var pageCat = detectCategoryFromPage(document);
+      if (pageCat) {
+        ctx.maksabCat = pageCat;
+        if (!ctx.categoryLabel || ctx.categoryLabel === '—') ctx.categoryLabel = pageCat;
+        ctx._catFromPage = true;
+      }
+    }
+    // Always mark valid if we have at least a category (even inferred)
+    if (!ctx.valid && (ctx.maksabCat || ctx.categoryLabel)) {
+      ctx.valid = true;
+    }
 
     renderReady(ui, ctx, platform, function onStart(){
       if (!ctx.valid) { ui.close(); return; }
