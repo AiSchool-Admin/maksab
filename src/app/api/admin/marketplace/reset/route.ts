@@ -28,6 +28,7 @@ const CONFIRM_PHRASE = "YES_RESET_ALL_DATA";
 const TABLES_DEFAULT = [
   "ahe_listings",
   "ahe_sellers",
+  "acquisition_queue",
   "ahe_harvest_jobs",
   "ahe_hourly_metrics",
   "ahe_daily_metrics",
@@ -70,14 +71,23 @@ async function countTable(supabase: SupabaseClient, table: string): Promise<numb
   }
 }
 
+/**
+ * Tables with composite primary keys (no `id` column).
+ * For these, we use a different filter column to satisfy PostgREST's
+ * "delete must have a filter" safety requirement.
+ */
+const TABLE_FILTER_COL: Record<string, string> = {
+  favorites: "user_id",
+  user_interest_profiles: "user_id",
+};
+
 async function wipeTable(supabase: SupabaseClient, table: string): Promise<{ deleted: number; error?: string }> {
   try {
-    // Delete all rows. We use a filter that always matches (id is not null) because
-    // PostgREST requires a filter for safety when calling delete().
+    const filterCol = TABLE_FILTER_COL[table] || "id";
     const { error, count } = await supabase
       .from(table)
       .delete({ count: "exact" })
-      .not("id", "is", null);
+      .not(filterCol, "is", null);
 
     if (error) return { deleted: 0, error: error.message };
     return { deleted: count ?? 0 };
@@ -208,10 +218,11 @@ export async function GET(req: NextRequest) {
 
   const results: Record<string, { deleted: number; error?: string }> = {};
 
-  // Wipe in dependency-safe order (children before parents)
-  // ahe_listings references ahe_sellers + ahe_scopes + ahe_harvest_jobs
-  // messages references conversations
-  // auction_bids, favorites reference ads
+  // Wipe in dependency-safe order (children before parents):
+  //   - ahe_listings references ahe_sellers, ahe_scopes, ahe_harvest_jobs
+  //   - acquisition_queue references ahe_sellers (must wipe BEFORE sellers)
+  //   - messages references conversations
+  //   - auction_bids, favorites reference ads
   const wipeOrder = [
     "user_signals",
     "user_interest_profiles",
@@ -224,6 +235,7 @@ export async function GET(req: NextRequest) {
     "ahe_hourly_metrics",
     "ahe_daily_metrics",
     "ahe_listings",
+    "acquisition_queue", // depends on ahe_sellers — wipe BEFORE
     "ahe_sellers",
     "ahe_harvest_jobs",
   ];
@@ -285,6 +297,6 @@ export async function GET(req: NextRequest) {
       : "▶️ Railway لسه شغّال. هيحصد تلقائياً.",
     auto_users_deleted: usersResult,
     preserved_tables: TABLES_PRESERVED,
-    next_step: "افتح سيت مدعوم (dubizzle/semsarmasr/opensooq) واضغط bookmarklet v10",
+    next_step: "افتح سيت مدعوم (dubizzle/semsarmasr/opensooq/aqarmap) واضغط bookmarklet v11",
   });
 }
