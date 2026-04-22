@@ -691,86 +691,93 @@
       result.sellerName = tryPatterns(agentPatterns, html) || tryPatterns(classPatterns, html);
 
       // ═══ Property specs (تفاصيل العقار) ═══
-      // SemsarMasr renders specs as label/value pairs in a table or list.
-      // Known Arabic labels — extract the value that follows each label.
-      var KNOWN_SPEC_LABELS = [
-        'السعر', 'سعر المتر', 'القسم', 'الغرض', 'المساحة', 'رقم الدور', 'الدور',
-        'عدد الغرف', 'عدد الحمامات', 'نوع التشطيب', 'الفرش', 'طبيعة المعلن',
-        'تاريخ البناء', 'تاريخ الإعلان', 'رقم الإعلان', 'نوع العقار',
-        'نوع الواجهة', 'الإطلالة', 'حالة العقار', 'طريقة الدفع', 'المقدم',
-      ];
-
-      // Pattern: "LABEL: VALUE" or "LABEL VALUE" in separate elements
-      for (var si = 0; si < KNOWN_SPEC_LABELS.length; si++) {
-        var label = KNOWN_SPEC_LABELS[si];
-        // Escape special regex chars in label (none expected but safe)
-        var labelEsc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Try pattern: <something>LABEL</something><something>VALUE</something>
-        var patterns = [
-          // Label and value in adjacent tags: <dt>الدور</dt><dd>10</dd> or similar
-          new RegExp('>\\s*' + labelEsc + '\\s*[:：]?\\s*<\\/[^>]+>\\s*<[^>]+>\\s*([^<]{1,80})\\s*<', 'i'),
-          // Label followed by colon + value in same tag: <span>الدور: 10</span>
-          new RegExp('>\\s*' + labelEsc + '\\s*[:：]\\s*([^<\\n]{1,80})\\s*<', 'i'),
-          // Standalone line: "الدور: 10\n"
-          new RegExp('(?:^|[\\n\\r>])\\s*' + labelEsc + '\\s*[:：]\\s*([^\\n\\r<]{1,80})', 'i'),
-        ];
-        for (var pi = 0; pi < patterns.length; pi++) {
-          var sm = html.match(patterns[pi]);
-          if (sm && sm[1]) {
-            var v = sm[1].trim().replace(/\s+/g, ' ').replace(/<[^>]+>/g, '').trim();
-            // Reject matches that include the label itself (runaway captures)
-            if (v && v.length < 80 && v !== label && !v.startsWith(label)) {
-              result.specs[label] = v;
-              break;
-            }
-          }
-        }
-      }
-
-      // ═══ Amenities (مميزات المشروع + مميزات داخلية) ═══
-      // Items rendered as check-marked list items. We look for the section
-      // headings and walk forward capturing feature names.
-      var KNOWN_AMENITIES = [
-        // مميزات المشروع/البناء
-        'مصعد', 'جراج/موقف سيارات', 'جراج', 'موقف سيارات',
-        'حراسة/أمن', 'حراسة', 'أمن', 'كاميرات مراقبة',
-        'إنذار حريق', 'بوابة', 'مركز تجاري', 'كافيهات/مطاعم',
-        'دش مركزي', 'حمام سباحة', 'نادي صحي', 'ملعب', 'حديقة',
-        // مميزات داخلية
-        'تكييف', 'تدفئة', 'غاز طبيعي', 'بلكونة', 'تراس',
-        'خزائن ملابس', 'خزائن مطبخ', 'إنترنت', 'هاتف', 'إنتركم',
-        'باب مصفح', 'سخان ماء', 'موقد غاز/بلت إن', 'موقد غاز',
-        'بلت إن', 'غسالة ملابس', 'غسالة', 'مايكروويف', 'ثلاجة',
-        'تلفزيون', 'مفروش', 'مفروشة', 'شرفة', 'مدفأة',
-      ];
-
-      // Strip HTML tags once for text scanning, preserving line breaks
+      // Strip HTML to plain text once (preserving line breaks) — used by both
+      // spec and amenity extraction.
       var plainText = html
         .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
         .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
-        .replace(/<(?:li|tr|div|p|br|h[1-6])\b[^>]*>/gi, '\n')
+        .replace(/<(?:li|tr|td|th|div|p|br|h[1-6])\b[^>]*>/gi, '\n')
         .replace(/<[^>]+>/g, ' ')
         .replace(/&nbsp;/g, ' ')
         .replace(/[ \t]+/g, ' ');
 
+      var KNOWN_SPEC_LABELS = [
+        'السعر', 'سعر المتر', 'القسم', 'الغرض', 'المساحة', 'رقم الدور', 'الدور',
+        'عدد الغرف', 'عدد الحمامات', 'نوع التشطيب', 'الفرش', 'طبيعة المعلن',
+        'تاريخ البناء', 'نوع العقار', 'نوع الواجهة', 'الإطلالة',
+        'حالة العقار', 'طريقة الدفع', 'المقدم',
+      ];
+
+      // Label-scan in plain text: "LABEL: VALUE" pattern (after <br>/newlines).
+      // This handles most SemsarMasr spec tables regardless of their HTML wrapping.
+      for (var si = 0; si < KNOWN_SPEC_LABELS.length; si++) {
+        var label = KNOWN_SPEC_LABELS[si];
+        var labelEsc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Require the label to be at start of a logical line (newline / space / >)
+        // then "<whitespace>:<whitespace>VALUE" up to the next newline.
+        var re = new RegExp('(?:^|[\\n\\r>])\\s*' + labelEsc + '\\s*[:：]\\s*([^\\n\\r<]{1,80})', 'i');
+        var m = plainText.match(re);
+        if (m && m[1]) {
+          var v = m[1].trim().replace(/\s+/g, ' ');
+          // Reject cases where the captured value starts with another known label
+          // (e.g. "السعر: سعر المتر: 32000" — runaway capture).
+          var isRunaway = KNOWN_SPEC_LABELS.some(function(otherLabel) {
+            return otherLabel !== label && v.indexOf(otherLabel) === 0;
+          });
+          if (v && v.length < 80 && !isRunaway) {
+            result.specs[label] = v;
+          }
+        }
+      }
+
+      // ═══ Amenities (مميزات المشروع + مميزات داخلية + قريبة من + الكماليات) ═══
+      // Expanded list — covers both SemsarMasr and Dubizzle amenity wording.
+      var KNOWN_AMENITIES = [
+        // مميزات المشروع/البناء
+        'مصعد', 'جراج/موقف سيارات', 'جراج', 'موقف سيارات', 'موقف سيارات مغطى',
+        'حراسة/أمن', 'حراسة', 'أمن', 'كاميرات مراقبة', 'خدمة بواب',
+        'إنذار حريق', 'بوابة', 'مركز تجاري', 'كافيهات/مطاعم',
+        'دش مركزي', 'حمام سباحة', 'نادي صحي', 'نادي رياضي', 'ملعب', 'حديقة',
+        'ممشى',
+        // مميزات داخلية
+        'تكييف', 'تدفئة', 'تدفئة وتكييف مركزي', 'غاز طبيعي', 'غاز طبيعى',
+        'بلكونة', 'تراس', 'شرفة',
+        'خزائن ملابس', 'خزائن مطبخ', 'غرفة ملابس',
+        'أجهزة المطبخ', 'إنترنت', 'هاتف', 'تليفون أرضى', 'إنتركم',
+        'باب مصفح', 'سخان ماء', 'موقد غاز/بلت إن', 'موقد غاز',
+        'بلت إن', 'غسالة ملابس', 'غسالة', 'مايكروويف', 'ثلاجة',
+        'تلفزيون', 'زجاج شبابيك مزدوج', 'مدفأة',
+        'عداد كهرباء', 'أساسير', 'أسانسير',
+        // الإطلالة / المنظر
+        'شارع رئيسي', 'إطلالة المدينة', 'المدينة', 'إطلالة بحر', 'بحر',
+        // قريبة من / الجوار
+        'مسجد', 'كنيسة', 'مستشفى', 'صيدلية', 'الشاطئ', 'بنك',
+        'الطريق السريع', 'مدرسة', 'جامعة', 'مترو',
+      ];
+
+      // Build amenity scan area: concatenate 3000-char windows after each known
+      // section heading. If no section found, fall back to whole plain text.
+      var amenityMarkers = [
+        'وسائل الراحة', 'المميزات', 'مميزات المشروع', 'مميزات داخلية',
+        'الإطلالة', 'المنظر', 'قريبة من', 'الجوار', 'المواصلات',
+        'الكماليات', 'الخدمات',
+      ];
+      var amenityText = '';
+      for (var mi = 0; mi < amenityMarkers.length; mi++) {
+        var mIdx = plainText.indexOf(amenityMarkers[mi]);
+        if (mIdx >= 0) amenityText += ' ' + plainText.substring(mIdx, mIdx + 3000);
+      }
+      if (!amenityText) amenityText = plainText;
+
+      // Scan amenity text for known keywords — no checkmark required.
+      // Simple presence check inside the section.
       var seenAmen = {};
       for (var ai = 0; ai < KNOWN_AMENITIES.length; ai++) {
         var feat = KNOWN_AMENITIES[ai];
-        // Look for ✔/✓/✅ next to the feature word, OR "LABEL: نعم" pattern
-        var featEsc = feat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        var checkRegex = new RegExp('[✔✓✅]\\s*' + featEsc + '(?![\\u0600-\\u06FF])');
-        var yesRegex = new RegExp(featEsc + '\\s*[:：]\\s*(?:نعم|yes|true)');
-        if (checkRegex.test(plainText) || yesRegex.test(plainText)) {
-          // Use the canonical (first-listed) form when we have variants
-          var canonical = feat
-            .replace('جراج', 'جراج/موقف سيارات')
-            .replace('حراسة', 'حراسة/أمن')
-            .replace('موقد غاز', 'موقد غاز/بلت إن')
-            .replace('غسالة', 'غسالة ملابس');
-          if (!seenAmen[feat]) {
-            seenAmen[feat] = 1;
-            result.amenities.push(feat);
-          }
+        if (seenAmen[feat]) continue;
+        if (amenityText.indexOf(feat) >= 0) {
+          seenAmen[feat] = 1;
+          result.amenities.push(feat);
         }
       }
 

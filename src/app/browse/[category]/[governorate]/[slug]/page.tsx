@@ -63,6 +63,23 @@ const SPEC_LABELS: Record<string, { label: string; icon: string }> = {
 const CAR_SPEC_ORDER = ["brand", "model", "year", "mileage", "transmission", "fuel", "engine_cc", "body_type", "color", "condition", "licensed"];
 const PROPERTY_SPEC_ORDER = ["property_type", "area", "rooms", "bathrooms", "floor", "finishing", "view", "payment_method", "condition"];
 
+// Arabic-keyed specs display order (for SemsarMasr/bookmarklet-extracted catalogs)
+const ARABIC_PROPERTY_SPEC_ORDER = [
+  "السعر", "سعر المتر", "الغرض", "القسم", "نوع العقار",
+  "المساحة", "عدد الغرف", "عدد الحمامات", "رقم الدور", "الدور",
+  "نوع التشطيب", "الفرش", "نوع الواجهة", "الإطلالة",
+  "طبيعة المعلن", "طريقة الدفع", "المقدم", "حالة العقار",
+  "تاريخ البناء",
+];
+
+// Specs we NEVER show — internal/noise from source platforms
+const HIDDEN_SPEC_KEYS = new Set([
+  "تاريخ الإعلان",
+  "رقم الإعلان",
+  "العنوان",
+  "title",
+]);
+
 interface Props {
   params: Promise<{ category: string; governorate: string; slug: string }>;
 }
@@ -305,12 +322,14 @@ export default async function BrowseListingPage({ params }: Props) {
   }
   const rawSpecs: Record<string, string> = { ...inlineSpecs, ...dbSpecs };
 
-  const specOrder = catName === "سيارات" ? CAR_SPEC_ORDER : PROPERTY_SPEC_ORDER;
+  const isCars = catName === "سيارات";
+  const primaryOrder = isCars ? CAR_SPEC_ORDER : PROPERTY_SPEC_ORDER;
+  const arabicOrder = isCars ? [] : ARABIC_PROPERTY_SPEC_ORDER;
   const orderedSpecs: Array<{ key: string; label: string; icon: string; value: string }> = [];
   const usedKeys = new Set<string>();
 
-  // First pass: ordered known keys
-  for (const key of specOrder) {
+  // Pass 1: ordered known English keys (normalized)
+  for (const key of primaryOrder) {
     const v = rawSpecs[key];
     if (v && String(v).trim() && String(v).trim() !== "-") {
       const meta = SPEC_LABELS[key] || { label: key, icon: "▪️" };
@@ -319,17 +338,24 @@ export default async function BrowseListingPage({ params }: Props) {
     }
   }
 
-  // Second pass: any other specs (unknown/extra fields)
+  // Pass 2: ordered Arabic keys (SemsarMasr catalog — renders in meaningful sequence)
+  for (const key of arabicOrder) {
+    if (usedKeys.has(key) || HIDDEN_SPEC_KEYS.has(key)) continue;
+    const v = rawSpecs[key];
+    if (v && String(v).trim() && String(v).trim() !== "-") {
+      orderedSpecs.push({ key, label: key, icon: "▪️", value: String(v) });
+      usedKeys.add(key);
+    }
+  }
+
+  // Pass 3: any other specs (unknown/extra fields) — skip hidden noise
   for (const [key, v] of Object.entries(rawSpecs)) {
-    if (usedKeys.has(key)) continue;
+    if (usedKeys.has(key) || HIDDEN_SPEC_KEYS.has(key)) continue;
     if (!v || !String(v).trim() || String(v).trim() === "-") continue;
-    // Skip internal/noise keys
-    if (key === "العنوان" || key === "title") continue;
     const meta = SPEC_LABELS[key];
     if (meta) {
       orderedSpecs.push({ key, label: meta.label, icon: meta.icon, value: formatSpecValue(key, String(v)) });
     } else {
-      // Arabic-labeled keys already in DB (from non-normalized specs)
       orderedSpecs.push({ key, label: key, icon: "▪️", value: String(v) });
     }
     usedKeys.add(key);
