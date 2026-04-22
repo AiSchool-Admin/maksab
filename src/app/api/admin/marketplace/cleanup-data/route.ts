@@ -47,6 +47,8 @@ export async function GET(req: NextRequest) {
       return await unifyGovernorate(supabase, limit);
     case "status":
       return await status(supabase);
+    case "source-breakdown":
+      return await sourceBreakdown(supabase);
     default:
       return NextResponse.json({
         error: "Missing or invalid `task` parameter",
@@ -322,6 +324,61 @@ async function unifyGovernorate(supabase: SupabaseClient, limit: number) {
     listings_renamed: (fixed1 || []).length,
     listings_filled_from_location: fixed2,
     sellers_renamed: (fixedSellers || []).length,
+  });
+}
+
+// ═══ Task: source-breakdown — where did existing listings come from? ═══
+
+async function sourceBreakdown(supabase: SupabaseClient) {
+  // Get all listings grouped by source_platform + source (if bookmarklet payload set it)
+  const { data: listings } = await supabase
+    .from("ahe_listings")
+    .select("id, source_platform, source_listing_url, created_at, scope_id, phone_source, seller_name, extracted_phone, title")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (!listings || listings.length === 0) {
+    return NextResponse.json({
+      message: "No listings in ahe_listings",
+      total: 0,
+    });
+  }
+
+  const byPlatform: Record<string, { count: number; with_phone: number; with_name: number; phone_sources: Record<string, number>; sample_urls: string[] }> = {};
+  for (const l of listings) {
+    const p = l.source_platform || "unknown";
+    if (!byPlatform[p]) byPlatform[p] = { count: 0, with_phone: 0, with_name: 0, phone_sources: {}, sample_urls: [] };
+    byPlatform[p].count++;
+    if (l.extracted_phone) byPlatform[p].with_phone++;
+    if (l.seller_name) byPlatform[p].with_name++;
+    const ps = l.phone_source || "none";
+    byPlatform[p].phone_sources[ps] = (byPlatform[p].phone_sources[ps] || 0) + 1;
+    if (byPlatform[p].sample_urls.length < 3) byPlatform[p].sample_urls.push(l.source_listing_url);
+  }
+
+  // Created-at histogram (group by hour)
+  const byHour: Record<string, number> = {};
+  for (const l of listings) {
+    const dt = l.created_at ? new Date(l.created_at) : null;
+    if (!dt) continue;
+    const key = dt.toISOString().substring(0, 13) + ":00"; // YYYY-MM-DDTHH:00
+    byHour[key] = (byHour[key] || 0) + 1;
+  }
+
+  // Most recent listings
+  const recent = listings.slice(0, 10).map((l) => ({
+    created_at: l.created_at,
+    platform: l.source_platform,
+    title: l.title?.substring(0, 60),
+    has_phone: !!l.extracted_phone,
+    has_name: !!l.seller_name,
+  }));
+
+  return NextResponse.json({
+    total: listings.length,
+    by_platform: byPlatform,
+    created_histogram: byHour,
+    most_recent_10: recent,
   });
 }
 
