@@ -226,6 +226,16 @@ interface BookmarkletPayload {
   scope_code?: string; // Explicit scope code from bookmarklet
   platform?: string; // Source platform: dubizzle, hatla2ee, contactcars, yallamotor, sooqmsr, etc.
   strategy?: string; // Extraction strategy used
+  // Unified harvester v10 sends an optional `meta` with pre-detected category
+  // / governorate / purpose so we don't need to guess from URL.
+  meta?: {
+    governorate?: string;
+    governorate_label?: string;
+    category?: string;
+    category_label?: string;
+    purpose?: string; // sale | rent
+    maksab_category?: string; // سيارات | عقارات
+  };
 }
 
 // GET — return recent bookmarklet results
@@ -470,8 +480,11 @@ export async function POST(req: NextRequest) {
           main_image_url: listing.thumbnailUrl,
           all_image_urls: listing.thumbnailUrl ? [listing.thumbnailUrl] : [],
           source_category: listing.category || null,
+          // Prefer meta.maksab_category (from unified harvester) — it knows the
+          // site structure better than slug-based detection.
+          maksab_category: body.meta?.maksab_category || null,
           source_location: listing.location,
-          governorate: location.governorate || null,
+          governorate: body.meta?.governorate_label || location.governorate || null,
           city: location.city || null,
           area: location.area || null,
           source_date_text: listing.dateText || null,
