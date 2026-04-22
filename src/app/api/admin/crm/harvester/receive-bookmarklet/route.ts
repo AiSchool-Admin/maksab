@@ -289,6 +289,8 @@ interface BookmarkletListing {
   sellerName: string | null;
   sellerPhone?: string | null;
   sellerProfileUrl?: string | null;
+  // Inferred seller type label: سمسار / مالك / مطور عقاري / شركة
+  sellerBadge?: string | null;
   isVerified?: boolean;
   isBusiness?: boolean;
   isFeatured?: boolean;
@@ -537,8 +539,9 @@ export async function POST(req: NextRequest) {
                 name: listing.sellerName || null,
                 source_platform: sourcePlatform,
                 is_verified: listing.isVerified || false,
-                is_business: listing.isBusiness || /مطور|شركة|مكتب/.test(listing.specs?.["طبيعة المعلن"] || ""),
-                detected_account_type: mapSellerType(listing.specs?.["طبيعة المعلن"]),
+                is_business: listing.isBusiness ||
+                  /مطور|شركة|مكتب/.test(listing.specs?.["طبيعة المعلن"] || listing.sellerBadge || ""),
+                detected_account_type: mapSellerType(listing.specs?.["طبيعة المعلن"] || listing.sellerBadge),
                 primary_category: null,
                 primary_governorate: location.governorate || null,
                 total_listings_seen: 1,
@@ -584,8 +587,9 @@ export async function POST(req: NextRequest) {
                   : {}),
               }
             : {},
-          // Seller type label from "طبيعة المعلن" spec (سمسار / مالك / مطور عقاري)
-          seller_badge: listing.specs?.["طبيعة المعلن"] || null,
+          // Seller type label: prefer explicit "طبيعة المعلن" spec, fall back
+          // to inferred sellerBadge (Dubizzle pattern match from company name)
+          seller_badge: listing.specs?.["طبيعة المعلن"] || listing.sellerBadge || null,
           seller_name: listing.sellerName || null,
           seller_profile_url: listing.sellerProfileUrl || null,
           seller_is_verified: listing.isVerified || false,

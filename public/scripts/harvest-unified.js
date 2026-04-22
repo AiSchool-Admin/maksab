@@ -667,6 +667,7 @@
             // Merge specs + amenities (bookmarklet-extracted property catalog)
             if (detail.specs && Object.keys(detail.specs).length > 0) it.specs = detail.specs;
             if (detail.amenities && detail.amenities.length > 0) it.amenities = detail.amenities;
+            if (detail.sellerBadge && !it.sellerBadge) it.sellerBadge = detail.sellerBadge;
             done++; update();
           })
           .catch(function(){ done++; update(); });
@@ -1335,7 +1336,21 @@
     },
 
     parseDetail: function(html) {
-      var result = { phone: null, sellerName: null, allImages: [], specs: {}, amenities: [] };
+      var result = { phone: null, sellerName: null, allImages: [], specs: {}, amenities: [], sellerBadge: null };
+
+      // Infer seller type (طبيعة المعلن) from name patterns. Dubizzle doesn't
+      // have a "type" field the way SemsarMasr does, so we guess from the name:
+      //   Remax / Century21 / Inspire Homes / XYZ Realty → سمسار (broker)
+      //   <Name> Development / <Name> مطور / استثمار → مطور عقاري (developer)
+      function inferSellerBadge(name) {
+        if (!name) return null;
+        var n = String(name).toLowerCase();
+        if (/remax|century\s*21|era\s+|coldwell|keller|savills/.test(n)) return 'سمسار';
+        if (/homes?|realty|real\s*estate|properties|brokers?|عقار(?:ات)?/.test(n)) return 'سمسار';
+        if (/developer|development|investment|استثمار|تطوير|مطور/.test(n)) return 'مطور عقاري';
+        if (/مكتب|office|شركة|company/.test(n)) return 'شركة';
+        return null;
+      }
 
       // Blocked list = logged-in user from current tab (detected once at run start)
       // + optional extras from this fetched page's __NEXT_DATA__.
@@ -1385,32 +1400,43 @@
                    (pageProps.result && (pageProps.result.ad || pageProps.result.item)) ||
                    null;
 
-          // Recursive deep-search: if known paths failed, scan pageProps for
-          // any object that looks like an ad (has title + user/seller/price).
+          // Recursive deep-search: if known paths failed, collect ALL ad-like
+          // objects and pick the one with the most ad-specific content.
+          // Picking the first match alone can grab a "related ads" sidebar
+          // item (which has title + thumb but no description/parameters) and
+          // miss the main listing.
           if (!ad) {
-            ad = (function findAdLike(obj, depth) {
-              if (depth > 6 || !obj || typeof obj !== 'object') return null;
+            var adCandidates = [];
+            (function findAdLike(obj, depth) {
+              if (depth > 6 || !obj || typeof obj !== 'object') return;
+              if (adCandidates.length >= 20) return; // stop after 20 candidates
               if (Array.isArray(obj)) {
-                for (var ai = 0; ai < Math.min(obj.length, 10); ai++) {
-                  var r = findAdLike(obj[ai], depth + 1);
-                  if (r) return r;
-                }
-                return null;
+                for (var ai = 0; ai < Math.min(obj.length, 10); ai++) findAdLike(obj[ai], depth + 1);
+                return;
               }
-              // Looks like an ad? has title AND some seller/phone/price field
+              // Score: title + at least one ad-specific field = candidate
               if ((obj.title || obj.name || obj.subject) &&
                   (obj.user || obj.seller || obj.owner || obj.agent ||
                    obj.phone || obj.description || obj.parameters || obj.amenities ||
                    obj.images || obj.photos)) {
-                return obj;
+                var score = 0;
+                if (obj.description && String(obj.description).length > 50) score += 10;
+                if (obj.parameters || obj.specifications || obj.attributes) score += 5;
+                if (obj.amenities || obj.features) score += 5;
+                if (obj.user || obj.seller) score += 3;
+                if (obj.phone || obj.phone_number) score += 3;
+                if (Array.isArray(obj.images) && obj.images.length > 2) score += 3;
+                if (obj.price) score += 1;
+                adCandidates.push({ obj: obj, score: score });
               }
               for (var k in obj) {
                 if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
-                var r2 = findAdLike(obj[k], depth + 1);
-                if (r2) return r2;
+                findAdLike(obj[k], depth + 1);
               }
-              return null;
             })(pageProps, 0);
+            // Pick highest-scoring candidate (the MAIN ad, not sidebar recommendations)
+            adCandidates.sort(function(a, b) { return b.score - a.score; });
+            if (adCandidates.length > 0) ad = adCandidates[0].obj;
           }
 
           if (ad && typeof ad === 'object') {
@@ -1678,6 +1704,13 @@
             }
           }
         }
+      }
+
+      // Final step: infer seller badge from the extracted name if we don't
+      // have an explicit one yet. This gives us "سمسار / مطور عقاري / شركة"
+      // for Dubizzle listings that are posted by real estate businesses.
+      if (!result.sellerBadge && result.sellerName) {
+        result.sellerBadge = inferSellerBadge(result.sellerName);
       }
 
       return result;
