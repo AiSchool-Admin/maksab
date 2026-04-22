@@ -262,7 +262,25 @@ export default async function BrowseListingPage({ params }: Props) {
     seller = data;
   }
 
-  const sellerName = seller?.name || listing.seller_name || null;
+  // Sanitize seller name — reject garbage captured by old bookmarklet versions
+  // (e.g. "انك تتصل به من خلال موقع سمسار مصر").
+  function cleanSellerDisplayName(n: string | null | undefined): string | null {
+    if (!n) return null;
+    const s = String(n).trim();
+    if (s.length < 2 || s.length > 50) return null;
+    const JUNK = [
+      "تتصل", "من خلال", "موقع سمسار", "موقع أقارماب", "موقع",
+      "فضلاً", "فضلا", "أخبر", "اخبر", "تواصل", "اتصل الآن",
+      "click here", "contact", "call now",
+    ];
+    for (const j of JUNK) if (s.includes(j)) return null;
+    if (/^(سمسار|عقارات|مكتب|شركة|وكيل|مالك|معلن|البائع|المعلن|بيانات|تفاصيل)$/i.test(s)) return null;
+    if (s.split(/\s+/).length > 4) return null; // sentences are not names
+    return s;
+  }
+
+  const rawSellerName = seller?.name || listing.seller_name || null;
+  const sellerName = cleanSellerDisplayName(rawSellerName);
   const sellerPhone = seller?.phone || listing.extracted_phone || null;
   const sellerIsVerified = seller?.is_verified || listing.seller_is_verified || false;
   const sellerIsBusiness = seller?.is_business || listing.seller_is_business || false;

@@ -697,23 +697,23 @@
       var phoneMatch = html.match(/(?:\+?201|01)[0-25]\d{8}/);
       if (phoneMatch) result.phone = normalizeEgPhone(phoneMatch[0]);
 
-      // Seller name — strategy:
-      //   Priority 1: seller card (account owner, the "المعلن" — same person as the phone)
-      //   Priority 2: HTML classes tagged with Owner/Advert/Seller
-      //   Priority 3: الوكيل in description (specific sales agent, can differ from المعلن)
-      //
-      // Real fix for the user's "محمد عصام vs نورهان" mismatch: prefer the name
-      // from the seller card (same source as the phone) over a name mentioned
-      // inside the listing description.
+      // Seller name — strategy (in order):
+      //   Priority 1: "بيانات المعلن" section — SemsarMasr's canonical seller
+      //               name label. This is the REAL account owner name.
+      //   Priority 2: h2/h3 near the phone number or "طبيعة المعلن" label.
+      //   Priority 3: HTML classes tagged with Owner/Advert.
+      //   Priority 4: الوكيل in description (last resort — can differ from المعلن).
 
       var sellerCardPatterns = [
-        // Near the "طبيعة المعلن" label there's usually a heading with the account name.
-        // Walk back ~500 chars from the label and grab the closest h2/h3/strong.
-        /<h3[^>]*>\s*([^<]{2,50})\s*<\/h3>[\s\S]{0,1500}طبيعة\s*المعلن/i,
-        /<h2[^>]*>\s*([^<]{2,50})\s*<\/h2>[\s\S]{0,1500}طبيعة\s*المعلن/i,
-        // Near the phone number there's usually an h3 with the name (reverse direction).
-        /<h3[^>]*>\s*([^<]{2,50})\s*<\/h3>[\s\S]{0,800}(?:\+?20?1|01)[0-25]\d{8}/i,
-        // SemsarMasr AgentDetails / AdvertiserName classes
+        // Priority 1: بيانات المعلن → next text node within 500 chars is the name.
+        // Match the label, then skip any HTML until we find actual text content.
+        /بيانات\s*المعلن[\s\S]{0,500}?>\s*([^<\n]{2,40})\s*</i,
+        // Priority 2: h3 near "طبيعة المعلن" label (seller card heading)
+        /<h3[^>]*>\s*([^<]{2,50})\s*<\/h3>[\s\S]{0,800}طبيعة\s*المعلن/i,
+        /<h2[^>]*>\s*([^<]{2,50})\s*<\/h2>[\s\S]{0,800}طبيعة\s*المعلن/i,
+        // Priority 3: h3 near the phone number (within 300 chars AFTER the phone).
+        /(?:\+?20?1|01)[0-25]\d{8}[\s\S]{0,300}<h3[^>]*>\s*([^<]{2,50})\s*<\/h3>/i,
+        // Priority 4: SemsarMasr AgentDetails / AdvertiserName classes
         /class="[^"]*(?:AgentDetails|AdvertiserName|AgentName|OwnerDetails)[^"]*"[^>]*>[\s\S]{0,300}?<(?:h2|h3|strong|span)[^>]*>\s*([^<]{2,50})\s*</i,
       ];
 
@@ -725,7 +725,36 @@
       var classPatterns = [
         /class="[^"]*(?:OwnerName|ownerName|AdvertName)[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
       ];
-      var BAD_NAMES = /^(سمسار|عقارات|مكتب|شركة|وكيل|مالك|معلن|seller|agent|broker|owner|admin|user|سمسار\s*مصر|البائع|المعلن|تفاصيل)$/i;
+
+      // Reject instruction/help-text phrases that were being captured as names.
+      // Any candidate containing these substrings (in Arabic or English) is NOT a name.
+      var JUNK_PHRASES = [
+        'تتصل', 'من خلال', 'موقع', 'فضلاً', 'فضلا', 'أخبر', 'اخبر',
+        'صاحب الإعلان', 'صاحب الاعلان', 'بيانات المعلن', 'طبيعة المعلن',
+        'تواصل', 'اتصال', 'اتصل الآن', 'واتس أب', 'أطلب اتصال', 'أطلب',
+        'راسل', 'السعر', 'شقة', 'للبيع', 'للإيجار', 'جنيه',
+        'click here', 'contact', 'call now', 'send a message',
+      ];
+      // Reject candidates that are exact generic labels (not names).
+      var BAD_NAMES = /^(سمسار|عقارات|مكتب|شركة|وكيل|مالك|معلن|seller|agent|broker|owner|admin|user|سمسار\s*مصر|البائع|المعلن|تفاصيل|بيانات)$/i;
+
+      function isValidName(candidate) {
+        if (!candidate) return false;
+        var n = String(candidate).trim();
+        if (n.length < 2 || n.length > 50) return false;
+        if (/^\d+$/.test(n)) return false;
+        if (BAD_NAMES.test(n)) return false;
+        // Word count: real names are 1-4 words. Longer = probably a sentence.
+        var wordCount = n.split(/\s+/).length;
+        if (wordCount > 4) return false;
+        // Reject if contains any junk phrase
+        for (var jp = 0; jp < JUNK_PHRASES.length; jp++) {
+          if (n.indexOf(JUNK_PHRASES[jp]) >= 0) return false;
+        }
+        // Reject if contains common sentence connectors
+        if (/\b(?:أن|أنه|إن|لكن|لذا|لأن|بس|عشان)\b/.test(n)) return false;
+        return true;
+      }
 
       function tryPatterns(patterns, src) {
         for (var i = 0; i < patterns.length; i++) {
@@ -735,18 +764,17 @@
               .replace(/\s+/g, ' ')
               .replace(/User\s*photo/gi, '')
               .replace(/صورة المستخدم/g, '')
-              .replace(/[•\-\.]+$/g, '')
+              .replace(/[•←→\-\.]+$/g, '')
+              .replace(/^[•←→\-\.]+/g, '')
               .trim();
+            // Trim price/listing tails
             n = n.split(/\s*[\.•،,]\s*(?:السعر|شقة|للبيع|جنيه|\d)/)[0].trim();
-            if (n.length >= 2 && n.length <= 50 && !/^\d+$/.test(n) && !BAD_NAMES.test(n)) {
-              return n;
-            }
+            if (isValidName(n)) return n;
           }
         }
         return null;
       }
 
-      // Order matters: seller card > HTML classes > description's الوكيل
       result.sellerName =
         tryPatterns(sellerCardPatterns, html) ||
         tryPatterns(classPatterns, html) ||
