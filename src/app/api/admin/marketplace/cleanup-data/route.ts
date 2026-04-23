@@ -19,10 +19,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeEgyptianPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { isDubizzleTextDump, parseDubizzleTextDump } from "@/lib/crm/harvester/parsers/dubizzle-text-dump";
-import { checkImageForWatermark, disposeWatermarkDetector } from "@/lib/marketplace/watermark-detect";
 
 export const maxDuration = 60;
-export const runtime = "nodejs"; // tesseract.js + sharp need Node runtime
 
 const ALEX_GOVS = ["الإسكندرية", "alexandria", "Alexandria", "الاسكندرية"];
 
@@ -57,8 +55,6 @@ export async function GET(req: NextRequest) {
       return await inferGovernorate(supabase, limit);
     case "extract-names":
       return await extractNamesFromDescriptions(supabase, limit);
-    case "detect-watermarks":
-      return await detectWatermarks(supabase, limit, searchParams.get("platform"));
     default:
       return NextResponse.json({
         error: "Missing or invalid `task` parameter",
@@ -418,132 +414,13 @@ async function extractNamesFromDescriptions(supabase: SupabaseClient, limit: num
   });
 }
 
-// ═══ Task: detect-watermarks — OCR each image, drop watermarked ones ═══
-//
-// For each listing's images, downloads the bytes, runs Tesseract OCR, and
-// removes any URL whose image contains a known platform watermark text
-// (dubizzle, semsarmasr, opensooq, aqarmap, ...).
-//
-// Slow — ~3 seconds per image. Process small batches per request and
-// re-invoke until done. Caller passes ?limit=5 (max 5 listings/call to fit
-// the 60s Vercel timeout assuming ~2 images per listing).
-//
-// Optional ?platform=dubizzle_bookmarklet to scan only one platform.
-
-async function detectWatermarks(
-  supabase: SupabaseClient,
-  limit: number,
-  platform: string | null,
-) {
-  const startTime = Date.now();
-
-  // Find listings whose images haven't been OCR-checked yet. We mark
-  // a listing as "checked" by setting specifications._wm_checked = true
-  // (and storing the count of removed images).
-  let query = supabase
-    .from("ahe_listings")
-    .select("id, source_platform, all_image_urls, main_image_url, thumbnail_url, specifications")
-    .not("all_image_urls", "is", null)
-    .filter("all_image_urls", "neq", "{}")
-    .filter("specifications->_wm_checked", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(Math.min(limit, 5));
-
-  if (platform) query = query.eq("source_platform", platform);
-
-  const { data: listings, error: fetchErr } = await query;
-
-  if (fetchErr) {
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
-  }
-  if (!listings || listings.length === 0) {
-    await disposeWatermarkDetector();
-    return NextResponse.json({
-      task: "detect-watermarks",
-      duration_ms: Date.now() - startTime,
-      message: "No listings remaining to scan",
-      processed: 0,
-    });
-  }
-
-  let totalImagesScanned = 0;
-  let totalImagesRemoved = 0;
-  let listingsCleaned = 0;
-  const samples: Array<{ url: string; matched: string; ms: number }> = [];
-
-  try {
-    for (const listing of listings) {
-      const images: string[] = Array.isArray(listing.all_image_urls)
-        ? listing.all_image_urls.filter((u: unknown): u is string => typeof u === "string" && !!u)
-        : [];
-      if (images.length === 0) continue;
-
-      const cleanImages: string[] = [];
-      let removedCount = 0;
-
-      for (const imgUrl of images) {
-        // Hard time guard — if we've spent 50s, stop and let user re-invoke
-        if (Date.now() - startTime > 50000) {
-          cleanImages.push(imgUrl); // keep unscanned images for now
-          continue;
-        }
-
-        totalImagesScanned++;
-        const result = await checkImageForWatermark(imgUrl);
-        if (result.hasWatermark) {
-          removedCount++;
-          totalImagesRemoved++;
-          if (samples.length < 5) {
-            samples.push({
-              url: imgUrl.substring(0, 80),
-              matched: result.matchedKeyword || "?",
-              ms: result.durationMs,
-            });
-          }
-        } else {
-          cleanImages.push(imgUrl);
-        }
-      }
-
-      // Update DB: clean image list + mark as checked
-      const newSpecs = {
-        ...(typeof listing.specifications === "object" && listing.specifications !== null
-          ? listing.specifications
-          : {}),
-        _wm_checked: new Date().toISOString(),
-        _wm_removed_count: removedCount,
-      };
-      const newMain = cleanImages[0] || null;
-      await supabase
-        .from("ahe_listings")
-        .update({
-          all_image_urls: cleanImages,
-          main_image_url: newMain,
-          thumbnail_url: cleanImages.length > 0 ? cleanImages[0] : null,
-          specifications: newSpecs,
-        })
-        .eq("id", listing.id);
-
-      if (removedCount > 0) listingsCleaned++;
-    }
-  } finally {
-    // Always release the OCR worker so the function exits clean
-    await disposeWatermarkDetector();
-  }
-
-  return NextResponse.json({
-    task: "detect-watermarks",
-    duration_ms: Date.now() - startTime,
-    listings_processed: listings.length,
-    listings_cleaned: listingsCleaned,
-    images_scanned: totalImagesScanned,
-    images_removed: totalImagesRemoved,
-    samples,
-    next_step: listings.length === Math.min(limit, 5)
-      ? "more listings remain — re-run this URL to continue"
-      : "all listings done",
-  });
-}
+// Server-side OCR was removed because Tesseract's first-call cold start
+// exceeded Vercel's 10s timeout on Hobby tier. Client-side alternative:
+// /admin/marketplace/watermark-scan — runs Tesseract.js in the user's
+// browser with no serverless timeout. See:
+//   src/app/admin/marketplace/watermark-scan/page.tsx
+//   src/app/api/admin/marketplace/watermark-scan/next-batch/route.ts
+//   src/app/api/admin/marketplace/watermark-scan/submit/route.ts
 
 // ═══ Task: infer-governorate — backfill null-governorate listings ═══
 //
