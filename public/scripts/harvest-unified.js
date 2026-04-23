@@ -597,7 +597,21 @@
         + (prevCount > 0 ? '<br><span style="opacity:0.7;font-size:11px;">(جلسات سابقة: ' + prevCount + ')</span>' : ''));
 
       var url = platform.buildPageUrl(ctx, page);
-      platform.fetchPage(url).then(function(res) {
+
+      // For page 1: use the LIVE document when the constructed URL matches
+      // what the user is already looking at. Many modern listing sites
+      // (Dubizzle/OLX, OpenSooq) hydrate data client-side — fetch() returns
+      // a skeleton HTML without prices. The live document has everything.
+      var pagePromise;
+      if (page === 1 && (url === ctx.startUrl || url.split('?')[0] === ctx.startUrl.split('?')[0])) {
+        pagePromise = Promise.resolve({
+          html: document.documentElement.outerHTML,
+          doc: document,
+        });
+      } else {
+        pagePromise = platform.fetchPage(url);
+      }
+      pagePromise.then(function(res) {
         var items = platform.parseList(res.html, res.doc, ctx) || [];
         var fresh = 0, stale = 0, newOnPage = 0;
 
@@ -1928,6 +1942,23 @@
       // for Dubizzle listings that are posted by real estate businesses.
       if (!result.sellerBadge && result.sellerName) {
         result.sellerBadge = inferSellerBadge(result.sellerName);
+      }
+
+      // Price fallback — if __NEXT_DATA__ recursion didn't find it, scan the
+      // rendered HTML text for the first realistic EGP price.
+      if (!result.price) {
+        var priceRegex = /([\d]{1,3}(?:,[\d]{3})+|[\d]{4,10})\s*(?:ج\.?\s*م|EGP|جنيه)/gi;
+        var priceCandidates = [];
+        var pm;
+        while ((pm = priceRegex.exec(html)) !== null && priceCandidates.length < 10) {
+          var p = parseInt(pm[1].replace(/,/g, ''), 10);
+          if (!isNaN(p) && p >= 1000 && p <= 100000000) priceCandidates.push(p);
+        }
+        if (priceCandidates.length > 0) {
+          // Pick the largest realistic value (main price > down payment)
+          priceCandidates.sort(function(a, b) { return b - a; });
+          result.price = priceCandidates[0];
+        }
       }
 
       return result;
