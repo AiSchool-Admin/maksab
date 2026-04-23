@@ -636,6 +636,122 @@
     next();
   }
 
+  // ═════════════════════════════════════════════════════════
+  //  Dubizzle phone reveal — calls /api/listing/{id}/contactInfo/
+  //  with user's browser cookies (credentials: 'include').
+  //  Spaced by random 5–12 second delays so Dubizzle doesn't flag
+  //  the session. Hard cap of 50 reveals per run for safety.
+  // ═════════════════════════════════════════════════════════
+
+  var DUBIZZLE_REVEAL_CFG = {
+    MIN_DELAY_MS: 5000,
+    MAX_DELAY_MS: 12000,
+    MAX_REVEALS_PER_RUN: 50,
+    STOP_ON_ERRORS: 3, // stop if 3 consecutive fetches fail (likely blocked)
+  };
+
+  function extractDubizzleListingId(url) {
+    if (!url) return null;
+    // URL pattern: /ad/<slug>-ID<digits>.html
+    var m = url.match(/ID(\d{6,})\.html/i);
+    if (m) return m[1];
+    // Fallback: any long digit run
+    var m2 = url.match(/\/(\d{6,})(?:\/|\b)/);
+    return m2 ? m2[1] : null;
+  }
+
+  function fetchDubizzleContactInfo(listingId) {
+    var url = 'https://www.dubizzle.com.eg/api/listing/' + listingId + '/contactInfo/';
+    return fetch(url, {
+      credentials: 'include',
+      headers: {
+        'accept': 'application/json',
+        'accept-language': 'ar',
+        'x-requested-with': 'XMLHttpRequest',
+      },
+    }).then(function(r) {
+      if (!r.ok) return { _error: r.status };
+      return r.json().catch(function() { return { _error: 'parse' }; });
+    }).catch(function(e) {
+      return { _error: String(e) };
+    });
+  }
+
+  function extractPhoneFromContactInfo(data) {
+    if (!data || data._error) return null;
+    // Try common top-level paths
+    var candidates = [
+      data.phone, data.mobile, data.phone_number, data.contactNumber,
+      data.phoneNumber, data.mobileNumber,
+      data.data && (data.data.phone || data.data.mobile),
+      data.result && (data.result.phone || data.result.mobile),
+      data.contact && (data.contact.phone || data.contact.mobile),
+    ];
+    for (var i = 0; i < candidates.length; i++) {
+      if (candidates[i]) {
+        var n = normalizeEgPhone(candidates[i]);
+        if (n) return n;
+      }
+    }
+    // Last resort: stringify and regex scan the whole response
+    try {
+      var asStr = JSON.stringify(data);
+      var m = asStr.match(/(?:\+?201|01)[0-25]\d{8}/);
+      if (m) return normalizeEgPhone(m[0]);
+    } catch (e) {}
+    return null;
+  }
+
+  function revealDubizzlePhones(items, ui) {
+    var needing = [];
+    for (var i = 0; i < items.length; i++) {
+      if (!items[i].sellerPhone) needing.push(items[i]);
+    }
+    if (needing.length === 0) return Promise.resolve();
+
+    var cap = Math.min(needing.length, DUBIZZLE_REVEAL_CFG.MAX_REVEALS_PER_RUN);
+    var done = 0, revealed = 0, consecutiveErrors = 0;
+
+    return new Promise(function(resolve) {
+      function step(k) {
+        if (k >= cap) return resolve();
+        if (consecutiveErrors >= DUBIZZLE_REVEAL_CFG.STOP_ON_ERRORS) {
+          renderProgress(ui, '⚠️ توقف كشف الأرقام — ' + consecutiveErrors + ' أخطاء متتالية<br>تم الكشف عن: <b>' + revealed + '</b>');
+          return resolve();
+        }
+        var it = needing[k];
+        var id = extractDubizzleListingId(it.url);
+        if (!id) { done++; return step(k + 1); }
+
+        var delay = DUBIZZLE_REVEAL_CFG.MIN_DELAY_MS +
+                    Math.random() * (DUBIZZLE_REVEAL_CFG.MAX_DELAY_MS - DUBIZZLE_REVEAL_CFG.MIN_DELAY_MS);
+
+        renderProgress(ui, '📞 كشف أرقام دوبيزل: <b>' + done + '/' + cap + '</b>'
+          + ' (كشفت: ' + revealed + ')'
+          + '<br><span style="opacity:0.7;font-size:11px;">استنى ' + Math.round(delay / 1000) + ' ث قبل التالي…</span>');
+
+        setTimeout(function() {
+          fetchDubizzleContactInfo(id).then(function(data) {
+            if (data && data._error) {
+              consecutiveErrors++;
+              done++;
+              return step(k + 1);
+            }
+            consecutiveErrors = 0;
+            var phone = extractPhoneFromContactInfo(data);
+            if (phone && phone !== BLOCKED_USER.phone) {
+              it.sellerPhone = phone;
+              revealed++;
+            }
+            done++;
+            step(k + 1);
+          });
+        }, delay);
+      }
+      step(0);
+    });
+  }
+
   function fetchDetailsBatch(platform, items, ui) {
     var total = items.filter(function(it){ return !it.sellerPhone || !it.sellerName; }).length;
     var done = 0;
@@ -800,17 +916,28 @@
           return;
         }
         fetchDetailsBatch(platform, items, ui).then(function(){
-          var withPhone = items.filter(function(it){ return it.sellerPhone; }).length;
-          var withName = items.filter(function(it){ return it.sellerName; }).length;
-          sendToMaksab(platform, ctx, items, ui).then(function(res){
-            renderDone(ui, {
-              total: items.length,
-              withPhone: withPhone,
-              withName: withName,
-              newCount: res.new_count || 0,
-              dupCount: res.duplicate || res.duplicates || 0,
-              scopeMatched: res.scope_matched,
-              firstError: res.first_insert_error || res.error,
+          // Dubizzle-only: after detail pages are fetched, attempt to reveal
+          // each listing's real phone via the contactInfo API. Slow but
+          // essential since Dubizzle hides phones behind the "إظهار الرقم"
+          // button. Other platforms (semsarmasr/aqarmap/opensooq) already
+          // expose phones in page HTML.
+          var phoneRevealPromise = (platform.id === 'dubizzle')
+            ? revealDubizzlePhones(items, ui)
+            : Promise.resolve();
+
+          return phoneRevealPromise.then(function() {
+            var withPhone = items.filter(function(it){ return it.sellerPhone; }).length;
+            var withName = items.filter(function(it){ return it.sellerName; }).length;
+            return sendToMaksab(platform, ctx, items, ui).then(function(res){
+              renderDone(ui, {
+                total: items.length,
+                withPhone: withPhone,
+                withName: withName,
+                newCount: res.new_count || 0,
+                dupCount: res.duplicate || res.duplicates || 0,
+                scopeMatched: res.scope_matched,
+                firstError: res.first_insert_error || res.error,
+              });
             });
           });
         });
