@@ -52,12 +52,25 @@ export default function WatermarkScanPage() {
   async function initWorker() {
     if (workerRef.current) return workerRef.current;
     setStatus("جاري تحميل محرّك OCR... (5-10 ثوان أول مرة)");
-    const tesseract = await import("tesseract.js");
-    const worker = await tesseract.createWorker("eng", 1, {
-      logger: () => {},
-    });
-    workerRef.current = worker as unknown as typeof workerRef.current;
-    return workerRef.current;
+    try {
+      const tesseract = await import("tesseract.js");
+      const worker = await tesseract.createWorker("eng", 1, {
+        logger: (m: { status?: string; progress?: number }) => {
+          if (m.status) {
+            const pct = m.progress ? ` (${Math.round(m.progress * 100)}%)` : "";
+            setStatus(`تحميل OCR: ${m.status}${pct}`);
+          }
+        },
+      });
+      workerRef.current = worker as unknown as typeof workerRef.current;
+      setStatus("✓ محرّك OCR جاهز");
+      return workerRef.current;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setStatus(`❌ فشل تحميل OCR: ${msg}. افتح Console (F12) لتفاصيل أكثر`);
+      console.error("[watermark-scan] tesseract init failed:", err);
+      throw err;
+    }
   }
 
   async function ocrImage(url: string): Promise<{ hasWatermark: boolean; matched?: string }> {
