@@ -1363,11 +1363,27 @@
           card = card.parentElement;
           var cardText = card.textContent || '';
           if (cardText.length > 2500) break; // went too far up — we're in the page not the card
-          // Price pattern: "X,XXX,XXX ج.م" or "X,XXX,XXX EGP" or plain digits
-          var priceMatch = cardText.match(/([\d]{1,3}(?:,[\d]{3})+|[\d]{4,10})\s*(?:ج\.?\s*م|EGP|جنيه)/i);
-          if (priceMatch && !cardPrice) {
-            var p = parseInt(priceMatch[1].replace(/,/g, ''), 10);
-            if (!isNaN(p) && p >= 1000 && p < 1e12) cardPrice = p;
+          // Collect ALL price matches in the card, then pick the FIRST one that
+          // falls in a realistic Egyptian property range (1k – 100M EGP).
+          // Cards often have "main price" + "down payment" both formatted as
+          // "X,XXX,XXX ج.م" — concatenations or installment-total widgets can
+          // produce 9-digit false positives (e.g. 125,093,000), so we filter.
+          if (!cardPrice) {
+            var priceRegex = /([\d]{1,3}(?:,[\d]{3})+|[\d]{4,10})\s*(?:ج\.?\s*م|EGP|جنيه)/gi;
+            var pm;
+            var candidates = [];
+            while ((pm = priceRegex.exec(cardText)) !== null) {
+              var p = parseInt(pm[1].replace(/,/g, ''), 10);
+              if (!isNaN(p) && p >= 1000 && p <= 100000000) candidates.push(p);
+              if (candidates.length >= 5) break; // safety
+            }
+            if (candidates.length > 0) {
+              // Pick the LARGEST realistic value — in a "main + down payment"
+              // pair, main price is always bigger. If there's only one match
+              // (main price alone), this also works.
+              candidates.sort(function(a, b) { return b - a; });
+              cardPrice = candidates[0];
+            }
           }
           // First image inside the card
           if (!cardImg) {
