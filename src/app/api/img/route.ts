@@ -7,16 +7,12 @@ export const runtime = "nodejs"; // sharp requires Node runtime, not edge
  * Image proxy with watermark handling per source.
  *
  * - SemsarMasr: crop bottom 8.5% (fixed watermark position).
- * - Dubizzle: URL transform — request Cloudinary to send the image
- *   WITHOUT their watermark overlay. Dubizzle images are served through
- *   Cloudinary with a transformation preset (e.g. `t_web_ads_w_large`)
- *   that adds the "Dubizzle" watermark as an overlay. Stripping those
- *   transforms returns the base image without the overlay.
- *
- * If the URL-transform approach doesn't yield a different image (e.g.
- * for old assets baked with the watermark), we fall back to the original
- * image unchanged — cleaner than blind cropping for a watermark that can
- * appear top, middle, or bottom.
+ * - Dubizzle: blur the top-right corner where the "dubizzle" watermark sits.
+ *   We don't crop — that would lose useful image area. We don't try URL
+ *   transformation either (tested; Dubizzle bakes the watermark into the
+ *   stored file, not as a Cloudinary overlay). Instead we apply a heavy
+ *   Gaussian blur to the watermark region so text becomes unreadable
+ *   while the rest of the image stays sharp.
  */
 
 async function stripBottomWatermark(buffer: ArrayBuffer, bottomPct: number): Promise<Buffer> {
@@ -36,19 +32,39 @@ async function stripBottomWatermark(buffer: ArrayBuffer, bottomPct: number): Pro
 }
 
 /**
- * Rewrite a Dubizzle image URL to request a non-watermarked version from
- * Cloudinary. Typical watermarked URL:
- *   https://images.dubizzle.com.eg/t_web_ads_w_large/f_auto,q_auto:good/v1/...
- * Transform-free URL:
- *   https://images.dubizzle.com.eg/v1/...
+ * Blur a specific rectangular region of the image in place. Leaves the rest
+ * of the image sharp. Used to make the Dubizzle watermark text unreadable
+ * without losing image area.
  */
-function rewriteDubizzleUrl(url: string): string | null {
-  if (!/images\.dubizzle\.com\.eg|images\.classistatic\.com/i.test(url)) return null;
-  const rewritten = url.replace(
-    /(images\.(?:dubizzle\.com\.eg|classistatic\.com))\/(?:[^/]+\/)*?(v\d+\/)/,
-    "$1/$2"
-  );
-  return rewritten !== url ? rewritten : null;
+async function blurRegion(
+  buffer: ArrayBuffer,
+  leftPct: number,
+  topPct: number,
+  widthPct: number,
+  heightPct: number,
+  blurSigma: number,
+): Promise<Buffer> {
+  const src = Buffer.from(buffer);
+  const meta = await sharp(src).metadata();
+  const w = meta.width;
+  const h = meta.height;
+  if (!w || !h) return src;
+
+  const regionLeft = Math.max(0, Math.round(w * leftPct));
+  const regionTop = Math.max(0, Math.round(h * topPct));
+  const regionWidth = Math.max(1, Math.min(w - regionLeft, Math.round(w * widthPct)));
+  const regionHeight = Math.max(1, Math.min(h - regionTop, Math.round(h * heightPct)));
+
+  // Extract the region, blur it heavily, re-composite back onto the original.
+  const blurredRegion = await sharp(src)
+    .extract({ left: regionLeft, top: regionTop, width: regionWidth, height: regionHeight })
+    .blur(blurSigma)
+    .toBuffer();
+
+  return sharp(src)
+    .composite([{ input: blurredRegion, left: regionLeft, top: regionTop }])
+    .jpeg({ quality: 85, progressive: true, mozjpeg: true })
+    .toBuffer();
 }
 
 export async function GET(req: NextRequest) {
@@ -59,44 +75,18 @@ export async function GET(req: NextRequest) {
     const isDubizzle = /dubizzle|classistatic/i.test(url);
     const isSemsar = /semsarmasr|sooqmsr/i.test(url);
 
-    let buffer: ArrayBuffer | null = null;
-    let contentType = "image/jpeg";
-    let stripMode = "none";
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "image/*",
+      },
+    });
+    if (!res.ok) return new Response("Image not found", { status: 404 });
 
-    // For Dubizzle: first try fetching a transform-stripped URL.
-    if (isDubizzle) {
-      const cleanUrl = rewriteDubizzleUrl(url);
-      if (cleanUrl) {
-        try {
-          const cleanRes = await fetch(cleanUrl, {
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-              "Accept": "image/*",
-            },
-          });
-          if (cleanRes.ok) {
-            buffer = await cleanRes.arrayBuffer();
-            contentType = cleanRes.headers.get("content-type") || "image/jpeg";
-            stripMode = "url-stripped";
-          }
-        } catch { /* fall through */ }
-      }
-    }
+    const buffer = await res.arrayBuffer();
+    const contentType = res.headers.get("content-type") || "image/jpeg";
 
-    // Fetch original if we don't already have a clean version.
-    if (!buffer) {
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Accept": "image/*",
-        },
-      });
-      if (!res.ok) return new Response("Image not found", { status: 404 });
-      buffer = await res.arrayBuffer();
-      contentType = res.headers.get("content-type") || "image/jpeg";
-    }
-
-    // SemsarMasr fixed-position crop
+    // SemsarMasr: fixed-position crop at the bottom.
     if (isSemsar && /image\//i.test(contentType)) {
       try {
         const processed = await stripBottomWatermark(buffer, 0.085);
@@ -107,14 +97,29 @@ export async function GET(req: NextRequest) {
             "X-Maksab-Watermark": "cropped-bottom",
           },
         });
-      } catch { /* fall through to raw buffer */ }
+      } catch { /* fall through */ }
+    }
+
+    // Dubizzle: blur the top-right corner where the watermark sits.
+    if (isDubizzle && /image\//i.test(contentType)) {
+      try {
+        // Region: right 28% × top 18%. Large enough to fully cover the
+        // "dubizzle" text + flame icon even on wide images.
+        const processed = await blurRegion(buffer, 0.72, 0, 0.28, 0.18, 22);
+        return new Response(new Uint8Array(processed), {
+          headers: {
+            "Content-Type": "image/jpeg",
+            "Cache-Control": "public, max-age=604800, immutable",
+            "X-Maksab-Watermark": "blurred-top-right",
+          },
+        });
+      } catch { /* fall through */ }
     }
 
     return new Response(buffer, {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=604800, immutable",
-        "X-Maksab-Watermark": stripMode,
       },
     });
   } catch {
