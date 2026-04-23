@@ -1238,15 +1238,22 @@
     parseList: function(html, doc, ctx) {
       var items = [];
 
+      // Debug: report which strategy succeeded so we can diagnose quickly
+      var debugInfo = { nextDataFound: false, adsArrayFound: false, adsCount: 0, domFallback: false };
+
       // Strategy 1: __NEXT_DATA__
       var scriptMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (scriptMatch) {
+        debugInfo.nextDataFound = true;
         try {
           var data = JSON.parse(scriptMatch[1]);
           var pageProps = (data && data.props && data.props.pageProps) || {};
           var ads = pageProps.ads || pageProps.listings || pageProps.items ||
                     (pageProps.searchResult && pageProps.searchResult.ads) ||
                     (pageProps.results && pageProps.results.ads) || [];
+          debugInfo.adsArrayFound = Array.isArray(ads) && ads.length > 0;
+          debugInfo.adsCount = Array.isArray(ads) ? ads.length : 0;
+          debugInfo.pagePropsKeys = Object.keys(pageProps).slice(0, 20);
           if (Array.isArray(ads) && ads.length > 0) {
             for (var i = 0; i < ads.length; i++) {
               var a = ads[i];
@@ -1329,7 +1336,10 @@
         } catch (e) { /* fall through */ }
       }
 
-      // Strategy 2: DOM fallback — look for cards with listing links
+      // Strategy 2: DOM fallback — look for cards with listing links.
+      // We climb each link's ancestors to find a card container and pull
+      // price (X,XXX,XXX ج.م) + thumbnail + location from the same card.
+      debugInfo.domFallback = true;
       var links = doc.querySelectorAll('a[href*="/ar/ad/"], a[href*="/ad/"]');
       var seen = {};
       for (var j = 0; j < links.length; j++) {
@@ -1342,12 +1352,40 @@
         seen[cleanUrl] = 1;
         var title2 = (a2.getAttribute('title') || a2.textContent || '').trim();
         if (!title2 || title2.length < 5) continue;
+
+        // Walk up to find the card — the smallest ancestor that contains the
+        // price text "X,XXX,XXX ج.م" or "X,XXX,XXX EGP".
+        var card = a2;
+        var cardPrice = null;
+        var cardImg = null;
+        for (var hops = 0; hops < 7; hops++) {
+          if (!card.parentElement) break;
+          card = card.parentElement;
+          var cardText = card.textContent || '';
+          if (cardText.length > 2500) break; // went too far up — we're in the page not the card
+          // Price pattern: "X,XXX,XXX ج.م" or "X,XXX,XXX EGP" or plain digits
+          var priceMatch = cardText.match(/([\d]{1,3}(?:,[\d]{3})+|[\d]{4,10})\s*(?:ج\.?\s*م|EGP|جنيه)/i);
+          if (priceMatch && !cardPrice) {
+            var p = parseInt(priceMatch[1].replace(/,/g, ''), 10);
+            if (!isNaN(p) && p >= 1000 && p < 1e12) cardPrice = p;
+          }
+          // First image inside the card
+          if (!cardImg) {
+            var imgEl = card.querySelector('img');
+            if (imgEl) {
+              var src = imgEl.getAttribute('src') || imgEl.src || '';
+              if (src && /\.(jpg|jpeg|png|webp)/i.test(src)) cardImg = src.indexOf('//') === 0 ? 'https:' + src : src;
+            }
+          }
+          if (cardPrice && cardImg) break;
+        }
+
         items.push({
           url: cleanUrl,
           title: title2,
           description: '',
-          price: null,
-          thumbnailUrl: null,
+          price: cardPrice,
+          thumbnailUrl: cardImg,
           location: ctx.governorateLabel || '',
           city: ctx.governorateLabel || '',
           area: '',
@@ -1362,6 +1400,14 @@
           isNegotiable: false,
           category: ctx.categoryLabel,
         });
+      }
+
+      // One-time debug dump so we know WHY we fell through to DOM fallback
+      if (typeof console !== 'undefined' && console.warn) {
+        try {
+          console.warn('[maksab] Dubizzle parseList debug:', JSON.stringify(debugInfo),
+            '— extracted', items.length, 'items, first price:', items[0] && items[0].price);
+        } catch (e) {}
       }
       return items;
     },
