@@ -668,6 +668,7 @@
             if (detail.specs && Object.keys(detail.specs).length > 0) it.specs = detail.specs;
             if (detail.amenities && detail.amenities.length > 0) it.amenities = detail.amenities;
             if (detail.sellerBadge && !it.sellerBadge) it.sellerBadge = detail.sellerBadge;
+            if (detail.price && !it.price) it.price = detail.price;
             done++; update();
           })
           .catch(function(){ done++; update(); });
@@ -1258,23 +1259,38 @@
               var title = a.name || a.title || a.subject || '';
               if (!title) continue;
 
-              // Price — Dubizzle/OLX structure varies: flat number, nested
-              // {value, amount}, or string with currency. Walk known paths.
-              var price = null;
-              var priceCandidates = [
-                a.price, a.price_value, a.price_amount, a.listing_price,
-                a.advertised_price, a.formatted_price, a.formattedPrice,
-                a.priceValue, a.priceAmount,
-              ];
-              // Nested price object variants (price.value, price.amount, etc.)
-              if (a.price && typeof a.price === 'object') {
-                priceCandidates.push(a.price.value, a.price.amount, a.price.price);
+              // Price — Dubizzle/OLX structure varies across versions.
+              // Adaptive extraction: try known paths, then recursive scan for
+               //ANY key containing "price" or "amount" with a numeric value
+              // in a realistic EGP range (100+ EGP).
+              function extractPriceFromObject(obj, depth) {
+                if (depth > 4 || !obj || typeof obj !== 'object') return null;
+                for (var kk in obj) {
+                  if (!Object.prototype.hasOwnProperty.call(obj, kk)) continue;
+                  var vv = obj[kk];
+                  var keyLower = kk.toLowerCase();
+                  // Direct numeric-looking value on a price/amount key
+                  if (/price|amount|value/.test(keyLower)
+                      && (typeof vv === 'number' || typeof vv === 'string')) {
+                    var num = parseInt(String(vv).replace(/[^\d]/g, ''), 10);
+                    if (!isNaN(num) && num >= 100 && num < 1e12) return num;
+                  }
+                  // Recurse into nested objects (e.g. price: { value, amount, currency })
+                  if (vv && typeof vv === 'object' && depth < 3) {
+                    var nested = extractPriceFromObject(vv, depth + 1);
+                    if (nested) return nested;
+                  }
+                }
+                return null;
               }
-              for (var pci = 0; pci < priceCandidates.length; pci++) {
-                var pc = priceCandidates[pci];
-                if (pc == null) continue;
-                var pcNum = parseInt(String(pc).replace(/[^\d]/g, ''), 10);
-                if (!isNaN(pcNum) && pcNum > 0) { price = pcNum; break; }
+              var price = extractPriceFromObject(a, 0);
+
+              // Debug: log the first ad's structure so we can diagnose if extraction fails
+              if (!price && i === 0 && typeof console !== 'undefined' && console.warn) {
+                try {
+                  console.warn('[maksab] Dubizzle first ad keys:', Object.keys(a).slice(0, 30));
+                  console.warn('[maksab] Dubizzle first ad sample:', JSON.stringify(a).substring(0, 1500));
+                } catch (e) {}
               }
 
               var img = null;
@@ -1351,7 +1367,7 @@
     },
 
     parseDetail: function(html) {
-      var result = { phone: null, sellerName: null, allImages: [], specs: {}, amenities: [], sellerBadge: null };
+      var result = { phone: null, sellerName: null, allImages: [], specs: {}, amenities: [], sellerBadge: null, price: null };
 
       // Infer seller type (طبيعة المعلن) from name patterns. Dubizzle doesn't
       // have a "type" field the way SemsarMasr does, so we guess from the name:
@@ -1465,6 +1481,24 @@
             if (candidateName && !isBlocked(candidateName, null)) {
               result.sellerName = candidateName;
             }
+
+            // Price extraction — adaptive: any key containing "price/amount/value"
+            // with a realistic number. Saved in result.price so fetchDetailsBatch
+            // can merge it into the item if list-page extraction missed it.
+            (function findPrice(obj, depth) {
+              if (depth > 4 || !obj || typeof obj !== 'object' || result.price) return;
+              for (var kk in obj) {
+                if (!Object.prototype.hasOwnProperty.call(obj, kk)) continue;
+                var vv = obj[kk];
+                var keyLower = kk.toLowerCase();
+                if (/price|amount/.test(keyLower) && (typeof vv === 'number' || typeof vv === 'string')) {
+                  var num = parseInt(String(vv).replace(/[^\d]/g, ''), 10);
+                  if (!isNaN(num) && num >= 1000 && num < 1e12) { result.price = num; return; }
+                }
+                if (vv && typeof vv === 'object' && depth < 3) findPrice(vv, depth + 1);
+                if (result.price) return;
+              }
+            })(ad, 0);
 
             // Fallback: try to extract name from description text.
             // Egyptian sellers often write: "للتواصل / <name>", "الوكيل <name>",
