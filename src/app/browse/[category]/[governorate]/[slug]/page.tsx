@@ -4,6 +4,15 @@ import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { isDubizzleTextDump, parseDubizzleTextDump } from "@/lib/crm/harvester/parsers/dubizzle-text-dump";
 import ImageGallery from "@/components/browse/ImageGallery";
+import {
+  PROPERTY_SPECS_ORDER,
+  PROPERTY_SPEC_BY_ID,
+  AMENITY_BY_ID,
+  AMENITY_CATEGORY_LABELS,
+  amenitiesByCategory,
+  SELLER_TYPE_LABELS,
+  type AmenityCategory,
+} from "@/lib/marketplace/schema";
 
 // Always render at request time — never serve stale DB snapshots from the CDN.
 export const dynamic = "force-dynamic";
@@ -34,51 +43,9 @@ const GOV_NAMES: Record<string, string> = {
   suez: "السويس", damietta: "دمياط", luxor: "الأقصر", aswan: "أسوان",
 };
 
-// Arabic labels for normalized spec keys (from enrichment CAR_SPEC_MAP / PROPERTY_SPEC_MAP)
-const SPEC_LABELS: Record<string, { label: string; icon: string }> = {
-  // Cars
-  brand: { label: "الماركة", icon: "🏷️" },
-  model: { label: "الموديل", icon: "🚗" },
-  year: { label: "سنة الصنع", icon: "📅" },
-  mileage: { label: "الكيلومترات", icon: "🛣️" },
-  transmission: { label: "ناقل الحركة", icon: "⚙️" },
-  fuel: { label: "نوع الوقود", icon: "⛽" },
-  color: { label: "اللون", icon: "🎨" },
-  engine_cc: { label: "سعة المحرك", icon: "🔧" },
-  body_type: { label: "نوع الهيكل", icon: "🚙" },
-  condition: { label: "الحالة", icon: "✨" },
-  licensed: { label: "مرخصة", icon: "📋" },
-  // Properties
-  property_type: { label: "نوع العقار", icon: "🏠" },
-  area: { label: "المساحة", icon: "📐" },
-  rooms: { label: "عدد الغرف", icon: "🛏️" },
-  bathrooms: { label: "عدد الحمامات", icon: "🚿" },
-  floor: { label: "الدور", icon: "🏢" },
-  finishing: { label: "التشطيب", icon: "🎨" },
-  view: { label: "الإطلالة", icon: "🏞️" },
-  payment_method: { label: "طريقة الدفع", icon: "💳" },
-};
-
-// Order in which to show specs (most important first)
-const CAR_SPEC_ORDER = ["brand", "model", "year", "mileage", "transmission", "fuel", "engine_cc", "body_type", "color", "condition", "licensed"];
-const PROPERTY_SPEC_ORDER = ["property_type", "area", "rooms", "bathrooms", "floor", "finishing", "view", "payment_method", "condition"];
-
-// Arabic-keyed specs display order (for SemsarMasr/bookmarklet-extracted catalogs)
-const ARABIC_PROPERTY_SPEC_ORDER = [
-  "السعر", "سعر المتر", "الغرض", "القسم", "نوع العقار",
-  "المساحة", "عدد الغرف", "عدد الحمامات", "رقم الدور", "الدور",
-  "نوع التشطيب", "الفرش", "نوع الواجهة", "الإطلالة",
-  "طبيعة المعلن", "طريقة الدفع", "المقدم", "حالة العقار",
-  "تاريخ البناء",
-];
-
-// Specs we NEVER show — internal/noise from source platforms
-const HIDDEN_SPEC_KEYS = new Set([
-  "تاريخ الإعلان",
-  "رقم الإعلان",
-  "العنوان",
-  "title",
-]);
+// Spec labels / order / amenity grouping come from the canonical Maksab schema.
+// This detail page renders listings with normalized English keys (property_type,
+// area_sqm, bedrooms, ...) and amenity IDs (balcony, elevator, sea_view, ...).
 
 interface Props {
   params: Promise<{ category: string; governorate: string; slug: string }>;
@@ -147,26 +114,26 @@ function cleanDescription(desc: string | null): string | null {
 }
 
 /**
- * Format a spec value for display. Adds units, translates common English values.
+ * Render a canonical spec value for display using its schema metadata.
+ * Translates enum IDs → Arabic labels and adds units.
  */
-function formatSpecValue(key: string, value: string): string {
-  const v = String(value).trim();
-  if (!v) return v;
+function formatCanonicalSpec(fieldId: string, rawValue: unknown): string {
+  const field = PROPERTY_SPEC_BY_ID[fieldId];
+  if (!field) return String(rawValue ?? "");
+  const v = rawValue == null ? "" : String(rawValue).trim();
+  if (!v) return "";
 
-  // Common translations
-  const translations: Record<string, string> = {
-    Automatic: "أوتوماتيك", Manual: "مانوال", automatic: "أوتوماتيك", manual: "مانوال",
-    Gasoline: "بنزين", Diesel: "سولار", Hybrid: "هايبرد", Electric: "كهرباء",
-    Yes: "نعم", No: "لا", true: "نعم", false: "لا",
-    New: "جديد", Used: "مستعمل", used: "مستعمل", new: "جديد",
-  };
-  if (translations[v]) return translations[v];
-
-  // Add units for numeric fields
-  if (key === "mileage" && /^\d+$/.test(v)) return `${Number(v).toLocaleString()} كم`;
-  if (key === "area" && /^\d+$/.test(v)) return `${v} م²`;
-  if (key === "engine_cc" && /^\d+$/.test(v)) return `${v} سي سي`;
-
+  // Enum translation (property_type=apartment → "شقة", etc.)
+  if (field.type === "enum" && field.enum_values && field.enum_values[v]) {
+    return field.enum_values[v];
+  }
+  if (field.type === "boolean") {
+    return v === "true" || v === "1" ? "نعم" : "لا";
+  }
+  if (field.type === "number" && /^\d+$/.test(v)) {
+    const formatted = Number(v).toLocaleString();
+    return field.unit ? `${formatted} ${field.unit}` : formatted;
+  }
   return v;
 }
 
@@ -284,19 +251,29 @@ export default async function BrowseListingPage({ params }: Props) {
   const sellerPhone = seller?.phone || listing.extracted_phone || null;
   const sellerIsVerified = seller?.is_verified || listing.seller_is_verified || false;
   const sellerIsBusiness = seller?.is_business || listing.seller_is_business || false;
-  const sellerBadge: string | null = listing.seller_badge || null;
   const sellerMemberYear = seller?.first_seen_at ? new Date(seller.first_seen_at).getFullYear() : null;
 
-  // Map raw "طبيعة المعلن" value to a colored badge config
-  function sellerBadgeStyle(raw: string | null): { label: string; icon: string; classes: string } | null {
-    if (!raw) return null;
-    const v = raw.toLowerCase();
-    if (/مطور|شركة|مكتب عقار/.test(v)) return { label: raw, icon: "🏢", classes: "bg-purple-100 text-purple-700" };
-    if (/سمسار|وسيط|broker|agent/.test(v)) return { label: raw, icon: "🤝", classes: "bg-amber-100 text-amber-700" };
-    if (/مالك|owner/.test(v)) return { label: raw, icon: "🏠", classes: "bg-emerald-100 text-emerald-700" };
-    return { label: raw, icon: "👤", classes: "bg-gray-100 text-gray-700" };
+  // Canonical seller type — 2 buckets only (owner / company). Server normalizer
+  // already writes the Arabic label ("مالك" / "شركة") into listing.seller_badge,
+  // but we also handle legacy rows by matching on any stored text.
+  function sellerBadgeStyle(rawBadge: string | null, isBusiness: boolean): { label: string; icon: string; classes: string } | null {
+    if (!rawBadge && !isBusiness) return null;
+    const src = (rawBadge || "").toLowerCase();
+    const isCompany =
+      isBusiness ||
+      /شركة|مطور|سمسار|مكتب|broker|agent|company|developer|office/.test(src);
+    const isOwner = !isCompany && /مالك|owner|individual|فرد/.test(src);
+    if (isCompany) {
+      const spec = SELLER_TYPE_LABELS.company;
+      return { label: spec.label, icon: spec.icon, classes: "bg-amber-100 text-amber-700" };
+    }
+    if (isOwner) {
+      const spec = SELLER_TYPE_LABELS.owner;
+      return { label: spec.label, icon: spec.icon, classes: "bg-emerald-100 text-emerald-700" };
+    }
+    return null;
   }
-  const sellerBadgeDisplay = sellerBadgeStyle(sellerBadge);
+  const sellerBadgeDisplay = sellerBadgeStyle(listing.seller_badge || null, !!sellerIsBusiness);
 
   // Images: gallery from all_image_urls, fallback to thumbnail/main.
   // Filter out promotional/CTA banners that semsarmasr injects into the detail page.
@@ -350,59 +327,41 @@ export default async function BrowseListingPage({ params }: Props) {
     if (k === "_amenities") continue;
     if (typeof v === "string" || typeof v === "number") dbSpecs[k] = String(v);
   }
-  const rawSpecs: Record<string, string> = { ...inlineSpecs, ...dbSpecs };
+  const rawSpecs: Record<string, string | number | boolean> = { ...inlineSpecs, ...dbSpecs };
+  const metaExtras: Record<string, string> = (dbSpecsRaw._meta && typeof dbSpecsRaw._meta === "object")
+    ? dbSpecsRaw._meta as Record<string, string>
+    : {};
 
-  const isCars = catName === "سيارات";
-  const primaryOrder = isCars ? CAR_SPEC_ORDER : PROPERTY_SPEC_ORDER;
-  const arabicOrder = isCars ? [] : ARABIC_PROPERTY_SPEC_ORDER;
+  // Render specs using the canonical Maksab schema. The DB already has
+  // canonical English keys (property_type, area_sqm, bedrooms, ...) set by
+  // the normalizer in receive-bookmarklet. We just walk PROPERTY_SPECS_ORDER
+  // and render each non-empty field via its schema metadata.
   const orderedSpecs: Array<{ key: string; label: string; icon: string; value: string }> = [];
-  const usedKeys = new Set<string>();
-
-  // Pass 1: ordered known English keys (normalized)
-  for (const key of primaryOrder) {
-    const v = rawSpecs[key];
-    if (v && String(v).trim() && String(v).trim() !== "-") {
-      const meta = SPEC_LABELS[key] || { label: key, icon: "▪️" };
-      orderedSpecs.push({ key, label: meta.label, icon: meta.icon, value: formatSpecValue(key, String(v)) });
-      usedKeys.add(key);
-    }
+  for (const fieldId of PROPERTY_SPECS_ORDER) {
+    const raw = rawSpecs[fieldId];
+    if (raw === undefined || raw === null || raw === "" || raw === "-") continue;
+    const field = PROPERTY_SPEC_BY_ID[fieldId];
+    const display = formatCanonicalSpec(fieldId, raw);
+    if (!display) continue;
+    orderedSpecs.push({
+      key: fieldId,
+      label: field?.label_ar || fieldId,
+      icon: field?.icon || "▪️",
+      value: display,
+    });
   }
 
-  // Pass 2: ordered Arabic keys (SemsarMasr catalog — renders in meaningful sequence)
-  for (const key of arabicOrder) {
-    if (usedKeys.has(key) || HIDDEN_SPEC_KEYS.has(key)) continue;
-    const v = rawSpecs[key];
-    if (v && String(v).trim() && String(v).trim() !== "-") {
-      orderedSpecs.push({ key, label: key, icon: "▪️", value: String(v) });
-      usedKeys.add(key);
-    }
-  }
-
-  // Pass 3: any other specs (unknown/extra fields) — skip hidden noise
-  for (const [key, v] of Object.entries(rawSpecs)) {
-    if (usedKeys.has(key) || HIDDEN_SPEC_KEYS.has(key)) continue;
-    if (!v || !String(v).trim() || String(v).trim() === "-") continue;
-    const meta = SPEC_LABELS[key];
-    if (meta) {
-      orderedSpecs.push({ key, label: meta.label, icon: meta.icon, value: formatSpecValue(key, String(v)) });
-    } else {
-      orderedSpecs.push({ key, label: key, icon: "▪️", value: String(v) });
-    }
-    usedKeys.add(key);
-  }
-
-  // Headline summary — brand/model/year or property_type/area/rooms
+  // Headline summary — property_type • area_sqm • bedrooms
   const headlineParts: string[] = [];
-  if (catName === "سيارات") {
-    if (rawSpecs.brand) headlineParts.push(String(rawSpecs.brand));
-    if (rawSpecs.model) headlineParts.push(String(rawSpecs.model));
-    if (rawSpecs.year) headlineParts.push(String(rawSpecs.year));
-  } else {
-    if (rawSpecs.property_type) headlineParts.push(String(rawSpecs.property_type));
-    if (rawSpecs.area) headlineParts.push(`${rawSpecs.area} م²`);
-    if (rawSpecs.rooms) headlineParts.push(`${rawSpecs.rooms} غرف`);
+  if (rawSpecs.property_type) {
+    headlineParts.push(formatCanonicalSpec("property_type", rawSpecs.property_type));
   }
+  if (rawSpecs.area_sqm) headlineParts.push(`${rawSpecs.area_sqm} م²`);
+  if (rawSpecs.bedrooms) headlineParts.push(`${rawSpecs.bedrooms} غرف`);
   const headline = headlineParts.filter(Boolean).join(" • ");
+
+  // Amenities grouped by category — for the sectioned UI
+  const amenityGroups = amenitiesByCategory(amenities);
 
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
@@ -566,24 +525,34 @@ export default async function BrowseListingPage({ params }: Props) {
           </div>
         )}
 
-        {/* Amenities / Features */}
+        {/* Amenities / Features — grouped by category (Maksab canonical schema) */}
         {amenities.length > 0 && (
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
             <h2 className="text-sm font-bold text-[#1A1A2E] mb-4 flex items-center gap-2">
               <span>✨</span>
               <span>المميزات والخدمات</span>
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {amenities.map((a) => (
-                <div
-                  key={a}
-                  className="flex items-center gap-2 py-2 px-3 bg-green-50 border border-green-100 rounded-lg text-sm"
-                >
-                  <span className="text-green-600 font-bold flex-shrink-0">✓</span>
-                  <span className="text-gray-800">{a}</span>
+            {(Object.keys(amenityGroups) as AmenityCategory[])
+              .filter((cat) => amenityGroups[cat].length > 0)
+              .map((cat) => (
+                <div key={cat} className="mb-4 last:mb-0">
+                  <h3 className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1.5">
+                    <span>{AMENITY_CATEGORY_LABELS[cat].icon}</span>
+                    <span>{AMENITY_CATEGORY_LABELS[cat].label}</span>
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {amenityGroups[cat].map((amenity) => (
+                      <div
+                        key={amenity.id}
+                        className="flex items-center gap-2 py-2 px-3 bg-green-50 border border-green-100 rounded-lg text-sm"
+                      >
+                        <span className="text-green-600 font-bold flex-shrink-0">✓</span>
+                        <span className="text-gray-800">{amenity.label_ar}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
-            </div>
           </div>
         )}
 

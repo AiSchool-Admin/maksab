@@ -11,19 +11,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractPhone, normalizeEgyptianPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
+import { normalizeListingData, normalizeSellerType } from "@/lib/marketplace/normalize";
+import { SELLER_TYPE_LABELS } from "@/lib/marketplace/schema";
 
 /**
- * Map Arabic "طبيعة المعلن" values to our canonical seller type.
- *   سمسار / وسيط → broker
- *   مالك / من المالك → owner
- *   مطور / شركة / مكتب → developer
+ * Legacy mapper from raw "طبيعة المعلن" text to the ahe_sellers enum.
+ * Kept for the existing DB schema; the UI-facing value is now derived via
+ * normalizeSellerType() → "owner" | "company".
  */
 function mapSellerType(rawValue: string | null | undefined): string {
-  if (!rawValue) return "individual";
-  const v = String(rawValue).toLowerCase();
-  if (/مطور|شركة|مكتب عقار/.test(v)) return "developer";
-  if (/سمسار|وسيط|broker|agent/.test(v)) return "broker";
-  if (/مالك|owner/.test(v)) return "owner";
+  const canonical = normalizeSellerType(rawValue);
+  if (canonical === "owner") return "owner";
+  if (canonical === "company") return "broker"; // existing enum still uses broker
   return "individual";
 }
 import { mapLocation } from "@/lib/crm/harvester/parsers/location-mapper";
@@ -539,8 +538,8 @@ export async function POST(req: NextRequest) {
                 name: listing.sellerName || null,
                 source_platform: sourcePlatform,
                 is_verified: listing.isVerified || false,
-                is_business: listing.isBusiness ||
-                  /مطور|شركة|مكتب/.test(listing.specs?.["طبيعة المعلن"] || listing.sellerBadge || ""),
+                // Canonical: company bucket covers broker + agent + developer + company + office
+                is_business: listing.isBusiness || normalizeSellerType(listing.specs?.["طبيعة المعلن"] || listing.sellerBadge) === "company",
                 detected_account_type: mapSellerType(listing.specs?.["طبيعة المعلن"] || listing.sellerBadge),
                 primary_category: null,
                 primary_governorate: location.governorate || null,
@@ -553,6 +552,26 @@ export async function POST(req: NextRequest) {
             if (newSeller) sellerId = newSeller.id;
           }
         }
+
+        // ── Canonicalize specs + amenities + seller_type into Maksab schema ──
+        // Every platform's raw output is translated to one unified shape:
+        //   specifications = canonical keys (property_type, area_sqm, bedrooms, ...)
+        //                    PLUS _amenities (canonical IDs) and _meta (extras)
+        const normalized = normalizeListingData(
+          listing.specs || null,
+          listing.amenities || null
+        );
+        const canonicalSpecifications: Record<string, unknown> = {
+          ...normalized.specs,
+          ...(normalized.amenities.length > 0 ? { _amenities: normalized.amenities } : {}),
+          ...(Object.keys(normalized.meta).length > 0 ? { _meta: normalized.meta } : {}),
+        };
+
+        // Unified seller type (2 buckets only): owner | company
+        const rawSellerType = listing.specs?.["طبيعة المعلن"] || listing.sellerBadge || null;
+        const canonicalSellerType = normalizeSellerType(rawSellerType);
+        // Display-facing Arabic label: "مالك" or "شركة"
+        const sellerBadgeLabel = canonicalSellerType ? SELLER_TYPE_LABELS[canonicalSellerType].label : null;
 
         // Insert listing — capture errors so we know why saves fail.
         const { error: insertErr } = await supabase.from("ahe_listings").insert({
@@ -578,18 +597,9 @@ export async function POST(req: NextRequest) {
           city: location.city || null,
           area: location.area || null,
           source_date_text: listing.dateText || null,
-          // Property catalog: merge specs (Arabic keyed) + amenities array
-          specifications: listing.specs || listing.amenities
-            ? {
-                ...(listing.specs || {}),
-                ...(listing.amenities && listing.amenities.length > 0
-                  ? { _amenities: listing.amenities }
-                  : {}),
-              }
-            : {},
-          // Seller type label: prefer explicit "طبيعة المعلن" spec, fall back
-          // to inferred sellerBadge (Dubizzle pattern match from company name)
-          seller_badge: listing.specs?.["طبيعة المعلن"] || listing.sellerBadge || null,
+          // Canonical Maksab schema — NOT the raw platform strings anymore
+          specifications: canonicalSpecifications,
+          seller_badge: sellerBadgeLabel,
           seller_name: listing.sellerName || null,
           seller_profile_url: listing.sellerProfileUrl || null,
           seller_is_verified: listing.isVerified || false,
