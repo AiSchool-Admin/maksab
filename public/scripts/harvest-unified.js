@@ -644,10 +644,10 @@
   // ═════════════════════════════════════════════════════════
 
   var DUBIZZLE_REVEAL_CFG = {
-    MIN_DELAY_MS: 5000,
-    MAX_DELAY_MS: 12000,
-    MAX_REVEALS_PER_RUN: 50,
-    STOP_ON_ERRORS: 3, // stop if 3 consecutive fetches fail (likely blocked)
+    CONCURRENT: 3,          // parallel requests (3 at a time)
+    INTER_BATCH_MS: 400,    // short pause between parallel batches
+    MAX_REVEALS_PER_RUN: 100, // safety cap
+    STOP_ON_ERRORS: 3,      // stop if 3 consecutive fetches fail
   };
 
   function extractDubizzleListingId(url) {
@@ -710,45 +710,47 @@
     if (needing.length === 0) return Promise.resolve();
 
     var cap = Math.min(needing.length, DUBIZZLE_REVEAL_CFG.MAX_REVEALS_PER_RUN);
-    var done = 0, revealed = 0, consecutiveErrors = 0;
+    var queue = needing.slice(0, cap);
+    var done = 0, revealed = 0, consecutiveErrors = 0, stopped = false;
+
+    function revealOne(it) {
+      var id = extractDubizzleListingId(it.url);
+      if (!id) { done++; return Promise.resolve(); }
+      return fetchDubizzleContactInfo(id).then(function(data) {
+        if (data && data._error) {
+          consecutiveErrors++;
+          done++;
+          return;
+        }
+        consecutiveErrors = 0;
+        var phone = extractPhoneFromContactInfo(data);
+        if (phone && phone !== BLOCKED_USER.phone) {
+          it.sellerPhone = phone;
+          revealed++;
+        }
+        done++;
+      });
+    }
 
     return new Promise(function(resolve) {
-      function step(k) {
-        if (k >= cap) return resolve();
+      function nextBatch() {
+        if (stopped) return resolve();
+        if (queue.length === 0) return resolve();
         if (consecutiveErrors >= DUBIZZLE_REVEAL_CFG.STOP_ON_ERRORS) {
-          renderProgress(ui, '⚠️ توقف كشف الأرقام — ' + consecutiveErrors + ' أخطاء متتالية<br>تم الكشف عن: <b>' + revealed + '</b>');
+          stopped = true;
+          renderProgress(ui, '⚠️ توقف كشف أرقام دوبيزل<br>' + consecutiveErrors + ' أخطاء متتالية — كشفت: <b>' + revealed + '</b>');
           return resolve();
         }
-        var it = needing[k];
-        var id = extractDubizzleListingId(it.url);
-        if (!id) { done++; return step(k + 1); }
-
-        var delay = DUBIZZLE_REVEAL_CFG.MIN_DELAY_MS +
-                    Math.random() * (DUBIZZLE_REVEAL_CFG.MAX_DELAY_MS - DUBIZZLE_REVEAL_CFG.MIN_DELAY_MS);
 
         renderProgress(ui, '📞 كشف أرقام دوبيزل: <b>' + done + '/' + cap + '</b>'
-          + ' (كشفت: ' + revealed + ')'
-          + '<br><span style="opacity:0.7;font-size:11px;">استنى ' + Math.round(delay / 1000) + ' ث قبل التالي…</span>');
+          + ' (كشفت: ' + revealed + ')');
 
-        setTimeout(function() {
-          fetchDubizzleContactInfo(id).then(function(data) {
-            if (data && data._error) {
-              consecutiveErrors++;
-              done++;
-              return step(k + 1);
-            }
-            consecutiveErrors = 0;
-            var phone = extractPhoneFromContactInfo(data);
-            if (phone && phone !== BLOCKED_USER.phone) {
-              it.sellerPhone = phone;
-              revealed++;
-            }
-            done++;
-            step(k + 1);
-          });
-        }, delay);
+        var batch = queue.splice(0, DUBIZZLE_REVEAL_CFG.CONCURRENT);
+        Promise.all(batch.map(revealOne)).then(function() {
+          setTimeout(nextBatch, DUBIZZLE_REVEAL_CFG.INTER_BATCH_MS);
+        });
       }
-      step(0);
+      nextBatch();
     });
   }
 
