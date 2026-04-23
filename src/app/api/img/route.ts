@@ -100,21 +100,12 @@ export async function GET(req: NextRequest) {
       } catch { /* fall through */ }
     }
 
-    // Dubizzle: blur the top-right corner where the watermark sits.
-    if (isDubizzle && /image\//i.test(contentType)) {
-      try {
-        // Region: right 28% × top 18%. Large enough to fully cover the
-        // "dubizzle" text + flame icon even on wide images.
-        const processed = await blurRegion(buffer, 0.72, 0, 0.28, 0.18, 22);
-        return new Response(new Uint8Array(processed), {
-          headers: {
-            "Content-Type": "image/jpeg",
-            "Cache-Control": "public, max-age=604800, immutable",
-            "X-Maksab-Watermark": "blurred-top-right",
-          },
-        });
-      } catch { /* fall through */ }
-    }
+    // Dubizzle: watermark position varies per image (top-left, top-right,
+    // center, etc. — Dubizzle randomizes as an anti-scrape measure). A fixed
+    // blur region only cleans some images while blurring others pointlessly,
+    // so we leave Dubizzle images untouched and rely on attribution elsewhere
+    // in the UI. AI inpainting is a possible future upgrade.
+    // (isDubizzle kept in case we add a better strategy later.)
 
     return new Response(buffer, {
       headers: {
