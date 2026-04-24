@@ -22,21 +22,37 @@ interface SampleResponse {
 
 export default function WatermarkScanSamplePage() {
   const [data, setData] = useState<SampleResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [onlyRemoved, setOnlyRemoved] = useState(true);
   const [random, setRandom] = useState(true);
 
   async function load() {
     setLoading(true);
-    const qs = new URLSearchParams({
-      limit: "5",
-      only_removed: onlyRemoved ? "1" : "0",
-      random: random ? "1" : "0",
-    });
-    const r = await fetch(`/api/admin/marketplace/watermark-scan/sample?${qs}`);
-    const j = await r.json();
-    setData(j);
-    setLoading(false);
+    setError(null);
+    try {
+      const qs = new URLSearchParams({
+        limit: "5",
+        only_removed: onlyRemoved ? "1" : "0",
+        random: random ? "1" : "0",
+      });
+      const r = await fetch(`/api/admin/marketplace/watermark-scan/sample?${qs}`);
+      const j = await r.json();
+      if (!r.ok || j.error) {
+        setError(j.error || `HTTP ${r.status}`);
+        setData(null);
+      } else if (!j.sample || !j.totals) {
+        setError("Invalid response shape: " + JSON.stringify(j).slice(0, 200));
+        setData(null);
+      } else {
+        setData(j);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -124,6 +140,13 @@ export default function WatermarkScanSamplePage() {
             {loading ? "⏳ جاري..." : "🔄 عيّنة جديدة"}
           </button>
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-900 mb-4">
+            <p className="font-bold mb-1">❌ حصل خطأ:</p>
+            <pre className="text-xs overflow-auto whitespace-pre-wrap">{error}</pre>
+          </div>
+        )}
 
         {loading && <div className="text-center text-gray-500 py-12">جاري التحميل...</div>}
 

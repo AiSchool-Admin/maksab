@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   // Pull everything that's been touched (we have ~100 listings, fine to filter JS-side)
   const { data, error } = await supabase
     .from("ahe_listings")
-    .select("id, title, source_platform, source_url, all_image_urls, specifications")
+    .select("id, title, source_platform, source_listing_url, all_image_urls, specifications")
     .limit(2000);
 
   if (error) {
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
       id: l.id,
       title: String(l.title || ""),
       platform: l.source_platform,
-      source_url: l.source_url,
+      source_url: l.source_listing_url,
       images: Array.isArray(l.all_image_urls)
         ? l.all_image_urls.filter((u: unknown): u is string => typeof u === "string" && !!u)
         : [],
