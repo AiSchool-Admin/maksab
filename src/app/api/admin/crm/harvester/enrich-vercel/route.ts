@@ -39,7 +39,7 @@ function extractSellerFallback(html: string): string | null {
 
 export const maxDuration = 60;
 
-const SUPPORTED_PLATFORMS = ["aqarmap", "opensooq", "propertyfinder", "dubizzle", "dowwr", "olx", "hatla2ee"];
+const SUPPORTED_PLATFORMS = ["aqarmap", "opensooq", "propertyfinder", "dubizzle", "dowwr", "olx", "hatla2ee", "semsarmasr"];
 
 // ─── Spec normalization ───
 

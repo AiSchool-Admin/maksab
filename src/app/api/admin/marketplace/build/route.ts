@@ -51,7 +51,8 @@ export async function POST(req: NextRequest) {
   const platforms = [...new Set(scopes?.map((s) => s.source_platform) || [])];
 
   // Trigger immediate harvest for non-blocked scopes
-  const nonBlockedScopes = scopes?.filter((s) => !["semsarmasr", "hatla2ee", "contactcars", "carsemsar"].includes(s.source_platform)) || [];
+  // SemsarMasr re-enabled in migration 00104 via Vercel delegation + dedicated parser
+  const nonBlockedScopes = scopes?.filter((s) => !["hatla2ee", "contactcars", "carsemsar"].includes(s.source_platform)) || [];
 
   let triggeredCount = 0;
   for (const scope of nonBlockedScopes.slice(0, 3)) {
