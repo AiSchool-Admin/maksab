@@ -585,13 +585,11 @@ export async function POST(req: NextRequest) {
           is_negotiable: listing.isNegotiable || false,
           supports_exchange: listing.supportsExchange || false,
           is_featured: listing.isFeatured || false,
-          thumbnail_url: listing.thumbnailUrl,
-          main_image_url: (listing.allImages && listing.allImages.length > 0 ? listing.allImages[0] : listing.thumbnailUrl),
-          // Cap at 3 images per listing — keeps cleaning pipeline within free
-          // tier of IOPaint/Replicate LaMa and reduces storage footprint.
-          all_image_urls: listing.allImages && listing.allImages.length > 0
-            ? listing.allImages.slice(0, 3)
-            : (listing.thumbnailUrl ? [listing.thumbnailUrl] : []),
+          // Images intentionally disabled — decided to store listing + seller
+          // data only. Any image URLs sent by the bookmarklet are dropped.
+          thumbnail_url: null,
+          main_image_url: null,
+          all_image_urls: [],
           source_category: listing.category || null,
           maksab_category: body.meta?.maksab_category || null,
           source_location: listing.location,

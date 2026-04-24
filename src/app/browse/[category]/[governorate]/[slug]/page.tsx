@@ -161,7 +161,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title, description,
     openGraph: {
       title, description, type: "website", siteName: "مكسب",
-      images: listing?.thumbnail_url ? [{ url: `/api/img?url=${encodeURIComponent(listing.thumbnail_url)}` }] : undefined,
     },
   };
 }
@@ -275,27 +274,9 @@ export default async function BrowseListingPage({ params }: Props) {
   }
   const sellerBadgeDisplay = sellerBadgeStyle(listing.seller_badge || null, !!sellerIsBusiness);
 
-  // Images: gallery from all_image_urls, fallback to thumbnail/main.
-  // Filter out promotional/CTA banners that semsarmasr injects into the detail page.
-  function isNoiseImage(url: string): boolean {
-    const u = url.toLowerCase();
-    return /banner|cta|call[-_]?now|contact[-_]?now|promo|ad_banner|advertisment|\/ads?\/|sponsor/i.test(u);
-  }
-
-  const rawImages: string[] = [];
-  if (Array.isArray(listing.all_image_urls)) {
-    for (const u of listing.all_image_urls) {
-      if (typeof u === "string" && u && !rawImages.includes(u) && !isNoiseImage(u)) rawImages.push(u);
-    }
-  }
-  if (listing.main_image_url && !rawImages.includes(listing.main_image_url) && !isNoiseImage(listing.main_image_url)) {
-    rawImages.unshift(listing.main_image_url);
-  }
-  if (listing.thumbnail_url && !rawImages.includes(listing.thumbnail_url) && !isNoiseImage(listing.thumbnail_url)) {
-    if (rawImages.length === 0) rawImages.push(listing.thumbnail_url);
-  }
-  const gallery = rawImages.slice(0, 12).map((u) => `/api/img?url=${encodeURIComponent(u)}`);
-  const mainImg = gallery[0] || null;
+  // Images disabled — listing + seller data only. Empty gallery.
+  const gallery: string[] = [];
+  const mainImg = null;
 
   // Area from source_location
   let area = listing.source_location

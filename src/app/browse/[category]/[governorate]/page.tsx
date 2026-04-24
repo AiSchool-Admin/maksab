@@ -148,8 +148,8 @@ export default async function BrowseCategoryGovernoratePage({ params }: Props) {
               const seller = listing.ahe_seller_id ? sellersMap[listing.ahe_seller_id] : null;
               const sellerName = seller?.name || listing.seller_name || null;
               const sellerPhone = seller?.phone || listing.extracted_phone || null;
-              const rawImgUrl = listing.thumbnail_url || listing.main_image_url;
-              const imgUrl = rawImgUrl ? `/api/img?url=${encodeURIComponent(rawImgUrl)}` : null;
+              // Images disabled — we store listing + seller data only.
+              const imgUrl = null;
 
               let area = listing.source_location
                 ? String(listing.source_location).split("-")[0].trim()

@@ -123,8 +123,8 @@ export default async function SellerPage({ params }: Props) {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {listings.map((l) => {
-              const rawImg = l.thumbnail_url || l.main_image_url;
-              const img = rawImg ? `/api/img?url=${encodeURIComponent(rawImg)}` : null;
+              // Images disabled — listing + seller data only.
+              const img = null;
               const catSlug = l.maksab_category === "سيارات" ? "vehicles" : "properties";
               const govSlug = l.governorate?.includes("الإسكندرية") ? "alexandria" : "alexandria";
               const slug = `${(l.title || "ad").replace(/\s+/g, "-").substring(0, 50)}-${l.id}`;
