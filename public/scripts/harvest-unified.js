@@ -2596,13 +2596,17 @@
         } catch (e) { /* skip */ }
       }
 
-      // Strategy 2.5: AqarMap's SSR store — script id="__R__" (custom framework)
-      // Content is usually `JSON.parse("...")` or a raw JSON object.
-      var rMatch = html.match(/<script[^>]*\bid=["']__R__["'][^>]*>([\s\S]*?)<\/script>/i);
-      console.info('[maksab/aqarmap] __R__ script found:', !!rMatch,
-        'body length:', rMatch ? rMatch[1].length : 0);
+      // Strategy 2.5: AqarMap's SSR store — script id="_R_" (custom Next.js
+      // build; real ID has single underscores, verified from script IDs log).
+      // Content is usually JSON.parse("...") or a raw JSON object.
+      var rMatch = html.match(/<script[^>]*\bid=["'](_R_|__R__)["'][^>]*>([\s\S]*?)<\/script>/i);
+      console.info('[maksab/aqarmap] _R_ script found:', !!rMatch,
+        'body length:', rMatch ? rMatch[2].length : 0);
       if (rMatch) {
-        var rBody = rMatch[1].trim();
+        var rBody = rMatch[2].trim();
+        // Log a preview so we can see the body shape if parsing fails
+        console.info('[maksab/aqarmap] _R_ body preview (first 200 chars):',
+          rBody.substring(0, 200));
         var rParsed = null;
         // Try direct JSON first
         try { rParsed = JSON.parse(rBody); } catch (_) {}
@@ -2617,11 +2621,17 @@
             } catch (__) {}
           }
         }
-        // Try `window.__R__ = {...}` assignment
+        // Try `window.XYZ = {...}` assignment
         if (!rParsed) {
           var assignR = rBody.match(/=\s*(\{[\s\S]*\})\s*;?\s*$/);
           if (assignR) { try { rParsed = JSON.parse(assignR[1]); } catch (___) {} }
         }
+        // Try wrapped in self-invoking function or similar
+        if (!rParsed) {
+          var objMatch = rBody.match(/(\{[\s\S]*\})/);
+          if (objMatch) { try { rParsed = JSON.parse(objMatch[1]); } catch (____) {} }
+        }
+        console.info('[maksab/aqarmap] _R_ parsed:', !!rParsed);
         if (rParsed) {
           console.info('[maksab/aqarmap] __R__ parsed. Top keys:', Object.keys(rParsed).slice(0, 15));
           var rListings = PLATFORMS.aqarmap._findListings(rParsed, 0);
