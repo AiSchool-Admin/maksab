@@ -2094,39 +2094,54 @@
           } catch(e) {}
 
           // FAST PATH: pageProps.serpApiResponse.listings.items — the canonical
-          // modern OpenSooq structure. No fragile regex — use the already-
-          // parsed __NEXT_DATA__ JSON directly.
+          // modern OpenSooq structure. Use these DIRECTLY, don't let the sort
+          // below pick a larger noise array (e.g. cities list) over real listings.
+          var serpItems = null;
           try {
             var serp = pp && pp.serpApiResponse;
-            var serpItems = (serp && serp.listings && serp.listings.items)
+            serpItems = (serp && serp.listings && serp.listings.items)
               || (serp && serp.items)
               || null;
             if (Array.isArray(serpItems) && serpItems.length > 0) {
               console.info('[maksab/opensooq] serpApiResponse.listings.items →',
-                serpItems.length, 'items, first item keys:', Object.keys(serpItems[0]).slice(0, 20));
-              // Reuse the generic extraction loop below by seeding `arrays`
-              arrays.unshift(serpItems);
+                serpItems.length, 'items, ALL keys:', Object.keys(serpItems[0]));
             } else {
               console.info('[maksab/opensooq] serpApiResponse missing/empty');
+              serpItems = null;
             }
           } catch(e) {
             console.warn('[maksab/opensooq] serpApiResponse access threw:', e && e.message);
+            serpItems = null;
           }
 
           console.info('[maksab/opensooq] Strategy 1 — candidate arrays found:', arrays.length,
             'sizes:', arrays.map(function(a){return a.length;}).slice(0, 5));
 
-          // Pick the biggest candidate array
-          arrays.sort(function(a, b){ return b.length - a.length; });
-          var listings = arrays[0] || [];
-          if (listings.length > 0) {
-            console.info('[maksab/opensooq] picked array size:', listings.length,
-              'first item keys:', Object.keys(listings[0] || {}).slice(0, 20));
+          // Pick listings: prefer serpApiResponse (known correct shape), else
+          // fall back to the biggest heuristic-matched array.
+          var listings;
+          if (serpItems) {
+            listings = serpItems;
+            console.info('[maksab/opensooq] using serpApiResponse items (', listings.length, ')');
+          } else {
+            arrays.sort(function(a, b){ return b.length - a.length; });
+            listings = arrays[0] || [];
+            if (listings.length > 0) {
+              console.info('[maksab/opensooq] using fallback heuristic array, size:', listings.length,
+                'first item keys:', Object.keys(listings[0] || {}).slice(0, 20));
+            }
           }
           var seenUrls = {};
 
           for (var i = 0; i < listings.length; i++) {
             var it = listings[i];
+
+            // Extract listing ID — modern OpenSooq uses `id` as the numeric
+            // listing ID (confirmed from detail page URL /ar/search/<id>).
+            var itemId = it.id || it.post_id || it.listing_id;
+            // Also try nested member_user_name pattern: `/ar/post/<slug>`
+            // Newer URL shape is actually /ar/search/<id> (verified from
+            // browser), so try that first.
             var url = null;
             var urlKeys = ['post_url', 'uri', 'url', 'link', 'href', 'detail_url', 'canonical_url', 'seo_url'];
             for (var uk = 0; uk < urlKeys.length; uk++) {
@@ -2134,7 +2149,7 @@
               if (v && typeof v === 'string') { url = v.charAt(0) === 'h' ? v : BASE + (v.charAt(0) === '/' ? v : '/' + v); break; }
             }
             if (!url && it.slug) url = BASE + (it.slug.charAt(0) === '/' ? it.slug : '/ar/' + it.slug);
-            if (!url && (it.post_id || it.id)) url = BASE + '/ar/post/' + (it.post_id || it.id);
+            if (!url && itemId) url = BASE + '/ar/search/' + itemId;
             if (!url) continue;
             var cleanUrl = url.split('?')[0];
             if (seenUrls[cleanUrl]) continue;
@@ -2143,11 +2158,19 @@
             var title = it.title || it.subject || it.post_title || it.highlights || it.name || '';
             if (!title || String(title).length < 4) continue;
 
+            // Price — modern OpenSooq uses `price_amount`, legacy had `price`.
             var price = null;
-            if (it.price != null) price = parseInt(String(it.price).replace(/[^\d]/g, ''), 10) || null;
+            var rawPrice = it.price_amount != null ? it.price_amount : it.price;
+            if (rawPrice != null) price = parseInt(String(rawPrice).replace(/[^\d]/g, ''), 10) || null;
 
+            // Image — modern OpenSooq uses `image_uri` (no scheme, needs prefix).
             var img = null;
-            if (it.image_url) img = it.image_url;
+            if (it.image_uri) {
+              img = String(it.image_uri);
+              if (img.indexOf('//') < 0) img = 'https://opensooq-images.os-cdn.com/' + img.replace(/^\/+/, '');
+              else if (img.indexOf('http') !== 0) img = 'https:' + (img.indexOf('//') === 0 ? img : '//' + img);
+            }
+            else if (it.image_url) img = it.image_url;
             else if (it.thumb) img = it.thumb;
             else if (it.images && it.images.length > 0) img = typeof it.images[0] === 'string' ? it.images[0] : (it.images[0].url || it.images[0].src);
             else if (it.cover_image) img = it.cover_image;
@@ -2159,23 +2182,24 @@
             if (sellerName) sellerName = String(sellerName).trim();
 
             var sellerProfileUrl = null;
-            if (it.member_id) sellerProfileUrl = BASE + '/ar/profile/' + it.member_id;
+            if (it.member_user_name) sellerProfileUrl = BASE + '/ar/member/' + it.member_user_name;
+            else if (it.member_id) sellerProfileUrl = BASE + '/ar/profile/' + it.member_id;
             else if (it.member && it.member.id) sellerProfileUrl = BASE + '/ar/profile/' + it.member.id;
 
             items.push({
               url: cleanUrl,
-              external_id: String(it.post_id || it.id || ''),
+              external_id: String(itemId || ''),
               title: String(title),
               description: it.description || it.short_description || '',
               price: price,
               thumbnailUrl: img || null,
-              location: it.city_name || it.location_name || it.neighborhood || ctx.governorateLabel || '',
-              city: it.city_name || ctx.governorateLabel || '',
+              location: it.city_label || it.city_name || it.location_name || it.neighborhood || ctx.governorateLabel || '',
+              city: it.city_label || it.city_name || ctx.governorateLabel || '',
               area: it.neighborhood_name || it.area_name || '',
               sellerPhone: null,
               sellerName: sellerName,
               sellerProfileUrl: sellerProfileUrl,
-              dateText: it.post_date || it.date || it.created_at || '',
+              dateText: it.posted_at || it.post_date || it.date || it.created_at || '',
               isVerified: !!(it.is_verified || (it.member && it.member.is_verified)),
               isBusiness: !!(it.is_business || (it.member && it.member.is_business)),
               isFeatured: !!(it.is_featured || it.featured || it.is_premium),
