@@ -2151,21 +2151,85 @@
         } catch (e) { /* fall through */ }
       }
 
-      // Strategy 2: DOM fallback
-      var links = doc.querySelectorAll('a[href*="/ar/post/"], a[href*="/post/"]');
+      // Strategy 2: serpApiResponse.listings.items (embedded JSON, modern OpenSooq)
+      var serpMatch = html.match(/"serpApiResponse"\s*:\s*(\{[\s\S]*?"items"\s*:\s*\[[\s\S]*?\][\s\S]*?\})/);
+      if (serpMatch) {
+        try {
+          var serp = JSON.parse(serpMatch[1]);
+          var serpItems = (serp.listings && serp.listings.items) || serp.items || [];
+          var seenUrls2 = {};
+          for (var si = 0; si < serpItems.length; si++) {
+            var sit = serpItems[si];
+            var surl = sit.post_url || sit.uri || sit.url || (sit.id ? '/ar/post/' + sit.id : null);
+            if (!surl) continue;
+            if (surl.charAt(0) === '/') surl = BASE + surl;
+            var scleanUrl = surl.split('?')[0];
+            if (seenUrls2[scleanUrl]) continue;
+            seenUrls2[scleanUrl] = 1;
+            var stitle = sit.title || sit.subject || sit.post_title || '';
+            if (!stitle || String(stitle).length < 4) continue;
+            items.push({
+              url: scleanUrl,
+              external_id: String(sit.post_id || sit.id || ''),
+              title: String(stitle),
+              description: sit.description || '',
+              price: sit.price != null ? (parseInt(String(sit.price).replace(/[^\d]/g, ''), 10) || null) : null,
+              thumbnailUrl: sit.image_url || sit.thumb || sit.cover_image || null,
+              location: sit.city_name || sit.neighborhood || ctx.governorateLabel || '',
+              city: sit.city_name || ctx.governorateLabel || '',
+              area: sit.neighborhood_name || sit.area_name || '',
+              sellerPhone: null,
+              sellerName: sit.member_user_name || sit.member_name || sit.seller_name || null,
+              sellerProfileUrl: sit.member_user_name ? BASE + '/ar/member/' + sit.member_user_name : null,
+              dateText: sit.post_date || sit.created_at || '',
+              isVerified: !!sit.is_verified,
+              isBusiness: !!(sit.is_business || /premium/.test(String(sit.listing_status || ''))),
+              isFeatured: /(premium|featured)/.test(String(sit.listing_status || '')),
+              supportsExchange: false,
+              isNegotiable: !!sit.is_negotiable,
+              category: ctx.categoryLabel,
+            });
+          }
+          if (items.length > 0) return items;
+        } catch (e) { /* fall through */ }
+      }
+
+      // Strategy 3: DOM fallback — modern OpenSooq uses /ar/<cat>/<sub>/<numeric-id>/<slug>
+      // not /ar/post/ (legacy). Scan all /ar/ links and keep ones with 4+ digit path segments.
+      var links = doc.querySelectorAll('a[href*="/ar/"]');
       var seen = {};
       for (var j = 0; j < links.length; j++) {
         var a = links[j];
         var href = a.getAttribute('href') || '';
         if (!href) continue;
+        // Must contain a 4+ digit ID segment (listing ID) — not a filter/search/auth link
+        if (!/\/\d{4,}(?:\/|$)/.test(href)) continue;
+        if (/\/(search|filter|category|page|login|register|profile|about|help|member)\b/i.test(href)) continue;
         var full = href.charAt(0) === '/' ? BASE + href : href;
         var clean = full.split('?')[0];
         if (seen[clean]) continue;
         seen[clean] = 1;
-        var ttl = (a.getAttribute('title') || a.textContent || '').trim();
+        var ttl = (a.getAttribute('title') || a.getAttribute('aria-label') || a.textContent || '').trim();
         if (!ttl || ttl.length < 5) continue;
+        // Try to grab price from nearest ancestor card
+        var card = a.closest('article, li, div[class*="card"], div[class*="Post"]');
+        var priceText = '';
+        if (card) {
+          var pEl = card.querySelector('[class*="price" i], [class*="Price" i]');
+          if (pEl) priceText = (pEl.textContent || '').trim();
+        }
+        var priceNum = null;
+        if (priceText) {
+          var pm = priceText.match(/\d[\d,٬\s]*/);
+          if (pm) priceNum = parseInt(pm[0].replace(/[^\d]/g, ''), 10) || null;
+        }
+        // Thumbnail
+        var imgEl = card ? card.querySelector('img') : null;
+        var imgSrc = imgEl ? (imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '') : '';
+
         items.push({
-          url: clean, title: ttl, description: '', price: null, thumbnailUrl: null,
+          url: clean, title: ttl, description: '', price: priceNum,
+          thumbnailUrl: imgSrc || null,
           location: ctx.governorateLabel || '', city: ctx.governorateLabel || '', area: '',
           sellerPhone: null, sellerName: null, sellerProfileUrl: null, dateText: '',
           isVerified: false, isBusiness: false, isFeatured: false,
@@ -2307,7 +2371,9 @@
       if (depth > 8 || !obj || typeof obj !== 'object') return null;
       if (Array.isArray(obj)) {
         if (obj.length >= 3 && obj[0] && typeof obj[0] === 'object'
-            && (obj[0].title || obj[0].name || obj[0].id || obj[0].slug || obj[0].url)) {
+            && (obj[0].title || obj[0].name || obj[0].id || obj[0].slug || obj[0].url
+                || obj[0].listing_id || obj[0].property_id || obj[0].unit_id
+                || obj[0].space || obj[0].area_sqm || obj[0].rooms || obj[0].bedrooms)) {
           return obj;
         }
         for (var i = 0; i < Math.min(obj.length, 20); i++) {
@@ -2342,18 +2408,40 @@
       var items = [];
       var BASE = 'https://aqarmap.com.eg';
 
-      // Strategy 1: __NEXT_DATA__
+      // Strategy 1: __NEXT_DATA__ — match server-side aqarmap.ts strategy order
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
         try {
           var data = JSON.parse(m[1]);
-          var listings = PLATFORMS.aqarmap._findListings(data, 0);
+          var pageProps = (data && data.props && data.props.pageProps) || {};
+
+          // Strategy 1a: pageProps.listings | properties | units | results (direct arrays)
+          var directListings = pageProps.listings || pageProps.properties || pageProps.units || pageProps.results;
+          if (!Array.isArray(directListings) || directListings.length === 0) directListings = null;
+
+          // Strategy 1b: dehydratedState.queries (React Query / TanStack Query)
+          if (!directListings && pageProps.dehydratedState && Array.isArray(pageProps.dehydratedState.queries)) {
+            for (var qi = 0; qi < pageProps.dehydratedState.queries.length; qi++) {
+              var q = pageProps.dehydratedState.queries[qi];
+              var qData = q && q.state && q.state.data;
+              var qItems = Array.isArray(qData) ? qData
+                : (qData && typeof qData === 'object' && Array.isArray(qData.data)) ? qData.data
+                : (qData && typeof qData === 'object' && Array.isArray(qData.listings)) ? qData.listings
+                : (qData && typeof qData === 'object' && Array.isArray(qData.properties)) ? qData.properties
+                : null;
+              if (qItems && qItems.length > 0) { directListings = qItems; break; }
+            }
+          }
+
+          // Strategy 1c: recursive fallback (existing heuristic)
+          var listings = directListings || PLATFORMS.aqarmap._findListings(data, 0);
+
           if (listings && listings.length > 0) {
             var seenUrls = {};
             for (var i = 0; i < listings.length; i++) {
               var it = listings[i];
-              var title = String(it.title || it.name || '').trim();
-              var id = it.id || it.listing_id;
+              var title = String(it.title || it.name || it.heading || '').trim();
+              var id = it.id || it.listing_id || it.property_id || it.unit_id;
               if (!title && !id) continue;
 
               var url = '';
