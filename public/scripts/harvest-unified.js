@@ -2596,6 +2596,85 @@
         } catch (e) { /* skip */ }
       }
 
+      // Strategy 2.5: AqarMap's SSR store — script id="__R__" (custom framework)
+      // Content is usually `JSON.parse("...")` or a raw JSON object.
+      var rMatch = html.match(/<script[^>]*\bid=["']__R__["'][^>]*>([\s\S]*?)<\/script>/i);
+      console.info('[maksab/aqarmap] __R__ script found:', !!rMatch,
+        'body length:', rMatch ? rMatch[1].length : 0);
+      if (rMatch) {
+        var rBody = rMatch[1].trim();
+        var rParsed = null;
+        // Try direct JSON first
+        try { rParsed = JSON.parse(rBody); } catch (_) {}
+        // Try JSON.parse("<escaped>") pattern
+        if (!rParsed) {
+          var jpMatch = rBody.match(/JSON\.parse\(\s*(['"])((?:\\.|(?!\1).)*)\1\s*\)/);
+          if (jpMatch) {
+            try {
+              // Unescape the string literal by letting JSON parse it as a string first
+              var inner = JSON.parse(jpMatch[1] + jpMatch[2] + jpMatch[1]);
+              rParsed = JSON.parse(inner);
+            } catch (__) {}
+          }
+        }
+        // Try `window.__R__ = {...}` assignment
+        if (!rParsed) {
+          var assignR = rBody.match(/=\s*(\{[\s\S]*\})\s*;?\s*$/);
+          if (assignR) { try { rParsed = JSON.parse(assignR[1]); } catch (___) {} }
+        }
+        if (rParsed) {
+          console.info('[maksab/aqarmap] __R__ parsed. Top keys:', Object.keys(rParsed).slice(0, 15));
+          var rListings = PLATFORMS.aqarmap._findListings(rParsed, 0);
+          if (rListings && rListings.length > 0) {
+            console.info('[maksab/aqarmap] __R__ listings found:', rListings.length,
+              'first item keys:', Object.keys(rListings[0]).slice(0, 15));
+            for (var ri = 0; ri < rListings.length; ri++) {
+              var rit = rListings[ri];
+              // Skip Schema.org / JSON-LD entries
+              if (rit['@type'] || rit['@id']) continue;
+              var rid = rit.id || rit.listing_id || rit.property_id || rit.unit_id;
+              var rtitle = String(rit.title || rit.name || rit.heading || '').trim();
+              if (!rtitle && !rid) continue;
+              var rurl = rit.url || rit.link || (rit.slug ? BASE + '/ar/' + rit.slug : (rid ? BASE + '/ar/listing/' + rid : null));
+              if (!rurl) continue;
+              if (rurl.charAt(0) === '/') rurl = BASE + rurl;
+              var rprice = null;
+              var rawRPrice = rit.price != null ? rit.price : (rit.salePrice != null ? rit.salePrice : rit.rentPrice);
+              if (rawRPrice != null) {
+                if (typeof rawRPrice === 'number') rprice = rawRPrice;
+                else if (typeof rawRPrice === 'object') rprice = parseInt(String(rawRPrice.value || rawRPrice.amount || '').replace(/[^\d]/g, ''), 10) || null;
+                else rprice = parseInt(String(rawRPrice).replace(/[^\d]/g, ''), 10) || null;
+              }
+              items.push({
+                url: String(rurl).split('?')[0],
+                external_id: String(rid || ''),
+                title: rtitle || ('عقار #' + (rid || '')),
+                description: rit.description || '',
+                price: rprice,
+                thumbnailUrl: (rit.photos && rit.photos[0]) ? (typeof rit.photos[0] === 'string' ? rit.photos[0] : rit.photos[0].url || rit.photos[0].file) : (rit.mainPhoto || rit.image || rit.thumbnail || null),
+                location: ((rit.area && rit.area.name) || rit.areaName || rit.neighborhood || '') + ', ' + ((rit.city && rit.city.name) || rit.cityName || ''),
+                city: (rit.city && rit.city.name) || rit.cityName || ctx.governorateLabel || '',
+                area: (rit.area && rit.area.name) || rit.areaName || rit.neighborhood || '',
+                sellerPhone: null,
+                sellerName: (rit.user && rit.user.name) || (rit.owner && rit.owner.name) || (rit.agent && rit.agent.name) || null,
+                sellerProfileUrl: null,
+                dateText: String(rit.createdAt || rit.created_at || rit.publishedAt || rit.date || ''),
+                isVerified: !!(rit.isVerified || rit.verified || (rit.user && rit.user.isVerified)),
+                isBusiness: !!(rit.is_broker || rit.isBroker || (rit.user && (rit.user.type === 'broker' || rit.user.type === 'agent'))),
+                isFeatured: !!(rit.isFeatured || rit.featured || rit.isPremium),
+                supportsExchange: false,
+                isNegotiable: !!(rit.isNegotiable || rit.is_negotiable),
+                category: ctx.categoryLabel,
+              });
+            }
+            if (items.length > 0) {
+              console.info('[maksab/aqarmap] Strategy 2.5 (__R__) produced', items.length, 'items');
+              return items;
+            }
+          }
+        }
+      }
+
       // Strategy 3: Aggressive script scanner — find any <script> whose body
       // looks like JSON containing property listings (title + price/rooms).
       // AqarMap may use a non-standard script ID for SSR state.
@@ -2621,10 +2700,18 @@
         if (!parsedAny) continue;
         var found3 = PLATFORMS.aqarmap._findListings(parsedAny, 0);
         if (found3 && found3.length > 0) {
+          // Reject Schema.org / JSON-LD entries — those have @type/@id and
+          // represent breadcrumbs / structured data, not real listings.
+          var firstKeys = Object.keys(found3[0] || {});
+          if (found3[0] && (found3[0]['@type'] || found3[0]['@id'] || firstKeys.indexOf('@type') >= 0)) {
+            console.info('[maksab/aqarmap] Strategy 3 skipping script #' + sb + ' — Schema.org breadcrumbs, not listings');
+            continue;
+          }
           console.info('[maksab/aqarmap] Strategy 3 hit — script #' + sb + ' →',
-            found3.length, 'items, first item keys:', Object.keys(found3[0]).slice(0, 12));
+            found3.length, 'items, first item keys:', firstKeys.slice(0, 12));
           for (var fi = 0; fi < found3.length; fi++) {
             var fit = found3[fi];
+            if (fit['@type'] || fit['@id']) continue;
             var fid = fit.id || fit.listing_id || fit.property_id || fit.unit_id;
             var ftitle = String(fit.title || fit.name || fit.heading || ('عقار #' + (fid || ''))).trim();
             var furl = fit.url || fit.link || (fit.slug ? BASE + '/ar/' + fit.slug : (fid ? BASE + '/ar/listing/' + fid : null));
