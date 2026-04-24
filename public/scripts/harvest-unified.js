@@ -2748,7 +2748,14 @@
       }
       console.info('[maksab/aqarmap] Strategy 3 — script JSON candidates:', jsonCandidates);
 
-      // Strategy 4: DOM scan — sample anchors so we can see real URL pattern
+      // Strategy 4: DOM scan — AqarMap uses Next.js 14 App Router with
+      // streaming (__next_f.push), no __NEXT_DATA__. Real listing URLs have
+      // the shape /ar/listing/<digits>-<slug>, confirmed from browser address
+      // bar. Target these directly and extract card data from the wrapper.
+      var listingAnchors = doc.querySelectorAll('a[href*="/ar/listing/"]');
+      console.info('[maksab/aqarmap] Strategy 4 (DOM) listing anchors:', listingAnchors.length);
+
+      // Still log a sample of all /ar/ anchors for diagnostic if listingAnchors is 0
       var anchors = doc.querySelectorAll('a[href*="/listing/"], a[href*="/property/"], a[href*="/ar/"]');
       console.info('[maksab/aqarmap] Strategy 4 (DOM) anchors:', anchors.length);
       var anchorSamples = [];
@@ -2756,6 +2763,72 @@
         anchorSamples.push(anchors[as].getAttribute('href'));
       }
       console.info('[maksab/aqarmap] sample anchor hrefs:', anchorSamples);
+
+      if (listingAnchors.length > 0) {
+        var seenL = {};
+        for (var la = 0; la < listingAnchors.length; la++) {
+          var lAnchor = listingAnchors[la];
+          var lHref = lAnchor.getAttribute('href') || '';
+          if (!lHref) continue;
+          var lFull = lHref.charAt(0) === '/' ? BASE + lHref : lHref;
+          var lClean = lFull.split('?')[0].split('#')[0];
+          if (seenL[lClean]) continue;
+          seenL[lClean] = 1;
+
+          // Extract numeric listing id from URL: /ar/listing/6902426-...
+          var idMatch = lClean.match(/\/ar\/listing\/(\d+)/);
+          var lId = idMatch ? idMatch[1] : '';
+
+          // Walk up to nearest card wrapper
+          var lCard = lAnchor.closest('article, li, [class*="card" i], [class*="listing" i], [class*="property" i]') || lAnchor.parentElement;
+
+          // Title — card heading or anchor's own text
+          var lTitle = '';
+          if (lCard) {
+            var hEl = lCard.querySelector('h1, h2, h3, h4, [class*="title" i], [class*="heading" i]');
+            if (hEl) lTitle = (hEl.textContent || '').trim();
+          }
+          if (!lTitle) lTitle = (lAnchor.getAttribute('title') || lAnchor.getAttribute('aria-label') || lAnchor.textContent || '').trim();
+          if (!lTitle || lTitle.length < 3) continue;
+
+          // Price — look for currency symbol in card
+          var lPrice = null;
+          if (lCard) {
+            var priceText = lCard.textContent || '';
+            var pm = priceText.match(/(\d[\d,٬\s]*)\s*(?:ج\.?م|جنيه|EGP)/);
+            if (pm) lPrice = parseInt(pm[1].replace(/[^\d]/g, ''), 10) || null;
+          }
+
+          // Area (sqm)
+          var lArea = '';
+          if (lCard) {
+            var cardText = lCard.textContent || '';
+            var am = cardText.match(/(\d+)\s*(?:م²|م2|متر)/);
+            if (am) lArea = am[1];
+          }
+
+          // Thumbnail
+          var lImgEl = lCard ? lCard.querySelector('img') : null;
+          var lImgSrc = lImgEl ? (lImgEl.getAttribute('src') || lImgEl.getAttribute('data-src') || '') : '';
+
+          items.push({
+            url: lClean,
+            external_id: lId,
+            title: lTitle + (lArea ? ' — ' + lArea + ' م²' : ''),
+            description: '',
+            price: lPrice,
+            thumbnailUrl: lImgSrc || null,
+            location: ctx.governorateLabel || '',
+            city: ctx.governorateLabel || '',
+            area: '',
+            sellerPhone: null, sellerName: null, sellerProfileUrl: null, dateText: '',
+            isVerified: false, isBusiness: false, isFeatured: false,
+            supportsExchange: false, isNegotiable: false,
+            category: ctx.categoryLabel,
+          });
+        }
+        console.info('[maksab/aqarmap] Strategy 4 (DOM listing/) produced', items.length, 'items');
+      }
 
       console.info('[maksab/aqarmap] Final items count:', items.length);
       return items;
