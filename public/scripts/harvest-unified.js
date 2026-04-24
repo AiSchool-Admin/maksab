@@ -2087,16 +2087,42 @@
           collect(data, 6);
 
           // Log pageProps keys to diagnose structure changes
+          var pp = null;
           try {
-            var pp = (data && data.props && data.props.pageProps) || {};
+            pp = (data && data.props && data.props.pageProps) || {};
             console.info('[maksab/opensooq] pageProps keys:', Object.keys(pp));
           } catch(e) {}
+
+          // FAST PATH: pageProps.serpApiResponse.listings.items — the canonical
+          // modern OpenSooq structure. No fragile regex — use the already-
+          // parsed __NEXT_DATA__ JSON directly.
+          try {
+            var serp = pp && pp.serpApiResponse;
+            var serpItems = (serp && serp.listings && serp.listings.items)
+              || (serp && serp.items)
+              || null;
+            if (Array.isArray(serpItems) && serpItems.length > 0) {
+              console.info('[maksab/opensooq] serpApiResponse.listings.items →',
+                serpItems.length, 'items, first item keys:', Object.keys(serpItems[0]).slice(0, 20));
+              // Reuse the generic extraction loop below by seeding `arrays`
+              arrays.unshift(serpItems);
+            } else {
+              console.info('[maksab/opensooq] serpApiResponse missing/empty');
+            }
+          } catch(e) {
+            console.warn('[maksab/opensooq] serpApiResponse access threw:', e && e.message);
+          }
+
           console.info('[maksab/opensooq] Strategy 1 — candidate arrays found:', arrays.length,
             'sizes:', arrays.map(function(a){return a.length;}).slice(0, 5));
 
           // Pick the biggest candidate array
           arrays.sort(function(a, b){ return b.length - a.length; });
           var listings = arrays[0] || [];
+          if (listings.length > 0) {
+            console.info('[maksab/opensooq] picked array size:', listings.length,
+              'first item keys:', Object.keys(listings[0] || {}).slice(0, 20));
+          }
           var seenUrls = {};
 
           for (var i = 0; i < listings.length; i++) {
@@ -2165,57 +2191,16 @@
         }
       }
 
-      // Strategy 2: serpApiResponse.listings.items (embedded JSON, modern OpenSooq)
-      var serpMatch = html.match(/"serpApiResponse"\s*:\s*(\{[\s\S]*?"items"\s*:\s*\[[\s\S]*?\][\s\S]*?\})/);
-      console.info('[maksab/opensooq] serpApiResponse match:', !!serpMatch);
-      if (serpMatch) {
-        try {
-          var serp = JSON.parse(serpMatch[1]);
-          var serpItems = (serp.listings && serp.listings.items) || serp.items || [];
-          var seenUrls2 = {};
-          for (var si = 0; si < serpItems.length; si++) {
-            var sit = serpItems[si];
-            var surl = sit.post_url || sit.uri || sit.url || (sit.id ? '/ar/post/' + sit.id : null);
-            if (!surl) continue;
-            if (surl.charAt(0) === '/') surl = BASE + surl;
-            var scleanUrl = surl.split('?')[0];
-            if (seenUrls2[scleanUrl]) continue;
-            seenUrls2[scleanUrl] = 1;
-            var stitle = sit.title || sit.subject || sit.post_title || '';
-            if (!stitle || String(stitle).length < 4) continue;
-            items.push({
-              url: scleanUrl,
-              external_id: String(sit.post_id || sit.id || ''),
-              title: String(stitle),
-              description: sit.description || '',
-              price: sit.price != null ? (parseInt(String(sit.price).replace(/[^\d]/g, ''), 10) || null) : null,
-              thumbnailUrl: sit.image_url || sit.thumb || sit.cover_image || null,
-              location: sit.city_name || sit.neighborhood || ctx.governorateLabel || '',
-              city: sit.city_name || ctx.governorateLabel || '',
-              area: sit.neighborhood_name || sit.area_name || '',
-              sellerPhone: null,
-              sellerName: sit.member_user_name || sit.member_name || sit.seller_name || null,
-              sellerProfileUrl: sit.member_user_name ? BASE + '/ar/member/' + sit.member_user_name : null,
-              dateText: sit.post_date || sit.created_at || '',
-              isVerified: !!sit.is_verified,
-              isBusiness: !!(sit.is_business || /premium/.test(String(sit.listing_status || ''))),
-              isFeatured: /(premium|featured)/.test(String(sit.listing_status || '')),
-              supportsExchange: false,
-              isNegotiable: !!sit.is_negotiable,
-              category: ctx.categoryLabel,
-            });
-          }
-          console.info('[maksab/opensooq] Strategy 2 (serpApiResponse) produced', items.length, 'items');
-          if (items.length > 0) return items;
-        } catch (e) {
-          console.warn('[maksab/opensooq] Strategy 2 threw:', e && e.message);
-        }
-      }
-
-      // Strategy 3: DOM fallback — modern OpenSooq uses /ar/<cat>/<sub>/<numeric-id>/<slug>
-      // not /ar/post/ (legacy). Scan all /ar/ links and keep ones with 4+ digit path segments.
+      // Strategy 2: DOM fallback — log samples of /ar/ anchor hrefs so we can
+      // see the real listing-URL shape OpenSooq uses today.
       var links = doc.querySelectorAll('a[href*="/ar/"]');
-      console.info('[maksab/opensooq] Strategy 3 (DOM) — /ar/ anchors in doc:', links.length);
+      console.info('[maksab/opensooq] Strategy 2 (DOM) — /ar/ anchors in doc:', links.length);
+      // Print a few sample hrefs to help diagnose URL pattern
+      var sampleHrefs = [];
+      for (var s = 0; s < Math.min(links.length, 10); s++) {
+        sampleHrefs.push(links[s].getAttribute('href'));
+      }
+      console.info('[maksab/opensooq] sample anchor hrefs:', sampleHrefs);
       var seen = {};
       for (var j = 0; j < links.length; j++) {
         var a = links[j];
@@ -2256,7 +2241,7 @@
           category: ctx.categoryLabel,
         });
       }
-      console.info('[maksab/opensooq] Strategy 3 (DOM) produced', items.length, 'items');
+      console.info('[maksab/opensooq] Strategy 2 (DOM) produced', items.length, 'items');
       return items;
     },
 
