@@ -16,7 +16,8 @@ interface SampleItem {
 
 interface SampleResponse {
   sample: SampleItem[];
-  totals: { checked: number; with_removals: number };
+  totals: { checked: number; with_removals: number; total_listings: number };
+  keyword_distribution: Record<string, number>;
 }
 
 export default function WatermarkScanSamplePage() {
@@ -59,24 +60,43 @@ export default function WatermarkScanSamplePage() {
         </p>
 
         {data && (
-          <div className="grid grid-cols-3 gap-3 mb-4 text-xs">
-            <div className="bg-white rounded-lg border border-gray-200 p-3">
-              <div className="text-gray-500">إجمالي مفحوص</div>
-              <div className="text-2xl font-bold text-gray-900">{data.totals.checked.toLocaleString()}</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-3">
-              <div className="text-gray-500">إعلانات اتشال منها صور</div>
-              <div className="text-2xl font-bold text-red-700">{data.totals.with_removals.toLocaleString()}</div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-3">
-              <div className="text-gray-500">نسبة التأثير</div>
-              <div className="text-2xl font-bold text-amber-700">
-                {data.totals.checked > 0
-                  ? Math.round((data.totals.with_removals / data.totals.checked) * 100)
-                  : 0}%
+          <>
+            <div className="grid grid-cols-3 gap-3 mb-4 text-xs">
+              <div className="bg-white rounded-lg border border-gray-200 p-3">
+                <div className="text-gray-500">إجمالي مفحوص</div>
+                <div className="text-2xl font-bold text-gray-900">{data.totals.checked.toLocaleString()}</div>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-200 p-3">
+                <div className="text-gray-500">إعلانات اتشال منها صور</div>
+                <div className="text-2xl font-bold text-red-700">{data.totals.with_removals.toLocaleString()}</div>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-200 p-3">
+                <div className="text-gray-500">نسبة التأثير</div>
+                <div className="text-2xl font-bold text-amber-700">
+                  {data.totals.checked > 0
+                    ? Math.round((data.totals.with_removals / data.totals.checked) * 100)
+                    : 0}%
+                </div>
               </div>
             </div>
-          </div>
+            {Object.keys(data.keyword_distribution).length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+                <h3 className="text-sm font-bold mb-2 text-gray-800">🔍 توزيع الكلمات اللي اتلقت</h3>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(data.keyword_distribution)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([kw, count]) => (
+                      <span
+                        key={kw}
+                        className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-200"
+                      >
+                        {kw} <b>×{count}</b>
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 flex flex-wrap gap-4 items-center text-sm">
