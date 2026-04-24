@@ -3,58 +3,17 @@
 /**
  * Client-side watermark scanner.
  *
- * Loads tesseract.js in the browser and iterates through listings, OCR-ing
- * every image and stripping any URL whose recognized text contains a known
- * source-site watermark ("dubizzle", "semsarmasr", ...). Uses the user's
- * machine — no serverless timeouts.
+ * Detects source-site watermarks in listing images by scanning pixel color
+ * signatures in the 4 corners of each image. OCR was unreliable on stylized
+ * logos — color-based detection is faster and more accurate for known
+ * watermarks. Currently detects:
+ *   - dubizzle: orange-red flame icon + dark gray "dubizzle" text
  *
- * Runs in a loop: fetch batch → OCR every image → POST result → repeat.
- * User watches the progress bar, can pause anytime by closing the tab.
+ * Runs in a loop: fetch batch → detect per image → POST result → repeat.
  */
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-
-const WATERMARK_KEYWORDS = [
-  "dubizzle", "olx",
-  "semsarmasr", "سمسار",
-  "aqarmap", "أقارماب", "عقارماب",
-  "opensooq", "أوبن سوق", "السوق المفتوح",
-  "propertyfinder", "prop finder",
-];
-
-/**
- * OCR mangles stylized logos. We match on short distinctive fragments that
- * survive typical OCR mistakes ("dubizzle" → "duhizzle" still contains "zzle").
- * Min 4 chars so we don't false-positive on ordinary words.
- */
-const WATERMARK_FRAGMENTS: { fragment: string; keyword: string }[] = [
-  // dubizzle: distinctive "zzle" + "bizz" + "ubiz"
-  { fragment: "zzle", keyword: "dubizzle" },
-  { fragment: "bizz", keyword: "dubizzle" },
-  { fragment: "ubiz", keyword: "dubizzle" },
-  { fragment: "dubi", keyword: "dubizzle" },
-  // semsarmasr
-  { fragment: "emsar", keyword: "semsarmasr" },
-  { fragment: "smsar", keyword: "semsarmasr" },
-  { fragment: "سمسار", keyword: "semsarmasr" },
-  // aqarmap
-  { fragment: "aqar", keyword: "aqarmap" },
-  { fragment: "qarma", keyword: "aqarmap" },
-  { fragment: "عقار", keyword: "aqarmap" },
-  { fragment: "أقار", keyword: "aqarmap" },
-  // opensooq
-  { fragment: "opens", keyword: "opensooq" },
-  { fragment: "nsooq", keyword: "opensooq" },
-  { fragment: "sooq", keyword: "opensooq" },
-  { fragment: "السوق", keyword: "opensooq" },
-  // propertyfinder
-  { fragment: "proper", keyword: "propertyfinder" },
-  { fragment: "finder", keyword: "propertyfinder" },
-  // OLX
-  { fragment: " olx", keyword: "olx" },
-  { fragment: "olx ", keyword: "olx" },
-];
 
 interface PendingListing {
   id: string;
@@ -71,6 +30,9 @@ interface ScanLogEntry {
   matched?: string[];
 }
 
+// Enable debug logging for first N images per listing
+const DEBUG_FIRST_N = 3;
+
 export default function WatermarkScanPage() {
   const [platform, setPlatform] = useState<string>("");
   const [running, setRunning] = useState(false);
@@ -78,33 +40,8 @@ export default function WatermarkScanPage() {
   const [remaining, setRemaining] = useState<number | null>(null);
   const [log, setLog] = useState<ScanLogEntry[]>([]);
   const [totals, setTotals] = useState({ listings: 0, kept: 0, removed: 0 });
-  const workerRef = useRef<{ recognize: (b: Blob | string) => Promise<{ data: { text: string } }>; terminate: () => Promise<unknown> } | null>(null);
   const stopFlag = useRef(false);
-
-  // Dynamically load tesseract.js once
-  async function initWorker() {
-    if (workerRef.current) return workerRef.current;
-    setStatus("جاري تحميل محرّك OCR... (5-10 ثوان أول مرة)");
-    try {
-      const tesseract = await import("tesseract.js");
-      const worker = await tesseract.createWorker("eng", 1, {
-        logger: (m: { status?: string; progress?: number }) => {
-          if (m.status) {
-            const pct = m.progress ? ` (${Math.round(m.progress * 100)}%)` : "";
-            setStatus(`تحميل OCR: ${m.status}${pct}`);
-          }
-        },
-      });
-      workerRef.current = worker as unknown as typeof workerRef.current;
-      setStatus("✓ محرّك OCR جاهز");
-      return workerRef.current;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setStatus(`❌ فشل تحميل OCR: ${msg}. افتح Console (F12) لتفاصيل أكثر`);
-      console.error("[watermark-scan] tesseract init failed:", err);
-      throw err;
-    }
-  }
+  const debugCountRef = useRef(0);
 
   // Load image blob into an HTMLImageElement
   async function blobToImage(blob: Blob): Promise<HTMLImageElement> {
@@ -117,39 +54,52 @@ export default function WatermarkScanPage() {
     });
   }
 
-  // Crop a region and scale it up via canvas; returns a Blob
-  function cropAndScale(img: HTMLImageElement, x: number, y: number, w: number, h: number, scale: number): Promise<Blob | null> {
-    return new Promise((resolve) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(w * scale);
-      canvas.height = Math.round(h * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return resolve(null);
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((b) => resolve(b), "image/png");
-    });
+  /**
+   * Dubizzle flame color signature: red-orange dot on the "i".
+   * Approximate hex: #E04B1F–#F37030. Very distinctive — rarely appears
+   * in concentrated clusters in real estate photos.
+   */
+  function isDubizzleFlame(r: number, g: number, b: number): boolean {
+    return (
+      r >= 180 && r <= 255 &&
+      g >= 30 && g <= 130 &&
+      b >= 10 && b <= 100 &&
+      r - g >= 70 &&
+      r - b >= 100
+    );
   }
 
-  function matchesWatermark(text: string): string | null {
-    const lower = text.toLowerCase();
-    // Try exact keyword first (high-confidence)
-    for (const kw of WATERMARK_KEYWORDS) {
-      if (lower.includes(kw.toLowerCase())) return kw;
-    }
-    // Fall back to fragment matching (catches OCR-mangled logos)
-    for (const { fragment, keyword } of WATERMARK_FRAGMENTS) {
-      if (lower.includes(fragment.toLowerCase())) return keyword;
-    }
-    return null;
+  /** Dubizzle text color: dark charcoal gray (R≈G≈B, mid-low value). */
+  function isDubizzleGrayText(r: number, g: number, b: number): boolean {
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    return (max - min) <= 25 && max >= 30 && max <= 130;
   }
 
-  async function ocrImage(url: string): Promise<{ hasWatermark: boolean; matched?: string }> {
-    const worker = await initWorker();
-    if (!worker) return { hasWatermark: false };
+  interface CornerStats {
+    flameRatio: number;
+    grayRatio: number;
+  }
 
-    // Fetch image through our proxy (handles CORS + any platform-specific crop)
+  function analyzeCorner(
+    ctx: CanvasRenderingContext2D,
+    x: number, y: number, w: number, h: number,
+  ): CornerStats {
+    const imgData = ctx.getImageData(x, y, w, h).data;
+    const total = imgData.length / 4;
+    let flame = 0;
+    let gray = 0;
+    for (let i = 0; i < imgData.length; i += 4) {
+      const r = imgData[i];
+      const g = imgData[i + 1];
+      const b = imgData[i + 2];
+      if (isDubizzleFlame(r, g, b)) flame++;
+      if (isDubizzleGrayText(r, g, b)) gray++;
+    }
+    return { flameRatio: flame / total, grayRatio: gray / total };
+  }
+
+  async function detectWatermark(url: string): Promise<{ hasWatermark: boolean; matched?: string }> {
     const proxyUrl = "/api/img?url=" + encodeURIComponent(url);
     let blob: Blob;
     try {
@@ -169,33 +119,40 @@ export default function WatermarkScanPage() {
 
     const W = img.naturalWidth || img.width;
     const H = img.naturalHeight || img.height;
-    if (W < 50 || H < 50) return { hasWatermark: false };
+    if (W < 80 || H < 80) return { hasWatermark: false };
 
-    // OCR targets:
-    //  1. 4 corners (30% × 25%) scaled 3x — watermarks usually live here
-    //  2. Full image (just in case it's a centered overlay)
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return { hasWatermark: false };
+    ctx.drawImage(img, 0, 0);
+
+    // Corner size: 30% wide × 22% tall — large enough to fit the logo
     const cornerW = Math.round(W * 0.3);
-    const cornerH = Math.round(H * 0.25);
-    const regions: Array<{ name: string; x: number; y: number; w: number; h: number; scale: number }> = [
-      { name: "TL", x: 0, y: 0, w: cornerW, h: cornerH, scale: 3 },
-      { name: "TR", x: W - cornerW, y: 0, w: cornerW, h: cornerH, scale: 3 },
-      { name: "BL", x: 0, y: H - cornerH, w: cornerW, h: cornerH, scale: 3 },
-      { name: "BR", x: W - cornerW, y: H - cornerH, w: cornerW, h: cornerH, scale: 3 },
-      { name: "FULL", x: 0, y: 0, w: W, h: H, scale: 1 },
+    const cornerH = Math.round(H * 0.22);
+    const corners: Array<{ name: string; x: number; y: number }> = [
+      { name: "TL", x: 0, y: 0 },
+      { name: "TR", x: W - cornerW, y: 0 },
+      { name: "BL", x: 0, y: H - cornerH },
+      { name: "BR", x: W - cornerW, y: H - cornerH },
     ];
 
-    for (const region of regions) {
-      const cropped = await cropAndScale(img, region.x, region.y, region.w, region.h, region.scale);
-      if (!cropped) continue;
-      try {
-        const { data } = await worker.recognize(cropped);
-        const text = data.text || "";
-        const matched = matchesWatermark(text);
-        if (matched) {
-          return { hasWatermark: true, matched };
-        }
-      } catch {
-        // Keep trying other regions
+    const shouldDebug = debugCountRef.current < DEBUG_FIRST_N;
+    if (shouldDebug) debugCountRef.current++;
+
+    for (const c of corners) {
+      const stats = analyzeCorner(ctx, c.x, c.y, cornerW, cornerH);
+      if (shouldDebug) {
+        console.log(
+          `[wm-scan] ${url.slice(-60)} ${c.name}: flame=${(stats.flameRatio * 100).toFixed(3)}% gray=${(stats.grayRatio * 100).toFixed(2)}%`,
+        );
+      }
+      // Dubizzle logo signature:
+      //   • flame icon: 0.15% - 4% of corner (small orange dot)
+      //   • gray text:  ≥ 1.5% (the "dubizzle" word)
+      if (stats.flameRatio >= 0.0015 && stats.flameRatio <= 0.04 && stats.grayRatio >= 0.015) {
+        return { hasWatermark: true, matched: `dubizzle@${c.name}` };
       }
     }
 
@@ -210,7 +167,7 @@ export default function WatermarkScanPage() {
     for (const url of l.images) {
       if (stopFlag.current) break;
       setStatus(`يفحص: ${l.title.substring(0, 40)}... (${clean.length + removed + 1}/${l.images.length})`);
-      const result = await ocrImage(url);
+      const result = await detectWatermark(url);
       if (result.hasWatermark) {
         removed++;
         if (result.matched) matched.add(result.matched);
@@ -245,6 +202,8 @@ export default function WatermarkScanPage() {
     if (running) return;
     setRunning(true);
     stopFlag.current = false;
+    debugCountRef.current = 0;
+    setStatus("🎨 بيفحص بالبكسلات...");
 
     try {
       while (!stopFlag.current) {
@@ -266,10 +225,6 @@ export default function WatermarkScanPage() {
         }
       }
     } finally {
-      if (workerRef.current) {
-        try { await workerRef.current.terminate(); } catch { /* ignore */ }
-        workerRef.current = null;
-      }
       setRunning(false);
       if (stopFlag.current) setStatus("⏸️ توقف يدوياً");
     }
@@ -281,7 +236,7 @@ export default function WatermarkScanPage() {
   }
 
   async function resetScans() {
-    if (!confirm("هيمسح علامة الفحص من كل الإعلانات عشان نعيد الفحص بمحرّك OCR أدق. الصور اللي اتشالت قبل كده مش هترجع. تأكيد؟")) return;
+    if (!confirm("هيمسح علامة الفحص من كل الإعلانات عشان نعيد الفحص بكشف الألوان. الصور اللي اتشالت قبل كده مش هترجع. تأكيد؟")) return;
     setStatus("🔄 جاري مسح علامات الفحص...");
     try {
       const r = await fetch("/api/admin/marketplace/watermark-scan/reset", {
@@ -319,9 +274,9 @@ export default function WatermarkScanPage() {
       <div className="max-w-4xl mx-auto px-4 py-6">
         <h1 className="text-2xl font-bold mb-2">🔍 فاحص العلامات المائية</h1>
         <p className="text-sm text-gray-600 mb-6">
-          يفحص صور الإعلانات بالـ OCR ويشيل أي صورة عليها علامة مائية من مصدر خارجي
-          (dubizzle / semsarmasr / opensooq / aqarmap). الفحص بيحصل في متصفحك مش على السيرفر
-          — ممكن ياخد وقت، لكن ما فيش timeouts.
+          يفحص صور الإعلانات بالبكسلات ويشيل أي صورة فيها لوجو dubizzle.
+          كشف باللون: الفلامة البرتقالية لـ dubizzle لونها مميز (~#E04B1F) ونادراً بيظهر بتركيز
+          في صور العقارات. أسرع وأدق من OCR على اللوجوهات المُنمّقة.
         </p>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-4">
@@ -411,10 +366,10 @@ export default function WatermarkScanPage() {
         <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-xs text-yellow-900">
           <p className="font-bold mb-1">💡 ملاحظات:</p>
           <ul className="list-disc list-inside space-y-1">
-            <li>أول مرة بتحمّل محرّك OCR (~5-10 ثوان + 12MB). المرات اللي بعدها من الـ cache.</li>
-            <li>كل صورة بتاخد 2-5 ثوان. 100 إعلان فيه 200 صورة = ~10 دقائق.</li>
-            <li>سيب الـ tab مفتوح. لو قفلته، تقدر تكمل بعدين من نفس المكان.</li>
-            <li>الدقة ~80% — ممكن false positives (لو مبنى مكتوب عليه نص إنجليزي).</li>
+            <li>مفيش محرّك OCR — بيشتغل بكشف الألوان فقط (أسرع بكتير).</li>
+            <li>كل صورة ~0.2-1 ثانية. 100 إعلان فيه 800 صورة = ~3-5 دقائق.</li>
+            <li>دلوقتي بيكشف dubizzle فقط. لو محتاج semsarmasr/aqarmap/opensooq، قولي.</li>
+            <li>أول 3 صور بتطبع debug info في Console (F12) عشان نتأكد من الكشف.</li>
           </ul>
         </div>
       </div>
