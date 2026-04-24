@@ -2415,6 +2415,25 @@
 
       console.info('[maksab/aqarmap] parseList — html length:', html.length);
 
+      // ─── Diagnostic: log all <script id="..."> tags found ───
+      var scriptIds = [];
+      var idPattern = /<script[^>]*\bid=["']([^"']+)["'][^>]*>/gi;
+      var idMatch;
+      while ((idMatch = idPattern.exec(html)) !== null) {
+        scriptIds.push(idMatch[1]);
+        if (scriptIds.length >= 20) break;
+      }
+      console.info('[maksab/aqarmap] script tag IDs:', scriptIds);
+
+      // ─── Diagnostic: detect common SSR data globals ───
+      var ssrPatterns = [
+        '__NEXT_DATA__', '__APOLLO_STATE__', '__INITIAL_STATE__',
+        '__NUXT__', '__PRELOADED_STATE__', '__REACT_QUERY_STATE__',
+        '__REDUX_STATE__',
+      ];
+      var ssrFound = ssrPatterns.filter(function(p) { return html.indexOf(p) >= 0; });
+      console.info('[maksab/aqarmap] SSR markers in HTML:', ssrFound);
+
       // Strategy 1: __NEXT_DATA__ — match server-side aqarmap.ts strategy order
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       console.info('[maksab/aqarmap] __NEXT_DATA__ found:', !!m);
@@ -2576,6 +2595,70 @@
           }
         } catch (e) { /* skip */ }
       }
+
+      // Strategy 3: Aggressive script scanner — find any <script> whose body
+      // looks like JSON containing property listings (title + price/rooms).
+      // AqarMap may use a non-standard script ID for SSR state.
+      var scriptBlocks = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
+      console.info('[maksab/aqarmap] Strategy 3 — total script blocks:', scriptBlocks.length);
+      var jsonCandidates = 0;
+      for (var sb = 0; sb < scriptBlocks.length; sb++) {
+        var bodyMatch = scriptBlocks[sb].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+        if (!bodyMatch) continue;
+        var body = bodyMatch[1].trim();
+        if (body.length < 200) continue;
+        // Quick heuristic: must mention listing-like fields
+        if (!/("title"|"name"|"property")/i.test(body)) continue;
+        if (!/("price"|"rooms"|"bedrooms"|"area")/i.test(body)) continue;
+        jsonCandidates++;
+        // Try to parse as JSON, or extract JSON from a `var x = {...}` assignment
+        var parsedAny = null;
+        try { parsedAny = JSON.parse(body); }
+        catch (_) {
+          var assign = body.match(/=\s*(\{[\s\S]*\})\s*;?\s*$/);
+          if (assign) { try { parsedAny = JSON.parse(assign[1]); } catch (__) {} }
+        }
+        if (!parsedAny) continue;
+        var found3 = PLATFORMS.aqarmap._findListings(parsedAny, 0);
+        if (found3 && found3.length > 0) {
+          console.info('[maksab/aqarmap] Strategy 3 hit — script #' + sb + ' →',
+            found3.length, 'items, first item keys:', Object.keys(found3[0]).slice(0, 12));
+          for (var fi = 0; fi < found3.length; fi++) {
+            var fit = found3[fi];
+            var fid = fit.id || fit.listing_id || fit.property_id || fit.unit_id;
+            var ftitle = String(fit.title || fit.name || fit.heading || ('عقار #' + (fid || ''))).trim();
+            var furl = fit.url || fit.link || (fit.slug ? BASE + '/ar/' + fit.slug : (fid ? BASE + '/ar/listing/' + fid : null));
+            if (!furl) continue;
+            if (furl.charAt(0) === '/') furl = BASE + furl;
+            items.push({
+              url: String(furl).split('?')[0],
+              external_id: String(fid || ''),
+              title: ftitle,
+              description: fit.description || '',
+              price: fit.price ? (parseInt(String(fit.price).replace(/[^\d]/g, ''), 10) || null) : null,
+              thumbnailUrl: (fit.photos && fit.photos[0]) ? (typeof fit.photos[0] === 'string' ? fit.photos[0] : fit.photos[0].url) : (fit.image || fit.thumbnail || null),
+              location: ((fit.area && fit.area.name) || fit.areaName || '') + ', ' + ((fit.city && fit.city.name) || fit.cityName || ''),
+              city: (fit.city && fit.city.name) || fit.cityName || '',
+              area: (fit.area && fit.area.name) || fit.areaName || '',
+              sellerPhone: null, sellerName: null, sellerProfileUrl: null, dateText: '',
+              isVerified: false, isBusiness: false, isFeatured: false,
+              supportsExchange: false, isNegotiable: false,
+              category: ctx.categoryLabel,
+            });
+          }
+          if (items.length > 0) break;
+        }
+      }
+      console.info('[maksab/aqarmap] Strategy 3 — script JSON candidates:', jsonCandidates);
+
+      // Strategy 4: DOM scan — sample anchors so we can see real URL pattern
+      var anchors = doc.querySelectorAll('a[href*="/listing/"], a[href*="/property/"], a[href*="/ar/"]');
+      console.info('[maksab/aqarmap] Strategy 4 (DOM) anchors:', anchors.length);
+      var anchorSamples = [];
+      for (var as = 0; as < Math.min(anchors.length, 10); as++) {
+        anchorSamples.push(anchors[as].getAttribute('href'));
+      }
+      console.info('[maksab/aqarmap] sample anchor hrefs:', anchorSamples);
 
       console.info('[maksab/aqarmap] Final items count:', items.length);
       return items;
