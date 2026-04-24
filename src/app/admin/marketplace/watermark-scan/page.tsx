@@ -23,6 +23,39 @@ const WATERMARK_KEYWORDS = [
   "propertyfinder", "prop finder",
 ];
 
+/**
+ * OCR mangles stylized logos. We match on short distinctive fragments that
+ * survive typical OCR mistakes ("dubizzle" → "duhizzle" still contains "zzle").
+ * Min 4 chars so we don't false-positive on ordinary words.
+ */
+const WATERMARK_FRAGMENTS: { fragment: string; keyword: string }[] = [
+  // dubizzle: distinctive "zzle" + "bizz" + "ubiz"
+  { fragment: "zzle", keyword: "dubizzle" },
+  { fragment: "bizz", keyword: "dubizzle" },
+  { fragment: "ubiz", keyword: "dubizzle" },
+  { fragment: "dubi", keyword: "dubizzle" },
+  // semsarmasr
+  { fragment: "emsar", keyword: "semsarmasr" },
+  { fragment: "smsar", keyword: "semsarmasr" },
+  { fragment: "سمسار", keyword: "semsarmasr" },
+  // aqarmap
+  { fragment: "aqar", keyword: "aqarmap" },
+  { fragment: "qarma", keyword: "aqarmap" },
+  { fragment: "عقار", keyword: "aqarmap" },
+  { fragment: "أقار", keyword: "aqarmap" },
+  // opensooq
+  { fragment: "opens", keyword: "opensooq" },
+  { fragment: "nsooq", keyword: "opensooq" },
+  { fragment: "sooq", keyword: "opensooq" },
+  { fragment: "السوق", keyword: "opensooq" },
+  // propertyfinder
+  { fragment: "proper", keyword: "propertyfinder" },
+  { fragment: "finder", keyword: "propertyfinder" },
+  // OLX
+  { fragment: " olx", keyword: "olx" },
+  { fragment: "olx ", keyword: "olx" },
+];
+
 interface PendingListing {
   id: string;
   title: string;
@@ -73,11 +106,50 @@ export default function WatermarkScanPage() {
     }
   }
 
+  // Load image blob into an HTMLImageElement
+  async function blobToImage(blob: Blob): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(blob);
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    });
+  }
+
+  // Crop a region and scale it up via canvas; returns a Blob
+  function cropAndScale(img: HTMLImageElement, x: number, y: number, w: number, h: number, scale: number): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(h * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return resolve(null);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((b) => resolve(b), "image/png");
+    });
+  }
+
+  function matchesWatermark(text: string): string | null {
+    const lower = text.toLowerCase();
+    // Try exact keyword first (high-confidence)
+    for (const kw of WATERMARK_KEYWORDS) {
+      if (lower.includes(kw.toLowerCase())) return kw;
+    }
+    // Fall back to fragment matching (catches OCR-mangled logos)
+    for (const { fragment, keyword } of WATERMARK_FRAGMENTS) {
+      if (lower.includes(fragment.toLowerCase())) return keyword;
+    }
+    return null;
+  }
+
   async function ocrImage(url: string): Promise<{ hasWatermark: boolean; matched?: string }> {
     const worker = await initWorker();
     if (!worker) return { hasWatermark: false };
 
-    // Fetch image through our proxy (handles CORS + semsarmasr crop if any)
+    // Fetch image through our proxy (handles CORS + any platform-specific crop)
     const proxyUrl = "/api/img?url=" + encodeURIComponent(url);
     let blob: Blob;
     try {
@@ -88,17 +160,45 @@ export default function WatermarkScanPage() {
       return { hasWatermark: false };
     }
 
+    let img: HTMLImageElement;
     try {
-      const { data } = await worker.recognize(blob);
-      const text = (data.text || "").toLowerCase();
-      for (const kw of WATERMARK_KEYWORDS) {
-        if (text.includes(kw.toLowerCase())) {
-          return { hasWatermark: true, matched: kw };
-        }
-      }
+      img = await blobToImage(blob);
     } catch {
-      // If OCR fails, keep the image (err on the side of keeping)
+      return { hasWatermark: false };
     }
+
+    const W = img.naturalWidth || img.width;
+    const H = img.naturalHeight || img.height;
+    if (W < 50 || H < 50) return { hasWatermark: false };
+
+    // OCR targets:
+    //  1. 4 corners (30% × 25%) scaled 3x — watermarks usually live here
+    //  2. Full image (just in case it's a centered overlay)
+    const cornerW = Math.round(W * 0.3);
+    const cornerH = Math.round(H * 0.25);
+    const regions: Array<{ name: string; x: number; y: number; w: number; h: number; scale: number }> = [
+      { name: "TL", x: 0, y: 0, w: cornerW, h: cornerH, scale: 3 },
+      { name: "TR", x: W - cornerW, y: 0, w: cornerW, h: cornerH, scale: 3 },
+      { name: "BL", x: 0, y: H - cornerH, w: cornerW, h: cornerH, scale: 3 },
+      { name: "BR", x: W - cornerW, y: H - cornerH, w: cornerW, h: cornerH, scale: 3 },
+      { name: "FULL", x: 0, y: 0, w: W, h: H, scale: 1 },
+    ];
+
+    for (const region of regions) {
+      const cropped = await cropAndScale(img, region.x, region.y, region.w, region.h, region.scale);
+      if (!cropped) continue;
+      try {
+        const { data } = await worker.recognize(cropped);
+        const text = data.text || "";
+        const matched = matchesWatermark(text);
+        if (matched) {
+          return { hasWatermark: true, matched };
+        }
+      } catch {
+        // Keep trying other regions
+      }
+    }
+
     return { hasWatermark: false };
   }
 
@@ -180,6 +280,28 @@ export default function WatermarkScanPage() {
     setStatus("⏹️ إيقاف... (ينهي الإعلان الحالي)");
   }
 
+  async function resetScans() {
+    if (!confirm("هيمسح علامة الفحص من كل الإعلانات عشان نعيد الفحص بمحرّك OCR أدق. الصور اللي اتشالت قبل كده مش هترجع. تأكيد؟")) return;
+    setStatus("🔄 جاري مسح علامات الفحص...");
+    try {
+      const r = await fetch("/api/admin/marketplace/watermark-scan/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: platform || undefined }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      setStatus(`✅ تم مسح ${j.cleared} علامة. اضغط "ابدأ الفحص" لإعادة الفحص.`);
+      setTotals({ listings: 0, kept: 0, removed: 0 });
+      setLog([]);
+      const batch = await fetchBatch();
+      setRemaining(batch.remaining);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setStatus(`❌ فشل المسح: ${msg}`);
+    }
+  }
+
   // Initial count
   useEffect(() => {
     fetchBatch().then((b) => setRemaining(b.remaining));
@@ -219,7 +341,7 @@ export default function WatermarkScanPage() {
             </select>
           </div>
 
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
             {!running ? (
               <button
                 onClick={runLoop}
@@ -235,8 +357,22 @@ export default function WatermarkScanPage() {
                 ⏹️ أوقف
               </button>
             )}
+            <button
+              onClick={resetScans}
+              disabled={running}
+              className="px-4 py-3 bg-amber-600 text-white rounded-xl font-bold text-sm hover:bg-amber-700 disabled:opacity-50"
+              title="يمسح علامة الفحص عشان نعيد الفحص على الإعلانات اللي اتفحصت قبل كده"
+            >
+              🔄 إعادة فحص الكل
+            </button>
+            <Link
+              href="/admin/marketplace/watermark-scan/sample"
+              className="px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-50"
+            >
+              🔎 عاين العينة
+            </Link>
             {remaining !== null && (
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-600 mr-auto">
                 باقي: <b className="text-gray-900">{remaining.toLocaleString()}</b> إعلان
               </span>
             )}
