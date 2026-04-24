@@ -587,8 +587,10 @@ export async function POST(req: NextRequest) {
           is_featured: listing.isFeatured || false,
           thumbnail_url: listing.thumbnailUrl,
           main_image_url: (listing.allImages && listing.allImages.length > 0 ? listing.allImages[0] : listing.thumbnailUrl),
+          // Cap at 3 images per listing — keeps cleaning pipeline within free
+          // tier of IOPaint/Replicate LaMa and reduces storage footprint.
           all_image_urls: listing.allImages && listing.allImages.length > 0
-            ? listing.allImages.slice(0, 10)
+            ? listing.allImages.slice(0, 3)
             : (listing.thumbnailUrl ? [listing.thumbnailUrl] : []),
           source_category: listing.category || null,
           maksab_category: body.meta?.maksab_category || null,
