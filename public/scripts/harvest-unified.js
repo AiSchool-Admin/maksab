@@ -2062,8 +2062,11 @@
       var items = [];
       var BASE = 'https://eg.opensooq.com';
 
+      console.info('[maksab/opensooq] parseList — html length:', html.length);
+
       // Strategy 1: __NEXT_DATA__
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+      console.info('[maksab/opensooq] __NEXT_DATA__ found:', !!m);
       if (m) {
         try {
           var data = JSON.parse(m[1]);
@@ -2082,6 +2085,14 @@
             for (var k in obj) if (Object.prototype.hasOwnProperty.call(obj, k)) collect(obj[k], depth - 1);
           }
           collect(data, 6);
+
+          // Log pageProps keys to diagnose structure changes
+          try {
+            var pp = (data && data.props && data.props.pageProps) || {};
+            console.info('[maksab/opensooq] pageProps keys:', Object.keys(pp));
+          } catch(e) {}
+          console.info('[maksab/opensooq] Strategy 1 — candidate arrays found:', arrays.length,
+            'sizes:', arrays.map(function(a){return a.length;}).slice(0, 5));
 
           // Pick the biggest candidate array
           arrays.sort(function(a, b){ return b.length - a.length; });
@@ -2147,12 +2158,16 @@
               category: ctx.categoryLabel,
             });
           }
+          console.info('[maksab/opensooq] Strategy 1 (__NEXT_DATA__) produced', items.length, 'items');
           if (items.length > 0) return items;
-        } catch (e) { /* fall through */ }
+        } catch (e) {
+          console.warn('[maksab/opensooq] Strategy 1 threw:', e && e.message);
+        }
       }
 
       // Strategy 2: serpApiResponse.listings.items (embedded JSON, modern OpenSooq)
       var serpMatch = html.match(/"serpApiResponse"\s*:\s*(\{[\s\S]*?"items"\s*:\s*\[[\s\S]*?\][\s\S]*?\})/);
+      console.info('[maksab/opensooq] serpApiResponse match:', !!serpMatch);
       if (serpMatch) {
         try {
           var serp = JSON.parse(serpMatch[1]);
@@ -2190,13 +2205,17 @@
               category: ctx.categoryLabel,
             });
           }
+          console.info('[maksab/opensooq] Strategy 2 (serpApiResponse) produced', items.length, 'items');
           if (items.length > 0) return items;
-        } catch (e) { /* fall through */ }
+        } catch (e) {
+          console.warn('[maksab/opensooq] Strategy 2 threw:', e && e.message);
+        }
       }
 
       // Strategy 3: DOM fallback — modern OpenSooq uses /ar/<cat>/<sub>/<numeric-id>/<slug>
       // not /ar/post/ (legacy). Scan all /ar/ links and keep ones with 4+ digit path segments.
       var links = doc.querySelectorAll('a[href*="/ar/"]');
+      console.info('[maksab/opensooq] Strategy 3 (DOM) — /ar/ anchors in doc:', links.length);
       var seen = {};
       for (var j = 0; j < links.length; j++) {
         var a = links[j];
@@ -2237,6 +2256,7 @@
           category: ctx.categoryLabel,
         });
       }
+      console.info('[maksab/opensooq] Strategy 3 (DOM) produced', items.length, 'items');
       return items;
     },
 
@@ -2408,19 +2428,26 @@
       var items = [];
       var BASE = 'https://aqarmap.com.eg';
 
+      console.info('[maksab/aqarmap] parseList — html length:', html.length);
+
       // Strategy 1: __NEXT_DATA__ — match server-side aqarmap.ts strategy order
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+      console.info('[maksab/aqarmap] __NEXT_DATA__ found:', !!m);
       if (m) {
         try {
           var data = JSON.parse(m[1]);
           var pageProps = (data && data.props && data.props.pageProps) || {};
+          console.info('[maksab/aqarmap] pageProps keys:', Object.keys(pageProps));
 
           // Strategy 1a: pageProps.listings | properties | units | results (direct arrays)
           var directListings = pageProps.listings || pageProps.properties || pageProps.units || pageProps.results;
           if (!Array.isArray(directListings) || directListings.length === 0) directListings = null;
+          console.info('[maksab/aqarmap] Strategy 1a (pageProps direct) →',
+            directListings ? directListings.length + ' items' : 'none');
 
           // Strategy 1b: dehydratedState.queries (React Query / TanStack Query)
           if (!directListings && pageProps.dehydratedState && Array.isArray(pageProps.dehydratedState.queries)) {
+            console.info('[maksab/aqarmap] Strategy 1b — dehydratedState.queries count:', pageProps.dehydratedState.queries.length);
             for (var qi = 0; qi < pageProps.dehydratedState.queries.length; qi++) {
               var q = pageProps.dehydratedState.queries[qi];
               var qData = q && q.state && q.state.data;
@@ -2429,12 +2456,20 @@
                 : (qData && typeof qData === 'object' && Array.isArray(qData.listings)) ? qData.listings
                 : (qData && typeof qData === 'object' && Array.isArray(qData.properties)) ? qData.properties
                 : null;
-              if (qItems && qItems.length > 0) { directListings = qItems; break; }
+              if (qItems && qItems.length > 0) {
+                console.info('[maksab/aqarmap] Strategy 1b hit — query[' + qi + '] →', qItems.length, 'items, keys:', qItems[0] ? Object.keys(qItems[0]).slice(0, 12) : []);
+                directListings = qItems;
+                break;
+              }
             }
           }
 
           // Strategy 1c: recursive fallback (existing heuristic)
           var listings = directListings || PLATFORMS.aqarmap._findListings(data, 0);
+          if (!directListings) {
+            console.info('[maksab/aqarmap] Strategy 1c (recursive) →',
+              listings ? listings.length + ' items' : 'none');
+          }
 
           if (listings && listings.length > 0) {
             var seenUrls = {};
@@ -2510,13 +2545,17 @@
                 category: ctx.categoryLabel,
               });
             }
+            console.info('[maksab/aqarmap] __NEXT_DATA__ strategies produced', items.length, 'items');
             if (items.length > 0) return items;
           }
-        } catch (e) { /* fall through */ }
+        } catch (e) {
+          console.warn('[maksab/aqarmap] __NEXT_DATA__ parse threw:', e && e.message);
+        }
       }
 
       // Strategy 2: JSON-LD ItemList
       var ldMatches = html.match(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+      console.info('[maksab/aqarmap] Strategy 2 (JSON-LD) — script tags found:', ldMatches.length);
       for (var li = 0; li < ldMatches.length; li++) {
         var innerMatch = ldMatches[li].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
         if (!innerMatch) continue;
@@ -2553,6 +2592,7 @@
         } catch (e) { /* skip */ }
       }
 
+      console.info('[maksab/aqarmap] Final items count:', items.length);
       return items;
     },
 
