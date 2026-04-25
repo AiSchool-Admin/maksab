@@ -827,7 +827,9 @@
             if (!it.sellerPhone && n + 1 < maxAttempts) {
               return delay(retryDelays[n] || 3000).then(function(){ return attempt(n + 1); });
             }
-          }).catch(function(){
+          }).catch(function(err){
+            // Permanent failures (4xx — listing deleted/forbidden) — don't retry.
+            if (err && err.permanent) return;
             // Network/parse error — retry with backoff if attempts remain.
             if (n + 1 < maxAttempts) {
               return delay(retryDelays[n] || 3000).then(function(){ return attempt(n + 1); });
@@ -1403,7 +1405,17 @@
 
     fetchPage: function(url) {
       return fetch(url, {credentials: 'include'})
-        .then(function(r){ return r.text(); })
+        .then(function(r){
+          if (!r.ok && r.status >= 400 && r.status < 500) {
+            // 4xx is permanent (listing deleted/forbidden) — flag for caller
+            // so the retry layer can skip further attempts.
+            var err = new Error('HTTP ' + r.status);
+            err.status = r.status;
+            err.permanent = true;
+            throw err;
+          }
+          return r.text();
+        })
         .then(function(html){
           var doc = new DOMParser().parseFromString(html, 'text/html');
           return { html: html, doc: doc };
@@ -2084,7 +2096,17 @@
 
     fetchPage: function(url) {
       return fetch(url, {credentials: 'include'})
-        .then(function(r){ return r.text(); })
+        .then(function(r){
+          if (!r.ok && r.status >= 400 && r.status < 500) {
+            // 4xx is permanent (listing deleted/forbidden) — flag for caller
+            // so the retry layer can skip further attempts.
+            var err = new Error('HTTP ' + r.status);
+            err.status = r.status;
+            err.permanent = true;
+            throw err;
+          }
+          return r.text();
+        })
         .then(function(html){
           var doc = new DOMParser().parseFromString(html, 'text/html');
           return { html: html, doc: doc };
@@ -2219,6 +2241,17 @@
             else if (it.member_id) sellerProfileUrl = BASE + '/ar/profile/' + it.member_id;
             else if (it.member && it.member.id) sellerProfileUrl = BASE + '/ar/profile/' + it.member.id;
 
+            // Phone — read from list item ONLY if it's a complete, unmasked
+            // Egyptian mobile (01[0125]XXXXXXXX). Reject masked variants
+            // (010029285XX) per user policy: no partial phones.
+            var listPhone = null;
+            var rawPh = it.phone_number || it.phone || it.mobile || null;
+            if (rawPh) {
+              var phStr = String(rawPh).replace(/[^\d]/g, '');
+              // Egyptian mobile: starts with 010/011/012/015, exactly 11 digits.
+              if (/^01[0125]\d{8}$/.test(phStr)) listPhone = phStr;
+            }
+
             items.push({
               url: cleanUrl,
               external_id: String(itemId || ''),
@@ -2229,7 +2262,7 @@
               location: it.city_label || it.city_name || it.location_name || it.neighborhood || ctx.governorateLabel || '',
               city: it.city_label || it.city_name || ctx.governorateLabel || '',
               area: it.neighborhood_name || it.area_name || '',
-              sellerPhone: null,
+              sellerPhone: listPhone,
               sellerName: sellerName,
               sellerProfileUrl: sellerProfileUrl,
               dateText: it.posted_at || it.post_date || it.date || it.created_at || '',
@@ -2420,7 +2453,17 @@
 
     fetchPage: function(url) {
       return fetch(url, {credentials: 'include'})
-        .then(function(r){ return r.text(); })
+        .then(function(r){
+          if (!r.ok && r.status >= 400 && r.status < 500) {
+            // 4xx is permanent (listing deleted/forbidden) — flag for caller
+            // so the retry layer can skip further attempts.
+            var err = new Error('HTTP ' + r.status);
+            err.status = r.status;
+            err.permanent = true;
+            throw err;
+          }
+          return r.text();
+        })
         .then(function(html){
           var doc = new DOMParser().parseFromString(html, 'text/html');
           return { html: html, doc: doc };
