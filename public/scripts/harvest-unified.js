@@ -200,14 +200,48 @@
           if (phoneCounts[pk] > topCount) { topPhone = pk; topCount = phoneCounts[pk]; }
         }
         // On OpenSooq's list page, all OTHER sellers' phones are masked
-        // ("010029285XX" — 9 digits + XX), so the 11-digit regex above
+        // ("010029285**XX**" — 9 digits + XX), so the 11-digit regex
         // never matches them. The only fully-formed phone on the list
-        // page is the logged-in user's own. So even ONE match here is
-        // sufficient evidence — no frequency threshold needed.
+        // page is the logged-in user's own.
         if (topPhone) {
           captured.phone = normalizeEgPhone(topPhone);
         }
       } catch (e) { /* ignore */ }
+    }
+
+    // 3. Final fallback: read from localStorage (user can pre-set it via
+    // the install page). This is the most reliable channel — the user
+    // knows their own phone and DOM-based detection has too many edge
+    // cases (custom navbars, missing semantic tags, etc.).
+    if (!captured.phone) {
+      try {
+        var savedPhone = localStorage.getItem('maksab_self_phone');
+        if (savedPhone) {
+          var sp = normalizeEgPhone(savedPhone);
+          if (sp) captured.phone = sp;
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // 4. Last-ditch: explicitly ask the user. Only when everything else
+    // failed AND we know they're on a platform that gates seller phones
+    // behind a logged-in account (OpenSooq).
+    if (!captured.phone && /opensooq/i.test(location.host)) {
+      try {
+        var ans = prompt(
+          'مكسب: ادخل رقم موبايلك المسجّل على OpenSooq\n' +
+          '(عشان نستبعده من أرقام البائعين)\n\n' +
+          'سيتم حفظه محلياً للجلسات القادمة. اتركه فارغاً لو مش مسجل دخول.',
+          ''
+        );
+        if (ans) {
+          var ap = normalizeEgPhone(ans);
+          if (ap) {
+            captured.phone = ap;
+            try { localStorage.setItem('maksab_self_phone', ap); } catch (_) {}
+          }
+        }
+      } catch (e) { /* user dismissed prompt */ }
     }
 
     // 3. Meta tags
