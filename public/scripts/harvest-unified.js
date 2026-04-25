@@ -773,8 +773,29 @@
     var done = 0;
     var idx = 0;
 
+    // OpenSooq rate-limits phone reveals per session; reduce concurrency
+    // and add retries with backoff to lift the success rate.
+    var isOpenSooq = platform.id === 'opensooq';
+    var concurrent = isOpenSooq ? 2 : CONCURRENT;
+    var maxAttempts = isOpenSooq ? 3 : 1;             // 1 initial + 2 retries
+    var retryDelays = [1500, 3000];                    // ms before retry 1 and 2
+
     function update() {
       renderProgress(ui, '📞 جلب الأرقام والأسماء: <b>' + done + '/' + total + '</b><br>إجمالي: ' + items.length);
+    }
+
+    function fetchAndParseOnce(it) {
+      // Fresh cache-buster every attempt — important for OpenSooq which
+      // serves identical responses for repeat fetches in the same window.
+      var cacheBuster = '_t=' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      var url = it.url + (it.url.indexOf('?') >= 0 ? '&' : '?') + cacheBuster;
+      return platform.fetchPage(url).then(function(res){
+        return platform.parseDetail(res.html, res.doc) || {};
+      });
+    }
+
+    function delay(ms) {
+      return new Promise(function(r){ setTimeout(r, ms); });
     }
 
     return new Promise(function(resolve){
@@ -787,28 +808,40 @@
         // additional images from the gallery. Skip only if we have everything.
         var needsFetch = !it.sellerPhone || !it.sellerName || !(it.allImages && it.allImages.length > 1);
         if (!needsFetch) { done++; update(); return Promise.resolve(); }
-        return platform.fetchPage(it.url + (it.url.indexOf('?') >= 0 ? '&' : '?') + '_t=' + Date.now())
-          .then(function(res){
-            var detail = platform.parseDetail(res.html, res.doc) || {};
+
+        function attempt(n) {
+          return fetchAndParseOnce(it).then(function(detail){
             if (detail.phone && !it.sellerPhone) it.sellerPhone = detail.phone;
             if (detail.sellerName && !it.sellerName) it.sellerName = detail.sellerName;
             if (detail.allImages && detail.allImages.length > 0) {
               it.allImages = detail.allImages;
               if (!it.thumbnailUrl) it.thumbnailUrl = detail.allImages[0];
             }
-            // Merge specs + amenities (bookmarklet-extracted property catalog)
             if (detail.specs && Object.keys(detail.specs).length > 0) it.specs = detail.specs;
             if (detail.amenities && detail.amenities.length > 0) it.amenities = detail.amenities;
             if (detail.sellerBadge && !it.sellerBadge) it.sellerBadge = detail.sellerBadge;
             if (detail.price && !it.price) it.price = detail.price;
-            done++; update();
-          })
-          .catch(function(){ done++; update(); });
+
+            // Only retry if we still don't have a phone AND we're on a
+            // platform that benefits from retries (currently OpenSooq).
+            if (!it.sellerPhone && n + 1 < maxAttempts) {
+              return delay(retryDelays[n] || 3000).then(function(){ return attempt(n + 1); });
+            }
+          }).catch(function(){
+            // Network/parse error — retry with backoff if attempts remain.
+            if (n + 1 < maxAttempts) {
+              return delay(retryDelays[n] || 3000).then(function(){ return attempt(n + 1); });
+            }
+          });
+        }
+
+        return attempt(0).then(function(){ done++; update(); })
+                        .catch(function(){ done++; update(); });
       }
 
       function drain() {
         var inFlight = [];
-        while (inFlight.length < CONCURRENT && idx < items.length) {
+        while (inFlight.length < concurrent && idx < items.length) {
           inFlight.push(launchOne(idx++));
         }
         if (inFlight.length === 0) return resolve();
