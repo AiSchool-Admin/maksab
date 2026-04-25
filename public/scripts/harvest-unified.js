@@ -2188,6 +2188,43 @@
           }
           var seenUrls = {};
 
+          // ─── Filter sponsored/cross-category noise ───
+          // OpenSooq mixes promoted listings from OTHER categories
+          // (electronics, services, jobs) and OTHER governorates (Cairo,
+          // Giza) into property search results. Filter to keep only
+          // listings whose category + governorate match what the user
+          // is actually browsing.
+          var wantCategory = ctx.maksabCat; // 'عقارات' or 'سيارات' or null
+          var wantGov = ctx.governorate || ctx.governorateLabel; // 'الإسكندرية'
+          var preFilter = listings.length;
+          listings = listings.filter(function(item) {
+            // Category check: cat1_label / cat2_label / cat1_uri must hint
+            // the right maksab category. Skip when wantCategory is null.
+            if (wantCategory) {
+              var catText = String((item.cat1_label || '') + ' ' + (item.cat2_label || '') + ' ' + (item.cat1_uri || '')).toLowerCase();
+              if (wantCategory === 'عقارات') {
+                if (!/عقار|real.?estate|property|شقق|فيلا|أراضي/i.test(catText)) return false;
+              } else if (wantCategory === 'سيارات') {
+                if (!/سيار|car|vehicle|موتو|دراج/i.test(catText)) return false;
+              }
+            }
+            // Governorate check: city_label must match the active governorate.
+            if (wantGov && /إسكندرية|اسكندرية|alexandria/i.test(wantGov)) {
+              var loc = String(item.city_label || item.nhood_label || '');
+              if (loc && !/إسكندرية|اسكندرية|alexandria/i.test(loc)) {
+                // Allow Alexandria-known neighborhoods
+                if (!/ميامي|سموحة|سيدي بشر|العصافرة|المنتزه|العامرية|برج العرب|محرم بك|سيدي جابر|كفر عبد|الإبراهيمية|أبو قير|العجمي|السيوف|المندرة|سان ستيفانو|ستانلي|كليوباترا|لوران|رشدي|سبورتنج|فلمنج|بحري|الأنفوشي|اللبان|الدخيلة|المنشية|فيكتوريا|جناكليس|بولكلي|كامب شيزار|النخيل|جليم|المعمورة/.test(loc)) {
+                  return false;
+                }
+              }
+            }
+            return true;
+          });
+          if (listings.length !== preFilter) {
+            console.info('[maksab/opensooq] filtered out', preFilter - listings.length,
+              'sponsored/cross-cat items, kept', listings.length);
+          }
+
           for (var i = 0; i < listings.length; i++) {
             var it = listings[i];
 
@@ -2243,13 +2280,17 @@
 
             // Phone — read from list item ONLY if it's a complete, unmasked
             // Egyptian mobile (01[0125]XXXXXXXX). Reject masked variants
-            // (010029285XX) per user policy: no partial phones.
+            // (010029285XX) per user policy: no partial phones. Also reject
+            // the logged-in user's own phone — OpenSooq may echo it in
+            // certain item shapes.
             var listPhone = null;
             var rawPh = it.phone_number || it.phone || it.mobile || null;
             if (rawPh) {
               var phStr = String(rawPh).replace(/[^\d]/g, '');
-              // Egyptian mobile: starts with 010/011/012/015, exactly 11 digits.
-              if (/^01[0125]\d{8}$/.test(phStr)) listPhone = phStr;
+              if (/^01[0125]\d{8}$/.test(phStr)
+                  && phStr !== (BLOCKED_USER && BLOCKED_USER.phone)) {
+                listPhone = phStr;
+              }
             }
 
             items.push({
@@ -2338,6 +2379,12 @@
     parseDetail: function(html) {
       var result = { phone: null, sellerName: null };
 
+      // Identify the logged-in user's own phone — OpenSooq renders it in
+      // the page header when signed in, and findPhoneInText would otherwise
+      // grab it as the "seller phone" for every listing.
+      var selfPhone = (BLOCKED_USER && BLOCKED_USER.phone) || null;
+      function notSelf(p) { return p && p !== selfPhone ? p : null; }
+
       // __NEXT_DATA__
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
@@ -2352,14 +2399,24 @@
           var phoneCandidates = [item.phone, item.mobile, item.contact_phone, user.phone, user.mobile];
           for (var k = 0; k < phoneCandidates.length; k++) {
             if (phoneCandidates[k]) {
-              var p = normalizeEgPhone(phoneCandidates[k]);
+              var p = notSelf(normalizeEgPhone(phoneCandidates[k]));
               if (p) { result.phone = p; break; }
             }
           }
         } catch (e) {}
       }
 
-      if (!result.phone) result.phone = findPhoneInText(html);
+      // Owner-card scoped phone scan (avoid header/navbar matches).
+      if (!result.phone) {
+        var ownerCard = html.match(/id=["']PostViewOwnerCard["']([\s\S]{0,4000})/i);
+        if (ownerCard) {
+          var ownerPhone = findPhoneInText(ownerCard[1]);
+          result.phone = notSelf(ownerPhone);
+        }
+      }
+
+      // Last-resort: scan whole HTML, but reject self-phone explicitly.
+      if (!result.phone) result.phone = notSelf(findPhoneInText(html));
 
       if (!result.sellerName) {
         // OpenSooq's owner card has h3 with name
