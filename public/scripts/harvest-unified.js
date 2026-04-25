@@ -3172,21 +3172,47 @@
         } catch (e) {}
       }
 
-      // Fallback: regex scan
-      if (!result.phone) result.phone = findPhoneInText(html);
+      // Reject "عقارات مصر" — it's the brand name AqarMap uses for itself
+      // (literally "Egypt Real Estate"), embedded in every detail page as
+      // the Organization metadata. Same for the contact phone 01006674484
+      // shown across ALL pages as a generic helpdesk number.
+      var AQARMAP_BRAND_NAMES = /^(عقارات\s*مصر|عقار\s*ماب|aqarmap|aqar\s*map)$/i;
+      var AQARMAP_BRAND_PHONES = ['01006674484'];
+
+      // Fallback: regex scan — but ONLY in clearly-scoped seller containers,
+      // never the page-global "name" regex (which picks the Organization
+      // schema name, i.e. AqarMap itself).
+      if (!result.phone) {
+        var telLink = html.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
+        if (telLink) {
+          var tp = normalizeEgPhone(telLink[2]);
+          if (tp && AQARMAP_BRAND_PHONES.indexOf(tp) < 0) result.phone = tp;
+        }
+      }
       if (!result.sellerName) {
         var pats = [
-          /class="[^"]*(?:owner|seller|agent|broker|user)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
-          /itemprop=["']name["'][^>]*>\s*([^<]{2,60})\s*</i,
-          /"name"\s*:\s*"([^"]{2,60})"/i,
+          /class="[^"]*(?:owner|seller|agent|broker)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
+          /class="[^"]*contact[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
         ];
         for (var i = 0; i < pats.length; i++) {
           var mm = html.match(pats[i]);
           if (mm && mm[1]) {
             var n = mm[1].trim().replace(/\s+/g, ' ');
-            if (n.length >= 2 && n.length <= 60 && !/^\d+$/.test(n)) { result.sellerName = n; break; }
+            if (n.length >= 2 && n.length <= 60
+                && !/^\d+$/.test(n)
+                && !AQARMAP_BRAND_NAMES.test(n)) {
+              result.sellerName = n;
+              break;
+            }
           }
         }
+      }
+      // Belt-and-braces: if NEXT_DATA gave us a brand-name seller, drop it.
+      if (result.sellerName && AQARMAP_BRAND_NAMES.test(result.sellerName)) {
+        result.sellerName = null;
+      }
+      if (result.phone && AQARMAP_BRAND_PHONES.indexOf(result.phone) >= 0) {
+        result.phone = null;
       }
       return result;
     },
