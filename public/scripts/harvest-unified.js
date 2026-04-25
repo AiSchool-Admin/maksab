@@ -2488,30 +2488,17 @@
     parseDetail: function(html) {
       var result = { phone: null, sellerName: null };
 
-      // Identify the logged-in user's own phone — OpenSooq renders it in
-      // the page header when signed in, and findPhoneInText would otherwise
-      // grab it as the "seller phone" for every listing.
+      // Identify the logged-in user's own phone — captured at run-start by
+      // detectLoggedInUser (NEXT_DATA → DOM scan → frequency → localStorage
+      // → prompt). Used to reject the user's own phone wherever it appears.
       var selfPhone = (BLOCKED_USER && BLOCKED_USER.phone) || null;
       function notSelf(p) { return p && p !== selfPhone ? p : null; }
 
-      // Strip <header>, <nav>, <aside>, <footer> from the HTML before
-      // scanning. OpenSooq renders the logged-in user's phone in the top
-      // navbar; the seller's contact number lives inside <main>. Removing
-      // the chrome eliminates the user-phone-leak class of bug entirely.
-      var contentHtml = html
-        .replace(/<header\b[\s\S]*?<\/header>/gi, '')
-        .replace(/<nav\b[\s\S]*?<\/nav>/gi, '')
-        .replace(/<aside\b[\s\S]*?<\/aside>/gi, '')
-        .replace(/<footer\b[\s\S]*?<\/footer>/gi, '');
-
-      // FAST PATH: <a href="tel:..."> inside main content = seller's
-      // contact button. Navbar account links never use tel:.
-      var telMatch = contentHtml.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
+      // FAST PATH: <a href="tel:..."> = seller's contact button.
+      var telMatch = html.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
       if (telMatch) {
-        var telPhone = normalizeEgPhone(telMatch[2]);
-        if (telPhone && telPhone !== selfPhone) {
-          result.phone = telPhone;
-        }
+        var telPhone = notSelf(normalizeEgPhone(telMatch[2]));
+        if (telPhone) result.phone = telPhone;
       }
 
       // __NEXT_DATA__
@@ -2526,7 +2513,10 @@
             result.sellerName = String(user.name || user.display_name).trim() || null;
           }
           if (!result.phone) {
-            var phoneCandidates = [item.phone, item.mobile, item.contact_phone, user.phone, user.mobile];
+            var phoneCandidates = [
+              item.phone, item.mobile, item.contact_phone, item.phone_number,
+              user.phone, user.mobile, user.phone_number,
+            ];
             for (var k = 0; k < phoneCandidates.length; k++) {
               if (phoneCandidates[k]) {
                 var p = notSelf(normalizeEgPhone(phoneCandidates[k]));
@@ -2537,20 +2527,19 @@
         } catch (e) {}
       }
 
-      // Owner-card scoped phone scan (avoid header/navbar matches).
+      // Owner-card scoped phone scan.
       if (!result.phone) {
-        var ownerCard = contentHtml.match(/id=["']PostViewOwnerCard["']([\s\S]{0,4000})/i);
+        var ownerCard = html.match(/id=["']PostViewOwnerCard["']([\s\S]{0,4000})/i);
         if (ownerCard) {
           var ownerPhone = findPhoneInText(ownerCard[1]);
           result.phone = notSelf(ownerPhone);
         }
       }
 
-      // Last-resort: scan content (header/nav/footer stripped) for ALL
-      // phones. Pick the first that isn't the user's. The strip above
-      // means even when selfPhone is unknown we no longer pick navbar.
+      // Last-resort: scan whole HTML for ALL phones, pick first non-self.
+      // BLOCKED_USER.phone (captured via prompt fallback) makes this safe.
       if (!result.phone) {
-        var allPhones = contentHtml.match(/01[0-25]\d{8}/g) || [];
+        var allPhones = html.match(/01[0-25]\d{8}/g) || [];
         for (var pp2 = 0; pp2 < allPhones.length; pp2++) {
           var cand = normalizeEgPhone(allPhones[pp2]);
           if (cand && cand !== selfPhone) { result.phone = cand; break; }
@@ -2558,8 +2547,7 @@
       }
 
       if (!result.sellerName) {
-        // OpenSooq's owner card has h3 with name
-        var own = contentHtml.match(/id=["']PostViewOwnerCard["'][\s\S]{0,2000}?<h3[^>]*>([^<]{2,60})<\/h3>/i);
+        var own = html.match(/id=["']PostViewOwnerCard["'][\s\S]{0,2000}?<h3[^>]*>([^<]{2,60})<\/h3>/i);
         if (own && own[1]) {
           result.sellerName = own[1].trim().replace(/\s+/g, ' ') || null;
         }
