@@ -182,6 +182,30 @@
       }
     } catch (e) { /* ignore */ }
 
+    // 2b. Last-resort: pick the MOST FREQUENT phone in the body text.
+    // OpenSooq renders the logged-in user's phone in multiple places
+    // (account dropdown, "My ads" sidebar, etc.) — by frequency it will
+    // dominate over any single seller's phone shown on a card.
+    if (!captured.phone) {
+      try {
+        var bodyText = (document.body && document.body.textContent) || '';
+        var phoneCounts = {};
+        var matchAll = bodyText.match(/01[0-25]\d{8}/g) || [];
+        for (var pi = 0; pi < matchAll.length; pi++) {
+          var pn = matchAll[pi];
+          phoneCounts[pn] = (phoneCounts[pn] || 0) + 1;
+        }
+        var topPhone = null, topCount = 0;
+        for (var pk in phoneCounts) {
+          if (phoneCounts[pk] > topCount) { topPhone = pk; topCount = phoneCounts[pk]; }
+        }
+        // Only treat as self-phone if it appears at least 3 times (clear pattern)
+        if (topPhone && topCount >= 3) {
+          captured.phone = normalizeEgPhone(topPhone);
+        }
+      } catch (e) { /* ignore */ }
+    }
+
     // 3. Meta tags
     try {
       var metaTags = document.querySelectorAll('meta[name*="user"], meta[property*="user"]');
@@ -2227,7 +2251,13 @@
           // Derive category/governorate from current URL — ctx.maksabCat
           // is often null for OpenSooq's Arabic-encoded URLs, so trusting
           // ctx alone misses the filter entirely.
-          var startUrl = String(ctx.startUrl || '');
+          //
+          // location.href returns the URL-encoded form (Arabic chars become
+          // %D8%XX...). Decode before regex matching, with a try/catch in
+          // case it's already malformed.
+          var rawStartUrl = String(ctx.startUrl || '');
+          var startUrl = rawStartUrl;
+          try { startUrl = decodeURIComponent(rawStartUrl); } catch (_) {}
           var urlIsProperty = /عقار|real.?estate|propert|شقق|فيلا|أراض/i.test(startUrl);
           var urlIsCar = /سيار|car|vehicle|موتو|دراج/i.test(startUrl);
           var urlIsAlex = /الإسكندرية|الاسكندرية|اسكندرية|alexandria/i.test(startUrl);
@@ -2236,6 +2266,9 @@
             || (urlIsCar ? 'سيارات' : null);
           var wantAlex = urlIsAlex
             || /إسكندرية|اسكندرية|alexandria/i.test(String(ctx.governorate || ctx.governorateLabel || ''));
+
+          console.info('[maksab/opensooq] decoded URL:', startUrl.substring(0, 120));
+          console.info('[maksab/opensooq] derived — wantCategory:', wantCategory, 'wantAlex:', wantAlex);
 
           var preFilter = listings.length;
           listings = listings.filter(function(item) {
