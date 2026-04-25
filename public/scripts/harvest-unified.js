@@ -199,8 +199,12 @@
         for (var pk in phoneCounts) {
           if (phoneCounts[pk] > topCount) { topPhone = pk; topCount = phoneCounts[pk]; }
         }
-        // Only treat as self-phone if it appears at least 3 times (clear pattern)
-        if (topPhone && topCount >= 3) {
+        // On OpenSooq's list page, all OTHER sellers' phones are masked
+        // ("010029285XX" — 9 digits + XX), so the 11-digit regex above
+        // never matches them. The only fully-formed phone on the list
+        // page is the logged-in user's own. So even ONE match here is
+        // sufficient evidence — no frequency threshold needed.
+        if (topPhone) {
           captured.phone = normalizeEgPhone(topPhone);
         }
       } catch (e) { /* ignore */ }
@@ -2456,6 +2460,17 @@
       var selfPhone = (BLOCKED_USER && BLOCKED_USER.phone) || null;
       function notSelf(p) { return p && p !== selfPhone ? p : null; }
 
+      // FAST PATH: <a href="tel:..."> is the seller's contact button on
+      // OpenSooq detail pages. The navbar's "my account" link is NOT a
+      // tel: link, so this scan skips it cleanly.
+      var telMatch = html.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
+      if (telMatch) {
+        var telPhone = normalizeEgPhone(telMatch[2]);
+        if (telPhone && telPhone !== selfPhone) {
+          result.phone = telPhone;
+        }
+      }
+
       // __NEXT_DATA__
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
@@ -2467,11 +2482,13 @@
           if (user.name || user.display_name) {
             result.sellerName = String(user.name || user.display_name).trim() || null;
           }
-          var phoneCandidates = [item.phone, item.mobile, item.contact_phone, user.phone, user.mobile];
-          for (var k = 0; k < phoneCandidates.length; k++) {
-            if (phoneCandidates[k]) {
-              var p = notSelf(normalizeEgPhone(phoneCandidates[k]));
-              if (p) { result.phone = p; break; }
+          if (!result.phone) {
+            var phoneCandidates = [item.phone, item.mobile, item.contact_phone, user.phone, user.mobile];
+            for (var k = 0; k < phoneCandidates.length; k++) {
+              if (phoneCandidates[k]) {
+                var p = notSelf(normalizeEgPhone(phoneCandidates[k]));
+                if (p) { result.phone = p; break; }
+              }
             }
           }
         } catch (e) {}
@@ -2492,8 +2509,8 @@
       // it always wins over the seller's phone deeper in the page.
       if (!result.phone) {
         var allPhones = html.match(/01[0-25]\d{8}/g) || [];
-        for (var pp = 0; pp < allPhones.length; pp++) {
-          var cand = normalizeEgPhone(allPhones[pp]);
+        for (var pp2 = 0; pp2 < allPhones.length; pp2++) {
+          var cand = normalizeEgPhone(allPhones[pp2]);
           if (cand && cand !== selfPhone) { result.phone = cand; break; }
         }
       }
@@ -3016,8 +3033,19 @@
           var idMatch = lClean.match(/\/ar\/listing\/(\d+)/);
           var lId = idMatch ? idMatch[1] : '';
 
-          // Walk up to nearest card wrapper
+          // Walk up to find a card wrapper that includes price text. The
+          // immediate `closest('article|li|card')` may be too tight (e.g.
+          // wraps only the image+title), with the price living one parent
+          // level up. Walk up to 5 ancestors and pick the first that has
+          // a price token in its text.
           var lCard = lAnchor.closest('article, li, [class*="card" i], [class*="listing" i], [class*="property" i]') || lAnchor.parentElement;
+          var widerCard = lCard;
+          var probe = lCard;
+          for (var up = 0; up < 5 && probe; up++) {
+            var t = (probe.textContent || '');
+            if (/(?:ج\.?م|جنيه|EGP)/.test(t)) { widerCard = probe; break; }
+            probe = probe.parentElement;
+          }
 
           // Title — card heading or anchor's own text
           var lTitle = '';
@@ -3028,18 +3056,20 @@
           if (!lTitle) lTitle = (lAnchor.getAttribute('title') || lAnchor.getAttribute('aria-label') || lAnchor.textContent || '').trim();
           if (!lTitle || lTitle.length < 3) continue;
 
-          // Price — look for currency symbol in card
+          // Price — search in widerCard (may be ancestor of lCard).
           var lPrice = null;
-          if (lCard) {
-            var priceText = lCard.textContent || '';
-            var pm = priceText.match(/(\d[\d,٬\s]*)\s*(?:ج\.?م|جنيه|EGP)/);
+          if (widerCard) {
+            var priceText = widerCard.textContent || '';
+            // Match a number ≥ 4 digits followed by EGP currency. Excludes
+            // small per-meter prices, area sqm (rejected by 4+ digit guard).
+            var pm = priceText.match(/(\d[\d,٬]{3,})\s*(?:ج\.?م|جنيه|EGP)/);
             if (pm) lPrice = parseInt(pm[1].replace(/[^\d]/g, ''), 10) || null;
           }
 
           // Area (sqm)
           var lArea = '';
-          if (lCard) {
-            var cardText = lCard.textContent || '';
+          if (widerCard) {
+            var cardText = widerCard.textContent || '';
             var am = cardText.match(/(\d+)\s*(?:م²|م2|متر)/);
             if (am) lArea = am[1];
           }
