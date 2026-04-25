@@ -130,6 +130,35 @@
             }
           }
         }
+
+        // 1b. Deep walk: if still no phone, recursively scan __NEXT_DATA__
+        // for any object under a "user/member/profile/me" parent key that
+        // contains a phone-shaped value. OpenSooq buries it under varying
+        // paths between releases.
+        if (!captured.phone) {
+          (function deepWalk(obj, parentKey, depth) {
+            if (depth > 6 || !obj || typeof obj !== 'object' || captured.phone) return;
+            if (Array.isArray(obj)) {
+              for (var ai = 0; ai < Math.min(obj.length, 20); ai++) deepWalk(obj[ai], parentKey, depth + 1);
+              return;
+            }
+            var underUserKey = /(^|[._-])(user|member|profile|account|me|loggedIn|auth|session|currentUser)([._-]|$)/i.test(parentKey);
+            if (underUserKey) {
+              var ph = obj.phone || obj.mobile || obj.phone_number || obj.contactNumber;
+              if (ph) {
+                var norm = normalizeEgPhone(ph);
+                if (norm) { captured.phone = norm; return; }
+              }
+              if (!captured.name) {
+                var nm = obj.name || obj.display_name || obj.full_name || obj.user_name;
+                if (nm) captured.name = String(nm).trim() || null;
+              }
+            }
+            for (var k in obj) {
+              if (Object.prototype.hasOwnProperty.call(obj, k)) deepWalk(obj[k], k, depth + 1);
+            }
+          })(props, 'pageProps', 0);
+        }
       }
     } catch (e) { /* ignore */ }
 
@@ -2194,25 +2223,36 @@
           // Giza) into property search results. Filter to keep only
           // listings whose category + governorate match what the user
           // is actually browsing.
-          var wantCategory = ctx.maksabCat; // 'عقارات' or 'سيارات' or null
-          var wantGov = ctx.governorate || ctx.governorateLabel; // 'الإسكندرية'
+          //
+          // Derive category/governorate from current URL — ctx.maksabCat
+          // is often null for OpenSooq's Arabic-encoded URLs, so trusting
+          // ctx alone misses the filter entirely.
+          var startUrl = String(ctx.startUrl || '');
+          var urlIsProperty = /عقار|real.?estate|propert|شقق|فيلا|أراض/i.test(startUrl);
+          var urlIsCar = /سيار|car|vehicle|موتو|دراج/i.test(startUrl);
+          var urlIsAlex = /الإسكندرية|الاسكندرية|اسكندرية|alexandria/i.test(startUrl);
+          var wantCategory = ctx.maksabCat
+            || (urlIsProperty ? 'عقارات' : null)
+            || (urlIsCar ? 'سيارات' : null);
+          var wantAlex = urlIsAlex
+            || /إسكندرية|اسكندرية|alexandria/i.test(String(ctx.governorate || ctx.governorateLabel || ''));
+
           var preFilter = listings.length;
           listings = listings.filter(function(item) {
-            // Category check: cat1_label / cat2_label / cat1_uri must hint
-            // the right maksab category. Skip when wantCategory is null.
+            // Category check via cat1_label / cat2_label / cat1_uri.
             if (wantCategory) {
               var catText = String((item.cat1_label || '') + ' ' + (item.cat2_label || '') + ' ' + (item.cat1_uri || '')).toLowerCase();
               if (wantCategory === 'عقارات') {
-                if (!/عقار|real.?estate|property|شقق|فيلا|أراضي/i.test(catText)) return false;
+                if (!/عقار|real.?estate|property|شقق|فيلا|أراضي|دوبلكس|بنتهاوس|محل|مكتب|عمارة/i.test(catText)) return false;
               } else if (wantCategory === 'سيارات') {
                 if (!/سيار|car|vehicle|موتو|دراج/i.test(catText)) return false;
               }
             }
-            // Governorate check: city_label must match the active governorate.
-            if (wantGov && /إسكندرية|اسكندرية|alexandria/i.test(wantGov)) {
+            // Governorate check: city_label must match Alexandria or one of
+            // its known neighborhoods. Drop everything else when on an Alex URL.
+            if (wantAlex) {
               var loc = String(item.city_label || item.nhood_label || '');
               if (loc && !/إسكندرية|اسكندرية|alexandria/i.test(loc)) {
-                // Allow Alexandria-known neighborhoods
                 if (!/ميامي|سموحة|سيدي بشر|العصافرة|المنتزه|العامرية|برج العرب|محرم بك|سيدي جابر|كفر عبد|الإبراهيمية|أبو قير|العجمي|السيوف|المندرة|سان ستيفانو|ستانلي|كليوباترا|لوران|رشدي|سبورتنج|فلمنج|بحري|الأنفوشي|اللبان|الدخيلة|المنشية|فيكتوريا|جناكليس|بولكلي|كامب شيزار|النخيل|جليم|المعمورة/.test(loc)) {
                   return false;
                 }
@@ -2220,10 +2260,8 @@
             }
             return true;
           });
-          if (listings.length !== preFilter) {
-            console.info('[maksab/opensooq] filtered out', preFilter - listings.length,
-              'sponsored/cross-cat items, kept', listings.length);
-          }
+          console.info('[maksab/opensooq] filter — wantCategory:', wantCategory,
+            'wantAlex:', wantAlex, 'kept:', listings.length, '/', preFilter);
 
           for (var i = 0; i < listings.length; i++) {
             var it = listings[i];
@@ -2415,8 +2453,17 @@
         }
       }
 
-      // Last-resort: scan whole HTML, but reject self-phone explicitly.
-      if (!result.phone) result.phone = notSelf(findPhoneInText(html));
+      // Last-resort: scan whole HTML for ALL phones and pick the first
+      // one that isn't the logged-in user's. findPhoneInText returns only
+      // the first match — when the user's phone is in the navbar/header,
+      // it always wins over the seller's phone deeper in the page.
+      if (!result.phone) {
+        var allPhones = html.match(/01[0-25]\d{8}/g) || [];
+        for (var pp = 0; pp < allPhones.length; pp++) {
+          var cand = normalizeEgPhone(allPhones[pp]);
+          if (cand && cand !== selfPhone) { result.phone = cand; break; }
+        }
+      }
 
       if (!result.sellerName) {
         // OpenSooq's owner card has h3 with name
