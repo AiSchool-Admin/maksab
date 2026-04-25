@@ -2460,10 +2460,19 @@
       var selfPhone = (BLOCKED_USER && BLOCKED_USER.phone) || null;
       function notSelf(p) { return p && p !== selfPhone ? p : null; }
 
-      // FAST PATH: <a href="tel:..."> is the seller's contact button on
-      // OpenSooq detail pages. The navbar's "my account" link is NOT a
-      // tel: link, so this scan skips it cleanly.
-      var telMatch = html.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
+      // Strip <header>, <nav>, <aside>, <footer> from the HTML before
+      // scanning. OpenSooq renders the logged-in user's phone in the top
+      // navbar; the seller's contact number lives inside <main>. Removing
+      // the chrome eliminates the user-phone-leak class of bug entirely.
+      var contentHtml = html
+        .replace(/<header\b[\s\S]*?<\/header>/gi, '')
+        .replace(/<nav\b[\s\S]*?<\/nav>/gi, '')
+        .replace(/<aside\b[\s\S]*?<\/aside>/gi, '')
+        .replace(/<footer\b[\s\S]*?<\/footer>/gi, '');
+
+      // FAST PATH: <a href="tel:..."> inside main content = seller's
+      // contact button. Navbar account links never use tel:.
+      var telMatch = contentHtml.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
       if (telMatch) {
         var telPhone = normalizeEgPhone(telMatch[2]);
         if (telPhone && telPhone !== selfPhone) {
@@ -2496,19 +2505,18 @@
 
       // Owner-card scoped phone scan (avoid header/navbar matches).
       if (!result.phone) {
-        var ownerCard = html.match(/id=["']PostViewOwnerCard["']([\s\S]{0,4000})/i);
+        var ownerCard = contentHtml.match(/id=["']PostViewOwnerCard["']([\s\S]{0,4000})/i);
         if (ownerCard) {
           var ownerPhone = findPhoneInText(ownerCard[1]);
           result.phone = notSelf(ownerPhone);
         }
       }
 
-      // Last-resort: scan whole HTML for ALL phones and pick the first
-      // one that isn't the logged-in user's. findPhoneInText returns only
-      // the first match — when the user's phone is in the navbar/header,
-      // it always wins over the seller's phone deeper in the page.
+      // Last-resort: scan content (header/nav/footer stripped) for ALL
+      // phones. Pick the first that isn't the user's. The strip above
+      // means even when selfPhone is unknown we no longer pick navbar.
       if (!result.phone) {
-        var allPhones = html.match(/01[0-25]\d{8}/g) || [];
+        var allPhones = contentHtml.match(/01[0-25]\d{8}/g) || [];
         for (var pp2 = 0; pp2 < allPhones.length; pp2++) {
           var cand = normalizeEgPhone(allPhones[pp2]);
           if (cand && cand !== selfPhone) { result.phone = cand; break; }
@@ -2517,7 +2525,7 @@
 
       if (!result.sellerName) {
         // OpenSooq's owner card has h3 with name
-        var own = html.match(/id=["']PostViewOwnerCard["'][\s\S]{0,2000}?<h3[^>]*>([^<]{2,60})<\/h3>/i);
+        var own = contentHtml.match(/id=["']PostViewOwnerCard["'][\s\S]{0,2000}?<h3[^>]*>([^<]{2,60})<\/h3>/i);
         if (own && own[1]) {
           result.sellerName = own[1].trim().replace(/\s+/g, ' ') || null;
         }
