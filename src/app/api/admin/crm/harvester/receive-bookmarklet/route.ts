@@ -135,12 +135,12 @@ async function matchScopeFromUrl(
 
   // 2. NEW: Fallback via meta (platform + governorate + category).
   // Unified bookmarklet v11 sends these reliably — much stronger than URL guessing.
-  if (meta && meta.platform && meta.maksab_category) {
+  if (meta && meta.platform) {
     const basePlatform = meta.platform.replace(/_bookmarklet$/, "");
     const platformVariants = Array.from(new Set([meta.platform, basePlatform]));
 
     // Tier 1 (preferred): exact match on platform + governorate + category.
-    if (meta.governorate_label) {
+    if (meta.governorate_label && meta.maksab_category) {
       const { data: exactScopes } = await supabase
         .from("ahe_scopes")
         .select("id, code, is_paused, is_active")
@@ -157,23 +157,43 @@ async function matchScopeFromUrl(
       }
     }
 
+    // Tier 1.5: platform + governorate (no category — common for bookmarklet
+    // when category detection fails on Arabic-encoded URL segments).
+    if (meta.governorate_label) {
+      const { data: govScopes } = await supabase
+        .from("ahe_scopes")
+        .select("id, code, is_paused, is_active")
+        .in("source_platform", platformVariants)
+        .eq("governorate", meta.governorate_label)
+        .limit(10);
+      if (govScopes && govScopes.length > 0) {
+        const best =
+          govScopes.find((s) => s.is_active && !s.is_paused) ||
+          govScopes.find((s) => s.is_active) ||
+          govScopes[0];
+        return best.id;
+      }
+    }
+
     // Tier 2 (relaxed): match on platform + category ONLY.
     // Used when the user is on an "all-Egypt" URL (g=0 on SemsarMasr) or when
     // the governorate slug doesn't map cleanly. The individual listings still
     // get their true governorate via mapLocation() from the listing location
     // text — this lookup is only about which scope record to attach.
-    const { data: relaxedScopes } = await supabase
-      .from("ahe_scopes")
-      .select("id, code, is_paused, is_active")
-      .in("source_platform", platformVariants)
-      .eq("maksab_category", meta.maksab_category)
-      .limit(10);
-    if (relaxedScopes && relaxedScopes.length > 0) {
-      const best =
-        relaxedScopes.find((s) => s.is_active && !s.is_paused) ||
-        relaxedScopes.find((s) => s.is_active) ||
-        relaxedScopes[0];
-      return best.id;
+    if (meta.maksab_category) {
+      const { data: relaxedScopes } = await supabase
+        .from("ahe_scopes")
+        .select("id, code, is_paused, is_active")
+        .in("source_platform", platformVariants)
+        .eq("maksab_category", meta.maksab_category)
+        .limit(10);
+      if (relaxedScopes && relaxedScopes.length > 0) {
+        const best =
+          relaxedScopes.find((s) => s.is_active && !s.is_paused) ||
+          relaxedScopes.find((s) => s.is_active) ||
+          relaxedScopes[0];
+        return best.id;
+      }
     }
 
     // Tier 3 (very relaxed): ANY scope on this platform.
