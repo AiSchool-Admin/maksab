@@ -2811,32 +2811,78 @@
         }
       }
 
-      // Strategy 2: JSON-LD ItemList
-      var ldMatches = html.match(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+      // Strategy 2: JSON-LD ItemList — order-agnostic regex (matches
+      // type="application/ld+json" wherever it appears in the script tag,
+      // including AqarMap's `<script id="search-schema" type="...">`).
+      var ldMatches = html.match(/<script\b[^>]*\btype=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
       console.info('[maksab/aqarmap] Strategy 2 (JSON-LD) — script tags found:', ldMatches.length);
       for (var li = 0; li < ldMatches.length; li++) {
         var innerMatch = ldMatches[li].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
         if (!innerMatch) continue;
         try {
           var ld = JSON.parse(innerMatch[1]);
-          if (ld && ld['@type'] === 'ItemList' && Array.isArray(ld.itemListElement)) {
-            for (var lj = 0; lj < ld.itemListElement.length; lj++) {
-              var el = ld.itemListElement[lj];
+          // ld may be an object OR an array of objects; flatten and look
+          // for an ItemList (search results) or list of Place / Product.
+          var ldList = Array.isArray(ld) ? ld : [ld];
+          for (var lk = 0; lk < ldList.length; lk++) {
+            var ldItem = ldList[lk];
+            // Direct ItemList shape
+            var elements = null;
+            if (ldItem && ldItem['@type'] === 'ItemList' && Array.isArray(ldItem.itemListElement)) {
+              elements = ldItem.itemListElement;
+            }
+            // Some schemas nest under @graph
+            if (!elements && ldItem && Array.isArray(ldItem['@graph'])) {
+              for (var gi = 0; gi < ldItem['@graph'].length; gi++) {
+                var g = ldItem['@graph'][gi];
+                if (g && g['@type'] === 'ItemList' && Array.isArray(g.itemListElement)) {
+                  elements = g.itemListElement;
+                  break;
+                }
+              }
+            }
+            if (!elements) continue;
+            console.info('[maksab/aqarmap] Strategy 2 hit — script', li, '→', elements.length, 'items');
+            for (var lj = 0; lj < elements.length; lj++) {
+              var el = elements[lj];
               var item = el.item || el;
-              if (!item || !item.url) continue;
+              if (!item || (!item.url && !item.name)) continue;
+              var rawUrl = String(item.url || '');
+              var cleanUrl = rawUrl ? rawUrl.split('?')[0].split('#')[0] : null;
+              if (!cleanUrl) continue;
+              if (cleanUrl.charAt(0) === '/') cleanUrl = BASE + cleanUrl;
+              // Price: offers.price OR offers[0].price
+              var ldPrice = null;
+              if (item.offers) {
+                var off = Array.isArray(item.offers) ? item.offers[0] : item.offers;
+                if (off && off.price != null) {
+                  ldPrice = parseInt(String(off.price).replace(/[^\d]/g, ''), 10) || null;
+                }
+              }
+              // Address: nested address object (PostalAddress) usually
+              var addr = item.address || (item.location && item.location.address) || {};
+              var locParts = [
+                addr.streetAddress, addr.addressLocality, addr.addressRegion,
+              ].filter(function(x) { return x; });
+              var ldLocation = locParts.length > 0 ? locParts.join(', ') : (ctx.governorateLabel || '');
+              // Image
+              var ldImg = item.image;
+              if (Array.isArray(ldImg)) ldImg = ldImg[0];
+              if (ldImg && typeof ldImg === 'object') ldImg = ldImg.url || ldImg.contentUrl;
               items.push({
-                url: String(item.url).split('?')[0],
+                url: cleanUrl,
+                external_id: String(item.identifier || item.sku || (cleanUrl.match(/\/(\d+)/) || [])[1] || ''),
                 title: String(item.name || ''),
                 description: item.description || '',
-                price: item.offers && item.offers.price ? parseInt(String(item.offers.price).replace(/[^\d]/g, ''), 10) : null,
-                thumbnailUrl: item.image || null,
-                location: ctx.governorateLabel || '',
-                city: ctx.governorateLabel || '',
-                area: '',
+                price: ldPrice,
+                thumbnailUrl: ldImg ? String(ldImg) : null,
+                location: ldLocation,
+                city: addr.addressLocality || ctx.governorateLabel || '',
+                area: addr.streetAddress || '',
                 sellerPhone: null,
                 sellerName: null,
                 sellerProfileUrl: null,
-                dateText: '',
+                dateText: String(item.datePosted || item.dateModified || ''),
                 isVerified: false,
                 isBusiness: false,
                 isFeatured: false,
