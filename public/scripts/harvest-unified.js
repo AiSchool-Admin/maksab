@@ -2913,6 +2913,84 @@
         }
       }
 
+      // DIAGNOSTIC: Scan _R_ script for broker/agency/developer/company keys
+      // BEFORE running JSON-LD strategy. AqarMap is a real-estate marketplace
+      // dominated by agencies — their names should be in the SSR store. We
+      // need to find the JSON path so parseList can extract them per listing.
+      try {
+        var rDiagMatch = html.match(/<script[^>]*\bid=["'](_R_|__R__)["'][^>]*>([\s\S]*?)<\/script>/i);
+        if (rDiagMatch) {
+          var rDiagBody = rDiagMatch[2].trim();
+          var rDiagParsed = null;
+          try { rDiagParsed = JSON.parse(rDiagBody); } catch (_) {}
+          if (!rDiagParsed) {
+            var jpD = rDiagBody.match(/JSON\.parse\(\s*(['"])((?:\\.|(?!\1).)*)\1\s*\)/);
+            if (jpD) {
+              try {
+                var innerD = JSON.parse(jpD[1] + jpD[2] + jpD[1]);
+                rDiagParsed = JSON.parse(innerD);
+              } catch (__) {}
+            }
+          }
+          if (!rDiagParsed) {
+            var oD = rDiagBody.match(/(\{[\s\S]*\})/);
+            if (oD) { try { rDiagParsed = JSON.parse(oD[1]); } catch (___) {} }
+          }
+          if (rDiagParsed) {
+            // Walk the tree, collect any object whose key matches a known
+            // seller-shape pattern. Capture path + a sample of its content.
+            var sellerKeys = /^(broker|brokers|agent|agents|developer|developers|company|agency|agencies|lister|realtor|owner|owners|user|users|seller|sellers|advertiser)$/i;
+            var findings = [];
+            (function walk(obj, path, depth) {
+              if (depth > 8 || !obj || typeof obj !== 'object' || findings.length >= 8) return;
+              if (Array.isArray(obj)) {
+                for (var ai = 0; ai < Math.min(obj.length, 3); ai++) {
+                  walk(obj[ai], path + '[' + ai + ']', depth + 1);
+                }
+                return;
+              }
+              for (var k in obj) {
+                if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+                if (sellerKeys.test(k) && obj[k] && typeof obj[k] === 'object') {
+                  var v = obj[k];
+                  if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'object') v = v[0];
+                  findings.push({
+                    path: path + '.' + k,
+                    keys: Object.keys(v || {}).slice(0, 8),
+                    name: v && (v.name || v.displayName || v.title) || null,
+                    id: v && (v.id || v._id) || null,
+                  });
+                  if (findings.length >= 8) return;
+                }
+                walk(obj[k], path + '.' + k, depth + 1);
+                if (findings.length >= 8) return;
+              }
+            })(rDiagParsed, '', 0);
+            console.info('[maksab/aqarmap] _R_ seller-shape findings:', JSON.stringify(findings));
+
+            // Also: dump first listing item's full keys (so we know where
+            // broker info is attached relative to the listing object).
+            var allListings = PLATFORMS.aqarmap._findListings(rDiagParsed, 0);
+            if (allListings && allListings.length > 0) {
+              var firstL = allListings[0];
+              console.info('[maksab/aqarmap] _R_ FIRST LISTING all keys:',
+                Object.keys(firstL).slice(0, 30));
+              // For each broker-shape key, log its content for the first listing
+              var brokerLikeKeys = Object.keys(firstL).filter(function(k){
+                return /broker|agent|developer|company|agency|owner|user|seller|lister|realtor|advertiser/i.test(k);
+              });
+              for (var bk = 0; bk < brokerLikeKeys.length; bk++) {
+                var bv = firstL[brokerLikeKeys[bk]];
+                console.info('[maksab/aqarmap] _R_ FIRST LISTING.' + brokerLikeKeys[bk] + ':',
+                  typeof bv === 'object' ? JSON.stringify(bv).substring(0, 300) : bv);
+              }
+            }
+          }
+        }
+      } catch (eDiag) {
+        console.warn('[maksab/aqarmap] _R_ diagnostic threw:', eDiag && eDiag.message);
+      }
+
       // Strategy 2: JSON-LD ItemList — order-agnostic regex (matches
       // type="application/ld+json" wherever it appears in the script tag,
       // including AqarMap's `<script id="search-schema" type="...">`).
