@@ -3322,6 +3322,52 @@
         } catch (e) { /* skip */ }
       }
 
+      // ═══ Strategy 0: Next.js 14 streaming chunks ═══════════════════════
+      // AqarMap embeds the broker/agent contact card via __next_f.push as
+      // an escaped JSON string. The seller object looks like:
+      //   {"name":"...","email":"...","isCallRequest":false,"has_parent":
+      //    "$undefined","phones":[{"number":"+201090080540","country_code":
+      //    "+20"}],"address":...}
+      //
+      // In the raw HTML these quotes are backslash-escaped because the
+      // whole object is a string literal inside another JSON string. The
+      // regex below tolerates BOTH escaped (\") and unescaped (") forms,
+      // and pairs the seller name (within ~600 chars before "phones")
+      // with the first phone in the phones array.
+      //
+      // Multiple sellers may be embedded on the same page (related/similar
+      // listings sidebar) — pick the FIRST occurrence of the pattern,
+      // which on AqarMap detail pages is the listing's actual seller.
+      var Q = '\\\\?"';  // matches " or \"
+      var streamPhonePat = new RegExp(
+        Q + 'phones' + Q + '\\s*:\\s*\\[\\s*\\{\\s*' +
+        Q + 'number' + Q + '\\s*:\\s*' + Q + '\\+?20?(01[0-25]\\d{8})'
+      );
+      var streamPhoneMatch = html.match(streamPhonePat);
+      if (streamPhoneMatch) {
+        var streamPhone = acceptPhone(normalizeEgPhone(streamPhoneMatch[1]));
+        if (streamPhone) {
+          result.phone = streamPhone;
+          // Look for "name":"..." within the 800 chars BEFORE this phone —
+          // it belongs to the same seller object. Pick the LAST name match
+          // (closest to "phones") to avoid picking sibling fields' names.
+          var phonesIdx = streamPhoneMatch.index;
+          var beforeHtml = html.substring(Math.max(0, phonesIdx - 800), phonesIdx);
+          var nameRegex = new RegExp(Q + 'name' + Q + '\\s*:\\s*' + Q + '([^"\\\\]{2,60})' + Q, 'g');
+          var lastNameVal = null;
+          var nm;
+          while ((nm = nameRegex.exec(beforeHtml)) !== null) {
+            lastNameVal = nm[1];
+          }
+          if (lastNameVal) {
+            var streamName = acceptName(lastNameVal);
+            if (streamName) result.sellerName = streamName;
+          }
+          console.info('[maksab/aqarmap/detail] Strategy 0 hit — phone:', result.phone,
+            '| name:', result.sellerName || 'none');
+        }
+      }
+
       // ═══ Strategy 1: __NEXT_DATA__ (legacy AqarMap pages) ═══
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
