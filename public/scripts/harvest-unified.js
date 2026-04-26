@@ -3267,9 +3267,22 @@
       function acceptName(n) {
         if (!n) return null;
         var t = String(n).trim().replace(/\s+/g, ' ');
-        if (t.length < 2 || t.length > 60) return null;
+        if (t.length < 2 || t.length > 50) return null;
         if (/^\d+$/.test(t)) return null;
         if (AQARMAP_BRAND_NAMES.test(t)) return null;
+        // Reject Next.js streaming placeholder for undefined values.
+        // AqarMap's seller object often has has_parent=$undefined and the
+        // seller name field itself is "$undefined" until hydrated by an
+        // XHR call — meaning the SSR HTML doesn't actually contain the
+        // seller name. Returning null is correct: no name beats wrong name.
+        if (/^\$(undefined|null)$/i.test(t)) return null;
+        // Reject listing titles. Real seller/agent names rarely contain
+        // real-estate action words or m² area markers. The wider scan
+        // (1200 chars) sometimes reaches the listing title which uses
+        // the same JSON key ("name") as the seller card.
+        if (/(للبيع|للإيجار|للايجار|للتمليك|للاستثمار)/.test(t)) return null;
+        if (/\d+\s*(?:م²|م2|متر(?!و)|sqm)/i.test(t)) return null;
+        if (/(?:^|\s)(فرصة|عاجل|بسعر|بفيو|مباشره?\s+ع|إستلام|استلام)/i.test(t)) return null;
         return notSelfName(t);
       }
       function acceptPhone(p) {
