@@ -182,11 +182,44 @@
       }
     } catch (e) { /* ignore */ }
 
-    // 2b. Last-resort: pick the MOST FREQUENT phone in the body text.
-    // OpenSooq renders the logged-in user's phone in multiple places
-    // (account dropdown, "My ads" sidebar, etc.) — by frequency it will
-    // dominate over any single seller's phone shown on a card.
+    // 3. Meta tags — some sites embed user info in <meta name="user-*">
     if (!captured.phone) {
+      try {
+        var metaTags = document.querySelectorAll('meta[name*="user"], meta[property*="user"]');
+        for (var mi = 0; mi < metaTags.length; mi++) {
+          var content = metaTags[mi].getAttribute('content') || '';
+          var mpm = content.match(/01[0-25]\d{8}/);
+          if (mpm) { captured.phone = normalizeEgPhone(mpm[0]); break; }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // 4. localStorage — user can pre-set it via the install page or via
+    // the prompt fallback below (persists across sessions per browser).
+    if (!captured.phone) {
+      try {
+        var savedPhone = localStorage.getItem('maksab_self_phone');
+        if (savedPhone) {
+          var sp = normalizeEgPhone(savedPhone);
+          if (sp) captured.phone = sp;
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    var isOpenSooqHost = /opensooq/i.test(location.host);
+
+    // 5. OpenSooq-only: frequency scan. OpenSooq renders the logged-in
+    // user's phone in multiple places (account dropdown, "My ads" sidebar)
+    // while other sellers' phones on the list page are masked
+    // ("010029285**XX**"), so the 11-digit regex won't match them. The
+    // user's own phone wins by frequency. Required: ≥ 2 occurrences —
+    // a single match is unreliable (could be a featured listing's
+    // unmasked phone leaking into the page).
+    //
+    // Restricted to OpenSooq because on other platforms (Dubizzle,
+    // AqarMap, semsarmasr) seller phones are NOT masked, so a frequent
+    // phone might be a popular agent's number rather than the user's.
+    if (!captured.phone && isOpenSooqHost) {
       try {
         var bodyText = (document.body && document.body.textContent) || '';
         var phoneCounts = {};
@@ -199,34 +232,17 @@
         for (var pk in phoneCounts) {
           if (phoneCounts[pk] > topCount) { topPhone = pk; topCount = phoneCounts[pk]; }
         }
-        // On OpenSooq's list page, all OTHER sellers' phones are masked
-        // ("010029285**XX**" — 9 digits + XX), so the 11-digit regex
-        // never matches them. The only fully-formed phone on the list
-        // page is the logged-in user's own.
-        if (topPhone) {
+        if (topPhone && topCount >= 2) {
           captured.phone = normalizeEgPhone(topPhone);
         }
       } catch (e) { /* ignore */ }
     }
 
-    // 3. Final fallback: read from localStorage (user can pre-set it via
-    // the install page). This is the most reliable channel — the user
-    // knows their own phone and DOM-based detection has too many edge
-    // cases (custom navbars, missing semantic tags, etc.).
-    if (!captured.phone) {
-      try {
-        var savedPhone = localStorage.getItem('maksab_self_phone');
-        if (savedPhone) {
-          var sp = normalizeEgPhone(savedPhone);
-          if (sp) captured.phone = sp;
-        }
-      } catch (e) { /* ignore */ }
-    }
-
-    // 4. Last-ditch: explicitly ask the user. Only when everything else
-    // failed AND we know they're on a platform that gates seller phones
-    // behind a logged-in account (OpenSooq).
-    if (!captured.phone && /opensooq/i.test(location.host)) {
+    // 6. Last-ditch: explicitly ask the user. Only on OpenSooq (other
+    // platforms expose seller phones unmasked, so missing the user's
+    // own phone is harmless — at worst we'd hand back the user's own
+    // listing as a candidate).
+    if (!captured.phone && isOpenSooqHost) {
       try {
         var ans = prompt(
           'مكسب: ادخل رقم موبايلك المسجّل على OpenSooq\n' +
@@ -243,18 +259,6 @@
         }
       } catch (e) { /* user dismissed prompt */ }
     }
-
-    // 3. Meta tags
-    try {
-      var metaTags = document.querySelectorAll('meta[name*="user"], meta[property*="user"]');
-      for (var mi = 0; mi < metaTags.length; mi++) {
-        var content = metaTags[mi].getAttribute('content') || '';
-        if (!captured.phone) {
-          var mpm = content.match(/01[0-25]\d{8}/);
-          if (mpm) captured.phone = normalizeEgPhone(mpm[0]);
-        }
-      }
-    } catch (e) { /* ignore */ }
 
     return captured;
   }
@@ -3180,6 +3184,19 @@
     parseDetail: function(html) {
       var result = { phone: null, sellerName: null };
 
+      // Reject the logged-in user's own contact info — same pattern as
+      // Dubizzle/OpenSooq parseDetail. Prevents the user's phone from
+      // appearing as a "seller phone" if they're signed in to AqarMap
+      // (e.g., as a registered agent) and the page surfaces their own
+      // profile under listing.user.
+      var selfPhone = (BLOCKED_USER && BLOCKED_USER.phone) || null;
+      var selfName = (BLOCKED_USER && BLOCKED_USER.name) || null;
+      function notSelfPhone(p) { return p && p !== selfPhone ? p : null; }
+      function notSelfName(n) {
+        if (!n || !selfName) return n || null;
+        return n.trim().toLowerCase() === selfName.toLowerCase() ? null : n;
+      }
+
       // __NEXT_DATA__
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
@@ -3189,13 +3206,13 @@
           var listing = pp.listing || pp.property || pp.unit || pp;
           var user = listing.user || listing.owner || listing.agent || listing.seller || {};
           if (user.name || user.display_name) {
-            result.sellerName = String(user.name || user.display_name).trim() || null;
+            result.sellerName = notSelfName(String(user.name || user.display_name).trim() || null);
           }
           // Phone candidates (aqarmap sometimes has in user object)
           var cand = [listing.phone, listing.mobile, user.phone, user.mobile, user.contact_phone];
           for (var ci = 0; ci < cand.length; ci++) {
             if (cand[ci]) {
-              var p = normalizeEgPhone(cand[ci]);
+              var p = notSelfPhone(normalizeEgPhone(cand[ci]));
               if (p) { result.phone = p; break; }
             }
           }
@@ -3215,7 +3232,7 @@
       if (!result.phone) {
         var telLink = html.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
         if (telLink) {
-          var tp = normalizeEgPhone(telLink[2]);
+          var tp = notSelfPhone(normalizeEgPhone(telLink[2]));
           if (tp && AQARMAP_BRAND_PHONES.indexOf(tp) < 0) result.phone = tp;
         }
       }
@@ -3231,8 +3248,8 @@
             if (n.length >= 2 && n.length <= 60
                 && !/^\d+$/.test(n)
                 && !AQARMAP_BRAND_NAMES.test(n)) {
-              result.sellerName = n;
-              break;
+              result.sellerName = notSelfName(n);
+              if (result.sellerName) break;
             }
           }
         }
