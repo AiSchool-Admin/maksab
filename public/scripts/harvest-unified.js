@@ -1,4 +1,4 @@
-// Maksab Unified Harvester v11 — dubizzle + semsarmasr + opensooq + aqarmap
+// Maksab Unified Harvester v12 — dubizzle + semsarmasr + opensooq + aqarmap
 // Run from any supported listing page. Detects platform, category, governorate,
 // paginates through results, fetches phones from detail pages, delivers to Maksab.
 (function(){
@@ -2498,14 +2498,24 @@
       var selfPhone = (BLOCKED_USER && BLOCKED_USER.phone) || null;
       function notSelf(p) { return p && p !== selfPhone ? p : null; }
 
-      // FAST PATH: <a href="tel:..."> = seller's contact button.
-      var telMatch = html.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
-      if (telMatch) {
-        var telPhone = notSelf(normalizeEgPhone(telMatch[2]));
-        if (telPhone) result.phone = telPhone;
+      // Owner-card region — the ONLY safe scope for phone extraction.
+      // OpenSooq pages contain support tel: links, related-listing phones,
+      // and other ambient phones that aren't the seller's. Restricting
+      // every phone-extraction strategy to PostViewOwnerCard prevents
+      // those from leaking into result.phone.
+      var ownerCardMatch = html.match(/id=["']PostViewOwnerCard["']([\s\S]{0,6000})/i);
+      var ownerHtml = ownerCardMatch ? ownerCardMatch[1] : null;
+
+      // FAST PATH: <a href="tel:..."> INSIDE the owner card only.
+      if (ownerHtml) {
+        var telMatch = ownerHtml.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
+        if (telMatch) {
+          var telPhone = notSelf(normalizeEgPhone(telMatch[2]));
+          if (telPhone) result.phone = telPhone;
+        }
       }
 
-      // __NEXT_DATA__
+      // __NEXT_DATA__ — structured seller data (most reliable when present).
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
         try {
@@ -2531,27 +2541,17 @@
         } catch (e) {}
       }
 
-      // Owner-card scoped phone scan.
-      if (!result.phone) {
-        var ownerCard = html.match(/id=["']PostViewOwnerCard["']([\s\S]{0,4000})/i);
-        if (ownerCard) {
-          var ownerPhone = findPhoneInText(ownerCard[1]);
-          result.phone = notSelf(ownerPhone);
-        }
+      // Owner-card scoped text scan — last resort, but bounded.
+      // Removed the previous whole-HTML "any phone wins" fallback: it was
+      // picking footer/support/related-listing phones and reporting them
+      // as the seller's phone. Better to return null than a wrong phone.
+      if (!result.phone && ownerHtml) {
+        var ownerPhone = findPhoneInText(ownerHtml);
+        result.phone = notSelf(ownerPhone);
       }
 
-      // Last-resort: scan whole HTML for ALL phones, pick first non-self.
-      // BLOCKED_USER.phone (captured via prompt fallback) makes this safe.
-      if (!result.phone) {
-        var allPhones = html.match(/01[0-25]\d{8}/g) || [];
-        for (var pp2 = 0; pp2 < allPhones.length; pp2++) {
-          var cand = normalizeEgPhone(allPhones[pp2]);
-          if (cand && cand !== selfPhone) { result.phone = cand; break; }
-        }
-      }
-
-      if (!result.sellerName) {
-        var own = html.match(/id=["']PostViewOwnerCard["'][\s\S]{0,2000}?<h3[^>]*>([^<]{2,60})<\/h3>/i);
+      if (!result.sellerName && ownerHtml) {
+        var own = ownerHtml.match(/<h3[^>]*>([^<]{2,60})<\/h3>/i);
         if (own && own[1]) {
           result.sellerName = own[1].trim().replace(/\s+/g, ' ') || null;
         }
@@ -3181,7 +3181,7 @@
       return items;
     },
 
-    parseDetail: function(html) {
+    parseDetail: function(html, doc) {
       var result = { phone: null, sellerName: null };
 
       // Reject the logged-in user's own contact info — same pattern as
@@ -3197,7 +3197,24 @@
         return n.trim().toLowerCase() === selfName.toLowerCase() ? null : n;
       }
 
-      // __NEXT_DATA__
+      // Reject "عقارات مصر" / generic helpdesk phone (AqarMap-itself).
+      var AQARMAP_BRAND_NAMES = /^(عقارات\s*مصر|عقار\s*ماب|aqarmap|aqar\s*map)$/i;
+      var AQARMAP_BRAND_PHONES = ['01006674484'];
+      function acceptName(n) {
+        if (!n) return null;
+        var t = String(n).trim().replace(/\s+/g, ' ');
+        if (t.length < 2 || t.length > 60) return null;
+        if (/^\d+$/.test(t)) return null;
+        if (AQARMAP_BRAND_NAMES.test(t)) return null;
+        return notSelfName(t);
+      }
+      function acceptPhone(p) {
+        if (!p) return null;
+        if (AQARMAP_BRAND_PHONES.indexOf(p) >= 0) return null;
+        return notSelfPhone(p);
+      }
+
+      // ═══ Strategy 1: __NEXT_DATA__ (legacy AqarMap pages) ═══
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
         try {
@@ -3206,36 +3223,98 @@
           var listing = pp.listing || pp.property || pp.unit || pp;
           var user = listing.user || listing.owner || listing.agent || listing.seller || {};
           if (user.name || user.display_name) {
-            result.sellerName = notSelfName(String(user.name || user.display_name).trim() || null);
+            result.sellerName = acceptName(user.name || user.display_name);
           }
-          // Phone candidates (aqarmap sometimes has in user object)
           var cand = [listing.phone, listing.mobile, user.phone, user.mobile, user.contact_phone];
           for (var ci = 0; ci < cand.length; ci++) {
             if (cand[ci]) {
-              var p = notSelfPhone(normalizeEgPhone(cand[ci]));
+              var p = acceptPhone(normalizeEgPhone(cand[ci]));
               if (p) { result.phone = p; break; }
             }
           }
         } catch (e) {}
       }
 
-      // Reject "عقارات مصر" — it's the brand name AqarMap uses for itself
-      // (literally "Egypt Real Estate"), embedded in every detail page as
-      // the Organization metadata. Same for the contact phone 01006674484
-      // shown across ALL pages as a generic helpdesk number.
-      var AQARMAP_BRAND_NAMES = /^(عقارات\s*مصر|عقار\s*ماب|aqarmap|aqar\s*map)$/i;
-      var AQARMAP_BRAND_PHONES = ['01006674484'];
-
-      // Fallback: regex scan — but ONLY in clearly-scoped seller containers,
-      // never the page-global "name" regex (which picks the Organization
-      // schema name, i.e. AqarMap itself).
-      if (!result.phone) {
-        var telLink = html.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
-        if (telLink) {
-          var tp = notSelfPhone(normalizeEgPhone(telLink[2]));
-          if (tp && AQARMAP_BRAND_PHONES.indexOf(tp) < 0) result.phone = tp;
+      // ═══ Strategy 2: JSON-LD (modern AqarMap on Next.js 14 streaming) ═══
+      // RealEstateListing / Product schemas expose seller name and telephone.
+      if (!result.phone || !result.sellerName) {
+        var ldMatches = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+        for (var li = 0; li < ldMatches.length; li++) {
+          var inner = ldMatches[li].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+          if (!inner) continue;
+          try {
+            var ld = JSON.parse(inner[1].trim());
+            var nodes = Array.isArray(ld) ? ld : (ld['@graph'] && Array.isArray(ld['@graph']) ? ld['@graph'] : [ld]);
+            for (var ni = 0; ni < nodes.length; ni++) {
+              var node = nodes[ni];
+              if (!node || typeof node !== 'object') continue;
+              // Direct telephone field on the listing/seller/offer
+              var phoneSources = [
+                node.telephone,
+                node.seller && node.seller.telephone,
+                node.offers && node.offers.seller && node.offers.seller.telephone,
+                node.author && node.author.telephone,
+                node.provider && node.provider.telephone,
+              ];
+              for (var ps = 0; ps < phoneSources.length; ps++) {
+                if (!result.phone && phoneSources[ps]) {
+                  var pn = acceptPhone(normalizeEgPhone(phoneSources[ps]));
+                  if (pn) { result.phone = pn; break; }
+                }
+              }
+              var nameSources = [
+                node.seller && node.seller.name,
+                node.offers && node.offers.seller && node.offers.seller.name,
+                node.author && node.author.name,
+                node.provider && node.provider.name,
+              ];
+              for (var ns = 0; ns < nameSources.length; ns++) {
+                if (!result.sellerName && nameSources[ns]) {
+                  var sn = acceptName(nameSources[ns]);
+                  if (sn) { result.sellerName = sn; break; }
+                }
+              }
+            }
+          } catch (e) { /* skip */ }
+          if (result.phone && result.sellerName) break;
         }
       }
+
+      // ═══ Strategy 3: tel: link — anywhere on the page is OK on AqarMap
+      // (no aggressive support links like OpenSooq has). Brand-phone filter
+      // catches the helpdesk number if it appears.
+      if (!result.phone) {
+        var telLink = html.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
+        if (telLink) result.phone = acceptPhone(normalizeEgPhone(telLink[2]));
+      }
+
+      // ═══ Strategy 4: DOM-based seller card scan ═══
+      // Modern AqarMap detail pages render the agent card client-side.
+      // Look for typical broker/agent name patterns near a tel: button.
+      if ((!result.sellerName || !result.phone) && doc) {
+        var sellerNodes = doc.querySelectorAll(
+          '[class*="broker" i], [class*="agent" i], [class*="seller" i], ' +
+          '[class*="owner" i], [class*="contact-card" i], [class*="ContactCard" i]'
+        );
+        for (var sd = 0; sd < sellerNodes.length && (!result.sellerName || !result.phone); sd++) {
+          var node2 = sellerNodes[sd];
+          var nodeText = (node2.textContent || '').trim();
+          if (!result.sellerName) {
+            // First non-numeric line ≥ 2 chars
+            var lines = nodeText.split(/\n+/).map(function(s) { return s.trim(); }).filter(Boolean);
+            for (var ln = 0; ln < lines.length; ln++) {
+              var sn2 = acceptName(lines[ln]);
+              if (sn2) { result.sellerName = sn2; break; }
+            }
+          }
+          if (!result.phone) {
+            var pn2 = acceptPhone(findPhoneInText(nodeText));
+            if (pn2) result.phone = pn2;
+          }
+        }
+      }
+
+      // ═══ Strategy 5: class-based regex (legacy, last resort) ═══
       if (!result.sellerName) {
         var pats = [
           /class="[^"]*(?:owner|seller|agent|broker)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
@@ -3244,23 +3323,12 @@
         for (var i = 0; i < pats.length; i++) {
           var mm = html.match(pats[i]);
           if (mm && mm[1]) {
-            var n = mm[1].trim().replace(/\s+/g, ' ');
-            if (n.length >= 2 && n.length <= 60
-                && !/^\d+$/.test(n)
-                && !AQARMAP_BRAND_NAMES.test(n)) {
-              result.sellerName = notSelfName(n);
-              if (result.sellerName) break;
-            }
+            var n = acceptName(mm[1]);
+            if (n) { result.sellerName = n; break; }
           }
         }
       }
-      // Belt-and-braces: if NEXT_DATA gave us a brand-name seller, drop it.
-      if (result.sellerName && AQARMAP_BRAND_NAMES.test(result.sellerName)) {
-        result.sellerName = null;
-      }
-      if (result.phone && AQARMAP_BRAND_PHONES.indexOf(result.phone) >= 0) {
-        result.phone = null;
-      }
+
       return result;
     },
 
