@@ -3041,6 +3041,91 @@
         console.warn('[maksab/aqarmap] DIAG stream-pattern scan threw:', eStream && eStream.message);
       }
 
+      // DIAGNOSTIC: DOM scan — agency badges are typically rendered as
+      // <img> with alt text containing the agency name, or as small
+      // <span>/<div> elements with class names like "agency", "broker",
+      // "developer", "publisher". Even if AqarMap hydrates these
+      // client-side, the SSR HTML may include placeholder elements with
+      // useful attributes.
+      try {
+        var domFindings = { agencyImages: [], agencyTextNodes: [] };
+        if (doc) {
+          // Images near listing cards with alt text
+          var allImgs = doc.querySelectorAll('img[alt]');
+          for (var di = 0; di < allImgs.length && domFindings.agencyImages.length < 8; di++) {
+            var img = allImgs[di];
+            var alt = (img.getAttribute('alt') || '').trim();
+            var src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+            if (!alt || alt.length < 3) continue;
+            // Filter for agency-like alt text: capital letters, "real estate",
+            // "development", "للعقارات", etc. — heuristic.
+            if (/(real\s*estate|development|properties|عقار|تطوير|للعقارات|brokers?|agency|builders?|investments?)/i.test(alt)
+                || /(developer|broker|agency|publisher)/i.test(src)) {
+              domFindings.agencyImages.push({ alt: alt.substring(0, 80), src: src.substring(0, 100) });
+            }
+          }
+
+          // Elements with agency-related class names
+          var agencyEls = doc.querySelectorAll(
+            '[class*="agency" i], [class*="broker" i], [class*="developer" i], ' +
+            '[class*="publisher" i], [class*="company-name" i], [class*="badge" i]'
+          );
+          for (var de = 0; de < agencyEls.length && domFindings.agencyTextNodes.length < 8; de++) {
+            var el = agencyEls[de];
+            var txt = (el.textContent || '').trim().replace(/\s+/g, ' ');
+            var cls = el.className || '';
+            if (txt && txt.length >= 2 && txt.length <= 80) {
+              domFindings.agencyTextNodes.push({
+                cls: String(cls).substring(0, 60),
+                text: txt.substring(0, 80),
+              });
+            }
+          }
+        }
+        console.info('[maksab/aqarmap] DIAG DOM agency findings — images:',
+          JSON.stringify(domFindings.agencyImages));
+        console.info('[maksab/aqarmap] DIAG DOM agency findings — text nodes:',
+          JSON.stringify(domFindings.agencyTextNodes));
+      } catch (eDom) {
+        console.warn('[maksab/aqarmap] DIAG DOM scan threw:', eDom && eDom.message);
+      }
+
+      // DIAGNOSTIC: Dump full JSON-LD node list with their full key sets.
+      // Previous logs only showed the FIRST node's keys (Organization). The
+      // RealEstateListing node may have seller/provider/offers fields we
+      // haven't seen yet.
+      try {
+        var ldDiagAll = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+        for (var ldi2 = 0; ldi2 < ldDiagAll.length; ldi2++) {
+          var ldI = ldDiagAll[ldi2].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+          if (!ldI) continue;
+          try {
+            var ldP = JSON.parse(ldI[1].trim());
+            var ldNodes2 = Array.isArray(ldP) ? ldP : (ldP['@graph'] && Array.isArray(ldP['@graph']) ? ldP['@graph'] : [ldP]);
+            for (var ln2 = 0; ln2 < ldNodes2.length; ln2++) {
+              var nd2 = ldNodes2[ln2];
+              if (!nd2 || typeof nd2 !== 'object') continue;
+              console.info('[maksab/aqarmap] DIAG ld+json#' + ldi2 + ' node[' + ln2 + ']',
+                'type:', nd2['@type'],
+                '| ALL keys:', Object.keys(nd2));
+              // For RealEstateListing or similar, also dump nested seller/provider
+              if (/RealEstate|Product|Offer|ItemList/i.test(String(nd2['@type']))) {
+                ['seller', 'provider', 'offers', 'author', 'itemListElement'].forEach(function(k) {
+                  if (nd2[k]) {
+                    var sample = nd2[k];
+                    if (Array.isArray(sample) && sample.length > 0) sample = sample[0];
+                    console.info('[maksab/aqarmap]   .' + k + ':',
+                      typeof sample === 'object' ? JSON.stringify(sample).substring(0, 250) : sample);
+                  }
+                });
+              }
+            }
+          } catch (e) { /* skip */ }
+        }
+      } catch (eLd) {
+        console.warn('[maksab/aqarmap] DIAG full ld+json scan threw:', eLd && eLd.message);
+      }
+
       // Strategy 2: JSON-LD ItemList — order-agnostic regex (matches
       // type="application/ld+json" wherever it appears in the script tag,
       // including AqarMap's `<script id="search-schema" type="...">`).
