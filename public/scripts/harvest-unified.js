@@ -2919,24 +2919,44 @@
       // need to find the JSON path so parseList can extract them per listing.
       try {
         var rDiagMatch = html.match(/<script[^>]*\bid=["'](_R_|__R__)["'][^>]*>([\s\S]*?)<\/script>/i);
+        console.info('[maksab/aqarmap] DIAG _R_ script matched:', !!rDiagMatch,
+          '| body length:', rDiagMatch ? rDiagMatch[2].length : 0);
         if (rDiagMatch) {
           var rDiagBody = rDiagMatch[2].trim();
+          // Log first/last 200 chars so we know the wrapper shape.
+          console.info('[maksab/aqarmap] DIAG _R_ body head:',
+            rDiagBody.substring(0, 200));
+          console.info('[maksab/aqarmap] DIAG _R_ body tail:',
+            rDiagBody.substring(Math.max(0, rDiagBody.length - 200)));
           var rDiagParsed = null;
-          try { rDiagParsed = JSON.parse(rDiagBody); } catch (_) {}
+          var rParseAttempt = null;
+          try { rDiagParsed = JSON.parse(rDiagBody); rParseAttempt = 'direct'; } catch (_) {}
           if (!rDiagParsed) {
             var jpD = rDiagBody.match(/JSON\.parse\(\s*(['"])((?:\\.|(?!\1).)*)\1\s*\)/);
             if (jpD) {
               try {
                 var innerD = JSON.parse(jpD[1] + jpD[2] + jpD[1]);
                 rDiagParsed = JSON.parse(innerD);
+                rParseAttempt = 'JSON.parse(escaped)';
               } catch (__) {}
             }
           }
           if (!rDiagParsed) {
-            var oD = rDiagBody.match(/(\{[\s\S]*\})/);
-            if (oD) { try { rDiagParsed = JSON.parse(oD[1]); } catch (___) {} }
+            var assignMatch = rDiagBody.match(/=\s*(\{[\s\S]*\})\s*;?\s*$/);
+            if (assignMatch) {
+              try { rDiagParsed = JSON.parse(assignMatch[1]); rParseAttempt = 'assignment'; } catch (___) {}
+            }
           }
+          if (!rDiagParsed) {
+            var oD = rDiagBody.match(/(\{[\s\S]*\})/);
+            if (oD) { try { rDiagParsed = JSON.parse(oD[1]); rParseAttempt = 'greedy-{}'; } catch (____) {} }
+          }
+          console.info('[maksab/aqarmap] DIAG _R_ parsed:', !!rDiagParsed,
+            '| via:', rParseAttempt || 'NONE');
+
           if (rDiagParsed) {
+            console.info('[maksab/aqarmap] DIAG _R_ top keys:',
+              Object.keys(rDiagParsed).slice(0, 20));
             // Walk the tree, collect any object whose key matches a known
             // seller-shape pattern. Capture path + a sample of its content.
             var sellerKeys = /^(broker|brokers|agent|agents|developer|developers|company|agency|agencies|lister|realtor|owner|owners|user|users|seller|sellers|advertiser)$/i;
@@ -2966,29 +2986,59 @@
                 if (findings.length >= 8) return;
               }
             })(rDiagParsed, '', 0);
-            console.info('[maksab/aqarmap] _R_ seller-shape findings:', JSON.stringify(findings));
+            console.info('[maksab/aqarmap] DIAG _R_ seller-shape findings:', JSON.stringify(findings));
 
             // Also: dump first listing item's full keys (so we know where
             // broker info is attached relative to the listing object).
             var allListings = PLATFORMS.aqarmap._findListings(rDiagParsed, 0);
+            console.info('[maksab/aqarmap] DIAG _R_ _findListings count:',
+              allListings ? allListings.length : 'null');
             if (allListings && allListings.length > 0) {
               var firstL = allListings[0];
-              console.info('[maksab/aqarmap] _R_ FIRST LISTING all keys:',
+              console.info('[maksab/aqarmap] DIAG _R_ FIRST LISTING all keys:',
                 Object.keys(firstL).slice(0, 30));
-              // For each broker-shape key, log its content for the first listing
               var brokerLikeKeys = Object.keys(firstL).filter(function(k){
-                return /broker|agent|developer|company|agency|owner|user|seller|lister|realtor|advertiser/i.test(k);
+                return /broker|agent|developer|company|agency|owner|user|seller|lister|realtor|advertiser|publisher|partner|account/i.test(k);
               });
+              console.info('[maksab/aqarmap] DIAG _R_ FIRST LISTING broker-like keys:',
+                brokerLikeKeys);
               for (var bk = 0; bk < brokerLikeKeys.length; bk++) {
                 var bv = firstL[brokerLikeKeys[bk]];
-                console.info('[maksab/aqarmap] _R_ FIRST LISTING.' + brokerLikeKeys[bk] + ':',
+                console.info('[maksab/aqarmap] DIAG _R_ FIRST LISTING.' + brokerLikeKeys[bk] + ':',
                   typeof bv === 'object' ? JSON.stringify(bv).substring(0, 300) : bv);
               }
             }
           }
         }
       } catch (eDiag) {
-        console.warn('[maksab/aqarmap] _R_ diagnostic threw:', eDiag && eDiag.message);
+        console.warn('[maksab/aqarmap] DIAG _R_ diagnostic threw:', eDiag && eDiag.message);
+      }
+
+      // ALSO scan the raw HTML for broker/agent/developer JSON shapes that
+      // might be in __next_f.push streaming chunks (not in _R_ at all).
+      try {
+        var streamFindings = [];
+        var streamPats = [
+          /\\?"developer\\?"\s*:\s*\{[\s\S]{0,400}?\\?"name\\?"\s*:\s*\\?"([^"\\]{2,80})\\?"/g,
+          /\\?"broker\\?"\s*:\s*\{[\s\S]{0,400}?\\?"name\\?"\s*:\s*\\?"([^"\\]{2,80})\\?"/g,
+          /\\?"agency\\?"\s*:\s*\{[\s\S]{0,400}?\\?"name\\?"\s*:\s*\\?"([^"\\]{2,80})\\?"/g,
+          /\\?"company\\?"\s*:\s*\{[\s\S]{0,400}?\\?"name\\?"\s*:\s*\\?"([^"\\]{2,80})\\?"/g,
+          /\\?"lister\\?"\s*:\s*\{[\s\S]{0,400}?\\?"name\\?"\s*:\s*\\?"([^"\\]{2,80})\\?"/g,
+          /\\?"user\\?"\s*:\s*\{[\s\S]{0,400}?\\?"name\\?"\s*:\s*\\?"([^"\\]{2,80})\\?"/g,
+          /\\?"contactInfo\\?"\s*:\s*\{[\s\S]{0,400}?\\?"name\\?"\s*:\s*\\?"([^"\\]{2,80})\\?"/g,
+        ];
+        for (var sp = 0; sp < streamPats.length; sp++) {
+          var pm;
+          var count = 0;
+          while ((pm = streamPats[sp].exec(html)) !== null && count < 5) {
+            streamFindings.push({ pattern: streamPats[sp].source.substring(0, 30), name: pm[1] });
+            count++;
+          }
+        }
+        console.info('[maksab/aqarmap] DIAG raw-html broker/agency name patterns:',
+          JSON.stringify(streamFindings.slice(0, 12)));
+      } catch (eStream) {
+        console.warn('[maksab/aqarmap] DIAG stream-pattern scan threw:', eStream && eStream.message);
       }
 
       // Strategy 2: JSON-LD ItemList — order-agnostic regex (matches
