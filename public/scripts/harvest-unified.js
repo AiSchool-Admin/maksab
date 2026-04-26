@@ -3206,11 +3206,13 @@
                 category: ctx.categoryLabel,
               });
             }
-            if (items.length > 0) return items;
+            if (items.length > 0) {
+              PLATFORMS.aqarmap._enrichAgenciesFromDom(items, doc);
+              return items;
+            }
           }
         } catch (e) { /* skip */ }
       }
-
       // Strategy 2.5: AqarMap's SSR store — script id="_R_" (custom Next.js
       // build; real ID has single underscores, verified from script IDs log).
       // Content is usually JSON.parse("...") or a raw JSON object.
@@ -3459,7 +3461,56 @@
       }
 
       console.info('[maksab/aqarmap] Final items count:', items.length);
+      PLATFORMS.aqarmap._enrichAgenciesFromDom(items, doc);
       return items;
+    },
+
+    // Walks the parsed DOM looking for <img> tags with src containing /logo/
+    // (AqarMap's agency-logo URL pattern, distinct from /search-thumb-webp/
+    // for listing photos). The img's alt attribute holds the agency name
+    // (e.g., "Sira Real Estate Logo"). For each logo, walk up to the
+    // enclosing listing card, find the listing URL, and write the agency
+    // name onto the matching item's sellerName field.
+    //
+    // This is what fills 0/10 → ~10/10 names for AqarMap. The agency
+    // names aren't in JSON-LD or _R_ (which is empty); they're rendered
+    // as logo images in the listing cards.
+    _enrichAgenciesFromDom: function(items, doc) {
+      if (!doc || !items || items.length === 0) return;
+      var BASE = 'https://aqarmap.com.eg';
+      var enriched = 0;
+      try {
+        var logoImgs = doc.querySelectorAll('img[src*="/logo/"]');
+        for (var i = 0; i < logoImgs.length; i++) {
+          var img = logoImgs[i];
+          var alt = (img.getAttribute('alt') || '').trim();
+          if (!alt || alt.length < 2) continue;
+          // Strip a trailing " Logo" / "logo" if present.
+          var agencyName = alt.replace(/\s+logo\s*$/i, '').trim();
+          if (!agencyName || agencyName.length < 2 || agencyName.length > 80) continue;
+          // Walk up to find the listing card containing this logo.
+          var card = img.closest('article, li, [class*="listing" i], [class*="card" i], [class*="property" i], [class*="result" i]');
+          if (!card) continue;
+          // Find the listing anchor inside the card.
+          var anchor = card.querySelector('a[href*="/ar/listing/"]');
+          if (!anchor) continue;
+          var href = anchor.getAttribute('href') || '';
+          if (!href) continue;
+          var fullUrl = href.charAt(0) === '/' ? BASE + href : href;
+          var cleanUrl = fullUrl.split('?')[0].split('#')[0];
+          // Match to items by URL.
+          for (var j = 0; j < items.length; j++) {
+            if (items[j].url === cleanUrl && !items[j].sellerName) {
+              items[j].sellerName = agencyName;
+              enriched++;
+              break;
+            }
+          }
+        }
+        console.info('[maksab/aqarmap] _enrichAgenciesFromDom — enriched', enriched, '/', items.length, 'items');
+      } catch (e) {
+        console.warn('[maksab/aqarmap] _enrichAgenciesFromDom threw:', e && e.message);
+      }
     },
 
     parseDetail: function(html, doc) {
