@@ -3617,9 +3617,12 @@
         '| tel: in html:', hasTelInHtml,
         '| total phone digits in html:', totalPhonesInHtml);
 
-      // DIAGNOSTIC: Dump 120-char context around each phone-shaped match.
-      // Goal: see WHERE the phone lives (JSON path? seller card class?
-      // hidden data attribute?) so we can target it precisely.
+      // DIAGNOSTIC: Dump 300-char before + 200-char after context around the
+      // FIRST seller phone match (skip phone#0 which is the AqarMap helpdesk
+      // wa.me link). Goal: see the FULL seller object — what fields surround
+      // "phones" beyond what we've already seen (isCallRequest, has_parent,
+      // address). The seller's name field should be in this window if it
+      // exists in HTML at all.
       if (totalPhonesInHtml > 0) {
         var phoneRegex = /01[0-25]\d{8}/g;
         var pmatch;
@@ -3631,6 +3634,44 @@
           console.info('[maksab/aqarmap/detail] phone#' + ctxNum + ' "' + pmatch[0] + '" ctx:', ctx);
           ctxNum++;
         }
+        // WIDE context dump for the SECOND phone (seller's, not AqarMap's).
+        var phoneRegex2 = /01[0-25]\d{8}/g;
+        var skipFirst = phoneRegex2.exec(html); // skip wa.me/AqarMap helpdesk
+        var sellerPhone = phoneRegex2.exec(html);
+        if (sellerPhone) {
+          var ws = Math.max(0, sellerPhone.index - 600);
+          var we = Math.min(html.length, sellerPhone.index + 400);
+          var wctx = html.substring(ws, we).replace(/\s+/g, ' ');
+          console.info('[maksab/aqarmap/detail] WIDE seller-phone ctx (1000 chars):', wctx);
+        }
+      }
+
+      // DIAGNOSTIC: search for known seller-name patterns in raw HTML.
+      // If the name "Mahmoud Hefny" (seen on the visible page) is anywhere
+      // in the fetched HTML, this confirms it's there — then we just need
+      // a better extraction strategy. If NOT found, the name is rendered
+      // entirely client-side and we'd need to call AqarMap's API.
+      try {
+        var latinNamePat = /\\?"([A-Z][a-z]{1,15}(?:\s+[A-Z][a-z]{1,20}){1,3})\\?"/g;
+        var latinFindings = [];
+        var lm;
+        while ((lm = latinNamePat.exec(html)) !== null && latinFindings.length < 10) {
+          latinFindings.push(lm[1]);
+        }
+        console.info('[maksab/aqarmap/detail] DIAG Latin-name candidates in HTML:',
+          JSON.stringify(latinFindings));
+
+        // Also: any field that looks like display_name / member_name / etc.
+        var nameKeyPat = /\\?"(member_name|display_name|user_name|owner_name|publisher_name|posts_count|listings_count|posts_no|posts_total)\\?"\s*:\s*\\?"?([^",}\]]{0,60})/g;
+        var keyFindings = [];
+        var km;
+        while ((km = nameKeyPat.exec(html)) !== null && keyFindings.length < 12) {
+          keyFindings.push({ key: km[1], val: km[2].substring(0, 50) });
+        }
+        console.info('[maksab/aqarmap/detail] DIAG name-key fields:',
+          JSON.stringify(keyFindings));
+      } catch (eName) {
+        console.warn('[maksab/aqarmap/detail] DIAG name search threw:', eName && eName.message);
       }
 
       // DIAGNOSTIC: Dump top-level JSON-LD types so we know what schemas
