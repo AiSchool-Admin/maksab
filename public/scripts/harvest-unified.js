@@ -3483,14 +3483,17 @@
     // as logo images in the listing cards.
     _enrichAgenciesFromDom: function(items, doc) {
       if (!doc || !items || items.length === 0) return;
-      var BASE = 'https://aqarmap.com.eg';
       var enriched = 0;
       var unmatched = 0;
+      // Build a lookup: listing ID → item index. The numeric ID is the
+      // most stable key — URLs vary by trailing slash, encoding, etc.
+      var byId = {};
+      for (var ii = 0; ii < items.length; ii++) {
+        var u = items[ii].url || '';
+        var idM = u.match(/\/ar\/listing\/(\d+)/);
+        if (idM) byId[idM[1]] = ii;
+      }
       try {
-        // AqarMap lazy-loads logos. Until the user scrolls, the real URL
-        // sits in data-src (or data-srcset / srcset), and src is a small
-        // placeholder. fetch() never triggers the lazy loader, so we MUST
-        // check the lazy attributes — not just src.
         var allImgs = doc.querySelectorAll('img');
         var logoImgs = [];
         for (var qi = 0; qi < allImgs.length; qi++) {
@@ -3504,10 +3507,16 @@
         }
         console.info('[maksab/aqarmap] _enrichAgenciesFromDom — logo candidates found:', logoImgs.length);
 
+        // Reject placeholder alts — AqarMap uses "company-img" / "company-name"
+        // as a generic alt when the agency hasn't supplied real branding.
+        var ALT_PLACEHOLDERS = /^(company-(?:img|name|logo)|agency-?(?:img|logo)|placeholder|no-?logo)$/i;
+
         for (var i = 0; i < logoImgs.length; i++) {
           var img = logoImgs[i];
           var alt = (img.getAttribute('alt') || '').trim();
-          if (!alt || alt.length < 2) {
+          if (!alt || alt.length < 2) { unmatched++; continue; }
+          if (ALT_PLACEHOLDERS.test(alt)) {
+            // Don't log as unmatched — these are intentional "no real name"
             unmatched++;
             continue;
           }
@@ -3517,14 +3526,14 @@
             unmatched++;
             continue;
           }
-          // Walk up to find the listing card containing this logo.
+          // Walk up to find the listing card containing this logo, then
+          // extract the listing ID from any /ar/listing/<id>... anchor.
           var card = img.closest('article, li, [class*="listing" i], [class*="card" i], [class*="property" i], [class*="result" i]');
           if (!card) {
             console.info('[maksab/aqarmap] _enrich — no card ancestor for logo:', agencyName);
             unmatched++;
             continue;
           }
-          // Find the listing anchor inside the card.
           var anchor = card.querySelector('a[href*="/ar/listing/"]');
           if (!anchor) {
             console.info('[maksab/aqarmap] _enrich — no /ar/listing anchor in card for logo:', agencyName);
@@ -3532,22 +3541,17 @@
             continue;
           }
           var href = anchor.getAttribute('href') || '';
-          if (!href) { unmatched++; continue; }
-          var fullUrl = href.charAt(0) === '/' ? BASE + href : href;
-          var cleanUrl = fullUrl.split('?')[0].split('#')[0];
-          // Match to items by URL.
-          var matched = false;
-          for (var j = 0; j < items.length; j++) {
-            if (items[j].url === cleanUrl && !items[j].sellerName) {
-              items[j].sellerName = agencyName;
-              enriched++;
-              matched = true;
-              break;
-            }
-          }
-          if (!matched) {
-            console.info('[maksab/aqarmap] _enrich — no item matched url:', cleanUrl, 'agency:', agencyName);
+          var idMatch = href.match(/\/ar\/listing\/(\d+)/);
+          if (!idMatch) { unmatched++; continue; }
+          var idx = byId[idMatch[1]];
+          if (idx === undefined) {
+            console.info('[maksab/aqarmap] _enrich — listing id not in items:', idMatch[1], 'agency:', agencyName);
             unmatched++;
+            continue;
+          }
+          if (!items[idx].sellerName) {
+            items[idx].sellerName = agencyName;
+            enriched++;
           }
         }
         console.info('[maksab/aqarmap] _enrichAgenciesFromDom — enriched',
