@@ -3348,23 +3348,40 @@
         var streamPhone = acceptPhone(normalizeEgPhone(streamPhoneMatch[1]));
         if (streamPhone) {
           result.phone = streamPhone;
-          // Look for "name":"..." within the 800 chars BEFORE this phone —
-          // it belongs to the same seller object. Pick the LAST name match
-          // (closest to "phones") to avoid picking sibling fields' names.
+          // Look for "name":"..." in a wide window around the phone (1200
+          // chars before, 600 after — covers `address` and downstream fields
+          // in case the name comes after phones in some object shapes).
+          //
+          // Collect ALL candidates and try each through acceptName(). First
+          // one that passes wins. The previous "last match" approach failed
+          // because the closest name was often "عقارات مصر" (the brand) and
+          // acceptName silently dropped it, leaving no name at all.
           var phonesIdx = streamPhoneMatch.index;
-          var beforeHtml = html.substring(Math.max(0, phonesIdx - 800), phonesIdx);
-          var nameRegex = new RegExp(Q + 'name' + Q + '\\s*:\\s*' + Q + '([^"\\\\]{2,60})' + Q, 'g');
-          var lastNameVal = null;
+          var winStart = Math.max(0, phonesIdx - 1200);
+          var winEnd = Math.min(html.length, phonesIdx + 600);
+          var window2 = html.substring(winStart, winEnd);
+          // Also accept variant key spellings AqarMap may use.
+          var nameRegex = new RegExp(
+            Q + '(?:name|title|display_name|broker_name|agent_name|company_name|fullName|full_name)' + Q +
+            '\\s*:\\s*' + Q + '([^"\\\\]{2,60})' + Q,
+            'g'
+          );
+          var nameCandidates = [];
           var nm;
-          while ((nm = nameRegex.exec(beforeHtml)) !== null) {
-            lastNameVal = nm[1];
+          while ((nm = nameRegex.exec(window2)) !== null) {
+            nameCandidates.push(nm[1]);
           }
-          if (lastNameVal) {
-            var streamName = acceptName(lastNameVal);
-            if (streamName) result.sellerName = streamName;
+          for (var nc = nameCandidates.length - 1; nc >= 0; nc--) {
+            // Walk from CLOSEST-to-phones backward — names just before
+            // "phones" tend to be the seller's; names earlier in the window
+            // are listing titles / breadcrumb labels.
+            var streamName = acceptName(nameCandidates[nc]);
+            if (streamName) { result.sellerName = streamName; break; }
           }
           console.info('[maksab/aqarmap/detail] Strategy 0 hit — phone:', result.phone,
-            '| name:', result.sellerName || 'none');
+            '| name:', result.sellerName || 'none',
+            '| name candidates seen:', nameCandidates.length,
+            '| sample:', nameCandidates.slice(-5));
         }
       }
 
