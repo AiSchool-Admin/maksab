@@ -2498,13 +2498,33 @@
       var selfPhone = (BLOCKED_USER && BLOCKED_USER.phone) || null;
       function notSelf(p) { return p && p !== selfPhone ? p : null; }
 
-      // Owner-card region — the ONLY safe scope for phone extraction.
-      // OpenSooq pages contain support tel: links, related-listing phones,
-      // and other ambient phones that aren't the seller's. Restricting
-      // every phone-extraction strategy to PostViewOwnerCard prevents
-      // those from leaking into result.phone.
-      var ownerCardMatch = html.match(/id=["']PostViewOwnerCard["']([\s\S]{0,6000})/i);
-      var ownerHtml = ownerCardMatch ? ownerCardMatch[1] : null;
+      // Try several owner-card region patterns — OpenSooq's container ID
+      // varies across page templates and over time. Use the FIRST match.
+      var ownerHtml = null;
+      var ownerSelectors = [
+        /id=["']PostViewOwnerCard["']([\s\S]{0,8000})/i,
+        /id=["']MemberInfo["']([\s\S]{0,8000})/i,
+        /id=["']ContactSeller["']([\s\S]{0,8000})/i,
+        /class=["'][^"']*PostViewOwnerCard[^"']*["']([\s\S]{0,8000})/i,
+        /class=["'][^"']*ownerCard[^"']*["']([\s\S]{0,8000})/i,
+        /class=["'][^"']*sellerCard[^"']*["']([\s\S]{0,8000})/i,
+        /class=["'][^"']*memberInfo[^"']*["']([\s\S]{0,8000})/i,
+      ];
+      var matchedSelector = null;
+      for (var os = 0; os < ownerSelectors.length; os++) {
+        var ocm = html.match(ownerSelectors[os]);
+        if (ocm) { ownerHtml = ocm[1]; matchedSelector = os; break; }
+      }
+
+      var hasNextData = /<script[^>]*id=["']__NEXT_DATA__["']/.test(html);
+      var hasTelInHtml = /href=["']tel:\+?(20)?01[0-25]\d{8}["']/.test(html);
+      var totalPhonesInHtml = (html.match(/01[0-25]\d{8}/g) || []).length;
+      console.info('[maksab/opensooq/detail] html len:', html.length,
+        '| ownerCard found:', ownerHtml ? 'selector#' + matchedSelector : 'NO',
+        '| owner len:', ownerHtml ? ownerHtml.length : 0,
+        '| __NEXT_DATA__:', hasNextData,
+        '| tel: in html:', hasTelInHtml,
+        '| total phone digits in html:', totalPhonesInHtml);
 
       // FAST PATH: <a href="tel:..."> INSIDE the owner card only.
       if (ownerHtml) {
@@ -2521,6 +2541,7 @@
         try {
           var data = JSON.parse(m[1]);
           var pp = (data && data.props && data.props.pageProps) || {};
+          console.info('[maksab/opensooq/detail] pageProps keys:', Object.keys(pp).slice(0, 12));
           var item = pp.post || pp.listing || pp.item || pp.data || pp.ad || {};
           var user = item.user || item.member || item.seller || {};
           if (user.name || user.display_name) {
@@ -2538,7 +2559,34 @@
               }
             }
           }
-        } catch (e) {}
+          // Deep-walk pageProps looking for ANY phone-shaped value associated
+          // with a "user/member/seller/contact" parent — covers shape changes.
+          if (!result.phone) {
+            (function deepWalkPhone(obj, parentKey, depth) {
+              if (depth > 6 || !obj || typeof obj !== 'object' || result.phone) return;
+              if (Array.isArray(obj)) {
+                for (var ai = 0; ai < Math.min(obj.length, 20); ai++) deepWalkPhone(obj[ai], parentKey, depth + 1);
+                return;
+              }
+              var sellerCtx = /(member|seller|user|contact|owner|advertiser|profile)/i.test(parentKey || '');
+              if (sellerCtx) {
+                var phKeys = ['phone', 'mobile', 'phone_number', 'contact_phone', 'phoneNumber'];
+                for (var pk = 0; pk < phKeys.length; pk++) {
+                  if (obj[phKeys[pk]]) {
+                    var pn = notSelf(normalizeEgPhone(obj[phKeys[pk]]));
+                    if (pn) { result.phone = pn; return; }
+                  }
+                }
+              }
+              for (var k2 in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, k2)) deepWalkPhone(obj[k2], k2, depth + 1);
+              }
+            })(pp, 'pageProps', 0);
+            if (result.phone) console.info('[maksab/opensooq/detail] phone found via deep-walk');
+          }
+        } catch (e) {
+          console.warn('[maksab/opensooq/detail] __NEXT_DATA__ parse threw:', e && e.message);
+        }
       }
 
       // Owner-card scoped text scan — last resort, but bounded.
@@ -2556,6 +2604,10 @@
           result.sellerName = own[1].trim().replace(/\s+/g, ' ') || null;
         }
       }
+
+      console.info('[maksab/opensooq/detail] result — phone:', result.phone || 'none',
+        '| name:', result.sellerName || 'none');
+
       return result;
     },
 
@@ -3214,12 +3266,23 @@
         return notSelfPhone(p);
       }
 
+      var hasNextData = /<script[^>]*id=["']__NEXT_DATA__["']/.test(html);
+      var ldCount = (html.match(/<script[^>]*type=["']application\/ld\+json["']/gi) || []).length;
+      var hasTelInHtml = /href=["']tel:\+?(20)?01[0-25]\d{8}["']/.test(html);
+      var totalPhonesInHtml = (html.match(/01[0-25]\d{8}/g) || []).length;
+      console.info('[maksab/aqarmap/detail] html len:', html.length,
+        '| __NEXT_DATA__:', hasNextData,
+        '| ld+json scripts:', ldCount,
+        '| tel: in html:', hasTelInHtml,
+        '| total phone digits in html:', totalPhonesInHtml);
+
       // ═══ Strategy 1: __NEXT_DATA__ (legacy AqarMap pages) ═══
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
         try {
           var data = JSON.parse(m[1]);
           var pp = (data && data.props && data.props.pageProps) || {};
+          console.info('[maksab/aqarmap/detail] pageProps keys:', Object.keys(pp).slice(0, 12));
           var listing = pp.listing || pp.property || pp.unit || pp;
           var user = listing.user || listing.owner || listing.agent || listing.seller || {};
           if (user.name || user.display_name) {
@@ -3232,7 +3295,9 @@
               if (p) { result.phone = p; break; }
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[maksab/aqarmap/detail] __NEXT_DATA__ parse threw:', e && e.message);
+        }
       }
 
       // ═══ Strategy 2: JSON-LD (modern AqarMap on Next.js 14 streaming) ═══
@@ -3328,6 +3393,9 @@
           }
         }
       }
+
+      console.info('[maksab/aqarmap/detail] result — phone:', result.phone || 'none',
+        '| name:', result.sellerName || 'none');
 
       return result;
     },
