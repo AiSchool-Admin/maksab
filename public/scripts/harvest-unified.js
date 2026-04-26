@@ -2273,6 +2273,18 @@
           if (serpItems) {
             listings = serpItems;
             console.info('[maksab/opensooq] using serpApiResponse items (', listings.length, ')');
+            // DIAGNOSTIC: dump phone-related fields from first 3 items so we can
+            // see if phone_number is masked (010XXXXXXXX**XX**), unmasked, or
+            // absent. has_phone / phone_reveal_key tell us whether the seller
+            // has exposed a phone and what reveal-key to use against the API.
+            for (var di = 0; di < Math.min(3, listings.length); di++) {
+              var di_it = listings[di];
+              console.info('[maksab/opensooq] sample#' + di + ' phone fields:',
+                'phone_number:', JSON.stringify(di_it.phone_number),
+                '| has_phone:', di_it.has_phone,
+                '| phone_reveal_key:', di_it.phone_reveal_key ? '(present, len=' + String(di_it.phone_reveal_key).length + ')' : 'absent',
+                '| member_id:', di_it.member_id);
+            }
           } else {
             arrays.sort(function(a, b){ return b.length - a.length; });
             listings = arrays[0] || [];
@@ -3275,6 +3287,40 @@
         '| ld+json scripts:', ldCount,
         '| tel: in html:', hasTelInHtml,
         '| total phone digits in html:', totalPhonesInHtml);
+
+      // DIAGNOSTIC: Dump 120-char context around each phone-shaped match.
+      // Goal: see WHERE the phone lives (JSON path? seller card class?
+      // hidden data attribute?) so we can target it precisely.
+      if (totalPhonesInHtml > 0) {
+        var phoneRegex = /01[0-25]\d{8}/g;
+        var pmatch;
+        var ctxNum = 0;
+        while ((pmatch = phoneRegex.exec(html)) !== null && ctxNum < 8) {
+          var start = Math.max(0, pmatch.index - 80);
+          var end = Math.min(html.length, pmatch.index + pmatch[0].length + 40);
+          var ctx = html.substring(start, end).replace(/\s+/g, ' ');
+          console.info('[maksab/aqarmap/detail] phone#' + ctxNum + ' "' + pmatch[0] + '" ctx:', ctx);
+          ctxNum++;
+        }
+      }
+
+      // DIAGNOSTIC: Dump top-level JSON-LD types so we know what schemas
+      // AqarMap is shipping (Product/RealEstateListing/Organization/etc.)
+      var ldDiagMatches = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+      for (var ldi = 0; ldi < ldDiagMatches.length; ldi++) {
+        var ldInner = ldDiagMatches[ldi].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+        if (!ldInner) continue;
+        try {
+          var ldObj = JSON.parse(ldInner[1].trim());
+          var ldTypes = [];
+          var ldNodes = Array.isArray(ldObj) ? ldObj : (ldObj['@graph'] && Array.isArray(ldObj['@graph']) ? ldObj['@graph'] : [ldObj]);
+          for (var lt = 0; lt < ldNodes.length; lt++) {
+            if (ldNodes[lt] && ldNodes[lt]['@type']) ldTypes.push(ldNodes[lt]['@type']);
+          }
+          console.info('[maksab/aqarmap/detail] ld+json#' + ldi + ' types:', ldTypes,
+            '| top keys:', Object.keys(ldNodes[0] || {}).slice(0, 12));
+        } catch (e) { /* skip */ }
+      }
 
       // ═══ Strategy 1: __NEXT_DATA__ (legacy AqarMap pages) ═══
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
