@@ -2745,13 +2745,39 @@
         console.info('[maksab/opensooq] reveal — using captured JWT, processing',
           todo.length, 'items');
 
+        // Build the full header set OpenSooq's reveal API expects.
+        // Verified via cURL capture: minimum Authorization + Content-Type
+        // is NOT enough — the server returns 500 without session-id,
+        // source, country, currency, abbucket, x-tracking-uuid, release-
+        // version. Pull what we can from cookies/session, fall back to
+        // sane defaults for the rest.
+        function readCookie(name) {
+          var pairs = (document.cookie || '').split('; ');
+          for (var i = 0; i < pairs.length; i++) {
+            var eq = pairs[i].indexOf('=');
+            if (eq > 0 && pairs[i].substring(0, eq) === name) {
+              return decodeURIComponent(pairs[i].substring(eq + 1));
+            }
+          }
+          return null;
+        }
+        var sessionCookie = readCookie('session') || '';
+        var sessionId = '';
+        try {
+          var parsed = JSON.parse(sessionCookie);
+          sessionId = parsed.id || '';
+        } catch (e) { /* ignore */ }
+        var deviceUuid = readCookie('device_uuid') || '';
+        var abBucket = readCookie('userABBucket') || '9';
+
         // Stagger requests 250 ms apart to avoid hammering the API.
         var revealedCount = 0;
         var doneCount = 0;
         todo.forEach(function(item, idx) {
           setTimeout(function() {
             fetch('https://eg.opensooq.com/api/account/reveal/v3/member-phone'
-                + '?cMedium=none&cName=direct_web_open&cSource=opensooq',
+                + '?cMedium=none&cName=direct_web_open&cSource=opensooq'
+                + '&abBucket=' + encodeURIComponent(abBucket),
               {
                 method: 'POST',
                 credentials: 'include',
@@ -2759,6 +2785,14 @@
                   'Authorization': jwt,
                   'Content-Type': 'application/json',
                   'Accept': '*/*',
+                  'accept-language': 'ar',
+                  'abbucket': abBucket,
+                  'country': 'eg',
+                  'currency': 'EGP',
+                  'release-version': '9.4.02',
+                  'session-id': sessionId,
+                  'source': 'desktop',
+                  'x-tracking-uuid': deviceUuid,
                 },
                 body: JSON.stringify({
                   reveal_key: item.phoneRevealKey,
