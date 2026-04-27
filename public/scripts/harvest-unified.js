@@ -3921,60 +3921,15 @@
       }
 
       // ── Property type ────────────────────────────────────
-      // categoryLabel is often empty in AqarMap XML, market_property_type
-      // is a numeric ID (e.g., "2" for apartment), and category is also
-      // numeric. The most reliable source is the listing title itself —
-      // it always contains a clear Arabic type word: شقة, فيلا, مكتب, etc.
-      var titleEl = entry.querySelector(':scope > title');
-      var titleFromXml = titleEl ? (titleEl.textContent || '').trim() : '';
-      // Also try translations[locale=ar field=title]
-      if (!titleFromXml) {
-        var trans = entry.querySelectorAll('translations > entry');
-        for (var tt = 0; tt < trans.length; tt++) {
-          if (getText(trans[tt], 'locale') === 'ar'
-              && getText(trans[tt], 'field') === 'title') {
-            titleFromXml = getText(trans[tt], 'content') || '';
-            break;
-          }
-        }
-      }
-      var inferredType = null;
-      if (titleFromXml) {
-        if (/فيلا|فلل|villa/i.test(titleFromXml)) inferredType = 'villa';
-        else if (/دوبلكس|duplex/i.test(titleFromXml)) inferredType = 'duplex';
-        else if (/بنتهاوس|penthouse/i.test(titleFromXml)) inferredType = 'penthouse';
-        else if (/استوديو|studio/i.test(titleFromXml)) inferredType = 'studio';
-        else if (/شاليه/i.test(titleFromXml)) inferredType = 'chalet';
-        else if (/مكتب|إداري|اداري/i.test(titleFromXml)) inferredType = 'office';
-        else if (/عيادة|عيادات/i.test(titleFromXml)) inferredType = 'clinic';
-        else if (/محل|محلات/i.test(titleFromXml)) inferredType = 'shop';
-        else if (/مصنع/i.test(titleFromXml)) inferredType = 'factory';
-        else if (/مخزن|مخازن/i.test(titleFromXml)) inferredType = 'warehouse';
-        else if (/أرض|اراضي|أراضي/i.test(titleFromXml)) inferredType = 'land';
-        else if (/عمارة|عمارات/i.test(titleFromXml)) inferredType = 'whole_building';
-        else if (/روف/i.test(titleFromXml)) inferredType = 'roof';
-        else if (/تاون|townhouse/i.test(titleFromXml)) inferredType = 'townhouse';
-        else if (/توين|twin/i.test(titleFromXml)) inferredType = 'twin_house';
-        else if (/شقة|شقق|apartment/i.test(titleFromXml)) inferredType = 'apartment';
-      }
-      // Numeric category ID fallback (limited known mapping)
-      var categoryNum = getText(entry, ':scope > category');
-      var numericCategoryMap = {
-        '2': 'apartment',
-        '3': 'villa',
-        '4': 'duplex',
-        '5': 'penthouse',
-      };
-      if (!inferredType && categoryNum && numericCategoryMap[categoryNum]) {
-        inferredType = numericCategoryMap[categoryNum];
-      }
+      // categoryLabel is text like "شقق للبيع" / "فلل للبيع" — first word
+      // is the type. market_property_type is sometimes an English enum.
+      var categoryLabel = getText(entry, ':scope > categoryLabel');
       var marketPropertyType = getText(entry, ':scope > market_property_type');
-      // Only use marketPropertyType if it's a non-numeric Arabic/English word.
-      if (!inferredType && marketPropertyType && !/^\d+$/.test(marketPropertyType)) {
-        inferredType = marketPropertyType;
-      }
-      if (inferredType) {
-        result.specs.property_type = inferredType;
+      if (marketPropertyType) {
+        result.specs.property_type = marketPropertyType;
+      } else if (categoryLabel) {
+        // Send under Arabic key so normalize.ts maps it via PROPERTY_TYPE_MAP.
+        result.specs['النوع'] = categoryLabel;
       }
 
       // ── Payment method ───────────────────────────────────
