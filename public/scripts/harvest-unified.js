@@ -966,6 +966,12 @@
             if (detail.amenities && detail.amenities.length > 0) it.amenities = detail.amenities;
             if (detail.sellerBadge && !it.sellerBadge) it.sellerBadge = detail.sellerBadge;
             if (detail.price && !it.price) it.price = detail.price;
+            // Description from the detail page is usually richer than the
+            // list-page snippet. Override if longer.
+            if (detail.description &&
+                (!it.description || detail.description.length > it.description.length)) {
+              it.description = detail.description;
+            }
 
             // Only retry if we still don't have a phone AND we're on a
             // platform that benefits from retries (currently OpenSooq).
@@ -3914,21 +3920,31 @@
         result.specs['المساحة'] = areaText;
       }
 
-      // ── Property type / category ─────────────────────────
+      // ── Property type ────────────────────────────────────
+      // categoryLabel is text like "شقق للبيع" / "فلل للبيع" — first word
+      // is the type. market_property_type is sometimes an English enum.
       var categoryLabel = getText(entry, ':scope > categoryLabel');
-      if (categoryLabel) {
-        result.specs.property_type_label = categoryLabel;
-      }
       var marketPropertyType = getText(entry, ':scope > market_property_type');
-      if (marketPropertyType) result.specs.property_type = marketPropertyType;
+      if (marketPropertyType) {
+        result.specs.property_type = marketPropertyType;
+      } else if (categoryLabel) {
+        // Send under Arabic key so normalize.ts maps it via PROPERTY_TYPE_MAP.
+        result.specs['النوع'] = categoryLabel;
+      }
 
-      // ── Payment method (top-level) ───────────────────────
+      // ── Payment method ───────────────────────────────────
+      // paymentMethodLabel is "label.payment_method.cash" — extract the
+      // suffix and normalize.
       var paymentLabel = getText(entry, ':scope > paymentMethodLabel');
-      if (paymentLabel) result.specs.payment_method_label = paymentLabel;
+      if (paymentLabel) {
+        var pmMatch = paymentLabel.match(/payment_method\.(\w+)/);
+        if (pmMatch) result.specs.payment_method = pmMatch[1];
+      }
 
       // ── Property view ────────────────────────────────────
-      var viewLabel = getText(entry, ':scope > property_view_label');
-      if (viewLabel) result.specs.view = viewLabel;
+      // property_view_label is usually "layout.all" — not a real view
+      // direction, skip. View value comes via attributes (custom_field
+      // name=view) when populated.
 
       // ── Compound info ────────────────────────────────────
       var compoundStatus = getText(entry, ':scope > compound_status');
