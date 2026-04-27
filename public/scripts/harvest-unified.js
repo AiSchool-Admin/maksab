@@ -3604,8 +3604,23 @@
         // (1200 chars) sometimes reaches the listing title which uses
         // the same JSON key ("name") as the seller card.
         if (/(للبيع|للإيجار|للايجار|للتمليك|للاستثمار)/.test(t)) return null;
-        if (/\d+\s*(?:م²|م2|متر(?!و)|sqm)/i.test(t)) return null;
+        // Match Latin (\d) AND Arabic-Indic (٠-٩) digits before m²/متر/sqm.
+        // Listing titles like "امتلك شقة ١١٢م ٣غرف" use ١١٢ (Arabic-Indic).
+        // Also catch bare "م" after digits (e.g., "212م") — but only when
+        // not followed by another Arabic letter, to avoid matching names
+        // that contain digits like a hypothetical "محمود١٢".
+        if (/[\d٠-٩]+\s*(?:م²|م2|متر(?!و)|sqm|م(?![ا-ي]))/i.test(t)) return null;
         if (/(?:^|\s)(فرصة|عاجل|بسعر|بفيو|مباشره?\s+ع|إستلام|استلام)/i.test(t)) return null;
+        // Property-imperative verbs that start listing titles, never seller
+        // names: "امتلك" (own), "اغتنم" / "أغتنم" (seize), "لعشاق"
+        // (for-fans-of), "بمقدم" (with-down-payment), "اطلب" (request).
+        if (/^(?:امتلك|اغتنم|أغتنم|لعشاق|بمقدم|اطلب|أطلب|تمتع|استمتع)\s/.test(t)) return null;
+        // English listing-title patterns: "Old building for sale",
+        // "Apartment for rent", "Land for investment", "Commercial unit for".
+        if (/\b(for\s+sale|for\s+rent|for\s+investment|for\s+lease)\b/i.test(t)) return null;
+        // Strings containing JSON-escape artifacts (leaked from streaming
+        // chunks): "user_deleted", literal \" or backslash-quote pairs.
+        if (/user_deleted|\\["\\]/.test(t)) return null;
         return notSelfName(t);
       }
       function acceptPhone(p) {
@@ -3711,10 +3726,12 @@
       if (!result.sellerName && doc) {
         try {
           var allUserLinks = doc.querySelectorAll('a[href*="/ar/user/"]');
+          var numericLinks = 0;
           for (var ul = 0; ul < allUserLinks.length; ul++) {
             // Require a numeric user ID after /ar/user/.
             var ulHref = allUserLinks[ul].getAttribute('href') || '';
             if (!/\/ar\/user\/\d+/.test(ulHref)) continue;
+            numericLinks++;
             // Inner text element — usually <p class="text-title-5">.
             var nameEl = allUserLinks[ul].querySelector('p, span, h1, h2, h3, h4');
             var nameText = (nameEl ? nameEl.textContent : allUserLinks[ul].textContent || '').trim();
@@ -3729,6 +3746,11 @@
               break;
             }
           }
+          // Always log the count so we can tell if SSR HTML lacks user-links
+          // (which means AqarMap renders them client-side after hydration).
+          console.info('[maksab/aqarmap/detail] Strategy 0a — user-links total:',
+            allUserLinks.length, '| with numeric ID:', numericLinks,
+            '| name:', result.sellerName || 'none');
         } catch (eU) {
           console.warn('[maksab/aqarmap/detail] Strategy 0a threw:', eU && eU.message);
         }
@@ -3788,7 +3810,10 @@
             // "phones" tend to be the seller's; names earlier in the window
             // are listing titles / breadcrumb labels.
             var streamName = acceptName(nameCandidates[nc]);
-            if (streamName) { result.sellerName = streamName; break; }
+            // Don't overwrite a name already set by Strategy 0a (DOM
+            // user-link). 0a is precise; this Strategy 0 fallback is
+            // heuristic and frequently picks up listing titles.
+            if (streamName && !result.sellerName) { result.sellerName = streamName; break; }
           }
           console.info('[maksab/aqarmap/detail] Strategy 0 hit — phone:', result.phone,
             '| name:', result.sellerName || 'none',
