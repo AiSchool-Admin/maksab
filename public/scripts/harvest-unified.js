@@ -3923,15 +3923,60 @@
       }
 
       // ── Property type ────────────────────────────────────
-      // categoryLabel is text like "شقق للبيع" / "فلل للبيع" — first word
-      // is the type. market_property_type is sometimes an English enum.
-      var categoryLabel = getText(entry, ':scope > categoryLabel');
-      var marketPropertyType = getText(entry, ':scope > market_property_type');
-      if (marketPropertyType) {
-        result.specs.property_type = marketPropertyType;
-      } else if (categoryLabel) {
-        // Send under Arabic key so normalize.ts maps it via PROPERTY_TYPE_MAP.
-        result.specs['النوع'] = categoryLabel;
+      // Verified via user's manual XML inspection (listing 6861670):
+      //   <categoryLabel></categoryLabel>           ← empty
+      //   <market_property_type>2</market_property_type> ← numeric ID
+      //   <category>2</category>                    ← numeric ID
+      // None of these give a usable Arabic/English type word. The
+      // RELIABLE source is the listing title — it always contains a
+      // clear Arabic type indicator (شقة, فيلا, مكتب, ...).
+      //
+      // Wrapped in try/catch so any selector/regex failure never bubbles
+      // up and breaks parseDetail. Property type is nice-to-have, not
+      // critical.
+      try {
+        var titleSources = [];
+        // Top-level <title> (if exists)
+        var topTitle = getText(entry, 'title');
+        if (topTitle) titleSources.push(topTitle);
+        // Arabic title from translations
+        var transNodes = entry.querySelectorAll('translations > entry');
+        for (var tn = 0; tn < transNodes.length; tn++) {
+          if (getText(transNodes[tn], 'field') === 'title') {
+            var c = getText(transNodes[tn], 'content');
+            if (c) titleSources.push(c);
+          }
+        }
+        var titleStr = titleSources.find(function(s) { return /[؀-ۿ]/.test(s); })
+                    || titleSources[0] || '';
+
+        // Order matters — commercial types (محل/مكتب/عياد) checked
+        // BEFORE layout qualifiers (دوبلكس/بنتهاوس). Otherwise "محل
+        // دوبلكس" mis-matches as "duplex" instead of "shop".
+        // Use Arabic root stems where helpful (عياد catches عيادة,
+        // عيادات, عيادتك, etc.).
+        var inferredType = null;
+        if (titleStr) {
+          if (/مكتب|مكاتب|إداري|اداري/i.test(titleStr))    inferredType = 'office';
+          else if (/عياد/i.test(titleStr))                  inferredType = 'clinic';
+          else if (/محل|محلات/i.test(titleStr))             inferredType = 'shop';
+          else if (/مصنع|مصانع/i.test(titleStr))           inferredType = 'factory';
+          else if (/مخزن|مخازن/i.test(titleStr))           inferredType = 'warehouse';
+          else if (/فيلا|فلل|villa/i.test(titleStr))        inferredType = 'villa';
+          else if (/شاليه|شاليهات|chalet/i.test(titleStr)) inferredType = 'chalet';
+          else if (/استوديو|studio/i.test(titleStr))        inferredType = 'studio';
+          else if (/تاون|townhouse/i.test(titleStr))        inferredType = 'townhouse';
+          else if (/توين|twin/i.test(titleStr))             inferredType = 'twin_house';
+          else if (/روف|roof/i.test(titleStr))              inferredType = 'roof';
+          else if (/أرض|اراضي|أراضي|land/i.test(titleStr)) inferredType = 'land';
+          else if (/عمارة|عمارات|building/i.test(titleStr))  inferredType = 'whole_building';
+          else if (/بنتهاوس|penthouse/i.test(titleStr))     inferredType = 'penthouse';
+          else if (/دوبلكس|duplex/i.test(titleStr))         inferredType = 'duplex';
+          else if (/شقة|شقق|apartment|flat/i.test(titleStr)) inferredType = 'apartment';
+        }
+        if (inferredType) result.specs.property_type = inferredType;
+      } catch (eType) {
+        // ignore — property_type is optional
       }
 
       // ── Payment method ───────────────────────────────────
@@ -3957,16 +4002,43 @@
       else if (getText(entry, ':scope > isResale') === 'true') result.specs.purpose = 'resale';
       else result.specs.purpose = 'sale';
 
-      // ── Description (Arabic from translations) ───────────
-      var translations = entry.querySelectorAll('translations > entry');
-      for (var ti = 0; ti < translations.length; ti++) {
-        var tLocale = getText(translations[ti], 'locale');
-        var tField = getText(translations[ti], 'field');
-        var tContent = getText(translations[ti], 'content');
-        if (!tContent) continue;
-        if (tField === 'description' && (tLocale === 'ar' || !result.description)) {
-          result.description = tContent;
+      // ── Description ──────────────────────────────────────
+      // AqarMap stores descriptions in <translations> with locale fields,
+      // but the locale labels are unreliable (we've seen Arabic content
+      // labeled as "en_US" and vice versa). It also auto-generates a
+      // short English summary like "Separate Villa For sale in Y with
+      // size 560 M² View Pool" — which is not the seller's real text.
+      //
+      // Strategy:
+      //   1. Collect ALL description translations
+      //   2. Prefer one with Arabic characters (real seller text)
+      //   3. Among Arabic ones, pick the longest (auto-gen is short)
+      //   4. Fall back to the longest non-Arabic only if no Arabic exists
+      try {
+        var descCandidates = [];
+        var translations = entry.querySelectorAll('translations > entry');
+        for (var ti = 0; ti < translations.length; ti++) {
+          var tField = getText(translations[ti], 'field');
+          var tContent = getText(translations[ti], 'content');
+          if (tField === 'description' && tContent) {
+            descCandidates.push(tContent);
+          }
         }
+        // Sort: Arabic-first (descending by length), then non-Arabic.
+        var arabicDescs = descCandidates.filter(function(d) {
+          return /[؀-ۿ]/.test(d);
+        });
+        var pickedDesc = null;
+        if (arabicDescs.length > 0) {
+          arabicDescs.sort(function(a, b) { return b.length - a.length; });
+          pickedDesc = arabicDescs[0];
+        } else if (descCandidates.length > 0) {
+          descCandidates.sort(function(a, b) { return b.length - a.length; });
+          pickedDesc = descCandidates[0];
+        }
+        if (pickedDesc) result.description = pickedDesc;
+      } catch (eDesc) {
+        // Fall through silently — description is optional.
       }
 
       // ── Amenities (CDATA enum array) ─────────────────────
