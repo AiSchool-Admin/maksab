@@ -3705,17 +3705,23 @@
       //   <a href="/ar/user/2592786/">
       //     <p class="text-title-5">Mahmoud Hefny</p>
       //   </a>
-      // This is exact and noise-free — no frequency guessing, no UI-label
-      // false positives. Works for individual sellers AND agencies.
+      // The href MUST contain a numeric user ID — without that filter the
+      // selector also matched category links like /ar/user/realestate
+      // whose inner text was "العقارات" (UI label).
       if (!result.sellerName && doc) {
         try {
-          var userLinks = doc.querySelectorAll('a[href*="/ar/user/"]');
-          for (var ul = 0; ul < userLinks.length; ul++) {
-            // Inner text element — usually <p class="text-title-5"> but
-            // accept any small inline text holder.
-            var nameEl = userLinks[ul].querySelector('p, span, h1, h2, h3, h4');
-            var nameText = (nameEl ? nameEl.textContent : userLinks[ul].textContent || '').trim();
+          var allUserLinks = doc.querySelectorAll('a[href*="/ar/user/"]');
+          for (var ul = 0; ul < allUserLinks.length; ul++) {
+            // Require a numeric user ID after /ar/user/.
+            var ulHref = allUserLinks[ul].getAttribute('href') || '';
+            if (!/\/ar\/user\/\d+/.test(ulHref)) continue;
+            // Inner text element — usually <p class="text-title-5">.
+            var nameEl = allUserLinks[ul].querySelector('p, span, h1, h2, h3, h4');
+            var nameText = (nameEl ? nameEl.textContent : allUserLinks[ul].textContent || '').trim();
             if (!nameText) continue;
+            // Real seller names have at least 2 words. Single-word values
+            // like "العقارات" / "Properties" are category labels, not sellers.
+            if (nameText.split(/\s+/).filter(Boolean).length < 2) continue;
             var pickedName = acceptName(nameText);
             if (pickedName) {
               result.sellerName = pickedName;
