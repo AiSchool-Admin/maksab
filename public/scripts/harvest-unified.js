@@ -2704,11 +2704,18 @@
     },
 
     fetchPage: function(url) {
-      // credentials: 'omit' — AqarMap does NOT require login to expose
-      // seller phones in the SSR HTML. Sending cookies would leak the
-      // user's account/session unnecessarily. Confirmed via test runs:
-      // 10/10 phones extracted from anonymous responses.
-      return fetch(url, {credentials: 'omit'})
+      // For LIST pages, fetch the URL as-is (HTML).
+      // For DETAIL pages (URL contains /ar/listing/<id>), fetch the public
+      // XML API endpoint instead — /api/v2/listing/<id>. The API returns
+      // the listing's <user> element with full_name + phone_number directly,
+      // avoiding 1.3 MB of HTML and all the regex/DOM-scraping heuristics.
+      // No login required; verified by user across multiple listings.
+      var detailMatch = url.match(/\/ar\/listing\/(\d+)/);
+      var fetchUrl = detailMatch
+        ? 'https://aqarmap.com.eg/api/v2/listing/' + detailMatch[1]
+        : url;
+      var isApi = !!detailMatch;
+      return fetch(fetchUrl, {credentials: 'omit'})
         .then(function(r){
           if (!r.ok && r.status >= 400 && r.status < 500) {
             // 4xx is permanent (listing deleted/forbidden) — flag for caller
@@ -2720,9 +2727,13 @@
           }
           return r.text();
         })
-        .then(function(html){
-          var doc = new DOMParser().parseFromString(html, 'text/html');
-          return { html: html, doc: doc };
+        .then(function(body){
+          // API returns XML, list pages return HTML — parse accordingly.
+          var doc = new DOMParser().parseFromString(
+            body,
+            isApi ? 'text/xml' : 'text/html'
+          );
+          return { html: body, doc: doc };
         });
     },
 
@@ -3562,339 +3573,63 @@
     },
 
     parseDetail: function(html, doc) {
+      // fetchPage above redirects detail-page URLs to AqarMap's public XML
+      // API at /api/v2/listing/<id>. The response contains a <user> element
+      // with <full_name> and <phone_number> directly — no scraping, no
+      // regex over HTML, no DOM heuristics. This is a deterministic
+      // structural extraction.
+      //
+      // Smart, precise solution per user request: parse the API response,
+      // not the rendered page.
       var result = { phone: null, sellerName: null };
+      if (!doc) return result;
 
-      // Reject the logged-in user's own contact info — same pattern as
-      // Dubizzle/OpenSooq parseDetail. Prevents the user's phone from
-      // appearing as a "seller phone" if they're signed in to AqarMap
-      // (e.g., as a registered agent) and the page surfaces their own
-      // profile under listing.user.
       var selfPhone = (BLOCKED_USER && BLOCKED_USER.phone) || null;
       var selfName = (BLOCKED_USER && BLOCKED_USER.name) || null;
-      function notSelfPhone(p) { return p && p !== selfPhone ? p : null; }
-      function notSelfName(n) {
-        if (!n || !selfName) return n || null;
-        return n.trim().toLowerCase() === selfName.toLowerCase() ? null : n;
-      }
-
-      // Reject "عقارات مصر" / generic helpdesk phone (AqarMap-itself).
       var AQARMAP_BRAND_NAMES = /^(عقارات\s*مصر|عقار\s*ماب|aqarmap|aqar\s*map)$/i;
       var AQARMAP_BRAND_PHONES = ['01006674484'];
-      // Sanity-only filter — names come from STRUCTURAL DOM extraction
-      // (logo <img alt="X Logo"> / <a href="/ar/user/\d+/">), not from
-      // pattern-matched JSON. So we only need to drop the brand name and
-      // the user's own name; we no longer need a blacklist of listing-
-      // title patterns, enum codes, or imperative verbs.
-      function acceptName(n) {
-        if (!n) return null;
-        var t = String(n).trim().replace(/\s+/g, ' ');
-        if (t.length < 2 || t.length > 80) return null;
-        if (AQARMAP_BRAND_NAMES.test(t)) return null;
-        return notSelfName(t);
-      }
-      function acceptPhone(p) {
-        if (!p) return null;
-        if (AQARMAP_BRAND_PHONES.indexOf(p) >= 0) return null;
-        return notSelfPhone(p);
+
+      // <user> is the seller container in the API XML response.
+      var userEl = doc.querySelector('user');
+      if (!userEl) {
+        console.info('[maksab/aqarmap/api] no <user> element — listing has no seller info');
+        return result;
       }
 
-      var hasNextData = /<script[^>]*id=["']__NEXT_DATA__["']/.test(html);
-      var ldCount = (html.match(/<script[^>]*type=["']application\/ld\+json["']/gi) || []).length;
-      var hasTelInHtml = /href=["']tel:\+?(20)?01[0-25]\d{8}["']/.test(html);
-      var totalPhonesInHtml = (html.match(/01[0-25]\d{8}/g) || []).length;
-      console.info('[maksab/aqarmap/detail] html len:', html.length,
-        '| __NEXT_DATA__:', hasNextData,
-        '| ld+json scripts:', ldCount,
-        '| tel: in html:', hasTelInHtml,
-        '| total phone digits in html:', totalPhonesInHtml);
-
-      // DIAGNOSTIC: Dump 300-char before + 200-char after context around the
-      // FIRST seller phone match (skip phone#0 which is the AqarMap helpdesk
-      // wa.me link). Goal: see the FULL seller object — what fields surround
-      // "phones" beyond what we've already seen (isCallRequest, has_parent,
-      // address). The seller's name field should be in this window if it
-      // exists in HTML at all.
-      if (totalPhonesInHtml > 0) {
-        var phoneRegex = /01[0-25]\d{8}/g;
-        var pmatch;
-        var ctxNum = 0;
-        while ((pmatch = phoneRegex.exec(html)) !== null && ctxNum < 8) {
-          var start = Math.max(0, pmatch.index - 80);
-          var end = Math.min(html.length, pmatch.index + pmatch[0].length + 40);
-          var ctx = html.substring(start, end).replace(/\s+/g, ' ');
-          console.info('[maksab/aqarmap/detail] phone#' + ctxNum + ' "' + pmatch[0] + '" ctx:', ctx);
-          ctxNum++;
-        }
-        // WIDE context dump for the SECOND phone (seller's, not AqarMap's).
-        var phoneRegex2 = /01[0-25]\d{8}/g;
-        var skipFirst = phoneRegex2.exec(html); // skip wa.me/AqarMap helpdesk
-        var sellerPhone = phoneRegex2.exec(html);
-        if (sellerPhone) {
-          var ws = Math.max(0, sellerPhone.index - 600);
-          var we = Math.min(html.length, sellerPhone.index + 400);
-          var wctx = html.substring(ws, we).replace(/\s+/g, ' ');
-          console.info('[maksab/aqarmap/detail] WIDE seller-phone ctx (1000 chars):', wctx);
+      // Name: <full_name> is wrapped in CDATA — DOMParser strips the wrapper.
+      var nameEl = userEl.querySelector('full_name');
+      if (nameEl) {
+        var rawName = (nameEl.textContent || '').trim();
+        if (rawName && rawName.length >= 2 && rawName.length <= 80
+            && !AQARMAP_BRAND_NAMES.test(rawName)
+            && (!selfName || rawName.toLowerCase() !== selfName.toLowerCase())) {
+          result.sellerName = rawName;
         }
       }
 
-      // DIAGNOSTIC: search for known seller-name patterns in raw HTML.
-      // If the name "Mahmoud Hefny" (seen on the visible page) is anywhere
-      // in the fetched HTML, this confirms it's there — then we just need
-      // a better extraction strategy. If NOT found, the name is rendered
-      // entirely client-side and we'd need to call AqarMap's API.
-      try {
-        var latinNamePat = /\\?"([A-Z][a-z]{1,15}(?:\s+[A-Z][a-z]{1,20}){1,3})\\?"/g;
-        var latinFindings = [];
-        var lm;
-        while ((lm = latinNamePat.exec(html)) !== null && latinFindings.length < 10) {
-          latinFindings.push(lm[1]);
-        }
-        console.info('[maksab/aqarmap/detail] DIAG Latin-name candidates in HTML:',
-          JSON.stringify(latinFindings));
-
-        // Also: any field that looks like display_name / member_name / etc.
-        var nameKeyPat = /\\?"(member_name|display_name|user_name|owner_name|publisher_name|posts_count|listings_count|posts_no|posts_total)\\?"\s*:\s*\\?"?([^",}\]]{0,60})/g;
-        var keyFindings = [];
-        var km;
-        while ((km = nameKeyPat.exec(html)) !== null && keyFindings.length < 12) {
-          keyFindings.push({ key: km[1], val: km[2].substring(0, 50) });
-        }
-        console.info('[maksab/aqarmap/detail] DIAG name-key fields:',
-          JSON.stringify(keyFindings));
-      } catch (eName) {
-        console.warn('[maksab/aqarmap/detail] DIAG name search threw:', eName && eName.message);
-      }
-
-      // DIAGNOSTIC: Dump top-level JSON-LD types so we know what schemas
-      // AqarMap is shipping (Product/RealEstateListing/Organization/etc.)
-      var ldDiagMatches = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
-      for (var ldi = 0; ldi < ldDiagMatches.length; ldi++) {
-        var ldInner = ldDiagMatches[ldi].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
-        if (!ldInner) continue;
-        try {
-          var ldObj = JSON.parse(ldInner[1].trim());
-          var ldTypes = [];
-          var ldNodes = Array.isArray(ldObj) ? ldObj : (ldObj['@graph'] && Array.isArray(ldObj['@graph']) ? ldObj['@graph'] : [ldObj]);
-          for (var lt = 0; lt < ldNodes.length; lt++) {
-            if (ldNodes[lt] && ldNodes[lt]['@type']) ldTypes.push(ldNodes[lt]['@type']);
-          }
-          console.info('[maksab/aqarmap/detail] ld+json#' + ldi + ' types:', ldTypes,
-            '| top keys:', Object.keys(ldNodes[0] || {}).slice(0, 12));
-        } catch (e) { /* skip */ }
-      }
-
-      // ═══ Strategy 0a: Seller user-profile link (PRIMARY) ════════════════
-      // Confirmed from a live DOM inspection: AqarMap renders the seller
-      // name inside an <a> linking to their user profile, e.g.
-      //   <a href="/ar/user/2592786/">
-      //     <p class="text-title-5">Mahmoud Hefny</p>
-      //   </a>
-      // The href MUST contain a numeric user ID — without that filter the
-      // selector also matched category links like /ar/user/realestate
-      // whose inner text was "العقارات" (UI label).
-      if (!result.sellerName && doc) {
-        try {
-          var allUserLinks = doc.querySelectorAll('a[href*="/ar/user/"]');
-          var numericLinks = 0;
-          for (var ul = 0; ul < allUserLinks.length; ul++) {
-            // Require a numeric user ID after /ar/user/.
-            var ulHref = allUserLinks[ul].getAttribute('href') || '';
-            if (!/\/ar\/user\/\d+/.test(ulHref)) continue;
-            numericLinks++;
-            // Inner text element — usually <p class="text-title-5">.
-            var nameEl = allUserLinks[ul].querySelector('p, span, h1, h2, h3, h4');
-            var nameText = (nameEl ? nameEl.textContent : allUserLinks[ul].textContent || '').trim();
-            if (!nameText) continue;
-            // Real seller names have at least 2 words. Single-word values
-            // like "العقارات" / "Properties" are category labels, not sellers.
-            if (nameText.split(/\s+/).filter(Boolean).length < 2) continue;
-            var pickedName = acceptName(nameText);
-            if (pickedName) {
-              result.sellerName = pickedName;
-              console.info('[maksab/aqarmap/detail] Strategy 0a (user-link) — name:', pickedName);
-              break;
-            }
-          }
-          // Always log the count so we can tell if SSR HTML lacks user-links
-          // (which means AqarMap renders them client-side after hydration).
-          console.info('[maksab/aqarmap/detail] Strategy 0a — user-links total:',
-            allUserLinks.length, '| with numeric ID:', numericLinks,
-            '| name:', result.sellerName || 'none');
-        } catch (eU) {
-          console.warn('[maksab/aqarmap/detail] Strategy 0a threw:', eU && eU.message);
+      // Phone: try multiple known paths in priority order.
+      // 1. <user><phone_number>+201145878735</phone_number></user>
+      // 2. <user><whatsApp_number><phone><number>...</number></phone></whatsApp_number></user>
+      // 3. <user><phone><number>...</number></phone></user>
+      var phoneNodes = [
+        userEl.querySelector('phone_number'),
+        userEl.querySelector('whatsApp_number > phone > number'),
+        userEl.querySelector('phone > number'),
+      ];
+      for (var pn = 0; pn < phoneNodes.length; pn++) {
+        if (!phoneNodes[pn]) continue;
+        var rawPhone = (phoneNodes[pn].textContent || '').trim();
+        var normalized = normalizeEgPhone(rawPhone);
+        if (normalized
+            && normalized !== selfPhone
+            && AQARMAP_BRAND_PHONES.indexOf(normalized) < 0) {
+          result.phone = normalized;
+          break;
         }
       }
 
-      // ═══ Strategy 0: Phone from Next.js 14 streaming chunks ═════════════
-      // AqarMap embeds the broker/agent contact card via __next_f.push as
-      // an escaped JSON string. The seller object's "phones" array is the
-      // most reliable phone source on the page. Quotes can be escaped (\")
-      // or plain (") depending on how the chunk is wrapped.
-      //
-      // NOTE: This strategy USED TO also try to extract the seller name
-      // from "name":"..." pairs in a wide window around "phones". That was
-      // dropped — it kept picking listing titles ("امتلك شقة ١١٢م...",
-      // "Old building for sale") because the listing-title field uses the
-      // same JSON key as the seller card. Names now come exclusively from
-      // structural DOM nodes: parseList logo enrichment for agencies, and
-      // Strategy 0a (user-link) for individuals.
-      var Q = '\\\\?"';  // matches " or \"
-      var streamPhonePat = new RegExp(
-        Q + 'phones' + Q + '\\s*:\\s*\\[\\s*\\{\\s*' +
-        Q + 'number' + Q + '\\s*:\\s*' + Q + '\\+?20?(01[0-25]\\d{8})'
-      );
-      var streamPhoneMatch = html.match(streamPhonePat);
-      if (streamPhoneMatch) {
-        var streamPhone = acceptPhone(normalizeEgPhone(streamPhoneMatch[1]));
-        if (streamPhone) {
-          result.phone = streamPhone;
-          console.info('[maksab/aqarmap/detail] Strategy 0 — phone:', result.phone);
-        }
-      }
-
-      // (Strategy 0.5 was a frequency-based scan over all "name":"..." JSON
-      // pairs. It picked the most-frequent value with count ≥ 2 and passed
-      // acceptName. Removed because:
-      //   - It conflated listing titles, agency names, and user names —
-      //     all serialize as "name":"..." on AqarMap.
-      //   - It picked "ميدتاون فيلا مول - بتر هوم" — a project banner,
-      //     not a seller — and stamped it on multiple unrelated listings.
-      //   - It depended on an ever-growing acceptName blacklist
-      //     ("$undefined", brands, ENUM_CODES, listing-action words, m²
-      //     markers, imperative verbs, ...) — fragile and noisy.
-      //
-      // Names now come from structural DOM nodes only:
-      //   - parseList _enrichAgenciesFromDom  → agencies (img logos)
-      //   - parseDetail Strategy 0a           → individuals (user-link)
-      // If neither finds a name, sellerName stays null. Better empty than
-      // wrong — quality > quantity.
-
-      // (Strategy 0.6 was a frequency-based person-shape regex over the
-      // raw HTML — it kept matching UI labels like "البريد الالكترونى",
-      // "طلب اتصال", "نوع المعلن" because every page renders them 2-3+
-      // times. Strategy 0a (DOM seller user-link) is precise and safer,
-      // so 0.6 is removed entirely.)
-
-      // ═══ Strategy 1: __NEXT_DATA__ (legacy AqarMap pages) ═══
-      var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
-      if (m) {
-        try {
-          var data = JSON.parse(m[1]);
-          var pp = (data && data.props && data.props.pageProps) || {};
-          console.info('[maksab/aqarmap/detail] pageProps keys:', Object.keys(pp).slice(0, 12));
-          var listing = pp.listing || pp.property || pp.unit || pp;
-          var user = listing.user || listing.owner || listing.agent || listing.seller || {};
-          if (user.name || user.display_name) {
-            result.sellerName = acceptName(user.name || user.display_name);
-          }
-          var cand = [listing.phone, listing.mobile, user.phone, user.mobile, user.contact_phone];
-          for (var ci = 0; ci < cand.length; ci++) {
-            if (cand[ci]) {
-              var p = acceptPhone(normalizeEgPhone(cand[ci]));
-              if (p) { result.phone = p; break; }
-            }
-          }
-        } catch (e) {
-          console.warn('[maksab/aqarmap/detail] __NEXT_DATA__ parse threw:', e && e.message);
-        }
-      }
-
-      // ═══ Strategy 2: JSON-LD (modern AqarMap on Next.js 14 streaming) ═══
-      // RealEstateListing / Product schemas expose seller name and telephone.
-      if (!result.phone || !result.sellerName) {
-        var ldMatches = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
-        for (var li = 0; li < ldMatches.length; li++) {
-          var inner = ldMatches[li].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
-          if (!inner) continue;
-          try {
-            var ld = JSON.parse(inner[1].trim());
-            var nodes = Array.isArray(ld) ? ld : (ld['@graph'] && Array.isArray(ld['@graph']) ? ld['@graph'] : [ld]);
-            for (var ni = 0; ni < nodes.length; ni++) {
-              var node = nodes[ni];
-              if (!node || typeof node !== 'object') continue;
-              // Direct telephone field on the listing/seller/offer
-              var phoneSources = [
-                node.telephone,
-                node.seller && node.seller.telephone,
-                node.offers && node.offers.seller && node.offers.seller.telephone,
-                node.author && node.author.telephone,
-                node.provider && node.provider.telephone,
-              ];
-              for (var ps = 0; ps < phoneSources.length; ps++) {
-                if (!result.phone && phoneSources[ps]) {
-                  var pn = acceptPhone(normalizeEgPhone(phoneSources[ps]));
-                  if (pn) { result.phone = pn; break; }
-                }
-              }
-              var nameSources = [
-                node.seller && node.seller.name,
-                node.offers && node.offers.seller && node.offers.seller.name,
-                node.author && node.author.name,
-                node.provider && node.provider.name,
-              ];
-              for (var ns = 0; ns < nameSources.length; ns++) {
-                if (!result.sellerName && nameSources[ns]) {
-                  var sn = acceptName(nameSources[ns]);
-                  if (sn) { result.sellerName = sn; break; }
-                }
-              }
-            }
-          } catch (e) { /* skip */ }
-          if (result.phone && result.sellerName) break;
-        }
-      }
-
-      // ═══ Strategy 3: tel: link — anywhere on the page is OK on AqarMap
-      // (no aggressive support links like OpenSooq has). Brand-phone filter
-      // catches the helpdesk number if it appears.
-      if (!result.phone) {
-        var telLink = html.match(/href=["']tel:\+?(20)?(01[0-25]\d{8})["']/);
-        if (telLink) result.phone = acceptPhone(normalizeEgPhone(telLink[2]));
-      }
-
-      // ═══ Strategy 4: DOM-based seller card scan ═══
-      // Modern AqarMap detail pages render the agent card client-side.
-      // Look for typical broker/agent name patterns near a tel: button.
-      if ((!result.sellerName || !result.phone) && doc) {
-        var sellerNodes = doc.querySelectorAll(
-          '[class*="broker" i], [class*="agent" i], [class*="seller" i], ' +
-          '[class*="owner" i], [class*="contact-card" i], [class*="ContactCard" i]'
-        );
-        for (var sd = 0; sd < sellerNodes.length && (!result.sellerName || !result.phone); sd++) {
-          var node2 = sellerNodes[sd];
-          var nodeText = (node2.textContent || '').trim();
-          if (!result.sellerName) {
-            // First non-numeric line ≥ 2 chars
-            var lines = nodeText.split(/\n+/).map(function(s) { return s.trim(); }).filter(Boolean);
-            for (var ln = 0; ln < lines.length; ln++) {
-              var sn2 = acceptName(lines[ln]);
-              if (sn2) { result.sellerName = sn2; break; }
-            }
-          }
-          if (!result.phone) {
-            var pn2 = acceptPhone(findPhoneInText(nodeText));
-            if (pn2) result.phone = pn2;
-          }
-        }
-      }
-
-      // ═══ Strategy 5: class-based regex (legacy, last resort) ═══
-      if (!result.sellerName) {
-        var pats = [
-          /class="[^"]*(?:owner|seller|agent|broker)[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
-          /class="[^"]*contact[\w-]*name[^"]*"[^>]*>\s*([^<]{2,60})\s*</i,
-        ];
-        for (var i = 0; i < pats.length; i++) {
-          var mm = html.match(pats[i]);
-          if (mm && mm[1]) {
-            var n = acceptName(mm[1]);
-            if (n) { result.sellerName = n; break; }
-          }
-        }
-      }
-
-      console.info('[maksab/aqarmap/detail] result — phone:', result.phone || 'none',
-        '| name:', result.sellerName || 'none');
+      console.info('[maksab/aqarmap/api] extracted — name:', result.sellerName || 'none',
+        '| phone:', result.phone || 'none');
 
       return result;
     },
