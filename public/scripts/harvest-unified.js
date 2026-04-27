@@ -3842,6 +3842,32 @@
             ')$',
             'i'
           );
+
+          // Arabic-pattern noise (location prefixes, property types, UI text).
+          // Real person/agency names rarely start with any of these tokens.
+          // The Strategy 0.6 Arabic regex was matching street names ("شارع
+          // جمال عبد الناصر"), property types ("فيلا منفصلة", "محل دوبلكس"),
+          // areas ("سموحه مروج", "المعمورة الشاطيء"), and UI ("تواصل مع المعلن").
+          var ARABIC_NON_NAME_PREFIX = new RegExp(
+            '^(?:' +
+            // Location/address starters
+            'شارع|طريق|كمبوند|كومبوند|محور|كورنيش|قرية|مدينة|منطقة|حي|كيلو|الكيلو|' +
+            // UI / instructional
+            'تواصل|اتصل|أعلن|اعلن|أعلانك|إعلانك|اعلانك|سعر|بسعر|بمقدم|امتلك|فرصة|عاجل|' +
+            // Sale/rent action words
+            'للبيع|للإيجار|للايجار|بيع|إيجار|ايجار|تمليك|إستثمار|استثمار|' +
+            // Property types (singular and plural)
+            'فيلا|شقة|دوبلكس|بنتهاوس|استوديو|محل|مكتب|أرض|شاليه|روف|عيادة|مصنع|عمارة|' +
+            'عمارات|مخزن|مطعم|كافيه|مكاتب|شقق|فلل|أراضي|محلات|عيادات|مخازن|مصانع|' +
+            'شاليهات|روفات|مقر|تجاري|إداري|سكني|طبي|صناعي|دور|طابق|وحدة|قطعة|' +
+            // Egyptian governorates and Alexandria neighborhoods
+            'الاسكندري|الإسكندري|القاهر|الجيز|الدقهلي|الشرقي|الغربي|البحير|سموحه|سموحة|' +
+            'بيانكي|المعمور|العجمي|سيدي|كينج|رشدي|المنتزه|سبورتنج|ميامي|محرم\\s*بك|' +
+            'سيدى|الإبراهيمي|البيطاش|الهانوفيل|سان\\s*ستيفانو|الرمل|كليوباتر' +
+            ')',
+            ''
+          );
+
           // Latin: TitleCase 2-3 word names
           var personPats = [
             /\\?"([A-Z][a-z]{1,18}(?:\s+[A-Z][a-z]{1,20}){1,3})\\?"/g,
@@ -3855,6 +3881,9 @@
               var pn = pm[1].trim();
               if (!pn) continue;
               if (AQARMAP_UI_NOISE.test(pn)) continue;
+              // Apply Arabic-noise filter only to Arabic-script matches.
+              // /[ء-ي]/ is the Arabic letter range used in personPats[1].
+              if (/[ء-ي]/.test(pn) && ARABIC_NON_NAME_PREFIX.test(pn)) continue;
               personCounts[pn] = (personCounts[pn] || 0) + 1;
             }
           }
