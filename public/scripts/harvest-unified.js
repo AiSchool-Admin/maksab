@@ -3429,7 +3429,22 @@
                 url: cleanUrl,
                 external_id: String(item.identifier || item.sku || (cleanUrl.match(/\/(\d+)/) || [])[1] || ''),
                 title: String(item.name || ''),
-                description: item.description || '',
+                // Filter CSS junk that occasionally appears in AqarMap's
+                // JSON-LD description field (e.g., "#nprogress{pointer-
+                // events:none}#nprogress .bar{...}"). If the description
+                // looks like CSS, leave it empty so parseDetail (XML API)
+                // can populate the real Arabic description from
+                // <translations>.
+                description: (function(d) {
+                  if (!d) return '';
+                  var s = String(d);
+                  if (/^\s*#\w+\s*\{/.test(s)
+                      || /pointer-events\s*:\s*none/.test(s)
+                      || /\{[^{}]*:[^{}]*\}/.test(s.substring(0, 50))) {
+                    return '';
+                  }
+                  return s;
+                })(item.description),
                 price: ldPrice,
                 thumbnailUrl: ldImg ? String(ldImg) : null,
                 location: ldLocation,
@@ -3949,6 +3964,13 @@
         }
         var titleStr = titleSources.find(function(s) { return /[؀-ۿ]/.test(s); })
                     || titleSources[0] || '';
+        // Also try meta_title which AqarMap exposes as a top-level element.
+        if (!titleStr) {
+          var metaTitle = getText(entry, 'meta_title');
+          if (metaTitle) titleStr = metaTitle;
+        }
+        console.info('[maksab/aqarmap/api] property_type sources — titleSources:',
+          titleSources.length, '| chosen:', (titleStr || '').substring(0, 50));
 
         // Order matters — commercial types (محل/مكتب/عياد) checked
         // BEFORE layout qualifiers (دوبلكس/بنتهاوس). Otherwise "محل
