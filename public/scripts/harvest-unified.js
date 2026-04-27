@@ -2715,8 +2715,15 @@
         ? 'https://aqarmap.com.eg/api/v2/listing/' + detailMatch[1]
         : url;
       var isApi = !!detailMatch;
-      return fetch(fetchUrl, {credentials: 'omit'})
+      var fetchOpts = isApi
+        ? { credentials: 'omit', headers: { 'Accept': 'application/xml' } }
+        : { credentials: 'omit' };
+      return fetch(fetchUrl, fetchOpts)
         .then(function(r){
+          if (isApi) {
+            console.info('[maksab/aqarmap/api] fetch', fetchUrl, '→ status:', r.status,
+              '| content-type:', r.headers.get('content-type') || '?');
+          }
           if (!r.ok && r.status >= 400 && r.status < 500) {
             // 4xx is permanent (listing deleted/forbidden) — flag for caller
             // so the retry layer can skip further attempts.
@@ -2733,6 +2740,12 @@
             body,
             isApi ? 'text/xml' : 'text/html'
           );
+          if (isApi) {
+            var hasParseError = doc.querySelector('parsererror');
+            console.info('[maksab/aqarmap/api] body length:', body.length,
+              '| parse error:', !!hasParseError,
+              '| body head:', body.substring(0, 200));
+          }
           return { html: body, doc: doc };
         });
     },
@@ -3582,7 +3595,10 @@
       // Smart, precise solution per user request: parse the API response,
       // not the rendered page.
       var result = { phone: null, sellerName: null };
-      if (!doc) return result;
+      if (!doc) {
+        console.info('[maksab/aqarmap/api] no doc — fetch likely failed');
+        return result;
+      }
 
       var selfPhone = (BLOCKED_USER && BLOCKED_USER.phone) || null;
       var selfName = (BLOCKED_USER && BLOCKED_USER.name) || null;
@@ -3592,7 +3608,19 @@
       // <user> is the seller container in the API XML response.
       var userEl = doc.querySelector('user');
       if (!userEl) {
-        console.info('[maksab/aqarmap/api] no <user> element — listing has no seller info');
+        // Diagnostic: dump root element + first-level children to see what
+        // the API actually returned.
+        var rootEl = doc.documentElement;
+        var rootName = rootEl ? rootEl.nodeName : 'null';
+        var firstChildren = [];
+        if (rootEl) {
+          var kids = rootEl.children;
+          for (var k = 0; k < Math.min(kids.length, 5); k++) {
+            firstChildren.push(kids[k].nodeName);
+          }
+        }
+        console.info('[maksab/aqarmap/api] no <user> element. root:', rootName,
+          '| first children:', firstChildren);
         return result;
       }
 
