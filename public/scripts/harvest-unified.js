@@ -124,6 +124,7 @@
   var OPENSOOQ_JWT = null;
   if (typeof window !== 'undefined' && /opensooq\.com/i.test(location.host)) {
     try {
+      // Hook fetch
       var _origFetchOS = window.fetch;
       window.fetch = function(url, opts) {
         try {
@@ -133,13 +134,26 @@
             || '';
           if (!OPENSOOQ_JWT && String(a).indexOf('Bearer eyJ') === 0) {
             OPENSOOQ_JWT = String(a);
-            console.info('[maksab/opensooq] captured JWT (', String(a).substring(0, 30), '…)');
+            console.info('[maksab/opensooq] captured JWT via fetch (', String(a).substring(0, 30), '…)');
           }
         } catch (e) { /* ignore */ }
         return _origFetchOS.apply(this, arguments);
       };
+
+      // Hook XMLHttpRequest too — some apps use the older API for some endpoints.
+      var _origXhrSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+      XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
+        try {
+          if (!OPENSOOQ_JWT && /^authorization$/i.test(name)
+              && String(value).indexOf('Bearer eyJ') === 0) {
+            OPENSOOQ_JWT = String(value);
+            console.info('[maksab/opensooq] captured JWT via XHR (', String(value).substring(0, 30), '…)');
+          }
+        } catch (e) { /* ignore */ }
+        return _origXhrSetHeader.apply(this, arguments);
+      };
     } catch (e) {
-      console.warn('[maksab/opensooq] fetch hook failed:', e && e.message);
+      console.warn('[maksab/opensooq] auth-hook setup failed:', e && e.message);
     }
   }
 
@@ -2688,27 +2702,44 @@
       }
       console.info('[maksab/opensooq] reveal — queue size:', todo.length);
 
-      // Wait up to 12 s for the global fetch hook to capture a Bearer JWT
-      // from any OpenSooq background call. If nothing is captured, skip.
-      function waitForJwt() {
+      // OpenSooq's React app doesn't issue Bearer-authed requests in the
+      // background — JWT is only sent when the user actively clicks a
+      // reveal/contact button. So we wait briefly for natural capture,
+      // and if nothing comes, prompt the user to click any phone-reveal
+      // button on the page so the hook can grab the token.
+      function waitForJwt(timeoutMs, promptUser) {
         return new Promise(function(resolve) {
           if (OPENSOOQ_JWT) return resolve(OPENSOOQ_JWT);
           var attempts = 0;
+          var maxAttempts = Math.ceil(timeoutMs / 500);
+          var prompted = false;
           var iv = setInterval(function() {
             attempts++;
-            if (OPENSOOQ_JWT || attempts >= 24) {
+            if (OPENSOOQ_JWT || attempts >= maxAttempts) {
               clearInterval(iv);
               resolve(OPENSOOQ_JWT);
+              return;
+            }
+            // After 3 s with no capture, ask the user to click reveal.
+            if (promptUser && !prompted && attempts === 6) {
+              prompted = true;
+              alert(
+                'مكسب — لكشف أرقام البائعين على السوق المفتوح:\n\n' +
+                '١. افتح أي إعلان في tab جديد\n' +
+                '٢. اضغط زر "اضغط لإظهار رقم الهاتف"\n' +
+                '٣. ارجع لـtab الحصاد — الأرقام هتتكشف تلقائياً\n\n' +
+                'لو فضّلت تتجاهل، اضغط OK وكمّل بأسماء فقط.'
+              );
             }
           }, 500);
         });
       }
 
-      waitForJwt().then(function(jwt) {
+      waitForJwt(60000, true).then(function(jwt) {
         if (!jwt) {
-          console.warn('[maksab/opensooq] reveal — no JWT captured after 12s.',
-            'Phones cannot be revealed. Make sure you are logged into OpenSooq',
-            'before running the bookmarklet.');
+          console.warn('[maksab/opensooq] reveal — no JWT captured.',
+            'Phones cannot be revealed. Tip: click any "اضغط لإظهار رقم الهاتف"',
+            'button on OpenSooq before running the bookmarklet next time.');
           return;
         }
         console.info('[maksab/opensooq] reveal — using captured JWT, processing',
