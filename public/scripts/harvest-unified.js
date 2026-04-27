@@ -3699,6 +3699,35 @@
         } catch (e) { /* skip */ }
       }
 
+      // ═══ Strategy 0a: Seller user-profile link (PRIMARY) ════════════════
+      // Confirmed from a live DOM inspection: AqarMap renders the seller
+      // name inside an <a> linking to their user profile, e.g.
+      //   <a href="/ar/user/2592786/">
+      //     <p class="text-title-5">Mahmoud Hefny</p>
+      //   </a>
+      // This is exact and noise-free — no frequency guessing, no UI-label
+      // false positives. Works for individual sellers AND agencies.
+      if (!result.sellerName && doc) {
+        try {
+          var userLinks = doc.querySelectorAll('a[href*="/ar/user/"]');
+          for (var ul = 0; ul < userLinks.length; ul++) {
+            // Inner text element — usually <p class="text-title-5"> but
+            // accept any small inline text holder.
+            var nameEl = userLinks[ul].querySelector('p, span, h1, h2, h3, h4');
+            var nameText = (nameEl ? nameEl.textContent : userLinks[ul].textContent || '').trim();
+            if (!nameText) continue;
+            var pickedName = acceptName(nameText);
+            if (pickedName) {
+              result.sellerName = pickedName;
+              console.info('[maksab/aqarmap/detail] Strategy 0a (user-link) — name:', pickedName);
+              break;
+            }
+          }
+        } catch (eU) {
+          console.warn('[maksab/aqarmap/detail] Strategy 0a threw:', eU && eU.message);
+        }
+      }
+
       // ═══ Strategy 0: Next.js 14 streaming chunks ═══════════════════════
       // AqarMap embeds the broker/agent contact card via __next_f.push as
       // an escaped JSON string. The seller object looks like:
@@ -3818,97 +3847,11 @@
         }
       }
 
-      // ═══ Strategy 0.6: Person-shape name fallback ═════════════════════
-      // For individual sellers, AqarMap doesn't always render "name":"..."
-      // pairs in the SSR HTML, but the displayed name (e.g., "Mahmoud Hefny")
-      // appears as plain quoted text 2+ times across the page (contact panel
-      // + breadcrumb + sidebar). Strategy 0.5's key-restricted regex misses
-      // these because the value isn't under a name-shaped key.
-      //
-      // This fallback scans all quoted strings, keeps only those that
-      // look like a person's name:
-      //   - Latin: 2-3 capitalized words (Mahmoud Hefny / Ahmed Mohamed Ali)
-      //   - Arabic: 2-3 Arabic-letter words
-      // and rejects known AqarMap UI strings (e.g., "Online Expos",
-      // "Live Private", "Pay Online", etc.) that appear on every page.
-      if (!result.sellerName) {
-        try {
-          var AQARMAP_UI_NOISE = new RegExp(
-            '^(?:' +
-            'Online\\s*Expos?|Live\\s*Private|Pay\\s*Online|' +
-            'Find\\s*Properties?|For\\s*Sale|For\\s*Rent|' +
-            'Sign\\s*Up|Log\\s*In|Sign\\s*In|' +
-            'AqarMap|Aqar\\s*Map|Egypt\\s*Real\\s*Estate' +
-            ')$',
-            'i'
-          );
-
-          // Arabic-pattern noise (location prefixes, property types, UI text).
-          // Real person/agency names rarely start with any of these tokens.
-          // The Strategy 0.6 Arabic regex was matching street names ("شارع
-          // جمال عبد الناصر"), property types ("فيلا منفصلة", "محل دوبلكس"),
-          // areas ("سموحه مروج", "المعمورة الشاطيء"), and UI ("تواصل مع المعلن").
-          var ARABIC_NON_NAME_PREFIX = new RegExp(
-            '^(?:' +
-            // Location/address starters
-            'شارع|طريق|كمبوند|كومبوند|محور|كورنيش|قرية|مدينة|منطقة|حي|كيلو|الكيلو|' +
-            // UI / instructional / form labels
-            'تواصل|اتصل|أعلن|اعلن|أعلانك|إعلانك|اعلانك|سعر|بسعر|بمقدم|امتلك|فرصة|عاجل|' +
-            'البريد|بريد|الإيميل|الايميل|الموبايل|الهاتف|التليفون|كلمة|الاسم|اسم\\s|معلومات|' +
-            'بيانات|الموقع|وقت|رقم|تسجيل|دخول|تسجيلك|أحدث|المزيد|عرض|إعلانات|اعلانات|الإعلانات|الاعلانات|' +
-            'طلب|اطلب|طلبك|ابحث|البحث|احفظ|اضف|أضف|أرسل|ارسل|إرسال|ارسال|' +
-            // Sale/rent action words
-            'للبيع|للإيجار|للايجار|بيع|إيجار|ايجار|تمليك|إستثمار|استثمار|' +
-            // Property types (singular and plural)
-            'فيلا|شقة|دوبلكس|بنتهاوس|استوديو|محل|مكتب|أرض|شاليه|روف|عيادة|مصنع|عمارة|' +
-            'عمارات|مخزن|مطعم|كافيه|مكاتب|شقق|فلل|أراضي|محلات|عيادات|مخازن|مصانع|' +
-            'شاليهات|روفات|مقر|تجاري|إداري|سكني|طبي|صناعي|دور|طابق|وحدة|قطعة|' +
-            // Egyptian governorates and Alexandria neighborhoods
-            'الاسكندري|الإسكندري|القاهر|الجيز|الدقهلي|الشرقي|الغربي|البحير|سموحه|سموحة|' +
-            'بيانكي|المعمور|العجمي|سيدي|كينج|رشدي|المنتزه|سبورتنج|ميامي|محرم\\s*بك|' +
-            'سيدى|الإبراهيمي|البيطاش|الهانوفيل|سان\\s*ستيفانو|الرمل|كليوباتر' +
-            ')',
-            ''
-          );
-
-          // Latin: TitleCase 2-3 word names
-          var personPats = [
-            /\\?"([A-Z][a-z]{1,18}(?:\s+[A-Z][a-z]{1,20}){1,3})\\?"/g,
-            // Arabic: 2-3 word names with Arabic letters only
-            /\\?"([ء-ي]{2,15}(?:\s+[ء-ي]{2,15}){1,3})\\?"/g,
-          ];
-          var personCounts = {};
-          for (var pp = 0; pp < personPats.length; pp++) {
-            var pm;
-            while ((pm = personPats[pp].exec(html)) !== null) {
-              var pn = pm[1].trim();
-              if (!pn) continue;
-              if (AQARMAP_UI_NOISE.test(pn)) continue;
-              // Apply Arabic-noise filter only to Arabic-script matches.
-              // /[ء-ي]/ is the Arabic letter range used in personPats[1].
-              if (/[ء-ي]/.test(pn) && ARABIC_NON_NAME_PREFIX.test(pn)) continue;
-              personCounts[pn] = (personCounts[pn] || 0) + 1;
-            }
-          }
-          var topPerson = null, topPersonCount = 0;
-          for (var pk in personCounts) {
-            if (personCounts[pk] < 2) continue;
-            var acceptedP = acceptName(pk);
-            if (!acceptedP) continue;
-            if (personCounts[pk] > topPersonCount) {
-              topPerson = acceptedP;
-              topPersonCount = personCounts[pk];
-            }
-          }
-          if (topPerson) {
-            result.sellerName = topPerson;
-            console.info('[maksab/aqarmap/detail] Strategy 0.6 — person-shape name:',
-              topPerson, '| count:', topPersonCount);
-          }
-        } catch (ePerson) {
-          console.warn('[maksab/aqarmap/detail] Strategy 0.6 threw:', ePerson && ePerson.message);
-        }
-      }
+      // (Strategy 0.6 was a frequency-based person-shape regex over the
+      // raw HTML — it kept matching UI labels like "البريد الالكترونى",
+      // "طلب اتصال", "نوع المعلن" because every page renders them 2-3+
+      // times. Strategy 0a (DOM seller user-link) is precise and safer,
+      // so 0.6 is removed entirely.)
 
       // ═══ Strategy 1: __NEXT_DATA__ (legacy AqarMap pages) ═══
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
