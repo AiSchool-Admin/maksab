@@ -107,6 +107,42 @@
 
   var BLOCKED_USER = { name: null, phone: null };
 
+  // ═════════════════════════════════════════════════════════
+  //  OpenSooq JWT capture
+  //  OpenSooq's phone-reveal endpoint requires a JWT Bearer token in
+  //  the Authorization header. The token is short-lived (~6 min) and
+  //  not stored in localStorage/sessionStorage — it lives in React
+  //  memory and is regenerated on the fly. We hook window.fetch on
+  //  the OpenSooq origin to capture it when OpenSooq's own code makes
+  //  ANY Bearer-authenticated call (analytics, suggestions, reveal).
+  //
+  //  Then _revealPhonesViaApi(items) replays the same Bearer token
+  //  against /api/account/reveal/v3/member-phone with each item's
+  //  phone_reveal_key — getting back the unmasked phone.
+  // ═════════════════════════════════════════════════════════
+
+  var OPENSOOQ_JWT = null;
+  if (typeof window !== 'undefined' && /opensooq\.com/i.test(location.host)) {
+    try {
+      var _origFetchOS = window.fetch;
+      window.fetch = function(url, opts) {
+        try {
+          var h = (opts && opts.headers) || {};
+          var a = h.Authorization || h.authorization
+            || (typeof h.get === 'function' && h.get('authorization'))
+            || '';
+          if (!OPENSOOQ_JWT && String(a).indexOf('Bearer eyJ') === 0) {
+            OPENSOOQ_JWT = String(a);
+            console.info('[maksab/opensooq] captured JWT (', String(a).substring(0, 30), '…)');
+          }
+        } catch (e) { /* ignore */ }
+        return _origFetchOS.apply(this, arguments);
+      };
+    } catch (e) {
+      console.warn('[maksab/opensooq] fetch hook failed:', e && e.message);
+    }
+  }
+
   function detectLoggedInUser() {
     var captured = { name: null, phone: null };
 
@@ -2438,10 +2474,17 @@
               supportsExchange: false,
               isNegotiable: !!(it.is_negotiable || it.negotiable),
               category: ctx.categoryLabel,
+              // phone_reveal_key — OpenSooq's per-listing token used by the
+              // /api/account/reveal/v3/member-phone endpoint. Stored here so
+              // _revealPhonesViaApi can call the reveal API per item.
+              phoneRevealKey: it.phone_reveal_key || null,
             });
           }
           console.info('[maksab/opensooq] Strategy 1 (__NEXT_DATA__) produced', items.length, 'items');
-          if (items.length > 0) return items;
+          if (items.length > 0) {
+            PLATFORMS.opensooq._revealPhonesViaApi(items);
+            return items;
+          }
         } catch (e) {
           console.warn('[maksab/opensooq] Strategy 1 threw:', e && e.message);
         }
@@ -2621,6 +2664,103 @@
         '| name:', result.sellerName || 'none');
 
       return result;
+    },
+
+    // Reveal phones for all items via OpenSooq's authenticated API.
+    // Runs in the BACKGROUND after parseList — doesn't block the runner.
+    // The runner's launchOne(item) checks needsFetch = !sellerPhone || ...
+    // If reveal completes for an item before launchOne reaches it, the
+    // detail-page fetch is skipped entirely (faster + less server load).
+    //
+    // Requires OPENSOOQ_JWT to be captured by the global fetch hook
+    // (set up at bookmarklet boot if running on opensooq.com).
+    _revealPhonesViaApi: function(items) {
+      if (!items || items.length === 0) return;
+      var todo = [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].phoneRevealKey && !items[i].sellerPhone) {
+          todo.push(items[i]);
+        }
+      }
+      if (todo.length === 0) {
+        console.info('[maksab/opensooq] reveal — no items need phone reveal');
+        return;
+      }
+      console.info('[maksab/opensooq] reveal — queue size:', todo.length);
+
+      // Wait up to 12 s for the global fetch hook to capture a Bearer JWT
+      // from any OpenSooq background call. If nothing is captured, skip.
+      function waitForJwt() {
+        return new Promise(function(resolve) {
+          if (OPENSOOQ_JWT) return resolve(OPENSOOQ_JWT);
+          var attempts = 0;
+          var iv = setInterval(function() {
+            attempts++;
+            if (OPENSOOQ_JWT || attempts >= 24) {
+              clearInterval(iv);
+              resolve(OPENSOOQ_JWT);
+            }
+          }, 500);
+        });
+      }
+
+      waitForJwt().then(function(jwt) {
+        if (!jwt) {
+          console.warn('[maksab/opensooq] reveal — no JWT captured after 12s.',
+            'Phones cannot be revealed. Make sure you are logged into OpenSooq',
+            'before running the bookmarklet.');
+          return;
+        }
+        console.info('[maksab/opensooq] reveal — using captured JWT, processing',
+          todo.length, 'items');
+
+        // Stagger requests 250 ms apart to avoid hammering the API.
+        var revealedCount = 0;
+        var doneCount = 0;
+        todo.forEach(function(item, idx) {
+          setTimeout(function() {
+            fetch('https://eg.opensooq.com/api/account/reveal/v3/member-phone'
+                + '?cMedium=none&cName=direct_web_open&cSource=opensooq',
+              {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                  'Authorization': jwt,
+                  'Content-Type': 'application/json',
+                  'Accept': '*/*',
+                },
+                body: JSON.stringify({
+                  reveal_key: item.phoneRevealKey,
+                  type: 'post',
+                }),
+              }
+            )
+              .then(function(r) { return r.ok ? r.json() : null; })
+              .then(function(data) {
+                doneCount++;
+                if (data && data.revealed_number) {
+                  var ph = String(data.revealed_number).replace(/[^\d]/g, '');
+                  if (/^01[0125]\d{8}$/.test(ph)
+                      && ph !== (BLOCKED_USER && BLOCKED_USER.phone)) {
+                    item.sellerPhone = ph;
+                    revealedCount++;
+                  }
+                }
+                if (doneCount === todo.length) {
+                  console.info('[maksab/opensooq] reveal — done.',
+                    revealedCount, '/', todo.length, 'phones revealed');
+                }
+              })
+              .catch(function(e) {
+                doneCount++;
+                if (doneCount === todo.length) {
+                  console.info('[maksab/opensooq] reveal — done.',
+                    revealedCount, '/', todo.length, 'phones revealed');
+                }
+              });
+          }, idx * 250);
+        });
+      });
     },
 
     maksabCategory: function(ctx) { return ctx.maksabCat || null; },
