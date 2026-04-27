@@ -3818,6 +3818,66 @@
         }
       }
 
+      // ═══ Strategy 0.6: Person-shape name fallback ═════════════════════
+      // For individual sellers, AqarMap doesn't always render "name":"..."
+      // pairs in the SSR HTML, but the displayed name (e.g., "Mahmoud Hefny")
+      // appears as plain quoted text 2+ times across the page (contact panel
+      // + breadcrumb + sidebar). Strategy 0.5's key-restricted regex misses
+      // these because the value isn't under a name-shaped key.
+      //
+      // This fallback scans all quoted strings, keeps only those that
+      // look like a person's name:
+      //   - Latin: 2-3 capitalized words (Mahmoud Hefny / Ahmed Mohamed Ali)
+      //   - Arabic: 2-3 Arabic-letter words
+      // and rejects known AqarMap UI strings (e.g., "Online Expos",
+      // "Live Private", "Pay Online", etc.) that appear on every page.
+      if (!result.sellerName) {
+        try {
+          var AQARMAP_UI_NOISE = new RegExp(
+            '^(?:' +
+            'Online\\s*Expos?|Live\\s*Private|Pay\\s*Online|' +
+            'Find\\s*Properties?|For\\s*Sale|For\\s*Rent|' +
+            'Sign\\s*Up|Log\\s*In|Sign\\s*In|' +
+            'AqarMap|Aqar\\s*Map|Egypt\\s*Real\\s*Estate' +
+            ')$',
+            'i'
+          );
+          // Latin: TitleCase 2-3 word names
+          var personPats = [
+            /\\?"([A-Z][a-z]{1,18}(?:\s+[A-Z][a-z]{1,20}){1,3})\\?"/g,
+            // Arabic: 2-3 word names with Arabic letters only
+            /\\?"([ء-ي]{2,15}(?:\s+[ء-ي]{2,15}){1,3})\\?"/g,
+          ];
+          var personCounts = {};
+          for (var pp = 0; pp < personPats.length; pp++) {
+            var pm;
+            while ((pm = personPats[pp].exec(html)) !== null) {
+              var pn = pm[1].trim();
+              if (!pn) continue;
+              if (AQARMAP_UI_NOISE.test(pn)) continue;
+              personCounts[pn] = (personCounts[pn] || 0) + 1;
+            }
+          }
+          var topPerson = null, topPersonCount = 0;
+          for (var pk in personCounts) {
+            if (personCounts[pk] < 2) continue;
+            var acceptedP = acceptName(pk);
+            if (!acceptedP) continue;
+            if (personCounts[pk] > topPersonCount) {
+              topPerson = acceptedP;
+              topPersonCount = personCounts[pk];
+            }
+          }
+          if (topPerson) {
+            result.sellerName = topPerson;
+            console.info('[maksab/aqarmap/detail] Strategy 0.6 — person-shape name:',
+              topPerson, '| count:', topPersonCount);
+          }
+        } catch (ePerson) {
+          console.warn('[maksab/aqarmap/detail] Strategy 0.6 threw:', ePerson && ePerson.message);
+        }
+      }
+
       // ═══ Strategy 1: __NEXT_DATA__ (legacy AqarMap pages) ═══
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
