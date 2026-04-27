@@ -38,10 +38,12 @@ export function normalizeSellerType(raw: string | null | undefined): SellerType 
 // ═══════════════════════════════════════════════════════════
 
 const PROPERTY_TYPE_MAP: Record<string, string> = {
-  // Apartment
+  // Apartment (singular + plural + "X for sale")
   شقة: "apartment", شقه: "apartment", apartment: "apartment", apartments: "apartment", flat: "apartment",
+  شقق: "apartment", "شقق للبيع": "apartment", "شقق للإيجار": "apartment", "شقة للبيع": "apartment", "شقة للإيجار": "apartment",
   // Villa
   فيلا: "villa", villa: "villa", villas: "villa",
+  فلل: "villa", "فلل للبيع": "villa", "فلل للإيجار": "villa", "فيلا للبيع": "villa",
   // Duplex
   دوبلكس: "duplex", duplex: "duplex",
   // Penthouse
@@ -50,17 +52,29 @@ const PROPERTY_TYPE_MAP: Record<string, string> = {
   استوديو: "studio", studio: "studio",
   // Chalet
   شاليه: "chalet", chalet: "chalet",
+  شاليهات: "chalet", "شاليه بحديقة للبيع": "chalet", "شاليهات للبيع": "chalet",
   // Townhouse / Twin house
   "تاون هاوس": "townhouse", townhouse: "townhouse",
   "توين هاوس": "twin_house", "twin house": "twin_house",
   // Commercial
   محل: "shop", shop: "shop", محلات: "shop",
+  "محل دوبلكس للبيع": "shop", "محلات للبيع": "shop",
   مكتب: "office", office: "office", مكاتب: "office",
+  "مكاتب للبيع": "office", "مقر إداري للبيع": "office", "إداري للبيع": "office", "مقر إداري": "office",
   عيادة: "clinic", clinic: "clinic",
+  عيادات: "clinic", "عيادات للبيع": "clinic",
+  مصنع: "factory", "مصنع للبيع": "factory",
+  مخزن: "warehouse", مخازن: "warehouse", "مخازن للبيع": "warehouse",
   // Land
   أرض: "land", اراضي: "land", أراضي: "land", land: "land", plot: "land",
+  "أرض تجارية للبيع": "land", "أراضي للبيع": "land", "أرض مباني سكنية للبيع": "land",
   // Whole building
   "عمارة كاملة": "whole_building", "whole building": "whole_building", building: "whole_building",
+  عمارات: "whole_building", "عمارات للبيع": "whole_building",
+  // Roof
+  روف: "roof", "روف للبيع": "roof",
+  // Commercial unit (general)
+  تجاري: "commercial", "تجاري للبيع": "commercial",
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -309,6 +323,52 @@ const AMENITY_ALIASES: Record<string, string> = {
   "مترو": "metro",
   "الطريق السريع": "highway",
   "طريق سريع": "highway",
+
+  // ── AqarMap enum codes (UPPERCASE_SNAKE_CASE) ──
+  // The AqarMap XML API exposes amenities as enum constants like
+  // "BALCONY", "ELEVATOR" instead of Arabic labels. Map each one to
+  // the canonical ID used elsewhere.
+  BALCONY: "balcony",
+  TERRACE: "terrace",
+  PRIVATE_GARDEN: "private_garden",
+  SECURITY: "security_guard",
+  CCTV: "cctv",
+  ELEVATOR: "elevator",
+  COVERED_PARKING: "covered_parking",
+  PARKING: "parking",
+  GARAGE: "garage",
+  AIR_CONDITIONING: "ac",
+  CENTRAL_AC: "central_ac",
+  HEATING: "heating",
+  WATER_HEATER: "water_heater",
+  ELECTRICITY_METER: "electricity_meter",
+  WATER_METER: "water_meter",
+  NATURAL_GAS_METER: "natural_gas",
+  LANDLINE_PHONE: "landline",
+  INTERNET: "internet",
+  KITCHEN_APPLIANCES: "kitchen_appliances",
+  GAS_STOVE: "gas_stove",
+  REFRIGERATOR: "refrigerator",
+  WASHING_MACHINE: "washing_machine",
+  TV: "tv",
+  BUILT_IN_WARDROBES: "built_in_wardrobes",
+  KITCHEN_CABINETS: "kitchen_cabinets",
+  WALK_IN_CLOSET: "walk_in_closet",
+  MAID_ROOM: "servant_room",
+  PETS_ALLOWED: "pets_allowed",
+  KIDS_PLAY_AREA: "playground",
+  SWIMMING_POOL: "swimming_pool",
+  GYM: "gym",
+  GARDEN: "garden",
+  SEA_VIEW: "sea_view",
+  GARDEN_VIEW: "garden_view",
+  CITY_VIEW: "city_view",
+  MOSQUE: "mosque",
+  SUPERMARKET: "supermarket",
+  PHARMACY: "pharmacy",
+  HOSPITAL: "hospital",
+  SCHOOL: "school",
+  BANK: "bank",
 };
 
 // ═══════════════════════════════════════════════════════════

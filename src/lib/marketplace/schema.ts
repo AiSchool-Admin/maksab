@@ -271,6 +271,8 @@ export const AMENITIES: Amenity[] = [
   { id: "natural_gas", label_ar: "غاز طبيعي", icon: "⛽", category: "interior" },
   { id: "water_heater", label_ar: "سخان ماء", icon: "🚿", category: "interior" },
   { id: "electricity_meter", label_ar: "عداد كهرباء", icon: "⚡", category: "interior" },
+  { id: "water_meter", label_ar: "عداد مياه", icon: "💧", category: "interior" },
+  { id: "pets_allowed", label_ar: "يسمح بالحيوانات الأليفة", icon: "🐾", category: "interior" },
   { id: "internet", label_ar: "إنترنت", icon: "📶", category: "interior" },
   { id: "landline", label_ar: "تليفون أرضي", icon: "☎️", category: "interior" },
   { id: "double_glazed_windows", label_ar: "زجاج شبابيك مزدوج", icon: "🪟", category: "interior" },
