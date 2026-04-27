@@ -3592,6 +3592,13 @@
         // XHR call — meaning the SSR HTML doesn't actually contain the
         // seller name. Returning null is correct: no name beats wrong name.
         if (/^\$(undefined|null)$/i.test(t)) return null;
+        // Reject ALL_CAPS_SNAKE_CASE enum values — AqarMap stores listing
+        // amenities as objects keyed by enum constants like SECURITY,
+        // ELECTRICITY_METER, NATURAL_GAS_METER, BALCONY, ELEVATOR,
+        // WATER_METER, PETS_ALLOWED, MAID_ROOM. The frequency scan was
+        // picking these up because "name":"BALCONY" appears 2-3+ times
+        // per page (once per amenity icon).
+        if (/^[A-Z][A-Z0-9_]*$/.test(t)) return null;
         // Reject listing titles. Real seller/agent names rarely contain
         // real-estate action words or m² area markers. The wider scan
         // (1200 chars) sometimes reaches the listing title which uses
