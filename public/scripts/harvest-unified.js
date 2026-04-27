@@ -3792,21 +3792,14 @@
 
     parseDetail: function(html, doc) {
       // fetchPage above redirects detail-page URLs to AqarMap's public XML
-      // API at /api/v2/listing/<id>. The response is a rich XML document
-      // with <entry> as the listing root containing user, photos, attributes,
-      // amenities, translations, address, etc.
+      // API at /api/v2/listing/<id>. The response contains a <user> element
+      // with <full_name> and <phone_number> directly — no scraping, no
+      // regex over HTML, no DOM heuristics. This is a deterministic
+      // structural extraction.
       //
-      // Returns full unified spec set: bedrooms, bathrooms, floor, area,
-      // finishing, payment_method, view, built_year, photos, description,
-      // amenities, plus seller name + phone.
-      var result = {
-        phone: null,
-        sellerName: null,
-        allImages: [],
-        specs: {},
-        amenities: [],
-        description: null,
-      };
+      // Smart, precise solution per user request: parse the API response,
+      // not the rendered page.
+      var result = { phone: null, sellerName: null };
       if (!doc) {
         console.info('[maksab/aqarmap/api] no doc — fetch likely failed');
         return result;
@@ -3817,162 +3810,59 @@
       var AQARMAP_BRAND_NAMES = /^(عقارات\s*مصر|عقار\s*ماب|aqarmap|aqar\s*map)$/i;
       var AQARMAP_BRAND_PHONES = ['01006674484'];
 
-      // The listing data is under <entry> (single root).
-      var entry = doc.querySelector('entry') || doc.documentElement;
-      if (!entry) return result;
-
-      function getText(el, sel) {
-        if (!el) return null;
-        var n = el.querySelector(sel);
-        return n ? (n.textContent || '').trim() : null;
-      }
-
-      // ── Seller (user) ────────────────────────────────────
-      var userEl = entry.querySelector('user');
-      if (userEl) {
-        var nameEl = userEl.querySelector('full_name');
-        if (nameEl) {
-          var rawName = (nameEl.textContent || '').trim();
-          if (rawName && rawName.length >= 2 && rawName.length <= 80
-              && !AQARMAP_BRAND_NAMES.test(rawName)
-              && (!selfName || rawName.toLowerCase() !== selfName.toLowerCase())) {
-            result.sellerName = rawName;
+      // <user> is the seller container in the API XML response.
+      var userEl = doc.querySelector('user');
+      if (!userEl) {
+        // Diagnostic: dump root element + first-level children to see what
+        // the API actually returned.
+        var rootEl = doc.documentElement;
+        var rootName = rootEl ? rootEl.nodeName : 'null';
+        var firstChildren = [];
+        if (rootEl) {
+          var kids = rootEl.children;
+          for (var k = 0; k < Math.min(kids.length, 5); k++) {
+            firstChildren.push(kids[k].nodeName);
           }
         }
-        var phoneNodes = [
-          userEl.querySelector('phone_number'),
-          userEl.querySelector('whatsApp_number > phone > number'),
-          userEl.querySelector('phone > number'),
-        ];
-        for (var pn = 0; pn < phoneNodes.length; pn++) {
-          if (!phoneNodes[pn]) continue;
-          var rawPhone = (phoneNodes[pn].textContent || '').trim();
-          var normalized = normalizeEgPhone(rawPhone);
-          if (normalized && normalized !== selfPhone
-              && AQARMAP_BRAND_PHONES.indexOf(normalized) < 0) {
-            result.phone = normalized;
-            break;
-          }
+        console.info('[maksab/aqarmap/api] no <user> element. root:', rootName,
+          '| first children:', firstChildren);
+        return result;
+      }
+
+      // Name: <full_name> is wrapped in CDATA — DOMParser strips the wrapper.
+      var nameEl = userEl.querySelector('full_name');
+      if (nameEl) {
+        var rawName = (nameEl.textContent || '').trim();
+        if (rawName && rawName.length >= 2 && rawName.length <= 80
+            && !AQARMAP_BRAND_NAMES.test(rawName)
+            && (!selfName || rawName.toLowerCase() !== selfName.toLowerCase())) {
+          result.sellerName = rawName;
         }
       }
 
-      // ── Specs from <attributes> ──────────────────────────
-      // Each <attributes><entry> has:
-      //   <id>...</id>
-      //   <custom_field>
-      //     <name>rooms|baths|floor|year-built|finish-type|...</name>
-      //     <label><![CDATA[العربي]]></label>
-      //     <type>integer|choice|...</type>
-      //   </custom_field>
-      //   <value>3</value>
-      //
-      // Maps name → unified spec key. Arabic labels go into specs as well
-      // so the receive endpoint's canonicalizer can map them.
-      var attrNameMap = {
-        'rooms': 'bedrooms',
-        'baths': 'bathrooms',
-        'floor': 'floor',
-        'year-built': 'built_year',
-        'finish-type': 'finishing',
-        'furnished': 'furnished',
-        'view': 'view',
-        'payment-method': 'payment_method',
-        'down-payment': 'down_payment',
-        'installment-period': 'installment_years',
-        'delivery-year': 'delivery_year',
-        'total-floors': 'total_floors',
-      };
-      // Finishing enum from AqarMap → readable string.
-      var finishMap = {
-        'EXTRA_SUPER_LUX': 'super_lux',
-        'SUPER_LUX': 'super_lux',
-        'LUX': 'lux',
-        'HALF_FINISHED': 'half',
-        'CORE_AND_SHELL': 'core',
-        'WITHOUT_FINISHING': 'on_brick',
-        'NOT_FINISHED': 'on_brick',
-      };
-      var attrs = entry.querySelectorAll('attributes > entry');
-      for (var ai = 0; ai < attrs.length; ai++) {
-        var name = getText(attrs[ai], 'custom_field > name');
-        var label = getText(attrs[ai], 'custom_field > label');
-        // Direct child <value>, not nested.
-        var valueEl = attrs[ai].querySelector(':scope > value');
-        var value = valueEl ? (valueEl.textContent || '').trim() : '';
-        if (!name || !value) continue;
-        var unifiedKey = attrNameMap[name] || name;
-        if (unifiedKey === 'finishing' && finishMap[value]) value = finishMap[value];
-        result.specs[unifiedKey] = value;
-        // Also store under Arabic label for the canonicalizer.
-        if (label) result.specs[label] = value;
-      }
-
-      // ── Area (top-level scalar) ──────────────────────────
-      var areaText = getText(entry, ':scope > area');
-      if (areaText && /^\d+/.test(areaText)) {
-        result.specs.area_sqm = parseInt(areaText, 10);
-        result.specs['المساحة'] = areaText;
-      }
-
-      // ── Property type / category ─────────────────────────
-      var categoryLabel = getText(entry, ':scope > categoryLabel');
-      if (categoryLabel) {
-        result.specs.property_type_label = categoryLabel;
-      }
-      var marketPropertyType = getText(entry, ':scope > market_property_type');
-      if (marketPropertyType) result.specs.property_type = marketPropertyType;
-
-      // ── Payment method (top-level) ───────────────────────
-      var paymentLabel = getText(entry, ':scope > paymentMethodLabel');
-      if (paymentLabel) result.specs.payment_method_label = paymentLabel;
-
-      // ── Property view ────────────────────────────────────
-      var viewLabel = getText(entry, ':scope > property_view_label');
-      if (viewLabel) result.specs.view = viewLabel;
-
-      // ── Compound info ────────────────────────────────────
-      var compoundStatus = getText(entry, ':scope > compound_status');
-      if (compoundStatus) result.specs.compound_status = compoundStatus;
-
-      // ── Sale/rent flags ──────────────────────────────────
-      if (getText(entry, ':scope > isRent') === 'true') result.specs.purpose = 'rent';
-      else if (getText(entry, ':scope > isResale') === 'true') result.specs.purpose = 'resale';
-      else result.specs.purpose = 'sale';
-
-      // ── Description (Arabic from translations) ───────────
-      var translations = entry.querySelectorAll('translations > entry');
-      for (var ti = 0; ti < translations.length; ti++) {
-        var tLocale = getText(translations[ti], 'locale');
-        var tField = getText(translations[ti], 'field');
-        var tContent = getText(translations[ti], 'content');
-        if (!tContent) continue;
-        if (tField === 'description' && (tLocale === 'ar' || !result.description)) {
-          result.description = tContent;
+      // Phone: try multiple known paths in priority order.
+      // 1. <user><phone_number>+201145878735</phone_number></user>
+      // 2. <user><whatsApp_number><phone><number>...</number></phone></whatsApp_number></user>
+      // 3. <user><phone><number>...</number></phone></user>
+      var phoneNodes = [
+        userEl.querySelector('phone_number'),
+        userEl.querySelector('whatsApp_number > phone > number'),
+        userEl.querySelector('phone > number'),
+      ];
+      for (var pn = 0; pn < phoneNodes.length; pn++) {
+        if (!phoneNodes[pn]) continue;
+        var rawPhone = (phoneNodes[pn].textContent || '').trim();
+        var normalized = normalizeEgPhone(rawPhone);
+        if (normalized
+            && normalized !== selfPhone
+            && AQARMAP_BRAND_PHONES.indexOf(normalized) < 0) {
+          result.phone = normalized;
+          break;
         }
-      }
-
-      // ── Amenities (CDATA enum array) ─────────────────────
-      var amenityEntries = entry.querySelectorAll('amenities > entry');
-      for (var amI = 0; amI < amenityEntries.length; amI++) {
-        var code = (amenityEntries[amI].textContent || '').trim();
-        if (code) result.amenities.push(code);
-      }
-
-      // ── Photos (gallery) ─────────────────────────────────
-      var photos = entry.querySelectorAll('photos > entry');
-      for (var ph = 0; ph < photos.length; ph++) {
-        var url = getText(photos[ph], 'thumbnails > main')
-               || getText(photos[ph], 'thumbnails > large')
-               || getText(photos[ph], 'thumbnails > small');
-        if (url) result.allImages.push(url);
       }
 
       console.info('[maksab/aqarmap/api] extracted — name:', result.sellerName || 'none',
-        '| phone:', result.phone || 'none',
-        '| specs keys:', Object.keys(result.specs).length,
-        '| amenities:', result.amenities.length,
-        '| images:', result.allImages.length,
-        '| desc:', result.description ? result.description.substring(0, 40) + '…' : 'none');
+        '| phone:', result.phone || 'none');
 
       return result;
     },
