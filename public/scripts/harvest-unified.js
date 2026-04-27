@@ -3986,9 +3986,11 @@
       console.info('[maksab/aqarmap/api] extracted — name:', result.sellerName || 'none',
         '| phone:', result.phone || 'none',
         '| specs keys:', Object.keys(result.specs).length,
-        '| amenities:', result.amenities.length,
+        '| amenities:', result.amenities.length, JSON.stringify(result.amenities),
         '| images:', result.allImages.length,
-        '| desc:', result.description ? result.description.substring(0, 40) + '…' : 'none');
+        '| desc:', result.description ? result.description.substring(0, 40) + '…' : 'none',
+        '| categoryLabel:', categoryLabel,
+        '| market_property_type:', marketPropertyType);
 
       return result;
     },
