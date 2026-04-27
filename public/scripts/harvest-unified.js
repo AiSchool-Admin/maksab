@@ -3755,6 +3755,62 @@
         }
       }
 
+      // ═══ Strategy 0.5: Frequency-based seller-name search ═══════════════
+      // Confirmed from diagnostic logs: real seller names like "Mahmoud Hefny"
+      // ARE in the HTML, but in chunks far from the "phones" field — outside
+      // Strategy 0's 1200-char window. They appear MULTIPLE times on the page
+      // (contact panel + sidebar + footer), so frequency is a reliable signal:
+      // the seller's name wins. Random labels like "Online Expos" / "Live
+      // Private" appear once and are skipped.
+      if (!result.sellerName) {
+        try {
+          var allNamesPat = new RegExp(
+            Q + '(?:name|display_name|member_name|user_name|owner_name|publisher_name|broker_name|agent_name|fullName|full_name)' + Q +
+            '\\s*:\\s*' + Q + '([^"\\\\]{2,80})' + Q,
+            'g'
+          );
+          var nameCounts = {};
+          var freqMatch;
+          while ((freqMatch = allNamesPat.exec(html)) !== null) {
+            var n = freqMatch[1].trim();
+            if (!n) continue;
+            nameCounts[n] = (nameCounts[n] || 0) + 1;
+          }
+          // Pick the most-frequent name that:
+          //  - appears ≥ 2 times (filters single-occurrence labels/banners)
+          //  - passes acceptName (rejects $undefined, brands, listing titles)
+          var topName = null;
+          var topCount = 0;
+          for (var nk in nameCounts) {
+            if (nameCounts[nk] < 2) continue;
+            var accepted = acceptName(nk);
+            if (!accepted) continue;
+            if (nameCounts[nk] > topCount) {
+              topName = accepted;
+              topCount = nameCounts[nk];
+            }
+          }
+          if (topName) {
+            result.sellerName = topName;
+            console.info('[maksab/aqarmap/detail] Strategy 0.5 — frequency-based name:',
+              topName, '| count:', topCount);
+          } else {
+            // Diagnostic: log all name occurrences with count ≥ 2 so we can
+            // see if there's a candidate that acceptName is wrongly dropping.
+            var freqDump = [];
+            for (var nk2 in nameCounts) {
+              if (nameCounts[nk2] >= 2) freqDump.push({ name: nk2, count: nameCounts[nk2] });
+            }
+            if (freqDump.length > 0) {
+              console.info('[maksab/aqarmap/detail] Strategy 0.5 — names with count≥2 (none accepted):',
+                JSON.stringify(freqDump.slice(0, 10)));
+            }
+          }
+        } catch (eFreq) {
+          console.warn('[maksab/aqarmap/detail] Strategy 0.5 threw:', eFreq && eFreq.message);
+        }
+      }
+
       // ═══ Strategy 1: __NEXT_DATA__ (legacy AqarMap pages) ═══
       var m = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
       if (m) {
