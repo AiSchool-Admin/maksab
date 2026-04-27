@@ -3888,15 +3888,17 @@
         'delivery-year': 'delivery_year',
         'total-floors': 'total_floors',
       };
-      // Finishing enum from AqarMap → readable string.
+      // Finishing enum from AqarMap → readable string. Maps to the
+      // canonical IDs in normalize.ts FINISHING_MAP so the value passes
+      // through unchanged (no further canonicalization needed).
       var finishMap = {
-        'EXTRA_SUPER_LUX': 'super_lux',
+        'EXTRA_SUPER_LUX': 'extra_super_lux',
         'SUPER_LUX': 'super_lux',
         'LUX': 'lux',
-        'HALF_FINISHED': 'half',
-        'CORE_AND_SHELL': 'core',
-        'WITHOUT_FINISHING': 'on_brick',
-        'NOT_FINISHED': 'on_brick',
+        'HALF_FINISHED': 'semi_finished',
+        'CORE_AND_SHELL': 'core_and_shell',
+        'WITHOUT_FINISHING': 'bare',
+        'NOT_FINISHED': 'bare',
       };
       var attrs = entry.querySelectorAll('attributes > entry');
       for (var ai = 0; ai < attrs.length; ai++) {
