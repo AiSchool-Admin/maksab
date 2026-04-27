@@ -3580,47 +3580,16 @@
       // Reject "عقارات مصر" / generic helpdesk phone (AqarMap-itself).
       var AQARMAP_BRAND_NAMES = /^(عقارات\s*مصر|عقار\s*ماب|aqarmap|aqar\s*map)$/i;
       var AQARMAP_BRAND_PHONES = ['01006674484'];
+      // Sanity-only filter — names come from STRUCTURAL DOM extraction
+      // (logo <img alt="X Logo"> / <a href="/ar/user/\d+/">), not from
+      // pattern-matched JSON. So we only need to drop the brand name and
+      // the user's own name; we no longer need a blacklist of listing-
+      // title patterns, enum codes, or imperative verbs.
       function acceptName(n) {
         if (!n) return null;
         var t = String(n).trim().replace(/\s+/g, ' ');
-        if (t.length < 2 || t.length > 50) return null;
-        if (/^\d+$/.test(t)) return null;
+        if (t.length < 2 || t.length > 80) return null;
         if (AQARMAP_BRAND_NAMES.test(t)) return null;
-        // Reject Next.js streaming placeholder for undefined values.
-        // AqarMap's seller object often has has_parent=$undefined and the
-        // seller name field itself is "$undefined" until hydrated by an
-        // XHR call — meaning the SSR HTML doesn't actually contain the
-        // seller name. Returning null is correct: no name beats wrong name.
-        if (/^\$(undefined|null)$/i.test(t)) return null;
-        // Reject ALL_CAPS_SNAKE_CASE enum values — AqarMap stores listing
-        // amenities as objects keyed by enum constants like SECURITY,
-        // ELECTRICITY_METER, NATURAL_GAS_METER, BALCONY, ELEVATOR,
-        // WATER_METER, PETS_ALLOWED, MAID_ROOM. The frequency scan was
-        // picking these up because "name":"BALCONY" appears 2-3+ times
-        // per page (once per amenity icon).
-        if (/^[A-Z][A-Z0-9_]*$/.test(t)) return null;
-        // Reject listing titles. Real seller/agent names rarely contain
-        // real-estate action words or m² area markers. The wider scan
-        // (1200 chars) sometimes reaches the listing title which uses
-        // the same JSON key ("name") as the seller card.
-        if (/(للبيع|للإيجار|للايجار|للتمليك|للاستثمار)/.test(t)) return null;
-        // Match Latin (\d) AND Arabic-Indic (٠-٩) digits before m²/متر/sqm.
-        // Listing titles like "امتلك شقة ١١٢م ٣غرف" use ١١٢ (Arabic-Indic).
-        // Also catch bare "م" after digits (e.g., "212م") — but only when
-        // not followed by another Arabic letter, to avoid matching names
-        // that contain digits like a hypothetical "محمود١٢".
-        if (/[\d٠-٩]+\s*(?:م²|م2|متر(?!و)|sqm|م(?![ا-ي]))/i.test(t)) return null;
-        if (/(?:^|\s)(فرصة|عاجل|بسعر|بفيو|مباشره?\s+ع|إستلام|استلام)/i.test(t)) return null;
-        // Property-imperative verbs that start listing titles, never seller
-        // names: "امتلك" (own), "اغتنم" / "أغتنم" (seize), "لعشاق"
-        // (for-fans-of), "بمقدم" (with-down-payment), "اطلب" (request).
-        if (/^(?:امتلك|اغتنم|أغتنم|لعشاق|بمقدم|اطلب|أطلب|تمتع|استمتع)\s/.test(t)) return null;
-        // English listing-title patterns: "Old building for sale",
-        // "Apartment for rent", "Land for investment", "Commercial unit for".
-        if (/\b(for\s+sale|for\s+rent|for\s+investment|for\s+lease)\b/i.test(t)) return null;
-        // Strings containing JSON-escape artifacts (leaked from streaming
-        // chunks): "user_deleted", literal \" or backslash-quote pairs.
-        if (/user_deleted|\\["\\]/.test(t)) return null;
         return notSelfName(t);
       }
       function acceptPhone(p) {
@@ -3756,22 +3725,19 @@
         }
       }
 
-      // ═══ Strategy 0: Next.js 14 streaming chunks ═══════════════════════
+      // ═══ Strategy 0: Phone from Next.js 14 streaming chunks ═════════════
       // AqarMap embeds the broker/agent contact card via __next_f.push as
-      // an escaped JSON string. The seller object looks like:
-      //   {"name":"...","email":"...","isCallRequest":false,"has_parent":
-      //    "$undefined","phones":[{"number":"+201090080540","country_code":
-      //    "+20"}],"address":...}
+      // an escaped JSON string. The seller object's "phones" array is the
+      // most reliable phone source on the page. Quotes can be escaped (\")
+      // or plain (") depending on how the chunk is wrapped.
       //
-      // In the raw HTML these quotes are backslash-escaped because the
-      // whole object is a string literal inside another JSON string. The
-      // regex below tolerates BOTH escaped (\") and unescaped (") forms,
-      // and pairs the seller name (within ~600 chars before "phones")
-      // with the first phone in the phones array.
-      //
-      // Multiple sellers may be embedded on the same page (related/similar
-      // listings sidebar) — pick the FIRST occurrence of the pattern,
-      // which on AqarMap detail pages is the listing's actual seller.
+      // NOTE: This strategy USED TO also try to extract the seller name
+      // from "name":"..." pairs in a wide window around "phones". That was
+      // dropped — it kept picking listing titles ("امتلك شقة ١١٢م...",
+      // "Old building for sale") because the listing-title field uses the
+      // same JSON key as the seller card. Names now come exclusively from
+      // structural DOM nodes: parseList logo enrichment for agencies, and
+      // Strategy 0a (user-link) for individuals.
       var Q = '\\\\?"';  // matches " or \"
       var streamPhonePat = new RegExp(
         Q + 'phones' + Q + '\\s*:\\s*\\[\\s*\\{\\s*' +
@@ -3782,101 +3748,26 @@
         var streamPhone = acceptPhone(normalizeEgPhone(streamPhoneMatch[1]));
         if (streamPhone) {
           result.phone = streamPhone;
-          // Look for "name":"..." in a wide window around the phone (1200
-          // chars before, 600 after — covers `address` and downstream fields
-          // in case the name comes after phones in some object shapes).
-          //
-          // Collect ALL candidates and try each through acceptName(). First
-          // one that passes wins. The previous "last match" approach failed
-          // because the closest name was often "عقارات مصر" (the brand) and
-          // acceptName silently dropped it, leaving no name at all.
-          var phonesIdx = streamPhoneMatch.index;
-          var winStart = Math.max(0, phonesIdx - 1200);
-          var winEnd = Math.min(html.length, phonesIdx + 600);
-          var window2 = html.substring(winStart, winEnd);
-          // Also accept variant key spellings AqarMap may use.
-          var nameRegex = new RegExp(
-            Q + '(?:name|title|display_name|broker_name|agent_name|company_name|fullName|full_name)' + Q +
-            '\\s*:\\s*' + Q + '([^"\\\\]{2,60})' + Q,
-            'g'
-          );
-          var nameCandidates = [];
-          var nm;
-          while ((nm = nameRegex.exec(window2)) !== null) {
-            nameCandidates.push(nm[1]);
-          }
-          for (var nc = nameCandidates.length - 1; nc >= 0; nc--) {
-            // Walk from CLOSEST-to-phones backward — names just before
-            // "phones" tend to be the seller's; names earlier in the window
-            // are listing titles / breadcrumb labels.
-            var streamName = acceptName(nameCandidates[nc]);
-            // Don't overwrite a name already set by Strategy 0a (DOM
-            // user-link). 0a is precise; this Strategy 0 fallback is
-            // heuristic and frequently picks up listing titles.
-            if (streamName && !result.sellerName) { result.sellerName = streamName; break; }
-          }
-          console.info('[maksab/aqarmap/detail] Strategy 0 hit — phone:', result.phone,
-            '| name:', result.sellerName || 'none',
-            '| name candidates seen:', nameCandidates.length,
-            '| sample:', nameCandidates.slice(-5));
+          console.info('[maksab/aqarmap/detail] Strategy 0 — phone:', result.phone);
         }
       }
 
-      // ═══ Strategy 0.5: Frequency-based seller-name search ═══════════════
-      // Confirmed from diagnostic logs: real seller names like "Mahmoud Hefny"
-      // ARE in the HTML, but in chunks far from the "phones" field — outside
-      // Strategy 0's 1200-char window. They appear MULTIPLE times on the page
-      // (contact panel + sidebar + footer), so frequency is a reliable signal:
-      // the seller's name wins. Random labels like "Online Expos" / "Live
-      // Private" appear once and are skipped.
-      if (!result.sellerName) {
-        try {
-          var allNamesPat = new RegExp(
-            Q + '(?:name|display_name|member_name|user_name|owner_name|publisher_name|broker_name|agent_name|fullName|full_name)' + Q +
-            '\\s*:\\s*' + Q + '([^"\\\\]{2,80})' + Q,
-            'g'
-          );
-          var nameCounts = {};
-          var freqMatch;
-          while ((freqMatch = allNamesPat.exec(html)) !== null) {
-            var n = freqMatch[1].trim();
-            if (!n) continue;
-            nameCounts[n] = (nameCounts[n] || 0) + 1;
-          }
-          // Pick the most-frequent name that:
-          //  - appears ≥ 2 times (filters single-occurrence labels/banners)
-          //  - passes acceptName (rejects $undefined, brands, listing titles)
-          var topName = null;
-          var topCount = 0;
-          for (var nk in nameCounts) {
-            if (nameCounts[nk] < 2) continue;
-            var accepted = acceptName(nk);
-            if (!accepted) continue;
-            if (nameCounts[nk] > topCount) {
-              topName = accepted;
-              topCount = nameCounts[nk];
-            }
-          }
-          if (topName) {
-            result.sellerName = topName;
-            console.info('[maksab/aqarmap/detail] Strategy 0.5 — frequency-based name:',
-              topName, '| count:', topCount);
-          } else {
-            // Diagnostic: log all name occurrences with count ≥ 2 so we can
-            // see if there's a candidate that acceptName is wrongly dropping.
-            var freqDump = [];
-            for (var nk2 in nameCounts) {
-              if (nameCounts[nk2] >= 2) freqDump.push({ name: nk2, count: nameCounts[nk2] });
-            }
-            if (freqDump.length > 0) {
-              console.info('[maksab/aqarmap/detail] Strategy 0.5 — names with count≥2 (none accepted):',
-                JSON.stringify(freqDump.slice(0, 10)));
-            }
-          }
-        } catch (eFreq) {
-          console.warn('[maksab/aqarmap/detail] Strategy 0.5 threw:', eFreq && eFreq.message);
-        }
-      }
+      // (Strategy 0.5 was a frequency-based scan over all "name":"..." JSON
+      // pairs. It picked the most-frequent value with count ≥ 2 and passed
+      // acceptName. Removed because:
+      //   - It conflated listing titles, agency names, and user names —
+      //     all serialize as "name":"..." on AqarMap.
+      //   - It picked "ميدتاون فيلا مول - بتر هوم" — a project banner,
+      //     not a seller — and stamped it on multiple unrelated listings.
+      //   - It depended on an ever-growing acceptName blacklist
+      //     ("$undefined", brands, ENUM_CODES, listing-action words, m²
+      //     markers, imperative verbs, ...) — fragile and noisy.
+      //
+      // Names now come from structural DOM nodes only:
+      //   - parseList _enrichAgenciesFromDom  → agencies (img logos)
+      //   - parseDetail Strategy 0a           → individuals (user-link)
+      // If neither finds a name, sellerName stays null. Better empty than
+      // wrong — quality > quantity.
 
       // (Strategy 0.6 was a frequency-based person-shape regex over the
       // raw HTML — it kept matching UI labels like "البريد الالكترونى",
