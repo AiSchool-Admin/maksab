@@ -2332,19 +2332,37 @@
         // Combine description with plainText body so we catch values that
         // appear as standalone bullets in the rendered page but not in
         // ad.description. Keep description first (cleaner Arabic).
-        var descScan = (descSrc + '\n' + plainText).substring(0, 8000);
+        // Also normalize Arabic-Indic digits (٠١٢٣٤٥٦٧٨٩) to ASCII so
+        // sellers writing "دور ٩" still match our patterns.
+        var arabicToLatinDigits = function(s) {
+          return s
+            .replace(/[٠]/g, '0').replace(/[١]/g, '1').replace(/[٢]/g, '2')
+            .replace(/[٣]/g, '3').replace(/[٤]/g, '4').replace(/[٥]/g, '5')
+            .replace(/[٦]/g, '6').replace(/[٧]/g, '7').replace(/[٨]/g, '8')
+            .replace(/[٩]/g, '9');
+        };
+        var descScan = arabicToLatinDigits(
+          (descSrc + '\n' + plainText).substring(0, 8000)
+        );
 
-        // Floor — accept numeric or descriptive ("مرتفع", "الأول", "الأخير").
+        // Floor — accept "الدور" OR bare "دور" (sellers drop the article in
+        // bullet lists). Accept numeric or descriptive ("مرتفع", "الأول",
+        // "الأخير", "9 ليس الاخير").
         if (!result.specs['الطابق'] && !result.specs['الدور']
             && !result.specs['رقم الدور']) {
-          var floorRe = /(?:^|[\s•·\-،,])الدور\s+([^\n،,.•·\-]{1,25})/;
+          var floorRe = /(?:^|[\s•·*\-،,])(?:ال)?دور\s+([^\n،,.•·*\-]{1,30})/;
           var floorMatch = descScan.match(floorRe);
           if (floorMatch && floorMatch[1]) {
             var floorVal = floorMatch[1].trim()
               .replace(/\s+/g, ' ')
               .replace(/^(?::|\-|—)\s*/, '');
-            if (floorVal && floorVal.length >= 1 && floorVal.length <= 25
-                && !/^(هو|هي|في|من|إلى)$/.test(floorVal)) {
+            // Reject false positives: "دور كبير" pattern words that aren't
+            // actually floor descriptors. The whitelist is permissive on
+            // purpose — we just block obvious non-floor phrases.
+            var isNonFloor = /^(هو|هي|في|من|إلى|كبير|مهم|أساسي|رئيسي|مميز)$/.test(floorVal)
+                          || /^(الإعلان|الوكيل|البائع|التواصل|الشراء|البيع)/.test(floorVal);
+            if (floorVal && floorVal.length >= 1 && floorVal.length <= 30
+                && !isNonFloor) {
               result.specs['الدور'] = floorVal;
             }
           }
@@ -2352,14 +2370,16 @@
 
         // Finishing — match the canonical finishing phrases. Order matters:
         // longer/more specific patterns first so "سوبر لوكس" beats "لوكس".
+        // ALSO accept "بدون تشطيب" → unfinished (common Egyptian seller phrasing).
         if (!result.specs['التشطيب'] && !result.specs['نوع التشطيب']) {
           var finishingPats = [
             /(اكسترا\s+سوبر\s+لوكس)/, /(إكسترا\s+سوبر\s+لوكس)/,
             /(سوبر\s+لوكس)/,
             /(نص(?:ف)?\s+تشطيب)/,
+            /(بدون\s+تشطيب)/,
             /(على\s+(?:ال)?محارة)/, /(على\s+(?:ال)?طوب)/,
             /(تشطيب\s+(?:كامل|نهائي|ديلوكس|حديث|مودرن|راقي))/,
-            /(?:^|[\s•·])((?:تشطيب|التشطيب)\s*[:\-]?\s*(?:سوبر\s+لوكس|لوكس|كامل|ديلوكس|نص(?:ف)?))/,
+            /(?:^|[\s•·*])((?:تشطيب|التشطيب)\s*[:\-]?\s*(?:سوبر\s+لوكس|لوكس|كامل|ديلوكس|نص(?:ف)?))/,
           ];
           for (var fpi = 0; fpi < finishingPats.length; fpi++) {
             var fmatch = descScan.match(finishingPats[fpi]);
@@ -2374,7 +2394,7 @@
         // Reject the current year to avoid catching ad-posting dates.
         if (!result.specs['تاريخ البناء'] && !result.specs['سنة البناء']
             && !result.specs['العمر']) {
-          var yearRe = /(?:مباني|بناء|سنة\s+(?:ال)?بناء|تاريخ\s+(?:ال)?بناء|سنة\s+الإنشاء)\s*[:\-]?\s*(\d{4})/;
+          var yearRe = /(?:مباني|مبانى|بناء|سنة\s+(?:ال)?بناء|تاريخ\s+(?:ال)?بناء|سنة\s+الإنشاء|سنة\s+الانشاء)\s*[:\-]?\s*(\d{4})/;
           var yearMatch = descScan.match(yearRe);
           if (yearMatch && yearMatch[1]) {
             var year = parseInt(yearMatch[1], 10);

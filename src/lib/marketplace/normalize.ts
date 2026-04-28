@@ -99,6 +99,9 @@ const FINISHING_MAP: Record<string, string> = {
   "جاهز للسكن": "ready_to_live",
   "تشطيب كامل": "ready_to_live",
   "تشطيب بالكامل": "ready_to_live",
+  "بدون تشطيب": "unfinished",
+  "غير مشطب": "unfinished",
+  unfinished: "unfinished",
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -408,7 +411,7 @@ export function normalizeListingData(
   if (rawSpecs && typeof rawSpecs === "object") {
     for (const [rawKey, rawValue] of Object.entries(rawSpecs)) {
       if (rawKey === "_amenities") continue; // handled separately
-      const canonical = SPEC_KEY_ALIASES[rawKey];
+      let canonical = SPEC_KEY_ALIASES[rawKey];
       if (!canonical) continue; // unknown key → drop
       if (canonical === "_ignore") continue;
       if (canonical.startsWith("_meta_")) {
@@ -417,6 +420,15 @@ export function normalizeListingData(
       }
       const stringValue = String(rawValue ?? "").trim();
       if (!stringValue) continue;
+      // Value-based routing: Dubizzle's "شروط التسليم" / "تاريخ التسليم"
+      // sometimes carries a finishing description ("بدون تشطيب") instead
+      // of a year. If the value looks like finishing language, re-route
+      // to the finishing field. Otherwise keep delivery_year mapping.
+      if (canonical === "delivery_year"
+          && /تشطيب|محارة|طوب|سوبر\s+لوكس/.test(stringValue)
+          && !specs.finishing) {
+        canonical = "finishing";
+      }
       const normalized = normalizeValueForField(canonical, stringValue);
       // Coerce to number for numeric fields
       if (["area_sqm", "bedrooms", "bathrooms", "year_built", "down_payment_egp"].includes(canonical)) {
