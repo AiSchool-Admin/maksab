@@ -4331,22 +4331,25 @@
         var t = items[i].title || '';
         if (!t) continue;
         var pt = null;
-        if (/مكتب|مكاتب|إداري|اداري/i.test(t))      pt = 'office';
-        else if (/عياد/i.test(t))                    pt = 'clinic';
-        else if (/محل|محلات/i.test(t))               pt = 'shop';
-        else if (/مصنع|مصانع/i.test(t))             pt = 'factory';
-        else if (/مخزن|مخازن/i.test(t))             pt = 'warehouse';
-        else if (/فيلا|فلل|villa/i.test(t))          pt = 'villa';
-        else if (/شاليه|شاليهات|chalet/i.test(t))   pt = 'chalet';
-        else if (/استوديو|studio/i.test(t))          pt = 'studio';
-        else if (/تاون|townhouse/i.test(t))          pt = 'townhouse';
-        else if (/توين|twin/i.test(t))               pt = 'twin_house';
-        else if (/روف|roof/i.test(t))                pt = 'roof';
-        else if (/أرض|اراضي|أراضي|land/i.test(t))   pt = 'land';
-        else if (/عمارة|عمارات|building/i.test(t))  pt = 'whole_building';
-        else if (/بنتهاوس|penthouse/i.test(t))       pt = 'penthouse';
-        else if (/دوبلكس|duplex/i.test(t))           pt = 'duplex';
-        else if (/شقة|شقق|apartment|flat/i.test(t)) pt = 'apartment';
+        // Order: commercial/special first, layout qualifiers last,
+        // generic apartment as fallback. Includes English variants for
+        // AqarMap's auto-generated bilingual descriptions.
+        if (/مكتب|مكاتب|إداري|اداري|\boffice\b/i.test(t))       pt = 'office';
+        else if (/عياد|\bclinic\b/i.test(t))                     pt = 'clinic';
+        else if (/محل|محلات|\bshop\b|\bretail\b/i.test(t))       pt = 'shop';
+        else if (/مصنع|مصانع|\bfactory\b/i.test(t))             pt = 'factory';
+        else if (/مخزن|مخازن|\bwarehouse\b/i.test(t))           pt = 'warehouse';
+        else if (/فيلا|فلل|\bvilla\b/i.test(t))                  pt = 'villa';
+        else if (/شاليه|شاليهات|\bchalet\b/i.test(t))           pt = 'chalet';
+        else if (/استوديو|\bstudio\b/i.test(t))                  pt = 'studio';
+        else if (/تاون|\btownhouse\b/i.test(t))                  pt = 'townhouse';
+        else if (/توين|\btwin\s*house\b/i.test(t))               pt = 'twin_house';
+        else if (/روف|\broof\b|\brooftop\b/i.test(t))            pt = 'roof';
+        else if (/أرض|اراضي|أراضي|\bland\b|\bplot\b/i.test(t)) pt = 'land';
+        else if (/عمارة|عمارات|\bwhole\s*building\b/i.test(t))  pt = 'whole_building';
+        else if (/بنتهاوس|\bpenthouse\b/i.test(t))               pt = 'penthouse';
+        else if (/دوبلكس|\bduplex\b/i.test(t))                   pt = 'duplex';
+        else if (/شقة|شقق|\bapartment\b|\bflat\b|\bresidential\b/i.test(t)) pt = 'apartment';
         if (pt) {
           if (!items[i].specs) items[i].specs = {};
           items[i].specs.property_type = pt;
@@ -4512,6 +4515,16 @@
           var metaTitle = getText(entry, 'meta_title');
           if (metaTitle) titleStr = metaTitle;
         }
+
+        // Build a fallback search string from title + description. AqarMap
+        // sometimes auto-generates an English description like
+        //   "Residential For sale in Panorama Mall ... View Garden"
+        //   "Land For sale in El-Bahira St ..."
+        //   "Office For sale ..."
+        // which carries the property_type word even when the seller's
+        // Arabic title doesn't (e.g. "فرصة استلام فوري", "⚡️للبيع من المالك").
+        var searchText = titleStr + ' ' + (result.description || '');
+
         console.info('[maksab/aqarmap/api] property_type sources — titleSources:',
           titleSources.length, '| chosen:', (titleStr || '').substring(0, 50));
 
@@ -4520,24 +4533,28 @@
         // دوبلكس" mis-matches as "duplex" instead of "shop".
         // Use Arabic root stems where helpful (عياد catches عيادة,
         // عيادات, عيادتك, etc.).
+        // English fallbacks added for AqarMap auto-generated descriptions.
         var inferredType = null;
-        if (titleStr) {
-          if (/مكتب|مكاتب|إداري|اداري/i.test(titleStr))    inferredType = 'office';
-          else if (/عياد/i.test(titleStr))                  inferredType = 'clinic';
-          else if (/محل|محلات/i.test(titleStr))             inferredType = 'shop';
-          else if (/مصنع|مصانع/i.test(titleStr))           inferredType = 'factory';
-          else if (/مخزن|مخازن/i.test(titleStr))           inferredType = 'warehouse';
-          else if (/فيلا|فلل|villa/i.test(titleStr))        inferredType = 'villa';
-          else if (/شاليه|شاليهات|chalet/i.test(titleStr)) inferredType = 'chalet';
-          else if (/استوديو|studio/i.test(titleStr))        inferredType = 'studio';
-          else if (/تاون|townhouse/i.test(titleStr))        inferredType = 'townhouse';
-          else if (/توين|twin/i.test(titleStr))             inferredType = 'twin_house';
-          else if (/روف|roof/i.test(titleStr))              inferredType = 'roof';
-          else if (/أرض|اراضي|أراضي|land/i.test(titleStr)) inferredType = 'land';
-          else if (/عمارة|عمارات|building/i.test(titleStr))  inferredType = 'whole_building';
-          else if (/بنتهاوس|penthouse/i.test(titleStr))     inferredType = 'penthouse';
-          else if (/دوبلكس|duplex/i.test(titleStr))         inferredType = 'duplex';
-          else if (/شقة|شقق|apartment|flat/i.test(titleStr)) inferredType = 'apartment';
+        if (searchText) {
+          if (/مكتب|مكاتب|إداري|اداري|\boffice\b/i.test(searchText))    inferredType = 'office';
+          else if (/عياد|\bclinic\b/i.test(searchText))                  inferredType = 'clinic';
+          else if (/محل|محلات|\bshop\b|\bretail\b/i.test(searchText))   inferredType = 'shop';
+          else if (/مصنع|مصانع|\bfactory\b/i.test(searchText))          inferredType = 'factory';
+          else if (/مخزن|مخازن|\bwarehouse\b/i.test(searchText))        inferredType = 'warehouse';
+          else if (/فيلا|فلل|\bvilla\b/i.test(searchText))               inferredType = 'villa';
+          else if (/شاليه|شاليهات|\bchalet\b/i.test(searchText))        inferredType = 'chalet';
+          else if (/استوديو|\bstudio\b/i.test(searchText))               inferredType = 'studio';
+          else if (/تاون|\btownhouse\b/i.test(searchText))               inferredType = 'townhouse';
+          else if (/توين|\btwin\s*house\b/i.test(searchText))            inferredType = 'twin_house';
+          else if (/روف|\broof\b|\brooftop\b/i.test(searchText))         inferredType = 'roof';
+          else if (/أرض|اراضي|أراضي|\bland\b|\bplot\b/i.test(searchText)) inferredType = 'land';
+          else if (/عمارة|عمارات|\bwhole\s*building\b/i.test(searchText)) inferredType = 'whole_building';
+          else if (/بنتهاوس|\bpenthouse\b/i.test(searchText))            inferredType = 'penthouse';
+          else if (/دوبلكس|\bduplex\b/i.test(searchText))                inferredType = 'duplex';
+          // Apartment is the broadest — checked last. AqarMap's English
+          // auto-description uses "Residential" for apartments, so accept
+          // that as well.
+          else if (/شقة|شقق|\bapartment\b|\bflat\b|\bresidential\b/i.test(searchText)) inferredType = 'apartment';
         }
         if (inferredType) result.specs.property_type = inferredType;
       } catch (eType) {
