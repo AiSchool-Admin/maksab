@@ -2015,13 +2015,61 @@
             }
 
             // Description — Dubizzle stores the seller-written body in
-            // ad.description (rich text, sometimes with \n line breaks). We
-            // wrap in try/catch and filter out CSS-shaped junk so we never
-            // override a good description with library boilerplate.
+            // ad.description (usually). Robustness pass: handle string, object
+            // ({ar, en, value, text}), array, AND fall back to a deep recursive
+            // scan if those don't yield text. Empirical lesson: the field name
+            // moves around between Dubizzle/OLX builds, so we look broadly.
             try {
-              var rawDesc = ad.description || ad.body || ad.long_description || ad.content || '';
+              var pickDescString = function(v) {
+                if (!v) return null;
+                if (typeof v === 'string') return v;
+                if (typeof v === 'object') {
+                  // Common shapes: {ar: "..."}, {value: "..."}, {text: "..."}, {body: "..."}
+                  return v.ar || v.value || v.text || v.body
+                      || v.content || v.html || null;
+                }
+                return null;
+              };
+
+              var rawDesc =
+                pickDescString(ad.description) ||
+                pickDescString(ad.body) ||
+                pickDescString(ad.long_description) ||
+                pickDescString(ad.detailed_description) ||
+                pickDescString(ad.content) ||
+                pickDescString(ad.text) ||
+                pickDescString(ad.descriptionAr) ||
+                pickDescString(ad.description_ar) ||
+                '';
+
+              // Last resort: deep-scan the ad object for any string field
+              // ≥ 80 chars that contains Arabic. The seller-written body is
+              // virtually always the longest Arabic string on the ad object.
+              if (!rawDesc) {
+                var bestLen = 0, bestStr = null;
+                (function deepScan(obj, depth) {
+                  if (depth > 4 || !obj || typeof obj !== 'object') return;
+                  for (var dk in obj) {
+                    if (!Object.prototype.hasOwnProperty.call(obj, dk)) continue;
+                    var dv = obj[dk];
+                    if (typeof dv === 'string') {
+                      if (dv.length >= 80 && dv.length <= 5000
+                          && /[؀-ۿ]/.test(dv) && dv.length > bestLen) {
+                        bestLen = dv.length;
+                        bestStr = dv;
+                      }
+                    } else if (dv && typeof dv === 'object') {
+                      deepScan(dv, depth + 1);
+                    }
+                  }
+                })(ad, 0);
+                if (bestStr) rawDesc = bestStr;
+              }
+
               if (rawDesc && typeof rawDesc === 'string') {
                 var cleanDesc = rawDesc
+                  .replace(/<br\s*\/?>/gi, '\n')
+                  .replace(/<\/p>/gi, '\n')
                   .replace(/<[^>]+>/g, ' ')
                   .replace(/&nbsp;/g, ' ')
                   .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
@@ -2224,6 +2272,48 @@
           if (!isSubstringOfOther) deduped.push(thisAm);
         }
         result.amenities = deduped;
+      }
+
+      // ═══ Description fallback from rendered HTML body ═══
+      // If Strategy 1 (JSON-LD) didn't yield a description (Dubizzle moves
+      // the field around between site builds), try to pull a long Arabic
+      // paragraph from the rendered ad-detail card. We look for the
+      // "وصف الإعلان" / "تفاصيل الإعلان" section header and take the
+      // following text block.
+      if (!result.description) {
+        try {
+          var descMarkers = [
+            'وصف الإعلان', 'تفاصيل الإعلان', 'الوصف', 'تفاصيل', 'وصف',
+          ];
+          for (var dmi = 0; dmi < descMarkers.length; dmi++) {
+            var marker = descMarkers[dmi];
+            var idxPos = plainText.indexOf(marker);
+            if (idxPos < 0) continue;
+            // Take next 3000 chars after the marker, then trim to 1st
+            // ad-card boundary (e.g. "اتصل" / "تم النشر بواسطة" / "الإعلانات النشطة")
+            var slice = plainText.substring(idxPos + marker.length, idxPos + marker.length + 3000);
+            var boundaries = [
+              'تم النشر بواسطة', 'الإعلانات النشطة', 'عضو منذ',
+              'احجز الآن', 'مكالمة', 'واتساب', 'إعلانات مشابهة',
+              'إعلانات أخرى', 'الإعلانات المشابهة',
+            ];
+            for (var bi = 0; bi < boundaries.length; bi++) {
+              var bIdx = slice.indexOf(boundaries[bi]);
+              if (bIdx > 50) slice = slice.substring(0, bIdx);
+            }
+            var clean = slice
+              .replace(/\s+/g, ' ')
+              .trim();
+            // Require Arabic content + reasonable length, reject if it
+            // starts with an obvious nav/UI label.
+            if (clean.length >= 80 && clean.length <= 5000
+                && /[؀-ۿ]/.test(clean)
+                && !/^(الرئيسية|العقارات|للبيع|للإيجار)/.test(clean)) {
+              result.description = clean;
+              break;
+            }
+          }
+        } catch (htmlDescErr) { /* ignore */ }
       }
 
       // ═══ Description-driven extraction for fields Dubizzle doesn't store
