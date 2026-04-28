@@ -4516,17 +4516,33 @@
           if (metaTitle) titleStr = metaTitle;
         }
 
-        // Build a fallback search string from title + description. AqarMap
-        // sometimes auto-generates an English description like
-        //   "Residential For sale in Panorama Mall ... View Garden"
-        //   "Land For sale in El-Bahira St ..."
-        //   "Office For sale ..."
-        // which carries the property_type word even when the seller's
-        // Arabic title doesn't (e.g. "فرصة استلام فوري", "⚡️للبيع من المالك").
-        var searchText = titleStr + ' ' + (result.description || '');
+        // Build a fallback search string from title + description content
+        // pulled DIRECTLY from XML (independent of where the description
+        // extraction block runs — that block executes later in parseDetail
+        // so result.description is still empty here). AqarMap auto-
+        // generates an English description for every listing that ALWAYS
+        // includes the type word:
+        //   "Residential For sale in Panorama Mall ..."  → apartment
+        //   "Land For sale in El-Bahira St ..."          → land
+        //   "Office For sale ..."                        → office
+        // which carries the type even when the seller's Arabic title
+        // doesn't (e.g. "فرصة استلام فوري", "⚡️للبيع من المالك").
+        var allDescContent = [];
+        var topD = getText(entry, 'description');
+        if (topD) allDescContent.push(topD);
+        for (var dti = 0; dti < transNodes.length; dti++) {
+          if (getText(transNodes[dti], 'field') === 'description') {
+            var dc = getText(transNodes[dti], 'content');
+            if (dc) allDescContent.push(dc);
+          }
+        }
+        var metaD = getText(entry, 'meta_description');
+        if (metaD) allDescContent.push(metaD);
+        var searchText = titleStr + ' ' + allDescContent.join(' ');
 
         console.info('[maksab/aqarmap/api] property_type sources — titleSources:',
-          titleSources.length, '| chosen:', (titleStr || '').substring(0, 50));
+          titleSources.length, '| descSources:', allDescContent.length,
+          '| chosen title:', (titleStr || '').substring(0, 50));
 
         // Order matters — commercial types (محل/مكتب/عياد) checked
         // BEFORE layout qualifiers (دوبلكس/بنتهاوس). Otherwise "محل
