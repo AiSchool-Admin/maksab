@@ -2495,7 +2495,7 @@
               url: cleanUrl,
               external_id: String(itemId || ''),
               title: String(title),
-              description: it.description || it.short_description || '',
+              description: it.masked_description || it.description || it.short_description || '',
               price: price,
               thumbnailUrl: img || null,
               location: it.city_label || it.city_name || it.location_name || it.neighborhood || ctx.governorateLabel || '',
@@ -2511,6 +2511,10 @@
               supportsExchange: false,
               isNegotiable: !!(it.is_negotiable || it.negotiable),
               category: ctx.categoryLabel,
+              // Extract unified specs from cat2_label + new_cps (English-keyed
+              // pairs like "Rooms/أكثر من 6 غرف"). Done inline so each item
+              // ships with its own specs — no extra API call needed.
+              specs: PLATFORMS.opensooq._extractSpecs(it),
               // phone_reveal_key — OpenSooq's per-listing token used by the
               // /api/account/reveal/v3/member-phone endpoint. Stored here so
               // _revealPhonesViaApi can call the reveal API per item.
@@ -2709,6 +2713,80 @@
     // If reveal completes for an item before launchOne reaches it, the
     // detail-page fetch is skipped entirely (faster + less server load).
     //
+    // Extract unified Maksab specs from a single OpenSooq listing object.
+    // Sources (per user-confirmed schema):
+    //   cat1_label, cat2_label  — category names ("عقارات للايجار" /
+    //                             "فلل - قصور للايجار") → property_type +
+    //                             purpose
+    //   new_cps                 — array of "EnglishKey/Arabic value" strings
+    //                             (e.g., "Rooms/أكثر من 6 غرف",
+    //                             "Surface/مساحة البناء: 300 م٢")
+    _extractSpecs: function(it) {
+      var specs = {};
+      try {
+        // Property type from cat2_label first (more specific), cat1_label
+        // as fallback. cat2_label examples: "فلل - قصور للايجار",
+        // "شقق للبيع", "محلات تجارية", "مكاتب إدارية".
+        var catLabel = (it.cat2_label || it.cat1_label || '') + '';
+        if (catLabel) {
+          if (/فلل|قصور|villa/i.test(catLabel))             specs.property_type = 'villa';
+          else if (/مكتب|مكاتب|إداري/i.test(catLabel))       specs.property_type = 'office';
+          else if (/عياد/i.test(catLabel))                   specs.property_type = 'clinic';
+          else if (/محل|محلات/i.test(catLabel))              specs.property_type = 'shop';
+          else if (/مصنع|مصانع/i.test(catLabel))            specs.property_type = 'factory';
+          else if (/مخزن|مخازن/i.test(catLabel))            specs.property_type = 'warehouse';
+          else if (/شاليه/i.test(catLabel))                  specs.property_type = 'chalet';
+          else if (/استوديو/i.test(catLabel))                specs.property_type = 'studio';
+          else if (/تاون/i.test(catLabel))                   specs.property_type = 'townhouse';
+          else if (/توين/i.test(catLabel))                   specs.property_type = 'twin_house';
+          else if (/روف/i.test(catLabel))                    specs.property_type = 'roof';
+          else if (/أرض|اراضي|أراضي|land/i.test(catLabel))  specs.property_type = 'land';
+          else if (/عمارة|عمارات/i.test(catLabel))          specs.property_type = 'whole_building';
+          else if (/بنتهاوس/i.test(catLabel))                specs.property_type = 'penthouse';
+          else if (/دوبلكس/i.test(catLabel))                 specs.property_type = 'duplex';
+          else if (/شقق|شقة/i.test(catLabel))                specs.property_type = 'apartment';
+
+          // Purpose: rent vs sale
+          if (/إيجار|للايجار|للإيجار|rent/i.test(catLabel)) specs.purpose = 'rent';
+          else specs.purpose = 'sale';
+        }
+
+        // From new_cps — array of "Key/Arabic-value" strings.
+        var newCps = Array.isArray(it.new_cps) ? it.new_cps : [];
+        for (var ci = 0; ci < newCps.length; ci++) {
+          var pair = String(newCps[ci]).split('/');
+          if (pair.length < 2) continue;
+          var key = pair[0].trim();
+          var val = pair.slice(1).join('/').trim();
+          var num = (val.match(/\d+/) || [])[0];
+          if (key === 'Rooms'                 && num) specs.bedrooms = parseInt(num, 10);
+          else if (key === 'Bathrooms'        && num) specs.bathrooms = parseInt(num, 10);
+          else if (key === 'Surface'          && num) specs.area_sqm = parseInt(num, 10);
+          else if (key === 'Surface_Lands'    && num) specs.land_area_sqm = parseInt(num, 10);
+          else if (key === 'Floor'            && num) specs.floor = parseInt(num, 10);
+          else if (key === 'Year_Built'       && num) specs.built_year = parseInt(num, 10);
+          else if (key === 'Furnished_RealEstate') {
+            // "مفروشة" / "غير مفروشة" / "نص فرش"
+            if (/غير\s*مفروش/.test(val))       specs.furnished = 'unfurnished';
+            else if (/مفروش/.test(val))         specs.furnished = 'furnished';
+            else if (/نص|جزئي|partial/i.test(val)) specs.furnished = 'partial';
+          }
+          else if (key === 'PaymentMethod' || key === 'Payment_Method') {
+            if (/كاش|نقد|cash/i.test(val))      specs.payment_method = 'cash';
+            else if (/تقسيط|installment/i.test(val)) specs.payment_method = 'installments';
+          }
+          else if (key === 'Finishing_RealEstate' || key === 'Finishing') {
+            if (/سوبر\s*لوكس|super/i.test(val) && /اكسترا|extra/i.test(val)) specs.finishing = 'extra_super_lux';
+            else if (/سوبر\s*لوكس|super/i.test(val)) specs.finishing = 'super_lux';
+            else if (/لوكس/.test(val))           specs.finishing = 'lux';
+            else if (/نص|نصف|semi/i.test(val))   specs.finishing = 'semi_finished';
+            else if (/محار|طوب|core|bare/i.test(val)) specs.finishing = 'bare';
+          }
+        }
+      } catch (e) { /* fail silently */ }
+      return specs;
+    },
+
     // Requires OPENSOOQ_JWT to be captured by the global fetch hook
     // (set up at bookmarklet boot if running on opensooq.com).
     _revealPhonesViaApi: function(items) {
