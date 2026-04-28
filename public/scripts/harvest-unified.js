@@ -1528,14 +1528,64 @@
       // Sellers commonly write:
       //   "كاش" | "تقسيط" | "بالتقسيط" | "أقساط على X سنوات" | "مقدم وأقساط"
       //   "مباني 2010" | "بناء 2008"
+      // CRITICAL: Scope the scan to the actual description body, NOT the
+      // whole plainText. SemsarMasr's page chrome includes filter UI
+      // buttons literally labeled "كاش" and "تقسيط" — scanning the full
+      // page text produced a false-positive cash_or_installments on every
+      // listing. Strategy: locate the seller-written body inside the page
+      // and only scan that.
       try {
-        var descScanSm = plainText.substring(0, 8000);
+        // Build a tightly-scoped description string. Try, in order:
+        //   1. Section labeled "وصف الإعلان" / "تفاصيل الإعلان" /
+        //      "تفاصيل العقار" / "ملاحظات" — take ~3000 chars after.
+        //   2. <textarea> / <p class="long_desc"> / <div class="LongDesc">
+        //      style elements that SemsarMasr uses for the body.
+        //   3. Fallback: the longest contiguous Arabic paragraph (≥120 chars)
+        //      in the rendered plainText.
+        var descScanSm = '';
+        var descMarkersSm = [
+          'وصف الإعلان', 'تفاصيل الإعلان', 'تفاصيل العقار',
+          'ملاحظات', 'الوصف', 'تفاصيل',
+        ];
+        for (var dmi2 = 0; dmi2 < descMarkersSm.length; dmi2++) {
+          var idxM = plainText.indexOf(descMarkersSm[dmi2]);
+          if (idxM < 0) continue;
+          var slice2 = plainText.substring(idxM + descMarkersSm[dmi2].length,
+                                            idxM + descMarkersSm[dmi2].length + 3000);
+          // Trim at boundaries that mark non-description content.
+          var bnd = ['طبيعة المعلن', 'بيانات المعلن', 'الكماليات',
+                     'مميزات', 'قريبة من', 'إعلانات مشابهة',
+                     'إعلانات مماثلة', 'الإعلانات النشطة'];
+          for (var bi2 = 0; bi2 < bnd.length; bi2++) {
+            var bIdx2 = slice2.indexOf(bnd[bi2]);
+            if (bIdx2 > 50) slice2 = slice2.substring(0, bIdx2);
+          }
+          if (slice2.length >= 80) {
+            descScanSm = slice2;
+            break;
+          }
+        }
+        // Fallback to longest Arabic paragraph if no marker matched.
+        if (!descScanSm) {
+          var paragraphs = plainText.split(/\n+/);
+          var longest = '';
+          for (var pgi = 0; pgi < paragraphs.length; pgi++) {
+            var pg = paragraphs[pgi].trim();
+            if (pg.length > longest.length && pg.length >= 120
+                && /[؀-ۿ]/.test(pg)
+                && !/^(كاش|تقسيط|الكل|بحث|فلتر|ترتيب)/.test(pg)) {
+              longest = pg;
+            }
+          }
+          if (longest) descScanSm = longest;
+        }
 
-        // payment_method — three buckets: cash / installment / mixed
-        if (!result.specs['طريقة الدفع']) {
+        // payment_method — three buckets: cash / installment / mixed.
+        // Only run the scan if we have a tight description scope.
+        if (!result.specs['طريقة الدفع'] && descScanSm) {
           // Installment signals (more specific first)
           var installmentRe = /(?:تقسيط|بالتقسيط|أقساط|اقساط|قسط|على\s+\d+\s+سن(?:ة|وات)|مقدم\s*(?:و|\+)\s*(?:تقسيط|أقساط|باقي))/;
-          var cashRe = /(?:^|[\s•·*])كاش(?:[\s•·*\.]|$)|نقدا(?:ً)?|نقدي/;
+          var cashRe = /(?:^|[\s•·*])كاش(?:[\s•·*\.,]|$)|نقدا(?:ً)?|نقدي/;
           var hasInstallment = installmentRe.test(descScanSm);
           var hasCash = cashRe.test(descScanSm);
           if (hasInstallment && hasCash) {
@@ -1549,7 +1599,8 @@
 
         // year_built — same pattern as Dubizzle. Allow "مباني" / "مبانى" /
         // "بناء" / "سنة البناء" / "تاريخ البناء" / "سنة الإنشاء".
-        if (!result.specs['تاريخ البناء'] && !result.specs['سنة البناء']) {
+        if (!result.specs['تاريخ البناء'] && !result.specs['سنة البناء']
+            && descScanSm) {
           var yearReSm = /(?:مباني|مبانى|بناء|سنة\s+(?:ال)?بناء|تاريخ\s+(?:ال)?بناء|سنة\s+(?:الإنشاء|الانشاء))\s*[:\-]?\s*(\d{4})/;
           var yearMatchSm = descScanSm.match(yearReSm);
           if (yearMatchSm && yearMatchSm[1]) {
