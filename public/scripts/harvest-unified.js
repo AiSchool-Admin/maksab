@@ -1263,6 +1263,13 @@
         var dateEl = c.querySelector('.ListingDate, [class*="date"]');
         var dateText = dateEl ? (dateEl.textContent || '').trim() : '';
 
+        // Infer property_type from title — SemsarMasr's label-scan in
+        // parseDetail rarely catches "نوع العقار" because the HTML doesn't
+        // use the colon-after-label format the regex expects. Title is
+        // always reliable: every SemsarMasr title starts with the property
+        // type word ("شقة", "فيلا", "محل", "كمبوند"...).
+        var inferredType = PLATFORMS.semsarmasr._inferPropertyType(title);
+
         results.push({
           url: url,
           external_id: c.getAttribute('data-id') || '',
@@ -1283,9 +1290,37 @@
           supportsExchange: false,
           isNegotiable: false,
           category: ctx.categoryLabel,
+          specs: inferredType ? { property_type: inferredType } : {},
         });
       }
       return results;
+    },
+
+    // Title → property_type inference. Same set of property types we use
+    // in AqarMap's title heuristic (kept intentionally in sync). Used by
+    // parseList because SemsarMasr's detail-page label scan misses
+    // "نوع العقار" when the HTML lacks a colon separator.
+    _inferPropertyType: function(title) {
+      if (!title) return null;
+      var t = String(title);
+      if (/مكتب|مكاتب|إداري|اداري/i.test(t))      return 'office';
+      if (/عياد/i.test(t))                          return 'clinic';
+      if (/محل|محلات/i.test(t))                    return 'shop';
+      if (/مصنع|مصانع/i.test(t))                  return 'factory';
+      if (/مخزن|مخازن/i.test(t))                  return 'warehouse';
+      if (/فيلا|فلل|villa/i.test(t))               return 'villa';
+      if (/شاليه|شاليهات|chalet/i.test(t))        return 'chalet';
+      if (/استوديو|studio/i.test(t))               return 'studio';
+      if (/تاون|townhouse/i.test(t))               return 'townhouse';
+      if (/توين|twin/i.test(t))                    return 'twin_house';
+      if (/روف|roof/i.test(t))                     return 'roof';
+      if (/أرض|اراضي|أراضي|land/i.test(t))        return 'land';
+      if (/عمارة|عمارات|building/i.test(t))       return 'whole_building';
+      if (/بنتهاوس|penthouse/i.test(t))            return 'penthouse';
+      if (/دوبلكس|duplex/i.test(t))                return 'duplex';
+      if (/شقة|شقق|apartment|flat/i.test(t))      return 'apartment';
+      if (/كمبوند|كومبوند|compound/i.test(t))     return 'apartment'; // compound usually = apartment in compound
+      return null;
     },
 
     parseDetail: function(html) {
@@ -1486,6 +1521,46 @@
         }
       }
       result.allImages = result.allImages.slice(0, 12);
+
+      // ═══ Description-driven extraction for fields the SemsarMasr label
+      //     scan misses (HTML doesn't always use the colon-after-label
+      //     format the regex expects) ═══
+      // Sellers commonly write:
+      //   "كاش" | "تقسيط" | "بالتقسيط" | "أقساط على X سنوات" | "مقدم وأقساط"
+      //   "مباني 2010" | "بناء 2008"
+      try {
+        var descScanSm = plainText.substring(0, 8000);
+
+        // payment_method — three buckets: cash / installment / mixed
+        if (!result.specs['طريقة الدفع']) {
+          // Installment signals (more specific first)
+          var installmentRe = /(?:تقسيط|بالتقسيط|أقساط|اقساط|قسط|على\s+\d+\s+سن(?:ة|وات)|مقدم\s*(?:و|\+)\s*(?:تقسيط|أقساط|باقي))/;
+          var cashRe = /(?:^|[\s•·*])كاش(?:[\s•·*\.]|$)|نقدا(?:ً)?|نقدي/;
+          var hasInstallment = installmentRe.test(descScanSm);
+          var hasCash = cashRe.test(descScanSm);
+          if (hasInstallment && hasCash) {
+            result.specs['طريقة الدفع'] = 'كاش أو تقسيط';
+          } else if (hasInstallment) {
+            result.specs['طريقة الدفع'] = 'تقسيط';
+          } else if (hasCash) {
+            result.specs['طريقة الدفع'] = 'كاش';
+          }
+        }
+
+        // year_built — same pattern as Dubizzle. Allow "مباني" / "مبانى" /
+        // "بناء" / "سنة البناء" / "تاريخ البناء" / "سنة الإنشاء".
+        if (!result.specs['تاريخ البناء'] && !result.specs['سنة البناء']) {
+          var yearReSm = /(?:مباني|مبانى|بناء|سنة\s+(?:ال)?بناء|تاريخ\s+(?:ال)?بناء|سنة\s+(?:الإنشاء|الانشاء))\s*[:\-]?\s*(\d{4})/;
+          var yearMatchSm = descScanSm.match(yearReSm);
+          if (yearMatchSm && yearMatchSm[1]) {
+            var yearSm = parseInt(yearMatchSm[1], 10);
+            var nowYSm = new Date().getFullYear();
+            if (yearSm >= 1900 && yearSm <= nowYSm + 1) {
+              result.specs['سنة البناء'] = String(yearSm);
+            }
+          }
+        }
+      } catch (smDescErr) { /* best-effort */ }
 
       return result;
     },
