@@ -962,7 +962,13 @@
               it.allImages = detail.allImages;
               if (!it.thumbnailUrl) it.thumbnailUrl = detail.allImages[0];
             }
-            if (detail.specs && Object.keys(detail.specs).length > 0) it.specs = detail.specs;
+            // MERGE detail.specs into it.specs (don't REPLACE) — parseList
+            // may have set keys parseDetail doesn't know about (e.g. AqarMap
+            // sets property_type from the list-page title before parseDetail
+            // runs). Replace would wipe those.
+            if (detail.specs && Object.keys(detail.specs).length > 0) {
+              it.specs = Object.assign({}, it.specs || {}, detail.specs);
+            }
             if (detail.amenities && detail.amenities.length > 0) it.amenities = detail.amenities;
             if (detail.sellerBadge && !it.sellerBadge) it.sellerBadge = detail.sellerBadge;
             if (detail.price && !it.price) it.price = detail.price;
@@ -4088,6 +4094,10 @@
       //   4. Fall back to the longest non-Arabic only if no Arabic exists
       try {
         var descCandidates = [];
+        // Source 1: top-level <description>
+        var topDesc = getText(entry, 'description');
+        if (topDesc) descCandidates.push(topDesc);
+        // Source 2: <translations><entry><field>description</field><content>...
         var translations = entry.querySelectorAll('translations > entry');
         for (var ti = 0; ti < translations.length; ti++) {
           var tField = getText(translations[ti], 'field');
@@ -4096,6 +4106,9 @@
             descCandidates.push(tContent);
           }
         }
+        // Source 3: <meta_description>
+        var metaDesc = getText(entry, 'meta_description');
+        if (metaDesc) descCandidates.push(metaDesc);
         // Sort: Arabic-first (descending by length), then non-Arabic.
         var arabicDescs = descCandidates.filter(function(d) {
           return /[؀-ۿ]/.test(d);
@@ -4109,6 +4122,9 @@
           pickedDesc = descCandidates[0];
         }
         if (pickedDesc) result.description = pickedDesc;
+        console.info('[maksab/aqarmap/api] description sources:',
+          descCandidates.length,
+          '| picked length:', pickedDesc ? pickedDesc.length : 0);
       } catch (eDesc) {
         // Fall through silently — description is optional.
       }
