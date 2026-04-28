@@ -967,10 +967,21 @@
             if (detail.sellerBadge && !it.sellerBadge) it.sellerBadge = detail.sellerBadge;
             if (detail.price && !it.price) it.price = detail.price;
             // Description from the detail page is usually richer than the
-            // list-page snippet. Override if longer.
-            if (detail.description &&
-                (!it.description || detail.description.length > it.description.length)) {
-              it.description = detail.description;
+            // list-page snippet. Override if longer — OR if the existing
+            // description looks like CSS junk (occasionally leaks from
+            // AqarMap's JSON-LD) since any real text beats CSS.
+            function looksLikeCssJunk(s) {
+              if (!s) return false;
+              return /^\s*#\w+\s*\{/.test(s)
+                  || /pointer-events\s*:\s*none/.test(s)
+                  || /\{[^{}]*:[^{}]*\}/.test(String(s).substring(0, 80));
+            }
+            if (detail.description) {
+              if (!it.description
+                  || looksLikeCssJunk(it.description)
+                  || detail.description.length > it.description.length) {
+                it.description = detail.description;
+              }
             }
 
             // Only retry if we still don't have a phone AND we're on a
@@ -3464,6 +3475,7 @@
             }
             if (items.length > 0) {
               PLATFORMS.aqarmap._enrichAgenciesFromDom(items, doc);
+              PLATFORMS.aqarmap._inferPropertyTypeFromTitles(items);
               return items;
             }
           }
@@ -3718,6 +3730,7 @@
 
       console.info('[maksab/aqarmap] Final items count:', items.length);
       PLATFORMS.aqarmap._enrichAgenciesFromDom(items, doc);
+      PLATFORMS.aqarmap._inferPropertyTypeFromTitles(items);
       return items;
     },
 
@@ -3808,6 +3821,43 @@
           enriched, '/', items.length, 'items | unmatched logos:', unmatched);
       } catch (e) {
         console.warn('[maksab/aqarmap] _enrichAgenciesFromDom threw:', e && e.message);
+      }
+    },
+
+    // Infer property_type from each item's title and write it into
+    // item.specs. Runs after parseList builds items, so the title is
+    // already available. Avoids needing to re-fetch / re-parse the XML
+    // detail just for this.
+    //
+    // Why a separate pass? parseDetail's title sourcing was unreliable —
+    // <title> isn't a top-level XML element on AqarMap, and translations
+    // were inconsistent. The list-page title we already have is enough.
+    _inferPropertyTypeFromTitles: function(items) {
+      if (!items) return;
+      for (var i = 0; i < items.length; i++) {
+        var t = items[i].title || '';
+        if (!t) continue;
+        var pt = null;
+        if (/مكتب|مكاتب|إداري|اداري/i.test(t))      pt = 'office';
+        else if (/عياد/i.test(t))                    pt = 'clinic';
+        else if (/محل|محلات/i.test(t))               pt = 'shop';
+        else if (/مصنع|مصانع/i.test(t))             pt = 'factory';
+        else if (/مخزن|مخازن/i.test(t))             pt = 'warehouse';
+        else if (/فيلا|فلل|villa/i.test(t))          pt = 'villa';
+        else if (/شاليه|شاليهات|chalet/i.test(t))   pt = 'chalet';
+        else if (/استوديو|studio/i.test(t))          pt = 'studio';
+        else if (/تاون|townhouse/i.test(t))          pt = 'townhouse';
+        else if (/توين|twin/i.test(t))               pt = 'twin_house';
+        else if (/روف|roof/i.test(t))                pt = 'roof';
+        else if (/أرض|اراضي|أراضي|land/i.test(t))   pt = 'land';
+        else if (/عمارة|عمارات|building/i.test(t))  pt = 'whole_building';
+        else if (/بنتهاوس|penthouse/i.test(t))       pt = 'penthouse';
+        else if (/دوبلكس|duplex/i.test(t))           pt = 'duplex';
+        else if (/شقة|شقق|apartment|flat/i.test(t)) pt = 'apartment';
+        if (pt) {
+          if (!items[i].specs) items[i].specs = {};
+          items[i].specs.property_type = pt;
+        }
       }
     },
 
