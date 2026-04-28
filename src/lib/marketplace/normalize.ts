@@ -157,6 +157,7 @@ const CONDITION_MAP: Record<string, string> = {
 const SPEC_KEY_ALIASES: Record<string, string> = {
   // property_type
   "نوع العقار": "property_type", "النوع": "property_type", "type": "property_type", "propertyType": "property_type",
+  "property_type": "property_type",
 
   // purpose
   "الغرض": "purpose", "غرض العقار": "purpose", "purpose": "purpose",
@@ -165,6 +166,7 @@ const SPEC_KEY_ALIASES: Record<string, string> = {
   "المساحة": "area_sqm", "مساحة البناء": "area_sqm", "مساحة الأرض": "area_sqm",
   "المساحة (م²)": "area_sqm", "المساحة (م2)": "area_sqm",
   "area": "area_sqm", "area_sqm": "area_sqm", "space": "area_sqm", "size": "area_sqm",
+  "land_area_sqm": "land_area_sqm",
 
   // bedrooms
   "عدد الغرف": "bedrooms", "غرف نوم": "bedrooms", "الغرف": "bedrooms",
@@ -175,14 +177,16 @@ const SPEC_KEY_ALIASES: Record<string, string> = {
 
   // floor
   "رقم الدور": "floor_number", "الدور": "floor_number", "الطابق": "floor_number",
-  "floor": "floor_number",
+  "floor": "floor_number", "floor_number": "floor_number",
 
-  // year_built
+  // year_built (also accept built_year — common bookmarklet output)
   "تاريخ البناء": "year_built", "سنة البناء": "year_built", "year_built": "year_built",
+  "built_year": "year_built",
 
   // delivery_year
   "تاريخ التسليم": "delivery_year", "سنة الاستلام": "delivery_year",
   "شروط التسليم": "delivery_year", // often contains the date
+  "delivery_year": "delivery_year",
 
   // view
   "الإطلالة": "view", "نوع الواجهة": "view", "view": "view", "facing": "view",
@@ -201,7 +205,7 @@ const SPEC_KEY_ALIASES: Record<string, string> = {
   "طريقة الدفع": "payment_method", "payment_method": "payment_method", "payment": "payment_method",
 
   // down payment
-  "المقدم": "down_payment_egp", "down_payment": "down_payment_egp",
+  "المقدم": "down_payment_egp", "down_payment": "down_payment_egp", "down_payment_egp": "down_payment_egp",
 
   // noise keys — ignored
   "رقم الإعلان": "_ignore",
