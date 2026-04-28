@@ -181,7 +181,8 @@ const SPEC_KEY_ALIASES: Record<string, string> = {
 
   // year_built (also accept built_year — common bookmarklet output)
   "تاريخ البناء": "year_built", "سنة البناء": "year_built", "year_built": "year_built",
-  "built_year": "year_built",
+  "built_year": "year_built", "سنة الإنشاء": "year_built", "تاريخ الإنشاء": "year_built",
+  "العمر": "year_built", // age in years — receive endpoint converts numeric age to year
 
   // delivery_year
   "تاريخ التسليم": "delivery_year", "سنة الاستلام": "delivery_year",
@@ -258,7 +259,7 @@ const AMENITY_ALIASES: Record<string, string> = {
   // Security
   "حراسة": "security_guard", "أمن": "security_guard", "حراسة/أمن": "security_guard",
   "حراسة وأمن": "security_guard", "أمن وحراسة 24 ساعة": "security_guard", "أمن وحراسة": "security_guard",
-  "كاميرات مراقبة": "cctv",
+  "كاميرات مراقبة": "cctv", "مراقبة": "cctv",
   "بوابة": "gated_entrance", "بوابة آمنة": "gated_entrance",
   "إنذار حريق": "fire_alarm", "انذار حريق": "fire_alarm",
   "باب مصفح": "armored_door",
@@ -269,25 +270,26 @@ const AMENITY_ALIASES: Record<string, string> = {
   "مصعد": "elevator", "أسانسير": "elevator", "أساسير": "elevator", "اسانسير": "elevator",
   "موقف سيارات": "parking", "موقف": "parking",
   "موقف سيارات مغطى": "covered_parking", "موقف مغطى": "covered_parking",
-  "جراج": "garage", "جراج/موقف سيارات": "garage",
+  "جراج": "garage", "جراج/موقف سيارات": "garage", "مرآب": "garage",
   "دش مركزي": "satellite_dish",
-  "حمام سباحة": "swimming_pool",
-  "نادي رياضي": "gym", "نادي صحي": "gym",
-  "ملعب": "playground", "مناطق أطفال": "playground",
+  "حمام سباحة": "swimming_pool", "مسبح": "swimming_pool",
+  "نادي رياضي": "gym", "نادي صحي": "gym", "جيم": "gym",
+  "ملعب": "playground", "مناطق أطفال": "playground", "منطقة لعب": "playground",
   "حديقة": "garden",
   "ممشى": "walkway",
   "مركز تجاري": "commercial_center", "مول تجاري": "commercial_center",
   "كافيهات/مطاعم": "cafes_restaurants", "كافيهات": "cafes_restaurants", "مطاعم": "cafes_restaurants",
 
   // Interior
-  "تدفئة وتكييف مركزي": "central_ac",
+  "تدفئة وتكييف مركزي": "central_ac", "تكييف مركزي": "central_ac",
   "تكييف": "ac", "مكيف": "ac",
   "تدفئة": "heating",
-  "غاز طبيعي": "natural_gas", "غاز طبيعى": "natural_gas",
+  "غاز طبيعي": "natural_gas", "غاز طبيعى": "natural_gas", "عداد غاز": "natural_gas",
   "سخان ماء": "water_heater",
   "عداد كهرباء": "electricity_meter",
+  "عداد مياه": "water_meter",
   "إنترنت": "internet", "انترنت": "internet",
-  "هاتف": "landline", "تليفون أرضي": "landline", "تليفون أرضى": "landline",
+  "هاتف": "landline", "تليفون أرضي": "landline", "تليفون أرضى": "landline", "خط تليفون": "landline",
   "زجاج شبابيك مزدوج": "double_glazed_windows",
   "مدفأة": "fireplace",
 
@@ -295,10 +297,10 @@ const AMENITY_ALIASES: Record<string, string> = {
   "خزائن ملابس": "built_in_wardrobes",
   "خزائن مطبخ": "kitchen_cabinets",
   "غرفة ملابس": "walk_in_closet",
-  "غرفة خدم": "servant_room",
+  "غرفة خدم": "servant_room", "غرفة الخادمة": "servant_room",
 
   // Appliances
-  "أجهزة المطبخ": "kitchen_appliances",
+  "أجهزة المطبخ": "kitchen_appliances", "مطبخ مجهز": "kitchen_appliances",
   "موقد غاز": "gas_stove", "موقد غاز/بلت إن": "gas_stove", "بلت إن": "gas_stove",
   "ثلاجة": "refrigerator",
   "مايكروويف": "microwave",
@@ -306,13 +308,16 @@ const AMENITY_ALIASES: Record<string, string> = {
   "تلفزيون": "tv",
 
   // Views
-  "بلكونة": "balcony",
+  "بلكونة": "balcony", "شرفة": "balcony",
   "تراس": "terrace",
   "حديقة خاصة": "private_garden",
   "إطلالة بحر": "sea_view", "إطلالة بحرية": "sea_view", "بحر": "sea_view",
-  "إطلالة حديقة": "garden_view",
+  "إطلالة حديقة": "garden_view", "إطلالة على الحديقة": "garden_view",
   "إطلالة المدينة": "city_view", "المدينة": "city_view",
   "شارع رئيسي": "main_street_view",
+
+  // Pets
+  "يسمح بالحيوانات الأليفة": "pets_allowed",
 
   // Nearby
   "مسجد": "mosque",

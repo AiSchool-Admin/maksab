@@ -2013,6 +2013,27 @@
                 }
               }
             }
+
+            // Description — Dubizzle stores the seller-written body in
+            // ad.description (rich text, sometimes with \n line breaks). We
+            // wrap in try/catch and filter out CSS-shaped junk so we never
+            // override a good description with library boilerplate.
+            try {
+              var rawDesc = ad.description || ad.body || ad.long_description || ad.content || '';
+              if (rawDesc && typeof rawDesc === 'string') {
+                var cleanDesc = rawDesc
+                  .replace(/<[^>]+>/g, ' ')
+                  .replace(/&nbsp;/g, ' ')
+                  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+                  .replace(/[ \t]+/g, ' ')
+                  .trim();
+                var isCssJunk = /^\s*#\w+\s*\{/.test(cleanDesc)
+                             || /pointer-events\s*:\s*none/.test(cleanDesc);
+                if (cleanDesc.length >= 20 && cleanDesc.length <= 5000 && !isCssJunk) {
+                  result.description = cleanDesc;
+                }
+              }
+            } catch (descErr) { /* ignore — description is optional */ }
           }
         } catch (e) { /* fall through to HTML regex */ }
       }
@@ -2078,12 +2099,68 @@
         .replace(/[ \t]+/g, ' ');
 
       var DUBIZZLE_SPEC_LABELS = [
-        'غرض العقار', 'الطابق', 'غرف نوم', 'عدد الغرف', 'الحمامات', 'عدد الحمامات',
-        'المساحة', 'مساحة البناء', 'مساحة الأرض', 'النوع', 'ملكية',
-        'مفروش', 'طريقة الدفع', 'حالة العقار', 'تاريخ التسليم', 'شروط التسليم',
-        'التشطيب', 'الإطلالة', 'الماركة', 'الموديل', 'سنة الصنع',
+        'غرض العقار', 'الطابق', 'الدور', 'رقم الدور', 'غرف نوم', 'عدد الغرف',
+        'الحمامات', 'عدد الحمامات',
+        'المساحة', 'مساحة البناء', 'مساحة الأرض', 'النوع', 'نوع العقار', 'ملكية',
+        'مفروش', 'الفرش', 'طريقة الدفع', 'حالة العقار', 'تاريخ التسليم', 'شروط التسليم',
+        'التشطيب', 'نوع التشطيب', 'الإطلالة',
+        'تاريخ البناء', 'سنة البناء', 'العمر', 'سنة الإنشاء',
+        'الماركة', 'الموديل', 'سنة الصنع',
         'الكيلومترات', 'ناقل الحركة', 'نوع الوقود', 'حجم المحرك', 'اللون',
       ];
+      // Smarter label→value extraction. A single regex that requires the value
+      // on the very next line misses Dubizzle's actual DOM, where label and
+      // value are siblings separated by a divider element (which becomes
+      // ≥1 blank line after tag-stripping). Strategy: find each label, then
+      // walk forward up to 5 short lines until we find the first non-empty,
+      // non-label line that looks like a value.
+      var ptLines = plainText.split(/\n+/);
+      var labelLineIdx = {};
+      for (var li = 0; li < ptLines.length; li++) {
+        var lineTrim = ptLines[li].trim();
+        if (!lineTrim) continue;
+        for (var lblI = 0; lblI < DUBIZZLE_SPEC_LABELS.length; lblI++) {
+          var lbl = DUBIZZLE_SPEC_LABELS[lblI];
+          // Match exact label, optionally followed by colon/value on same line
+          if (lineTrim === lbl
+              || lineTrim.indexOf(lbl + ':') === 0
+              || lineTrim.indexOf(lbl + ' :') === 0
+              || lineTrim.indexOf(lbl + '：') === 0) {
+            // Inline value? "الطابق: 3"
+            var inlineMatch = lineTrim.match(new RegExp(
+              '^' + lbl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+              '\\s*[:：]\\s*(.+)$'));
+            if (inlineMatch && inlineMatch[1]) {
+              var inlineVal = inlineMatch[1].trim();
+              if (inlineVal && inlineVal.length < 100 && !result.specs[lbl]) {
+                result.specs[lbl] = inlineVal;
+              }
+            } else if (!labelLineIdx[lbl]) {
+              labelLineIdx[lbl] = li;
+            }
+          }
+        }
+      }
+      // For labels found on their own line, scan up to 5 forward lines for value
+      Object.keys(labelLineIdx).forEach(function(lbl) {
+        if (result.specs[lbl]) return;
+        var startIdx = labelLineIdx[lbl];
+        for (var fwd = 1; fwd <= 5; fwd++) {
+          var nextLine = (ptLines[startIdx + fwd] || '').trim();
+          if (!nextLine) continue;
+          // Skip if next line is itself a label (means this label had no value)
+          if (DUBIZZLE_SPEC_LABELS.indexOf(nextLine) >= 0) break;
+          // Skip pure dividers / very short noise
+          if (/^[━─\-•·.,]+$/.test(nextLine)) continue;
+          if (nextLine.length > 100) continue;
+          if (nextLine === lbl) continue;
+          result.specs[lbl] = nextLine;
+          break;
+        }
+      });
+      // Legacy regex fallback — for single-line "label: value" formats not
+      // caught above. Kept narrow so it doesn't overwrite richer multi-line
+      // values we already pulled.
       for (var di = 0; di < DUBIZZLE_SPEC_LABELS.length; di++) {
         var dLabel = DUBIZZLE_SPEC_LABELS[di];
         if (result.specs[dLabel]) continue;
@@ -2098,31 +2175,55 @@
         }
       }
 
-      // Amenities — plain-text scan for known features near "الكماليات" section
+      // Amenities — plain-text scan for known features. Earlier we limited the
+      // scan to a 2500-char window near "الكماليات" markers, which silently
+      // dropped half the listings whose Dubizzle DOM doesn't render those
+      // exact section headings (varies by category and layout). Scanning the
+      // full page text is safe because the keyword list is property-specific.
+      // We still de-prioritize matches that fall inside the description body
+      // by deduping after extraction.
       if (result.amenities.length === 0) {
-        var amenityMarkers = ['الكماليات', 'المميزات', 'الخدمات', 'المرافق'];
-        var amenityText = '';
-        for (var amMark = 0; amMark < amenityMarkers.length; amMark++) {
-          var amIdx = plainText.indexOf(amenityMarkers[amMark]);
-          if (amIdx >= 0) amenityText += ' ' + plainText.substring(amIdx, amIdx + 2500);
-        }
-        if (amenityText) {
-          var DUBIZZLE_AMENITIES = [
-            'شرفة', 'حديقة خاصة', 'حديقة', 'أمن', 'أمن وحراسة', 'غرفة خدم',
-            'أجهزة المطبخ', 'تدفئة وتكييف مركزي', 'تكييف', 'تدفئة',
-            'موقف سيارات مغطى', 'موقف سيارات', 'جراج', 'عداد كهرباء',
-            'غاز طبيعي', 'غاز طبيعى', 'تليفون أرضي', 'تليفون أرضى',
-            'أساسير', 'أسانسير', 'مصعد', 'حمام سباحة',
-            'نادي رياضي', 'مناطق أطفال', 'كاميرات مراقبة', 'بلكونة',
-            'إنترنت', 'مفروش', 'مكيف',
-          ];
-          for (var ami = 0; ami < DUBIZZLE_AMENITIES.length; ami++) {
-            var amFeat = DUBIZZLE_AMENITIES[ami];
-            if (amenityText.indexOf(amFeat) >= 0 && result.amenities.indexOf(amFeat) < 0) {
-              result.amenities.push(amFeat);
-            }
+        var DUBIZZLE_AMENITIES = [
+          'شرفة', 'بلكونة', 'حديقة خاصة', 'حديقة', 'أمن', 'أمن وحراسة',
+          'غرفة خدم', 'غرفة الخادمة',
+          'أجهزة المطبخ', 'مطبخ مجهز', 'تدفئة وتكييف مركزي', 'تكييف مركزي',
+          'تكييف', 'تدفئة',
+          'موقف سيارات مغطى', 'موقف سيارات', 'جراج', 'مرآب',
+          'عداد كهرباء', 'عداد مياه', 'عداد غاز',
+          'غاز طبيعي', 'غاز طبيعى', 'تليفون أرضي', 'تليفون أرضى', 'خط تليفون',
+          'أساسير', 'أسانسير', 'مصعد', 'حمام سباحة', 'مسبح',
+          'نادي رياضي', 'جيم', 'مناطق أطفال', 'منطقة لعب',
+          'كاميرات مراقبة', 'مراقبة',
+          'إنترنت', 'مفروش', 'مكيف',
+          'إطلالة بحرية', 'إطلالة على الحديقة',
+          'يسمح بالحيوانات الأليفة',
+        ];
+        // Scan the FULL page text — Dubizzle renders amenity badges all over
+        // the detail page, not only in a single labeled section.
+        for (var ami = 0; ami < DUBIZZLE_AMENITIES.length; ami++) {
+          var amFeat = DUBIZZLE_AMENITIES[ami];
+          if (plainText.indexOf(amFeat) >= 0 && result.amenities.indexOf(amFeat) < 0) {
+            result.amenities.push(amFeat);
           }
         }
+        // Drop "shorter substrings" of already-matched longer features.
+        // Example: if we matched "حديقة خاصة" we don't ALSO want bare "حديقة"
+        // since that's the same feature with less specificity.
+        var deduped = [];
+        for (var ddi = 0; ddi < result.amenities.length; ddi++) {
+          var thisAm = result.amenities[ddi];
+          var isSubstringOfOther = false;
+          for (var ddj = 0; ddj < result.amenities.length; ddj++) {
+            if (ddi === ddj) continue;
+            if (result.amenities[ddj].length > thisAm.length
+                && result.amenities[ddj].indexOf(thisAm) >= 0) {
+              isSubstringOfOther = true;
+              break;
+            }
+          }
+          if (!isSubstringOfOther) deduped.push(thisAm);
+        }
+        result.amenities = deduped;
       }
 
       // Extract "الإعلانات النشطة" (active ads count) and "عضو منذ" (member-since year)
