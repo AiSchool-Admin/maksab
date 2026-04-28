@@ -2226,6 +2226,78 @@
         result.amenities = deduped;
       }
 
+      // ═══ Description-driven extraction for fields Dubizzle doesn't store
+      //     in structured data ═══
+      // Empirical finding from real listings: Dubizzle's parameters array
+      // rarely includes finishing / floor / built_year for property ads.
+      // Sellers write these in free-text description bullets:
+      //   "• الدور مرتفع وليس الاخير"
+      //   "• مباني 2008"
+      //   "• تشطيب كامل"
+      // We pull them out with conservative regexes — only assign when the
+      // value is unambiguous and not already populated. All wrapped in
+      // try/catch so a regex backtrack issue can't kill the whole parse.
+      try {
+        var descSrc = result.description || '';
+        // Combine description with plainText body so we catch values that
+        // appear as standalone bullets in the rendered page but not in
+        // ad.description. Keep description first (cleaner Arabic).
+        var descScan = (descSrc + '\n' + plainText).substring(0, 8000);
+
+        // Floor — accept numeric or descriptive ("مرتفع", "الأول", "الأخير").
+        if (!result.specs['الطابق'] && !result.specs['الدور']
+            && !result.specs['رقم الدور']) {
+          var floorRe = /(?:^|[\s•·\-،,])الدور\s+([^\n،,.•·\-]{1,25})/;
+          var floorMatch = descScan.match(floorRe);
+          if (floorMatch && floorMatch[1]) {
+            var floorVal = floorMatch[1].trim()
+              .replace(/\s+/g, ' ')
+              .replace(/^(?::|\-|—)\s*/, '');
+            if (floorVal && floorVal.length >= 1 && floorVal.length <= 25
+                && !/^(هو|هي|في|من|إلى)$/.test(floorVal)) {
+              result.specs['الدور'] = floorVal;
+            }
+          }
+        }
+
+        // Finishing — match the canonical finishing phrases. Order matters:
+        // longer/more specific patterns first so "سوبر لوكس" beats "لوكس".
+        if (!result.specs['التشطيب'] && !result.specs['نوع التشطيب']) {
+          var finishingPats = [
+            /(اكسترا\s+سوبر\s+لوكس)/, /(إكسترا\s+سوبر\s+لوكس)/,
+            /(سوبر\s+لوكس)/,
+            /(نص(?:ف)?\s+تشطيب)/,
+            /(على\s+(?:ال)?محارة)/, /(على\s+(?:ال)?طوب)/,
+            /(تشطيب\s+(?:كامل|نهائي|ديلوكس|حديث|مودرن|راقي))/,
+            /(?:^|[\s•·])((?:تشطيب|التشطيب)\s*[:\-]?\s*(?:سوبر\s+لوكس|لوكس|كامل|ديلوكس|نص(?:ف)?))/,
+          ];
+          for (var fpi = 0; fpi < finishingPats.length; fpi++) {
+            var fmatch = descScan.match(finishingPats[fpi]);
+            if (fmatch && fmatch[1]) {
+              result.specs['التشطيب'] = fmatch[1].trim().replace(/\s+/g, ' ');
+              break;
+            }
+          }
+        }
+
+        // Built year — "مباني 2008", "بناء 2010", "سنة البناء 2015".
+        // Reject the current year to avoid catching ad-posting dates.
+        if (!result.specs['تاريخ البناء'] && !result.specs['سنة البناء']
+            && !result.specs['العمر']) {
+          var yearRe = /(?:مباني|بناء|سنة\s+(?:ال)?بناء|تاريخ\s+(?:ال)?بناء|سنة\s+الإنشاء)\s*[:\-]?\s*(\d{4})/;
+          var yearMatch = descScan.match(yearRe);
+          if (yearMatch && yearMatch[1]) {
+            var year = parseInt(yearMatch[1], 10);
+            var nowY = new Date().getFullYear();
+            // Require sane range. Allow up to next year (off-plan delivery
+            // language sometimes appears in property descriptions).
+            if (year >= 1900 && year <= nowY + 1) {
+              result.specs['سنة البناء'] = String(year);
+            }
+          }
+        }
+      } catch (descExtractErr) { /* ignore — best-effort extraction */ }
+
       // Extract "الإعلانات النشطة" (active ads count) and "عضو منذ" (member-since year)
       // from the seller card. These tell us whether the seller is a professional
       // broker (10+ active ads = definitely a company even when the name doesn't
