@@ -134,16 +134,24 @@ export default function AlexandriaDashboard() {
         </Link>
 
         {/* بائعو العقارات */}
-        <Link href="/admin/crm/sellers?category=properties" className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-2xl">🏠</span>
-            <span className="text-xs font-bold text-gray-400">بائعو العقارات</span>
-          </div>
-          <p className="text-3xl font-bold text-dark">{data.alexPropertiesSellers.toLocaleString()}</p>
-          <p className="text-xs text-purple-600 font-medium mt-1">
-            {data.alexPropertiesWithPhone.toLocaleString()} بأرقام 📱
-          </p>
-        </Link>
+        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+          <Link href="/admin/crm/sellers?category=properties" className="block">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-2xl">🏠</span>
+              <span className="text-xs font-bold text-gray-400">بائعو العقارات</span>
+            </div>
+            <p className="text-3xl font-bold text-dark">{data.alexPropertiesSellers.toLocaleString()}</p>
+            <p className="text-xs text-purple-600 font-medium mt-1">
+              {data.alexPropertiesWithPhone.toLocaleString()} بأرقام 📱
+            </p>
+          </Link>
+          <Link
+            href="/admin/crm/whales?category=properties"
+            className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-[#1B7A3D] hover:text-[#145C2E]"
+          >
+            🐋 الحيتان (Pareto 80/20) ←
+          </Link>
+        </div>
 
         {/* رسائل وليد */}
         <Link href="/admin/sales/outreach?tab=waleed" className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
