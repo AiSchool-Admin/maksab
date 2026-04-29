@@ -561,7 +561,10 @@ export async function POST(req: NextRequest) {
                 // Canonical: company bucket covers broker + agent + developer + company + office
                 is_business: listing.isBusiness || normalizeSellerType(listing.specs?.["طبيعة المعلن"] || listing.sellerBadge) === "company",
                 detected_account_type: mapSellerType(listing.specs?.["طبيعة المعلن"] || listing.sellerBadge),
-                primary_category: null,
+                // Carry the listing's maksab_category (Arabic: "عقارات"/"سيارات")
+                // through to the seller record so /admin/crm/whales and tier
+                // filtering work without an extra backfill step.
+                primary_category: body.meta?.maksab_category || null,
                 primary_governorate: location.governorate || null,
                 total_listings_seen: 1,
                 priority_score: phone ? 25 : 0,

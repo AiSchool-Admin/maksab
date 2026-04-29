@@ -61,13 +61,83 @@ export async function GET(request: NextRequest) {
       parseInt(searchParams.get("minListings") || "1", 10)
     );
 
+    // Accept both Arabic (the value the bookmarklet actually sends) and
+    // the canonical English. Sellers harvested before the receive-endpoint
+    // fix have NULL primary_category — we self-heal those below.
+    const categoryValues =
+      category === "properties"
+        ? ["properties", "عقارات"]
+        : category === "vehicles"
+        ? ["vehicles", "سيارات", "cars", "مركبات"]
+        : [category];
+
+    // Self-heal: backfill primary_category on any sellers that have NULL but
+    // whose linked listings reveal the category. Safe to run on every load —
+    // it only updates rows whose primary_category is NULL.
+    try {
+      const { data: orphans } = await sb
+        .from("ahe_sellers")
+        .select("id")
+        .is("primary_category", null)
+        .in("primary_governorate", governorates)
+        .limit(500);
+
+      if (orphans && orphans.length > 0) {
+        const orphanIds = (orphans as Array<{ id: string }>).map((o) => o.id);
+        // Pull majority maksab_category for each orphan from ahe_listings
+        const { data: catRows } = await sb
+          .from("ahe_listings")
+          .select("ahe_seller_id, maksab_category")
+          .in("ahe_seller_id", orphanIds)
+          .not("maksab_category", "is", null);
+
+        if (catRows && catRows.length > 0) {
+          // Compute majority category per seller
+          const tally: Record<string, Record<string, number>> = {};
+          for (const r of catRows) {
+            const sid = r.ahe_seller_id as string;
+            const c = r.maksab_category as string;
+            tally[sid] = tally[sid] || {};
+            tally[sid][c] = (tally[sid][c] || 0) + 1;
+          }
+          // Group sellers by chosen category, then bulk-update
+          const grouped: Record<string, string[]> = {};
+          for (const [sid, counts] of Object.entries(tally)) {
+            let best: string | null = null;
+            let bestN = 0;
+            for (const [c, n] of Object.entries(counts)) {
+              if (n > bestN) {
+                best = c;
+                bestN = n;
+              }
+            }
+            if (best) {
+              grouped[best] = grouped[best] || [];
+              grouped[best].push(sid);
+            }
+          }
+          for (const [cat, ids] of Object.entries(grouped)) {
+            await sb
+              .from("ahe_sellers")
+              .update({ primary_category: cat, updated_at: new Date().toISOString() })
+              .in("id", ids)
+              .is("primary_category", null);
+          }
+        }
+      }
+    } catch (healErr) {
+      console.warn("[whales] backfill skipped:", healErr);
+      // Don't fail the request — the main query still works for sellers
+      // whose primary_category is already set.
+    }
+
     // Fetch ALL sellers matching the filters (no pagination — Pareto needs the full set)
     let query = sb
       .from("ahe_sellers")
       .select(
         "id, name, phone, source_platform, total_listings_seen, active_listings, seller_tier, whale_score, pipeline_status, primary_category, primary_governorate, last_outreach_at, outreach_count, created_at"
       )
-      .eq("primary_category", category)
+      .in("primary_category", categoryValues)
       .in("primary_governorate", governorates)
       .gte("total_listings_seen", minListings);
 
