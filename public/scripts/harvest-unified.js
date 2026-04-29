@@ -722,6 +722,8 @@
     var page = 1;
     var emptyStreak = 0;
     var archiveReached = false;
+    var allSeenStreak = 0; // consecutive pages where ≥90% URLs were already seen
+    var totalSkippedPrevSeen = 0; // for UI feedback
 
     function next() {
       var limitReached = MAX_ITEMS > 0 && allItems.length >= MAX_ITEMS;
@@ -739,7 +741,9 @@
       renderProgress(ui, '🔍 <b>' + platform.displayName + '</b> — صفحة ' + page
         + '<br>وُجد حتى الآن: <b>' + allItems.length + '</b>'
         + (MAX_ITEMS > 0 ? ' / ' + MAX_ITEMS + ' (وضع اختبار)' : '')
-        + (prevCount > 0 ? '<br><span style="opacity:0.7;font-size:11px;">(جلسات سابقة: ' + prevCount + ')</span>' : ''));
+        + (prevCount > 0 ? '<br><span style="opacity:0.7;font-size:11px;">(جلسات سابقة: ' + prevCount
+            + (totalSkippedPrevSeen > 0 ? ' • تم تخطي ' + totalSkippedPrevSeen + ' محصود سابقاً' : '')
+            + ')</span>' : ''));
 
       var url = platform.buildPageUrl(ctx, page);
 
@@ -758,7 +762,7 @@
       }
       pagePromise.then(function(res) {
         var items = platform.parseList(res.html, res.doc, ctx) || [];
-        var fresh = 0, stale = 0, newOnPage = 0;
+        var fresh = 0, stale = 0, newOnPage = 0, alreadySeen = 0;
 
         for (var i = 0; i < items.length; i++) {
           // Respect test-mode cap
@@ -767,13 +771,39 @@
           var age = parseAgeDays(it.dateText);
           if (age !== null && age > MAX_AGE_DAYS) { stale++; continue; }
           fresh++;
+          // Skip URLs we've already harvested in a previous session — saves
+          // both sending bandwidth AND lets us early-exit when a whole page
+          // is full of already-harvested items (sites order newest-first, so
+          // hitting an all-seen page means everything beyond is also seen).
+          if (prevSeenUrls[it.url]) {
+            alreadySeen++;
+            totalSkippedPrevSeen++;
+            continue;
+          }
           // Only filter intra-run duplicates (same URL appears on 2 list pages).
-          // Cross-run filtering is the SERVER's job (source_listing_url match).
           if (!seenInThisRun[it.url]) {
             seenInThisRun[it.url] = 1;
             allItems.push(it);
             newOnPage++;
           }
+        }
+
+        // ═══ Early-exit when the page is mostly already-seen URLs ═══
+        // Site lists are sorted newest-first, so once we hit a page where
+        // ≥90% of items are already in our store, everything beyond is
+        // even older and definitely already seen. We require 2 such
+        // consecutive pages to absorb the case where a few new ads were
+        // bumped/featured higher than older fresh ads.
+        var totalProcessable = fresh; // fresh = within 30-day window
+        if (totalProcessable >= 5 && alreadySeen / totalProcessable >= 0.9) {
+          allSeenStreak++;
+          if (allSeenStreak >= 2) {
+            archiveReached = true;
+            console.info('[maksab] early-exit on page', page,
+              '— 2 consecutive pages with ≥90% already-seen URLs');
+          }
+        } else {
+          allSeenStreak = 0;
         }
 
         // More than half are archive-age → stop walking further
