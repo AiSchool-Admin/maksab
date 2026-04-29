@@ -1,17 +1,30 @@
 /**
- * GET /api/admin/crm/whales — Pareto analysis of sellers
+ * GET /api/admin/crm/whales — Pareto analysis grouped by MERCHANT
  *
- * Returns top sellers ranked by total_listings_seen with cumulative
- * percentage data, plus aggregate breakpoints (top 10/20/30/50%) so
- * the UI can show "Top N% of sellers own X% of listings".
+ * Groups multi-phone brokerages (e.g. "Remax Avalon" with one phone per
+ * agent) into single merchant rows so the whales table doesn't show the
+ * same brokerage three times.
  *
- * The "whales" framing prioritizes the 80/20 rule for outreach: focus
- * the personal-touch acquisition effort on the small set of sellers
- * holding the bulk of inventory.
+ * Grouping uses the persisted `merchant_key` column on ahe_sellers,
+ * computed at insert time by the receive endpoint. For sellers that
+ * predate the column being added, this endpoint self-heals on first
+ * load (computes and writes merchant_key for any NULL rows).
+ *
+ * Returns ranked merchants with cumulative percentage data, plus
+ * aggregate breakpoints (top 10/20/30/50%) so the UI can show
+ * "Top N% of merchants own X% of listings".
+ *
+ * PATCH: update pipeline_status (to all sellers in a merchant) or
+ * override admin_phone for a merchant.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  groupSellersIntoMerchants,
+  computeMerchantKey,
+  type SellerLike,
+} from "@/lib/crm/merchant";
 
 function getSupabase() {
   return createClient(
@@ -23,29 +36,6 @@ function getSupabase() {
   );
 }
 
-interface Seller {
-  id: string;
-  name: string | null;
-  phone: string | null;
-  source_platform: string | null;
-  total_listings_seen: number;
-  active_listings: number | null;
-  seller_tier: string | null;
-  whale_score: number;
-  pipeline_status: string | null;
-  primary_category: string | null;
-  primary_governorate: string | null;
-  last_outreach_at: string | null;
-  outreach_count: number | null;
-  created_at: string;
-}
-
-interface RankedSeller extends Seller {
-  rank: number;
-  individual_pct: number;
-  cumulative_pct: number;
-}
-
 export async function GET(request: NextRequest) {
   try {
     const sb = getSupabase();
@@ -55,15 +45,12 @@ export async function GET(request: NextRequest) {
     const governorates = (
       searchParams.get("governorates") || "الإسكندرية,alexandria,الاسكندرية"
     ).split(",");
-    const phoneOnly = searchParams.get("phoneOnly") !== "false"; // default true for outreach
+    const phoneOnly = searchParams.get("phoneOnly") !== "false";
     const minListings = Math.max(
       1,
       parseInt(searchParams.get("minListings") || "1", 10)
     );
 
-    // Accept both Arabic (the value the bookmarklet actually sends) and
-    // the canonical English. Sellers harvested before the receive-endpoint
-    // fix have NULL primary_category — we self-heal those below.
     const categoryValues =
       category === "properties"
         ? ["properties", "عقارات"]
@@ -71,9 +58,8 @@ export async function GET(request: NextRequest) {
         ? ["vehicles", "سيارات", "cars", "مركبات"]
         : [category];
 
-    // Self-heal: backfill primary_category on any sellers that have NULL but
-    // whose linked listings reveal the category. Safe to run on every load —
-    // it only updates rows whose primary_category is NULL.
+    // Self-heal NULL primary_category (one-time fix for sellers harvested
+    // before the receive-endpoint started carrying maksab_category through).
     try {
       const { data: orphans } = await sb
         .from("ahe_sellers")
@@ -84,7 +70,6 @@ export async function GET(request: NextRequest) {
 
       if (orphans && orphans.length > 0) {
         const orphanIds = (orphans as Array<{ id: string }>).map((o) => o.id);
-        // Pull majority maksab_category for each orphan from ahe_listings
         const { data: catRows } = await sb
           .from("ahe_listings")
           .select("ahe_seller_id, maksab_category")
@@ -92,15 +77,15 @@ export async function GET(request: NextRequest) {
           .not("maksab_category", "is", null);
 
         if (catRows && catRows.length > 0) {
-          // Compute majority category per seller
           const tally: Record<string, Record<string, number>> = {};
-          for (const r of catRows) {
-            const sid = r.ahe_seller_id as string;
-            const c = r.maksab_category as string;
-            tally[sid] = tally[sid] || {};
-            tally[sid][c] = (tally[sid][c] || 0) + 1;
+          for (const r of catRows as Array<{
+            ahe_seller_id: string;
+            maksab_category: string;
+          }>) {
+            tally[r.ahe_seller_id] = tally[r.ahe_seller_id] || {};
+            tally[r.ahe_seller_id][r.maksab_category] =
+              (tally[r.ahe_seller_id][r.maksab_category] || 0) + 1;
           }
-          // Group sellers by chosen category, then bulk-update
           const grouped: Record<string, string[]> = {};
           for (const [sid, counts] of Object.entries(tally)) {
             let best: string | null = null;
@@ -119,7 +104,10 @@ export async function GET(request: NextRequest) {
           for (const [cat, ids] of Object.entries(grouped)) {
             await sb
               .from("ahe_sellers")
-              .update({ primary_category: cat, updated_at: new Date().toISOString() })
+              .update({
+                primary_category: cat,
+                updated_at: new Date().toISOString(),
+              })
               .in("id", ids)
               .is("primary_category", null);
           }
@@ -127,15 +115,55 @@ export async function GET(request: NextRequest) {
       }
     } catch (healErr) {
       console.warn("[whales] backfill skipped:", healErr);
-      // Don't fail the request — the main query still works for sellers
-      // whose primary_category is already set.
     }
 
-    // Fetch ALL sellers matching the filters (no pagination — Pareto needs the full set)
+    // Self-heal merchant_key for sellers that predate the column being
+    // populated. Computes the same key the receive endpoint writes for
+    // new sellers. Idempotent — only updates rows where merchant_key is
+    // NULL, so safe to run on every load.
+    try {
+      const { data: keyOrphans } = await sb
+        .from("ahe_sellers")
+        .select("id, name, primary_governorate, source_platform")
+        .is("merchant_key", null)
+        .in("primary_category", categoryValues)
+        .in("primary_governorate", governorates)
+        .not("name", "is", null)
+        .limit(500);
+
+      if (keyOrphans && keyOrphans.length > 0) {
+        for (const o of keyOrphans as Array<{
+          id: string;
+          name: string | null;
+          primary_governorate: string | null;
+          source_platform: string | null;
+        }>) {
+          const key = computeMerchantKey(
+            o.name,
+            o.primary_governorate,
+            o.source_platform
+          );
+          if (key) {
+            await sb
+              .from("ahe_sellers")
+              .update({
+                merchant_key: key,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", o.id)
+              .is("merchant_key", null);
+          }
+        }
+      }
+    } catch (mkErr) {
+      console.warn("[whales] merchant_key backfill skipped:", mkErr);
+    }
+
+    // Fetch all matching sellers (no pagination — Pareto needs the full set)
     let query = sb
       .from("ahe_sellers")
       .select(
-        "id, name, phone, source_platform, total_listings_seen, active_listings, seller_tier, whale_score, pipeline_status, primary_category, primary_governorate, last_outreach_at, outreach_count, created_at"
+        "id, name, phone, source_platform, total_listings_seen, active_listings, seller_tier, whale_score, pipeline_status, primary_category, primary_governorate, last_outreach_at, outreach_count, created_at, merchant_admin_phone"
       )
       .in("primary_category", categoryValues)
       .in("primary_governorate", governorates)
@@ -143,103 +171,107 @@ export async function GET(request: NextRequest) {
 
     if (phoneOnly) query = query.not("phone", "is", null);
 
-    query = query.order("total_listings_seen", { ascending: false }).limit(1000);
+    query = query
+      .order("total_listings_seen", { ascending: false })
+      .limit(2000);
 
     const { data, error } = await query;
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const sellers = (data || []) as Seller[];
-    const totalSellers = sellers.length;
-    const totalListings = sellers.reduce(
-      (sum, s) => sum + (s.total_listings_seen || 0),
+    const sellers = (data || []) as SellerLike[];
+
+    // Group multi-phone brokerages into single merchant rows
+    const merchants = groupSellersIntoMerchants(sellers);
+
+    const totalMerchants = merchants.length;
+    const totalListings = merchants.reduce(
+      (sum, m) => sum + m.total_listings,
       0
     );
 
-    // Rank + cumulative percentage
+    // Rank + cumulative percentage on MERCHANTS
     let cumulative = 0;
-    const ranked: RankedSeller[] = sellers.map((s, i) => {
-      const listings = s.total_listings_seen || 0;
-      cumulative += listings;
+    const ranked = merchants.map((m, i) => {
+      cumulative += m.total_listings;
       const cumPct = totalListings > 0 ? (cumulative / totalListings) * 100 : 0;
-      const indPct = totalListings > 0 ? (listings / totalListings) * 100 : 0;
+      const indPct =
+        totalListings > 0 ? (m.total_listings / totalListings) * 100 : 0;
       return {
-        ...s,
+        ...m,
         rank: i + 1,
         individual_pct: Math.round(indPct * 100) / 100,
         cumulative_pct: Math.round(cumPct * 100) / 100,
       };
     });
 
-    // Pareto breakpoints: at each percentile of SELLERS, what % of LISTINGS do they hold?
-    // Classic 80/20 framing: "Top 20% of sellers own X% of listings."
-    const breakpoints = [10, 20, 30, 50, 80].map((sellerPct) => {
-      const cutoff = Math.max(1, Math.ceil((sellerPct / 100) * totalSellers));
+    // Pareto breakpoints
+    const breakpoints = [10, 20, 30, 50, 80].map((merchantPct) => {
+      const cutoff = Math.max(
+        1,
+        Math.ceil((merchantPct / 100) * totalMerchants)
+      );
       const sliceListings = ranked
         .slice(0, cutoff)
-        .reduce((sum, s) => sum + s.total_listings_seen, 0);
+        .reduce((sum, r) => sum + r.total_listings, 0);
       const share =
         totalListings > 0 ? (sliceListings / totalListings) * 100 : 0;
       return {
-        seller_percentile: sellerPct,
-        seller_count: cutoff,
+        merchant_percentile: merchantPct,
+        merchant_count: cutoff,
         listings_count: sliceListings,
         listings_share: Math.round(share * 100) / 100,
       };
     });
 
-    // The actual 80/20 cutoff: how many sellers does it take to reach 80% of listings?
-    let pareto80Count = totalSellers;
+    // 80/20 cutoff: how many merchants does it take to reach 80% of listings?
+    let pareto80Count = totalMerchants;
     let pareto80Listings = totalListings;
     for (let i = 0; i < ranked.length; i++) {
       if (ranked[i].cumulative_pct >= 80) {
         pareto80Count = i + 1;
         pareto80Listings = ranked
           .slice(0, i + 1)
-          .reduce((sum, s) => sum + s.total_listings_seen, 0);
+          .reduce((sum, r) => sum + r.total_listings, 0);
         break;
       }
     }
 
-    // Outreach progress on whales (top 20%) — how many we've actually reached out to
-    const top20Cutoff = Math.max(1, Math.ceil(totalSellers * 0.2));
+    // Outreach progress on whales (top 20%)
+    const top20Cutoff = Math.max(1, Math.ceil(totalMerchants * 0.2));
     const top20 = ranked.slice(0, top20Cutoff);
     const contactedCount = top20.filter(
-      (s) =>
-        s.pipeline_status === "contacted" ||
-        s.pipeline_status === "interested" ||
-        s.pipeline_status === "registered"
+      (m) =>
+        m.pipeline_status === "contacted" ||
+        m.pipeline_status === "interested" ||
+        m.pipeline_status === "registered"
     ).length;
     const consentedCount = top20.filter(
-      (s) => s.pipeline_status === "registered"
+      (m) => m.pipeline_status === "registered"
     ).length;
 
     return NextResponse.json({
       summary: {
-        total_sellers: totalSellers,
+        total_merchants: totalMerchants,
+        total_sellers: sellers.length,
         total_listings: totalListings,
-        // 80/20 rule: how concentrated is supply?
-        pareto_80_seller_count: pareto80Count,
-        pareto_80_seller_share:
-          totalSellers > 0
-            ? Math.round((pareto80Count / totalSellers) * 10000) / 100
+        pareto_80_merchant_count: pareto80Count,
+        pareto_80_merchant_share:
+          totalMerchants > 0
+            ? Math.round((pareto80Count / totalMerchants) * 10000) / 100
             : 0,
         pareto_80_listings: pareto80Listings,
-        // Top 20% specifically (the whales we'll work)
-        top_20pct_seller_count: top20Cutoff,
-        top_20pct_listings: top20.reduce(
-          (sum, s) => sum + s.total_listings_seen,
-          0
-        ),
+        top_20pct_merchant_count: top20Cutoff,
+        top_20pct_listings: top20.reduce((sum, m) => sum + m.total_listings, 0),
         top_20pct_listings_share:
-          breakpoints.find((b) => b.seller_percentile === 20)?.listings_share ||
-          0,
+          breakpoints.find((b) => b.merchant_percentile === 20)
+            ?.listings_share || 0,
         top_20pct_contacted: contactedCount,
         top_20pct_consented: consentedCount,
       },
       breakpoints,
-      whales: ranked,
+      merchants: ranked,
     });
   } catch (err) {
     return NextResponse.json(
@@ -250,18 +282,22 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PATCH /api/admin/crm/whales — update pipeline_status / notes for a seller
+ * PATCH /api/admin/crm/whales
  *
- * Lightweight write endpoint so the whales page can mark a seller as
- * "contacted" / "interested" / "rejected" inline without leaving the page.
+ * Two operations:
+ *   1. Update pipeline_status — applied to ALL sellers in the merchant
+ *      (passed as seller_ids[] from the UI's expanded merchant row)
+ *   2. Override admin_phone — applied to all sellers in the merchant by
+ *      writing the same merchant_admin_phone value
  */
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { seller_id, pipeline_status, notes } = body || {};
-    if (!seller_id) {
+    const { seller_ids, pipeline_status, admin_phone } = body || {};
+
+    if (!Array.isArray(seller_ids) || seller_ids.length === 0) {
       return NextResponse.json(
-        { error: "seller_id required" },
+        { error: "seller_ids[] required" },
         { status: 400 }
       );
     }
@@ -282,21 +318,29 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const update: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
     if (pipeline_status) {
       update.pipeline_status = pipeline_status;
-      // Also bump outreach metadata when transitioning to "contacted"
       if (pipeline_status === "contacted") {
         update.last_outreach_at = new Date().toISOString();
       }
     }
-    if (typeof notes === "string") update.notes = notes;
+    if (admin_phone !== undefined) {
+      update.merchant_admin_phone = admin_phone || null;
+    }
+
+    if (Object.keys(update).length === 1) {
+      // only updated_at — nothing meaningful to do
+      return NextResponse.json({ ok: true, no_op: true });
+    }
 
     const sb = getSupabase();
     const { error } = await sb
       .from("ahe_sellers")
       .update(update)
-      .eq("id", seller_id);
+      .in("id", seller_ids);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

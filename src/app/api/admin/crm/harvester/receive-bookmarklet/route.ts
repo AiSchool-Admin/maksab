@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { extractPhone, normalizeEgyptianPhone } from "@/lib/crm/harvester/parsers/phone-extractor";
 import { normalizeListingData, normalizeSellerType } from "@/lib/marketplace/normalize";
 import { SELLER_TYPE_LABELS } from "@/lib/marketplace/schema";
+import { computeMerchantKey } from "@/lib/crm/merchant";
 
 /**
  * Legacy mapper from raw "طبيعة المعلن" text to the ahe_sellers enum.
@@ -539,15 +540,30 @@ export async function POST(req: NextRequest) {
                 .maybeSingle()
             : { data: null };
 
+          // Compute the brokerage identity key (used by the whales page to
+          // group multi-phone brokerages like "Remax Avalon" into one row).
+          const merchantKey = computeMerchantKey(
+            listing.sellerName,
+            location.governorate,
+            sourcePlatform
+          );
+
           if (existingSeller) {
             sellerId = existingSeller.id;
-            // Backfill name on existing seller if we have one now and they don't
-            if (listing.sellerName) {
+            // Backfill name + merchant_key on existing seller. We update
+            // merchant_key whenever we get a better signal (e.g. older row
+            // had a generic name; newer harvest has the full brokerage
+            // name) — but never overwrite a non-null key with null.
+            const updateFields: Record<string, unknown> = {
+              updated_at: new Date().toISOString(),
+            };
+            if (listing.sellerName) updateFields.name = listing.sellerName;
+            if (merchantKey) updateFields.merchant_key = merchantKey;
+            if (Object.keys(updateFields).length > 1) {
               await supabase
                 .from("ahe_sellers")
-                .update({ name: listing.sellerName, updated_at: new Date().toISOString() })
-                .eq("id", existingSeller.id)
-                .is("name", null);
+                .update(updateFields)
+                .eq("id", existingSeller.id);
             }
           } else {
             const { data: newSeller } = await supabase
@@ -566,6 +582,7 @@ export async function POST(req: NextRequest) {
                 // filtering work without an extra backfill step.
                 primary_category: body.meta?.maksab_category || null,
                 primary_governorate: location.governorate || null,
+                merchant_key: merchantKey,
                 total_listings_seen: 1,
                 priority_score: phone ? 25 : 0,
                 pipeline_status: phone ? "phone_found" : "discovered",
