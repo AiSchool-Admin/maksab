@@ -342,6 +342,39 @@ export async function PATCH(request: NextRequest) {
       .update(update)
       .in("id", seller_ids);
 
+    // Activity log: record the action in outreach_logs so it shows in
+    // the merchant's timeline. Best-effort — don't fail the request if
+    // the log insert errors. We attach the log to the first seller_id
+    // (canonical merchant record), matching the notes pattern.
+    if (!error) {
+      try {
+        const events: Array<{
+          seller_id: string;
+          action: string;
+          notes: string | null;
+        }> = [];
+        if (pipeline_status) {
+          events.push({
+            seller_id: seller_ids[0],
+            action: `status:${pipeline_status}`,
+            notes: null,
+          });
+        }
+        if (admin_phone !== undefined) {
+          events.push({
+            seller_id: seller_ids[0],
+            action: admin_phone ? "admin_phone:set" : "admin_phone:cleared",
+            notes: admin_phone || null,
+          });
+        }
+        if (events.length > 0) {
+          await sb.from("outreach_logs").insert(events);
+        }
+      } catch (logErr) {
+        console.warn("[whales] activity log insert skipped:", logErr);
+      }
+    }
+
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

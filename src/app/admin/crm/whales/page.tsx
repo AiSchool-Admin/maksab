@@ -30,6 +30,9 @@ import {
   XCircle,
   Mail,
   Crown,
+  StickyNote,
+  Send,
+  Clock,
 } from "lucide-react";
 
 interface MerchantPhone {
@@ -143,6 +146,89 @@ export default function WhalesPage() {
     url: string;
     phone: string;
   } | null>(null);
+
+  // Notes / Activity timeline modal — opened per merchant.
+  interface ActivityNote {
+    id: string;
+    seller_id: string;
+    agent_name: string;
+    note_text: string;
+    is_pinned: boolean;
+    created_at: string;
+  }
+  interface ActivityEvent {
+    id: string;
+    seller_id: string;
+    action: string;
+    notes: string | null;
+    created_at: string;
+  }
+  const [notesOpen, setNotesOpen] = useState<Merchant | null>(null);
+  const [notesData, setNotesData] = useState<{
+    notes: ActivityNote[];
+    activities: ActivityEvent[];
+  } | null>(null);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesLoading, setNotesLoading] = useState(false);
+
+  const openNotesModal = useCallback(async (m: Merchant) => {
+    setNotesOpen(m);
+    setNotesData(null);
+    setNotesDraft("");
+    setNotesLoading(true);
+    try {
+      const headers = getAdminHeaders();
+      const params = new URLSearchParams({ seller_ids: m.seller_ids.join(",") });
+      const res = await fetch(`/api/admin/crm/whales/activity?${params}`, {
+        headers,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setNotesData({
+          notes: json.notes || [],
+          activities: json.activities || [],
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load notes:", err);
+    }
+    setNotesLoading(false);
+  }, []);
+
+  const saveNote = useCallback(async () => {
+    if (!notesOpen || !notesDraft.trim()) return;
+    setNotesSaving(true);
+    try {
+      const headers = {
+        ...getAdminHeaders(),
+        "Content-Type": "application/json",
+      };
+      const res = await fetch("/api/admin/crm/whales/activity", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          seller_ids: notesOpen.seller_ids,
+          note_text: notesDraft.trim(),
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setNotesData((prev) =>
+          prev
+            ? { ...prev, notes: [json.note, ...prev.notes] }
+            : { notes: [json.note], activities: [] }
+        );
+        setNotesDraft("");
+      } else {
+        const json = await res.json();
+        alert(json.error || "فشل في الحفظ");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setNotesSaving(false);
+  }, [notesOpen, notesDraft]);
 
   const fetchMerchants = useCallback(async () => {
     setLoading(true);
@@ -439,7 +525,8 @@ export default function WhalesPage() {
                   📊 توزيع التركّز (Pareto Breakpoints)
                 </h2>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
                 <thead className="bg-gray-50 text-gray-600">
                   <tr>
                     <th className="text-right px-5 py-2 font-medium">
@@ -480,10 +567,11 @@ export default function WhalesPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
 
             {/* Filter buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {(
                 [
                   {
@@ -516,7 +604,8 @@ export default function WhalesPage() {
 
             {/* Merchants Table */}
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
                 <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
                   <tr>
                     <th className="text-right px-3 py-3 font-medium w-8"></th>
@@ -527,10 +616,10 @@ export default function WhalesPage() {
                     <th className="text-right px-3 py-3 font-medium">
                       موبايل الأدمن
                     </th>
-                    <th className="text-right px-3 py-3 font-medium">المنصة</th>
+                    <th className="text-right px-3 py-3 font-medium hidden lg:table-cell">المنصة</th>
                     <th className="text-right px-3 py-3 font-medium">إعلانات</th>
-                    <th className="text-right px-3 py-3 font-medium">أرقام</th>
-                    <th className="text-right px-3 py-3 font-medium">% تجميعي</th>
+                    <th className="text-right px-3 py-3 font-medium hidden md:table-cell">أرقام</th>
+                    <th className="text-right px-3 py-3 font-medium hidden lg:table-cell">% تجميعي</th>
                     <th className="text-right px-3 py-3 font-medium">الحالة</th>
                     <th className="text-right px-3 py-3 font-medium">إجراءات</th>
                   </tr>
@@ -600,7 +689,7 @@ export default function WhalesPage() {
                               <span className="text-gray-400">—</span>
                             )}
                           </td>
-                          <td className="px-3 py-3 text-xs text-gray-600">
+                          <td className="px-3 py-3 text-xs text-gray-600 hidden lg:table-cell">
                             {PLATFORM_LABELS[m.source_platform || ""] ||
                               m.source_platform ||
                               "—"}
@@ -608,10 +697,10 @@ export default function WhalesPage() {
                           <td className="px-3 py-3 font-bold text-gray-900">
                             {m.total_listings}
                           </td>
-                          <td className="px-3 py-3 text-xs text-gray-600">
+                          <td className="px-3 py-3 text-xs text-gray-600 hidden md:table-cell">
                             {m.phones.length}
                           </td>
-                          <td className="px-3 py-3 text-xs">
+                          <td className="px-3 py-3 text-xs hidden lg:table-cell">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-gray-700 min-w-[3.5rem]">
                                 {m.cumulative_pct}%
@@ -675,6 +764,13 @@ export default function WhalesPage() {
                                 title="علّم: رفض"
                               >
                                 <XCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => openNotesModal(m)}
+                                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg"
+                                title="ملاحظات وسجل التواصل"
+                              >
+                                <StickyNote className="w-4 h-4" />
                               </button>
                             </div>
                           </td>
@@ -763,6 +859,7 @@ export default function WhalesPage() {
                   })}
                 </tbody>
               </table>
+              </div>
               {visibleMerchants.length === 0 && (
                 <div className="px-4 py-12 text-center text-gray-500">
                   لا يوجد شركات بهذا الفلتر
@@ -824,6 +921,168 @@ export default function WhalesPage() {
           </div>
         </div>
       )}
+
+      {/* Notes / Activity Modal */}
+      {notesOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          onClick={() => setNotesOpen(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  📝 {notesOpen.display_name}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {notesOpen.total_listings} إعلان · {notesOpen.phones.length}{" "}
+                  رقم
+                </p>
+              </div>
+              <button
+                onClick={() => setNotesOpen(null)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Compose */}
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+              <textarea
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                placeholder="اكتب ملاحظة عن المكالمة، النتيجة، أو التالي..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B7A3D]/20 focus:border-[#1B7A3D]"
+                rows={3}
+              />
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={saveNote}
+                  disabled={!notesDraft.trim() || notesSaving}
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-[#1B7A3D] text-white rounded-lg text-sm font-medium hover:bg-[#145C2E] disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {notesSaving ? "جاري الحفظ..." : "حفظ"}
+                </button>
+              </div>
+            </div>
+
+            {/* Timeline */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+              {notesLoading ? (
+                <div className="text-center text-gray-500 py-8 text-sm">
+                  جاري التحميل...
+                </div>
+              ) : !notesData ||
+                (notesData.notes.length === 0 &&
+                  notesData.activities.length === 0) ? (
+                <div className="text-center text-gray-500 py-8 text-sm">
+                  لا توجد ملاحظات أو سجل تواصل بعد
+                </div>
+              ) : (
+                <>
+                  {notesData.notes.map((n) => (
+                    <div
+                      key={"n:" + n.id}
+                      className="bg-yellow-50 border border-yellow-100 rounded-lg p-3"
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 mb-1">
+                        <span className="flex items-center gap-1">
+                          <StickyNote className="w-3 h-3" />
+                          {n.agent_name}
+                        </span>
+                        <span>{formatDate(n.created_at)}</span>
+                      </div>
+                      <div className="text-sm text-gray-800 whitespace-pre-wrap">
+                        {n.note_text}
+                      </div>
+                    </div>
+                  ))}
+                  {notesData.activities.map((a) => (
+                    <div
+                      key={"a:" + a.id}
+                      className="bg-gray-50 border border-gray-100 rounded-lg p-3"
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 mb-1">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {translateAction(a.action)}
+                        </span>
+                        <span>{formatDate(a.created_at)}</span>
+                      </div>
+                      {a.notes && (
+                        <div className="text-xs text-gray-600 font-mono">
+                          {a.notes}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/* ─── Helpers for the notes modal ─── */
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "الآن";
+    if (diffMin < 60) return `منذ ${diffMin} د`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `منذ ${diffH} س`;
+    const diffD = Math.floor(diffH / 24);
+    if (diffD < 7) return `منذ ${diffD} يوم`;
+    return d.toLocaleDateString("ar-EG", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function translateAction(action: string): string {
+  // outreach_logs.action values written by PATCH whales:
+  //   status:contacted / status:registered / status:rejected / ...
+  //   admin_phone:set / admin_phone:cleared
+  if (action === "admin_phone:set") return "تعيين رقم admin";
+  if (action === "admin_phone:cleared") return "إلغاء رقم admin";
+  if (action.startsWith("status:")) {
+    const s = action.slice("status:".length);
+    const map: Record<string, string> = {
+      discovered: "جديد",
+      phone_found: "رقم متاح",
+      contacted: "تم التواصل",
+      interested: "مهتم",
+      registered: "مسجّل",
+      rejected: "رفض",
+      not_reachable: "متعذر الوصول",
+    };
+    return `الحالة → ${map[s] || s}`;
+  }
+  // Legacy outreach actions from the broader CRM (sent / interested / etc.)
+  const legacy: Record<string, string> = {
+    sent: "رسالة مُرسَلة",
+    skipped: "تم التخطي",
+    interested: "أبدى اهتمامه",
+    considering: "يفكّر",
+    rejected: "رفض",
+  };
+  return legacy[action] || action;
 }
