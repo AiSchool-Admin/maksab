@@ -602,8 +602,234 @@ export default function WhalesPage() {
               ))}
             </div>
 
-            {/* Merchants Table */}
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            {/* Mobile/Tablet card layout (< lg) */}
+            <div className="lg:hidden space-y-3">
+              {visibleMerchants.map((m) => {
+                const stat =
+                  PIPELINE_LABELS[m.pipeline_status] ||
+                  PIPELINE_LABELS.discovered;
+                const isExpanded = !!expanded[m.merchant_key];
+                const hasMultiplePhones = m.phones.length > 1;
+                return (
+                  <div
+                    key={m.merchant_key}
+                    className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm"
+                  >
+                    {/* Top row: rank + name + status */}
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-xs text-gray-500 mb-0.5">
+                          <span className="font-bold text-gray-700">#{m.rank}</span>
+                          <span>·</span>
+                          <span>
+                            {PLATFORM_LABELS[m.source_platform || ""] ||
+                              m.source_platform ||
+                              "—"}
+                          </span>
+                        </div>
+                        <div className="font-bold text-gray-900 truncate">
+                          {m.display_name || "—"}
+                        </div>
+                      </div>
+                      <span
+                        className={`inline-flex shrink-0 items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${stat.color}`}
+                      >
+                        <span>{stat.emoji}</span>
+                        {stat.label}
+                      </span>
+                    </div>
+
+                    {/* Admin phone */}
+                    <div className="flex items-center justify-between gap-2 mb-3 bg-gray-50 rounded-lg px-3 py-2">
+                      <div className="text-xs text-gray-500">📞 موبايل الأدمن</div>
+                      {m.admin_phone ? (
+                        <button
+                          onClick={() =>
+                            copy(m.admin_phone!, m.merchant_key + ":phone")
+                          }
+                          className="flex items-center gap-1.5 text-gray-800 hover:text-[#1B7A3D] font-mono text-sm"
+                        >
+                          {copiedKey === m.merchant_key + ":phone" ? (
+                            <Check className="w-3 h-3 text-green-600" />
+                          ) : (
+                            <Copy className="w-3 h-3 opacity-50" />
+                          )}
+                          {m.admin_phone}
+                          {m.admin_phone_overridden && (
+                            <span title="مختار يدوياً">
+                              <Crown className="w-3 h-3 text-amber-500" />
+                            </span>
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400 text-sm">—</span>
+                      )}
+                    </div>
+
+                    {/* Stats grid */}
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs mb-3">
+                      <div className="bg-gray-50 rounded-lg py-2">
+                        <div className="font-bold text-gray-900 text-base">
+                          {m.total_listings}
+                        </div>
+                        <div className="text-gray-500">إعلان</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg py-2">
+                        <div className="font-bold text-gray-900 text-base">
+                          {m.phones.length}
+                        </div>
+                        <div className="text-gray-500">رقم</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg py-2">
+                        <div className="font-bold text-[#1B7A3D] text-base">
+                          {m.cumulative_pct}%
+                        </div>
+                        <div className="text-gray-500">تجميعي</div>
+                      </div>
+                    </div>
+
+                    {/* Actions row */}
+                    <div className="flex items-center justify-between gap-1 pt-3 border-t border-gray-100">
+                      <button
+                        onClick={() => openWhatsApp(m)}
+                        disabled={!m.admin_phone}
+                        className="flex-1 flex items-center justify-center gap-1 py-2 text-green-600 hover:bg-green-50 rounded-lg disabled:opacity-30 text-xs font-medium"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        واتس
+                      </button>
+                      <button
+                        onClick={() => generateMagicLink(m)}
+                        disabled={busyKey === m.merchant_key || !m.admin_phone}
+                        className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-30 text-xs font-medium"
+                      >
+                        <Link2 className="w-4 h-4" />
+                        رابط
+                      </button>
+                      <button
+                        onClick={() => updateStatus(m, "contacted")}
+                        disabled={busyKey === m.merchant_key}
+                        className="flex-1 flex items-center justify-center gap-1 py-2 text-yellow-600 hover:bg-yellow-50 rounded-lg disabled:opacity-30 text-xs font-medium"
+                      >
+                        <Mail className="w-4 h-4" />
+                        تواصل
+                      </button>
+                      <button
+                        onClick={() => updateStatus(m, "registered")}
+                        disabled={busyKey === m.merchant_key}
+                        className="flex-1 flex items-center justify-center gap-1 py-2 text-emerald-600 hover:bg-emerald-50 rounded-lg disabled:opacity-30 text-xs font-medium"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        مسجّل
+                      </button>
+                      <button
+                        onClick={() => updateStatus(m, "rejected")}
+                        disabled={busyKey === m.merchant_key}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-30"
+                        title="رفض"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => openNotesModal(m)}
+                        className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg"
+                        title="ملاحظات"
+                      >
+                        <StickyNote className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Expand phones */}
+                    {hasMultiplePhones && (
+                      <>
+                        <button
+                          onClick={() =>
+                            setExpanded((prev) => ({
+                              ...prev,
+                              [m.merchant_key]: !prev[m.merchant_key],
+                            }))
+                          }
+                          className="mt-3 w-full flex items-center justify-center gap-1 py-2 text-xs font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg"
+                        >
+                          {isExpanded ? (
+                            <>
+                              <ChevronUp className="w-3 h-3" />
+                              إخفاء الأرقام
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="w-3 h-3" />
+                              عرض كل الـ {m.phones.length} أرقام
+                            </>
+                          )}
+                        </button>
+                        {isExpanded && (
+                          <div className="mt-2 space-y-2">
+                            {m.phones.map((p) => {
+                              const isAdmin = p.phone === m.admin_phone;
+                              return (
+                                <div
+                                  key={p.seller_id}
+                                  className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border ${
+                                    isAdmin
+                                      ? "bg-amber-50 border-amber-200"
+                                      : "bg-gray-50 border-gray-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {isAdmin && (
+                                      <Crown className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                                    )}
+                                    <span className="font-mono text-xs truncate">
+                                      {p.phone || "—"}
+                                    </span>
+                                    <span className="text-[10px] text-gray-500 shrink-0">
+                                      ({p.listings} إعلان)
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {!isAdmin && p.phone && (
+                                      <button
+                                        onClick={() =>
+                                          overrideAdminPhone(m, p.phone!)
+                                        }
+                                        disabled={busyKey === m.merchant_key}
+                                        className="text-[10px] px-2 py-1 bg-[#1B7A3D] text-white rounded hover:bg-[#145C2E] disabled:opacity-50"
+                                      >
+                                        admin
+                                      </button>
+                                    )}
+                                    {isAdmin && m.admin_phone_overridden && (
+                                      <button
+                                        onClick={() =>
+                                          overrideAdminPhone(m, null)
+                                        }
+                                        disabled={busyKey === m.merchant_key}
+                                        className="text-[10px] px-2 py-1 text-amber-700 hover:bg-amber-100 rounded"
+                                      >
+                                        إلغاء
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+              {visibleMerchants.length === 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500 text-sm">
+                  لا يوجد شركات بهذا الفلتر
+                </div>
+              )}
+            </div>
+
+            {/* Desktop table layout (>= lg) */}
+            <div className="hidden lg:block bg-white rounded-2xl border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
                 <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
@@ -616,10 +842,10 @@ export default function WhalesPage() {
                     <th className="text-right px-3 py-3 font-medium">
                       موبايل الأدمن
                     </th>
-                    <th className="text-right px-3 py-3 font-medium hidden lg:table-cell">المنصة</th>
+                    <th className="text-right px-3 py-3 font-medium">المنصة</th>
                     <th className="text-right px-3 py-3 font-medium">إعلانات</th>
-                    <th className="text-right px-3 py-3 font-medium hidden md:table-cell">أرقام</th>
-                    <th className="text-right px-3 py-3 font-medium hidden lg:table-cell">% تجميعي</th>
+                    <th className="text-right px-3 py-3 font-medium">أرقام</th>
+                    <th className="text-right px-3 py-3 font-medium">% تجميعي</th>
                     <th className="text-right px-3 py-3 font-medium">الحالة</th>
                     <th className="text-right px-3 py-3 font-medium">إجراءات</th>
                   </tr>
@@ -689,7 +915,7 @@ export default function WhalesPage() {
                               <span className="text-gray-400">—</span>
                             )}
                           </td>
-                          <td className="px-3 py-3 text-xs text-gray-600 hidden lg:table-cell">
+                          <td className="px-3 py-3 text-xs text-gray-600">
                             {PLATFORM_LABELS[m.source_platform || ""] ||
                               m.source_platform ||
                               "—"}
@@ -697,10 +923,10 @@ export default function WhalesPage() {
                           <td className="px-3 py-3 font-bold text-gray-900">
                             {m.total_listings}
                           </td>
-                          <td className="px-3 py-3 text-xs text-gray-600 hidden md:table-cell">
+                          <td className="px-3 py-3 text-xs text-gray-600">
                             {m.phones.length}
                           </td>
-                          <td className="px-3 py-3 text-xs hidden lg:table-cell">
+                          <td className="px-3 py-3 text-xs">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-gray-700 min-w-[3.5rem]">
                                 {m.cumulative_pct}%
