@@ -591,10 +591,9 @@ export default function WhalesPage() {
                                 )}
                                 {m.admin_phone}
                                 {m.admin_phone_overridden && (
-                                  <Crown
-                                    className="w-3 h-3 text-amber-500"
-                                    title="مختار يدوياً"
-                                  />
+                                  <span title="مختار يدوياً">
+                                    <Crown className="w-3 h-3 text-amber-500" />
+                                  </span>
                                 )}
                               </button>
                             ) : (
