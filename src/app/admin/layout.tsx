@@ -125,6 +125,7 @@ const navSections: NavSection[] = [
     label: "التسويق",
     icon: "📈",
     items: [
+      { href: "/admin/marketing", label: "📊 نظرة عامة", icon: BarChart3 },
       { href: "/admin/crm/harvester", label: "🌾 محرك الحصاد", icon: Wheat },
       { href: "/admin/crm/whales?category=properties", label: "🐋 الحيتان (Pareto)", icon: Target },
       { href: "/admin/crm/sellers?category=properties", label: "بائعو العقارات 🏠", icon: UserSearch },
@@ -138,6 +139,7 @@ const navSections: NavSection[] = [
     label: "المبيعات",
     icon: "💼",
     items: [
+      { href: "/admin/sales", label: "📊 نظرة عامة", icon: BarChart3 },
       { href: "/admin/sales/outreach?tab=ahmed", label: "🏠 أحمد — عقارات", icon: Mail },
       { href: "/admin/sales/outreach?tab=waleed", label: "🚗 وليد — سيارات", icon: Mail },
       { href: "/admin/crm/escalations", label: "📥 محتاج رد إنسان", icon: Inbox },
@@ -151,6 +153,7 @@ const navSections: NavSection[] = [
     label: "خدمة العملاء",
     icon: "💚",
     items: [
+      { href: "/admin/cs", label: "📊 نظرة عامة", icon: BarChart3 },
       { href: "/admin/cs/conversations", label: "💬 سارة — المحادثات", icon: Headphones },
       { href: "/admin/cs/escalations", label: "🚨 تصعيدات الدعم", icon: Flag },
     ],
@@ -161,6 +164,7 @@ const navSections: NavSection[] = [
     label: "المالية",
     icon: "💰",
     items: [
+      { href: "/admin/finance", label: "📊 نظرة عامة", icon: BarChart3 },
       { href: "/admin/finance/revenue", label: "$ الإيرادات", icon: DollarSign },
       { href: "/admin/finance/subscriptions", label: "📦 الباقات", icon: CreditCard },
       { href: "/admin/finance/dashboard", label: "📊 لوحة المالية", icon: PieChart },
