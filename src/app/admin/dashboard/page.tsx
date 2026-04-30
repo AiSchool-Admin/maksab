@@ -145,12 +145,20 @@ export default function AlexandriaDashboard() {
               {data.alexPropertiesWithPhone.toLocaleString()} بأرقام 📱
             </p>
           </Link>
-          <Link
-            href="/admin/crm/whales?category=properties"
-            className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-[#1B7A3D] hover:text-[#145C2E]"
-          >
-            🐋 الحيتان (Pareto 80/20) ←
-          </Link>
+          <div className="flex items-center gap-3 mt-2">
+            <Link
+              href="/admin/crm/whales?category=properties"
+              className="inline-flex items-center gap-1 text-xs font-bold text-[#1B7A3D] hover:text-[#145C2E]"
+            >
+              🐋 الحيتان ←
+            </Link>
+            <Link
+              href="/admin/crm/escalations"
+              className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 hover:text-amber-900"
+            >
+              📥 محتاج رد إنسان ←
+            </Link>
+          </div>
         </div>
 
         {/* رسائل وليد */}

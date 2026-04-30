@@ -33,6 +33,8 @@ import {
   StickyNote,
   Send,
   Clock,
+  Rocket,
+  AlertTriangle,
 } from "lucide-react";
 
 interface MerchantPhone {
@@ -147,6 +149,71 @@ export default function WhalesPage() {
     phone: string;
   } | null>(null);
 
+  // Batch-send (Ahmed daily outreach) state
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchN, setBatchN] = useState(10);
+  const [batchSending, setBatchSending] = useState(false);
+  interface BatchResultRow {
+    merchant_key: string;
+    display_name: string;
+    phone: string | null;
+    status: "sent" | "skipped" | "failed";
+    reason?: string;
+  }
+  const [batchResult, setBatchResult] = useState<{
+    sent: number;
+    failed: number;
+    skipped: number;
+    remaining_today: number;
+    cap: number;
+    results: BatchResultRow[];
+  } | null>(null);
+  const [batchQuota, setBatchQuota] = useState<{
+    cap: number;
+    sent_today: number;
+    remaining_today: number;
+  } | null>(null);
+
+  const fetchBatchQuota = useCallback(async () => {
+    try {
+      const headers = getAdminHeaders();
+      const res = await fetch("/api/admin/crm/whales/batch-send", { headers });
+      if (res.ok) {
+        const json = await res.json();
+        setBatchQuota(json);
+      }
+    } catch {
+      // ignore — quota display is non-critical
+    }
+  }, []);
+
+  const runBatchSend = useCallback(async () => {
+    setBatchSending(true);
+    setBatchResult(null);
+    try {
+      const headers = {
+        ...getAdminHeaders(),
+        "Content-Type": "application/json",
+      };
+      const res = await fetch("/api/admin/crm/whales/batch-send", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ n: batchN, category }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setBatchResult(json);
+        await fetchBatchQuota();
+      } else {
+        alert(json.error || "فشل في الإرسال");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("خطأ في الاتصال");
+    }
+    setBatchSending(false);
+  }, [batchN, category, fetchBatchQuota]);
+
   // Notes / Activity timeline modal — opened per merchant.
   interface ActivityNote {
     id: string;
@@ -256,6 +323,10 @@ export default function WhalesPage() {
   useEffect(() => {
     fetchMerchants();
   }, [fetchMerchants]);
+
+  useEffect(() => {
+    fetchBatchQuota();
+  }, [fetchBatchQuota]);
 
   const visibleMerchants: Merchant[] = (() => {
     if (!summary) return merchants;
@@ -450,6 +521,14 @@ export default function WhalesPage() {
               <RefreshCw
                 className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
               />
+            </button>
+            <button
+              onClick={() => setBatchOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#D4A843] text-white rounded-lg text-sm font-bold hover:bg-[#B8860B]"
+              title="ابدأ حصاد اليوم (Ahmed)"
+            >
+              <Rocket className="w-4 h-4" />
+              ابدأ حصاد اليوم
             </button>
             <button
               onClick={exportCsv}
@@ -1144,6 +1223,199 @@ export default function WhalesPage() {
                 إغلاق
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Send Modal */}
+      {batchOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          onClick={() => !batchSending && setBatchOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-lg w-full shadow-2xl max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  🚀 ابدأ حصاد اليوم — أحمد
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  أحمد هيبعت رسالة WhatsApp لأكبر N سمسار لم يتم التواصل معاهم
+                </p>
+              </div>
+              <button
+                onClick={() => !batchSending && setBatchOpen(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {!batchResult ? (
+              <div className="px-6 py-5 space-y-4">
+                {batchQuota && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-900 font-medium">
+                        حد اليوم
+                      </span>
+                      <span className="font-bold text-blue-900">
+                        {batchQuota.sent_today} / {batchQuota.cap}
+                      </span>
+                    </div>
+                    <div className="text-xs text-blue-700 mt-1">
+                      متبقي اليوم: {batchQuota.remaining_today} رسالة
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    عدد السماسرة المستهدفين
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[5, 10, 25, 50].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setBatchN(n)}
+                        disabled={
+                          !!batchQuota && n > batchQuota.remaining_today
+                        }
+                        className={`py-2 rounded-lg text-sm font-bold transition-colors ${
+                          batchN === n
+                            ? "bg-[#1B7A3D] text-white"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={batchN}
+                    onChange={(e) =>
+                      setBatchN(
+                        Math.min(50, Math.max(1, parseInt(e.target.value) || 1))
+                      )
+                    }
+                    className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  />
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium mb-1">قواعد الإرسال (MVP)</p>
+                      <ul className="space-y-0.5 list-disc pr-4">
+                        <li>سقف 50 رسالة/يوم</li>
+                        <li>سمسار واحد فقط لكل شركة</li>
+                        <li>التخطي التلقائي للمتواصل معاهم</li>
+                        <li>أحمد بيرد على ردودهم تلقائياً (نطاق محدود)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={runBatchSend}
+                  disabled={
+                    batchSending ||
+                    (batchQuota && batchQuota.remaining_today === 0) ||
+                    false
+                  }
+                  className="w-full py-3 bg-[#D4A843] text-white rounded-lg font-bold hover:bg-[#B8860B] disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Rocket className="w-5 h-5" />
+                  {batchSending
+                    ? "جاري الإرسال..."
+                    : `ابعت لـ ${batchN} سمسار الآن`}
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto px-6 py-5">
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-emerald-50 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-emerald-700">
+                      {batchResult.sent}
+                    </div>
+                    <div className="text-xs text-emerald-600">تم الإرسال</div>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-red-700">
+                      {batchResult.failed}
+                    </div>
+                    <div className="text-xs text-red-600">فشل</div>
+                  </div>
+                  <div className="bg-gray-100 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-gray-700">
+                      {batchResult.skipped}
+                    </div>
+                    <div className="text-xs text-gray-600">تخطي</div>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 mb-2">
+                  متبقي اليوم: {batchResult.remaining_today} / {batchResult.cap}
+                </div>
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {batchResult.results.map((r) => (
+                    <div
+                      key={r.merchant_key}
+                      className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm ${
+                        r.status === "sent"
+                          ? "bg-emerald-50"
+                          : r.status === "failed"
+                          ? "bg-red-50"
+                          : "bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 truncate">
+                          {r.display_name}
+                        </div>
+                        {r.phone && (
+                          <div className="text-xs font-mono text-gray-500">
+                            {r.phone}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs shrink-0 text-right">
+                        {r.status === "sent" ? (
+                          <span className="text-emerald-700 font-medium">
+                            ✓ تم
+                          </span>
+                        ) : r.status === "failed" ? (
+                          <span className="text-red-700 font-medium" title={r.reason}>
+                            ✗ فشل
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">— تخطي</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setBatchOpen(false);
+                      setBatchResult(null);
+                      fetchMerchants();
+                    }}
+                    className="flex-1 py-2 bg-[#1B7A3D] text-white rounded-lg font-medium hover:bg-[#145C2E]"
+                  >
+                    تم — تحديث القائمة
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
