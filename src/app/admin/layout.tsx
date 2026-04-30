@@ -117,6 +117,7 @@ const navSections: NavSection[] = [
     icon: "🏠",
     items: [
       { href: "/admin/dashboard", label: "لوحة القيادة", icon: LayoutDashboard },
+      { href: "/admin/guide", label: "📖 دليل العمل", icon: ClipboardCheck },
     ],
   },
   {

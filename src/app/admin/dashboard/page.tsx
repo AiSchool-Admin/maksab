@@ -546,7 +546,7 @@ export default function CeoDashboardPage() {
         <QuickLink href="/admin/crm/whales?category=properties" icon={Rocket} label="ابدأ حصاد Ahmed" color="bg-[#D4A843]" />
         <QuickLink href="/admin/crm/escalations" icon={Inbox} label="محتاج رد" color="bg-amber-600" />
         <QuickLink href="/admin/marketplace/bookmarklet" icon={Wheat} label="Bookmarklet" color="bg-emerald-600" />
-        <QuickLink href="/admin/team" icon={Headphones} label="الفريق" color="bg-blue-600" />
+        <QuickLink href="/admin/guide" icon={ListTodo} label="دليل العمل" color="bg-blue-600" />
       </div>
     </div>
   );
