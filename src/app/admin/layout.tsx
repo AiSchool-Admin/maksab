@@ -98,46 +98,61 @@ interface NavSection {
 }
 
 /**
- * Unified navigation — all former "legacy/أخرى" items are now distributed
- * to their appropriate department sections.
+ * Unified navigation — 6 sections aligned to business functions.
+ * The sidebar surfaces the ~16 pages that are actively used; older
+ * pages remain in the codebase but are not surfaced here.
+ *
+ *   🏠 الرئيسية         (single item — Dashboard overview)
+ *   📈 التسويق          (acquiring sellers — harvester + whales + sellers)
+ *   💼 المبيعات          (converting sellers — Ahmed/Waleed + escalations)
+ *   💚 خدمة العملاء      (post-signup support — Sara)
+ *   💰 المالية           (revenue + packages)
+ *   ⚙️ الإعدادات         (settings + team)
  */
 const navSections: NavSection[] = [
   {
-    id: "dashboard",
+    id: "home",
     sectionKey: "dashboard",
-    label: "لوحة القيادة",
-    icon: "🎯",
+    label: "الرئيسية",
+    icon: "🏠",
     items: [
-      { href: "/admin/marketplace", label: "🏗️ بناء السوق", icon: Target },
-      { href: "/admin/dashboard", label: "الرئيسية", icon: LayoutDashboard },
-      { href: "/admin/acquisition", label: "محرك الاستحواذ", icon: Target },
+      { href: "/admin/dashboard", label: "لوحة القيادة", icon: LayoutDashboard },
+    ],
+  },
+  {
+    id: "marketing",
+    sectionKey: "sales",
+    label: "التسويق",
+    icon: "📈",
+    items: [
+      { href: "/admin/crm/harvester", label: "🌾 محرك الحصاد", icon: Wheat },
+      { href: "/admin/crm/whales?category=properties", label: "🐋 الحيتان (Pareto)", icon: Target },
+      { href: "/admin/crm/sellers?category=properties", label: "بائعو العقارات 🏠", icon: UserSearch },
+      { href: "/admin/crm/sellers?category=vehicles", label: "بائعو السيارات 🚗", icon: UserSearch },
+      { href: "/admin/marketplace", label: "🏗️ بناء السوق", icon: ShoppingBag },
     ],
   },
   {
     id: "sales",
     sectionKey: "sales",
-    label: "الحصاد والمبيعات",
-    icon: "📈",
+    label: "المبيعات",
+    icon: "💼",
     items: [
-      { href: "/admin/crm/harvester", label: "محرك الحصاد", icon: Cpu },
-      { href: "/admin/crm/harvester/alexandria", label: "الإسكندرية", icon: MapPin },
-      { href: "/admin/crm/harvester/enrich-specs", label: "استخراج المواصفات", icon: Search },
-      { href: "/admin/crm/harvester/test-scopes", label: "🔍 اختبار النطاقات", icon: Search },
-      { href: "/admin/sales/crm", label: "🎯 نظام المبيعات (Seller 360)", icon: Target },
-      { href: "/admin/sales/outreach?tab=waleed", label: "وليد 🚗 سيارات", icon: Mail },
-      { href: "/admin/sales/outreach?tab=ahmed", label: "أحمد 🏠 عقارات", icon: Mail },
-      { href: "/admin/sales/whatsapp", label: "📱 لوحة واتساب", icon: Send },
+      { href: "/admin/sales/outreach?tab=ahmed", label: "🏠 أحمد — عقارات", icon: Mail },
+      { href: "/admin/sales/outreach?tab=waleed", label: "🚗 وليد — سيارات", icon: Mail },
+      { href: "/admin/crm/escalations", label: "📥 محتاج رد إنسان", icon: Inbox },
+      { href: "/admin/sales/crm", label: "🎯 Seller 360", icon: UserCog },
       { href: "/admin/sales/templates", label: "📝 قوالب الرسائل", icon: ClipboardCheck },
     ],
   },
   {
-    id: "sellers",
-    sectionKey: "sales",
-    label: "العملاء",
-    icon: "👥",
+    id: "customer_service",
+    sectionKey: "settings",
+    label: "خدمة العملاء",
+    icon: "💚",
     items: [
-      { href: "/admin/crm/sellers?category=vehicles", label: "بائعو السيارات 🚗", icon: UserSearch },
-      { href: "/admin/crm/sellers?category=properties", label: "بائعو العقارات 🏠", icon: UserSearch },
+      { href: "/admin/cs/conversations", label: "💬 سارة — المحادثات", icon: Headphones },
+      { href: "/admin/cs/escalations", label: "🚨 تصعيدات الدعم", icon: Flag },
     ],
   },
   {
@@ -146,9 +161,9 @@ const navSections: NavSection[] = [
     label: "المالية",
     icon: "💰",
     items: [
-      { href: "/admin/finance/revenue", label: "الإيرادات", icon: DollarSign },
-      { href: "/admin/price-index", label: "مؤشر الأسعار 📊", icon: TrendingUp },
-      { href: "/pricing", label: "الباقات", icon: CreditCard },
+      { href: "/admin/finance/revenue", label: "$ الإيرادات", icon: DollarSign },
+      { href: "/admin/finance/subscriptions", label: "📦 الباقات", icon: CreditCard },
+      { href: "/admin/finance/dashboard", label: "📊 لوحة المالية", icon: PieChart },
     ],
   },
   {
@@ -157,8 +172,9 @@ const navSections: NavSection[] = [
     label: "الإعدادات",
     icon: "⚙️",
     items: [
-      { href: "/admin/cs", label: "سارة (خدمة العملاء)", icon: Headphones },
-      { href: "/admin/settings", label: "الإعدادات", icon: Settings },
+      { href: "/admin/team", label: "👥 الفريق", icon: Users },
+      { href: "/admin/locations", label: "📍 المواقع", icon: MapPin },
+      { href: "/admin/settings", label: "⚙️ الإعدادات", icon: Settings },
     ],
   },
 ];
