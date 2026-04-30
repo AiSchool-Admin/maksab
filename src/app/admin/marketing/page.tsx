@@ -178,7 +178,7 @@ export default function MarketingPage() {
             ابدأ هنا
           </div>
           <p className="text-xs text-blue-700">
-            قاعدة البيانات فاضية. اضغط "محرك الحصاد" واسحب الـ Bookmarklet من
+            قاعدة البيانات فاضية. اضغط &ldquo;محرك الحصاد&rdquo; واسحب الـ Bookmarklet من
             هناك، ثم شغّله على Dubizzle / AqarMap / SemsarMasr لجمع أول دفعة.
           </p>
         </div>

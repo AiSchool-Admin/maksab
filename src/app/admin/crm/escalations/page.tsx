@@ -160,7 +160,7 @@ export default function EscalationsPage() {
                 </p>
                 <p className="text-xs mt-0.5 text-amber-700">
                   أحمد توقف عن الرد. اقرأ المحادثة، رد يدوياً عبر WhatsApp،
-                  ثم علّم "تم الحل".
+                  ثم علّم &ldquo;تم الحل&rdquo;.
                 </p>
               </div>
             </div>
